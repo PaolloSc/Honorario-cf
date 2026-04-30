@@ -2,8 +2,7 @@ services:
   - type: web
     name: honorario-backend
     env: python
-    rootDir: .
-    buildCommand: pip install -r pyproject.toml || uv sync
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /docs
     envVars:
