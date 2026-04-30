@@ -1,23 +1,22 @@
 function resolveApiBase(): string {
+  // 1. Vercel environment variable takes priority
   const envBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+  if (envBase) return envBase;
 
-  if (envBase) {
-    return envBase;
-  }
-
+  // 2. In browser (production), use same domain — Railway typically runs on same domain via proxy
   if (typeof window !== "undefined") {
+    const protocol = window.location.protocol;
     const host = window.location.hostname;
-    const browserOnLoopback = host === "localhost" || host === "127.0.0.1";
-    if (!browserOnLoopback) {
-      return `${window.location.protocol}//${host}:8000`;
-    }
+    // Vercel serverless functions are at /api on the same domain
+    return `${protocol}//${host}`;
   }
 
+  // 3. Development fallback
   return "http://127.0.0.1:8000";
 }
 
 const API_BASE = resolveApiBase();
- 
+
 async function request<T>(
   path: string,
   options?: RequestInit
@@ -44,15 +43,15 @@ async function request<T>(
   } finally {
     clearTimeout(timeoutId);
   }
- 
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`API error ${res.status}: ${body}`);
   }
- 
+
   return res.json();
 }
- 
+
 export async function generateContract(data: unknown) {
   return request<{
     success: boolean;
@@ -64,7 +63,7 @@ export async function generateContract(data: unknown) {
     body: JSON.stringify(data),
   });
 }
- 
+
 export async function downloadContract(contractId: string) {
   const res = await fetch(
     `${API_BASE}/api/contract/${contractId}/download`
@@ -72,7 +71,7 @@ export async function downloadContract(contractId: string) {
   if (!res.ok) throw new Error("Failed to download contract");
   return res.blob();
 }
- 
+
 export async function sendEmail(data: {
   contract_id: string;
   destinatario_email: string;
@@ -84,7 +83,7 @@ export async function sendEmail(data: {
     body: JSON.stringify(data),
   });
 }
- 
+
 export async function sendForSignature(data: {
   contract_id: string;
   signatarios: Array<{ email: string; name: string; role: string }>;
@@ -97,7 +96,7 @@ export async function sendForSignature(data: {
     }
   );
 }
- 
+
 export async function lookupCNPJ(cnpj: string) {
   const cnpjClean = cnpj.replace(/\D/g, "");
   return request<{
