@@ -4,8 +4,9 @@ version = "0.1.0"
 description = "API para automacao de contratos de honorarios advocaticios"
 requires-python = ">=3.11"
 
-[project.optional-dependencies]
-dev = []
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
