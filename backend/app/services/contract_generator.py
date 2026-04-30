@@ -441,8 +441,8 @@ class ContractGenerator:
             style="List Bullet",
         )
         doc.add_paragraph(
-            "As horas trabalhadas serão devidas em parcela única mensalmente mediante "
-            "apuração e faturamento no mês seguinte àquele correspondente às horas trabalhadas.",
+            "As horas trabalhadas serão apuradas ao final de cada mês e faturadas em "
+            "parcela única no mês imediatamente subsequente.",
             style="List Bullet",
         )
  
@@ -479,20 +479,19 @@ class ContractGenerator:
  
         if ht.tem_pacote_horas and ht.quantidade_horas_pacote and ht.valor_pacote:
             doc.add_paragraph(
-                f"Os serviços jurídicos serão remunerados com pacote mensal fixo correspondente "
-                f"a {ht.quantidade_horas_pacote} horas, no valor de "
+                f"Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
+                f"{ht.quantidade_horas_pacote} horas, no valor de "
                 f"{valor_com_extenso(ht.valor_pacote)}.",
                 style="List Bullet",
             )
             doc.add_paragraph(
-                f"Caso as {ht.quantidade_horas_pacote} horas mensais não sejam utilizadas "
-                f"em determinado mês, o saldo residual será acumulado para o mês subsequente ao "
-                f"mês em que as horas não foram utilizadas.",
+                f"As horas não utilizadas em determinado mês serão acumuladas e poderão ser "
+                f"aproveitadas no mês imediatamente subsequente.",
                 style="List Bullet",
             )
             if ht.periodo_banco_horas_meses:
                 doc.add_paragraph(
-                    f"O banco de horas será zerado a cada {ht.periodo_banco_horas_meses} meses.",
+                    f"O saldo acumulado será zerado a cada {ht.periodo_banco_horas_meses} meses.",
                     style="List Bullet",
                 )
  
