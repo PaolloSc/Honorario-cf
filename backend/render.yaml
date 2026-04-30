@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: honorario-backend
+    env: python
+    rootDir: .
+    buildCommand: pip install -r pyproject.toml || uv sync
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /docs
+    envVars:
+      - key: CORS_ORIGINS
+        value: https://honorario-cf.vercel.app
+      - key: DOCUSEAL_API_KEY
+      - key: AZURE_TENANT_ID
+      - key: AZURE_CLIENT_ID
+      - key: AZURE_CLIENT_SECRET
+      - key: AZURE_SENDER_EMAIL
