@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  /* C&F Advogados - identidade visual */
+  --brand-verde-escuro: #1A3C34;
+  --brand-verde-medio: #006451;
+  --brand-verde-claro: #A6D3BA;
+  --brand-cinza-claro: #D7D1CA;
+  --brand-marrom: #7A6755;
+
+  --background: #FAF8F5;
+  --foreground: #1A3C34;
+  --primary: #006451;
+  --primary-light: #A6D3BA;
+  --primary-dark: #1A3C34;
+  --accent: #7A6755;
+  --danger: #B91C1C;
+  --success: #006451;
+  --warning: #B45309;
+  --border: #D7D1CA;
+  --card: #FFFFFF;
+  --muted: #6B6359;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-brand-verde-escuro: var(--brand-verde-escuro);
+  --color-brand-verde-medio: var(--brand-verde-medio);
+  --color-brand-verde-claro: var(--brand-verde-claro);
+  --color-brand-cinza-claro: var(--brand-cinza-claro);
+  --color-brand-marrom: var(--brand-marrom);
+  --font-display: var(--font-lexend-zetta);
+  --font-sans: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6,
+.font-display {
+  font-family: var(--font-lexend-zetta), 'Segoe UI', Tahoma, sans-serif;
+  letter-spacing: 0.02em;
+}
