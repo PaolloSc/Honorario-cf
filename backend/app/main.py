@@ -1,15 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
- 
+
 from app.config import settings
-from app.routers import cnpj, contract, docuseal, email
- 
+from app.database import init_db
+from app.routers import cnpj, contract, contracts, docuseal, email
+
+init_db()
+
 app = FastAPI(
     title="Honorarios API",
     description="API para automacao de contratos de honorarios advocaticios - C&F Advogados",
-    version="1.0.0",
+    version="2.0.0",
 )
- 
+
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 lan_origin_regex = (
     r"^https?://("
@@ -27,13 +30,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
- 
+
 app.include_router(contract.router)
+app.include_router(contracts.router)
 app.include_router(email.router)
 app.include_router(docuseal.router)
 app.include_router(cnpj.router)
- 
- 
+
+
 @app.get("/api/health")
 async def health_check() -> dict:
     return {"status": "ok", "service": "honorarios-api"}

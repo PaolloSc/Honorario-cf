@@ -83,12 +83,25 @@ class AzureEmailService:
                 "body": {
                     "contentType": "HTML",
                     "content": (
+                        '<div style="font-family: Segoe UI, Tahoma, sans-serif; max-width: 600px;">'
+                        '<div style="background-color: #1A3C34; padding: 24px 32px; border-radius: 8px 8px 0 0;">'
+                        '<span style="font-family: Lexend Zetta, sans-serif; color: #FFFFFF; font-size: 18px; '
+                        'font-weight: 500; letter-spacing: 2px;">Carvalho &amp; Furtado</span>'
+                        '<br><span style="font-family: Lexend Zetta, sans-serif; color: rgba(255,255,255,0.8); '
+                        'font-size: 10px; letter-spacing: 6px;">ADVOGADOS</span>'
+                        "</div>"
+                        '<div style="padding: 32px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
                         f"<p>Prezado(a) {to_name},</p>"
                         "<p>Segue em anexo o Contrato de Honorarios para sua conferencia.</p>"
                         "<p>Apos a conferencia, o documento sera encaminhado para assinatura "
                         "digital via DocuSeal.</p>"
-                        "<p>Atenciosamente,<br>"
-                        "Carvalho & Furtado Advogados</p>"
+                        '<p style="margin-top: 24px;">Atenciosamente,<br>'
+                        '<strong style="color: #1A3C34;">Carvalho &amp; Furtado Advogados</strong></p>'
+                        "</div>"
+                        '<div style="text-align: center; padding: 16px; color: #7A6755; font-size: 11px;">'
+                        "Este e-mail e seu conteudo sao confidenciais."
+                        "</div>"
+                        "</div>"
                     ),
                 },
                 "toRecipients": [

@@ -76,12 +76,13 @@ class ContractGenerator:
         self.output_dir = self._resolve_backend_path(settings.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
  
-    def generate(self, data: ContratoRequest) -> tuple[str, str]:
+    def generate(self, data: ContratoRequest, contract_id: str | None = None) -> tuple[str, str]:
         """Generate a contract document from form data.
- 
+
         Returns (contract_id, file_path).
         """
-        contract_id = str(uuid.uuid4())
+        if contract_id is None:
+            contract_id = str(uuid.uuid4())
         doc = self._build_document(data)
  
         filename = f"contrato_{contract_id}.docx"

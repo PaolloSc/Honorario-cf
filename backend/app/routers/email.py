@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.config import BACKEND_DIR, settings
+from app.database import AuditLogDB, ContractDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,7 @@ def resolve_backend_path(value: str) -> Path:
 
 
 @router.post("/send", response_model=EmailResponse)
-async def send_contract_email(data: EmailRequest) -> EmailResponse:
+async def send_contract_email(data: EmailRequest, db: Session = Depends(get_db)) -> EmailResponse:
     """Send contract via email using Azure Communication Services."""
     try:
         # Find the contract file
@@ -62,6 +64,16 @@ async def send_contract_email(data: EmailRequest) -> EmailResponse:
         )
 
         if result["success"]:
+            contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
+            if contract:
+                db.add(AuditLogDB(
+                    contract_id=data.contract_id,
+                    action="envio_email",
+                    detail=f"E-mail enviado para {data.destinatario_email}",
+                    version_number=contract.current_version,
+                    created_at=utcnow(),
+                ))
+                db.commit()
             return EmailResponse(success=True, message="E-mail enviado com sucesso")
         else:
             return EmailResponse(success=False, message=result.get("error", "Erro ao enviar e-mail"))
