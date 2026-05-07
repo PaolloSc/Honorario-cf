@@ -174,6 +174,16 @@ export default function ContractDetailPage() {
               <dd>{contract.client_email || "—"}</dd>
             </div>
             <div className="flex justify-between">
+              <dt className="text-muted">Criado por</dt>
+              <dd>{contract.created_by || "—"}</dd>
+            </div>
+            {contract.updated_by && contract.updated_by !== contract.created_by && (
+              <div className="flex justify-between">
+                <dt className="text-muted">Editado por</dt>
+                <dd>{contract.updated_by}</dd>
+              </div>
+            )}
+            <div className="flex justify-between">
               <dt className="text-muted">Criado em</dt>
               <dd>{formatDate(contract.created_at)}</dd>
             </div>
@@ -228,6 +238,9 @@ export default function ContractDetailPage() {
                     {ACTION_LABELS[entry.action] || entry.action}
                     {entry.version_number && (
                       <span className="text-xs text-muted ml-2">v{entry.version_number}</span>
+                    )}
+                    {entry.user_email && (
+                      <span className="text-xs text-primary/70 ml-2">por {entry.user_email}</span>
                     )}
                   </p>
                   {entry.detail && <p className="text-xs text-muted mt-0.5">{entry.detail}</p>}

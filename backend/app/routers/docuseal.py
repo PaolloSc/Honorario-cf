@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.docuseal import DocuSealService
@@ -44,7 +45,11 @@ def resolve_backend_path(value: str) -> Path:
 
 
 @router.post("/send-for-signature", response_model=DocuSealResponse)
-async def send_for_signature(data: DocuSealRequest, db: Session = Depends(get_db)) -> DocuSealResponse:
+async def send_for_signature(
+    data: DocuSealRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DocuSealResponse:
     """Send contract for digital signature via DocuSeal."""
     try:
         service = get_docuseal_service()
@@ -97,6 +102,7 @@ async def send_for_signature(data: DocuSealRequest, db: Session = Depends(get_db
                     action="envio_assinatura",
                     detail=f"Enviado para assinatura via DocuSeal (submission {submission_id})",
                     version_number=contract.current_version,
+                    user_email=user.email,
                     created_at=utcnow(),
                 ))
                 db.commit()

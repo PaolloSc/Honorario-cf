@@ -12,3 +12,4 @@ msal>=1.28.0
 azure-communication-email>=1.0.0
 sqlalchemy>=2.0.0
 aiosqlite>=0.20.0
+pyjwt[crypto]>=2.8.0
