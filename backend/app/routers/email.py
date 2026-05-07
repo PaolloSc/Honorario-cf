@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
@@ -45,7 +46,11 @@ def resolve_backend_path(value: str) -> Path:
 
 
 @router.post("/send", response_model=EmailResponse)
-async def send_contract_email(data: EmailRequest, db: Session = Depends(get_db)) -> EmailResponse:
+async def send_contract_email(
+    data: EmailRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EmailResponse:
     """Send contract via email using Azure Communication Services."""
     try:
         # Find the contract file
@@ -71,6 +76,7 @@ async def send_contract_email(data: EmailRequest, db: Session = Depends(get_db))
                     action="envio_email",
                     detail=f"E-mail enviado para {data.destinatario_email}",
                     version_number=contract.current_version,
+                    user_email=user.email,
                     created_at=utcnow(),
                 ))
                 db.commit()

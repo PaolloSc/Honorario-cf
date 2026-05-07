@@ -17,6 +17,12 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+let _accessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+  _accessToken = token;
+}
+
 async function request<T>(
   path: string,
   options?: RequestInit
@@ -25,14 +31,19 @@ async function request<T>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 12000);
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+  if (_accessToken) {
+    headers["Authorization"] = `Bearer ${_accessToken}`;
+  }
+
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
       signal: options?.signal || controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
+      headers,
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
@@ -116,6 +127,7 @@ export interface ContractSummary {
   client_name: string;
   client_email: string;
   current_version: number;
+  created_by?: string;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +143,7 @@ export interface VersionSummary {
   version_number: number;
   file_path: string | null;
   docuseal_submission_id: string | null;
+  created_by?: string;
   created_at: string;
 }
 
@@ -138,6 +151,7 @@ export interface AuditEntry {
   action: string;
   detail: string | null;
   version_number: number | null;
+  user_email?: string;
   created_at: string;
 }
 
@@ -147,6 +161,8 @@ export interface ContractDetail {
   client_name: string;
   client_email: string;
   current_version: number;
+  created_by?: string;
+  updated_by?: string;
   created_at: string;
   updated_at: string;
   versions: VersionSummary[];

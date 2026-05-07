@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import cnpj, contract, contracts, docuseal, email
+from app.routers import cnpj, contract, contracts, docuseal, email, users
 
 init_db()
 
@@ -36,6 +36,7 @@ app.include_router(contracts.router)
 app.include_router(email.router)
 app.include_router(docuseal.router)
 app.include_router(cnpj.router)
+app.include_router(users.router)
 
 
 @app.get("/api/health")

@@ -38,6 +38,21 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# ── Users ─────────────────────────────────────────────────────────
+
+class UserDB(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    azure_id = Column(String(128), unique=True, nullable=False, index=True)
+    email = Column(String(256), unique=True, nullable=False, index=True)
+    name = Column(String(256), nullable=False, default="")
+    role = Column(String(32), nullable=False, default="advogado")  # advogado | admin
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+# ── Contracts ─────────────────────────────────────────────────────
+
 class ContractDB(Base):
     __tablename__ = "contracts"
 
@@ -47,6 +62,8 @@ class ContractDB(Base):
     client_name = Column(String(256), nullable=False, default="")
     client_email = Column(String(256), nullable=False, default="")
     current_version = Column(Integer, nullable=False, default=1)
+    created_by = Column(String(256), nullable=True)  # user email
+    updated_by = Column(String(256), nullable=True)  # user email
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -67,6 +84,7 @@ class ContractVersionDB(Base):
     form_data_json = Column(Text, nullable=False)
     file_path = Column(String(512), nullable=True)
     docuseal_submission_id = Column(String(128), nullable=True)
+    created_by = Column(String(256), nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     contract = relationship("ContractDB", back_populates="versions")
@@ -80,6 +98,7 @@ class AuditLogDB(Base):
     action = Column(String(64), nullable=False)
     detail = Column(Text, nullable=True)
     version_number = Column(Integer, nullable=True)
+    user_email = Column(String(256), nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     contract = relationship("ContractDB", back_populates="audit_logs")
