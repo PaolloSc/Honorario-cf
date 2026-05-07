@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Lexend_Zetta } from "next/font/google";
+import Logo from "@/components/ui/Logo";
 import "./globals.css";
 
 const lexendZetta = Lexend_Zetta({
@@ -28,25 +29,24 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <header className="bg-primary-dark text-white shadow-md">
           <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                aria-hidden
-                className="w-11 h-11 rounded-md bg-primary-light text-primary-dark flex items-center justify-center font-display font-bold text-lg shadow-sm"
-              >
-                C&amp;F
-              </div>
-              <div className="leading-tight">
-                <p className="font-display font-semibold text-base tracking-wide">
-                  Carvalho &amp; Furtado Advogados
-                </p>
+            <div className="flex items-center gap-4">
+              <a href="/" className="flex items-center gap-4">
+                <Logo variant="light" className="h-10 w-auto" showSubtitle={false} />
+              </a>
+              <div className="leading-tight hidden sm:block">
                 <p className="text-xs text-brand-verde-claro/90 font-sans">
                   Automação de Contratos de Honorários
                 </p>
               </div>
             </div>
-            <span className="hidden sm:inline-flex items-center gap-2 text-xs font-medium text-brand-verde-claro/80 uppercase tracking-widest">
-              Sistema Interno
-            </span>
+            <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
+              <a href="/" className="text-brand-verde-claro/80 hover:text-white transition">
+                Novo Contrato
+              </a>
+              <a href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
+                Contratos
+              </a>
+            </nav>
           </div>
         </header>
 
@@ -54,9 +54,12 @@ export default function RootLayout({
 
         <footer className="bg-primary-dark text-brand-verde-claro/90 mt-12">
           <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-            <p className="font-display tracking-wide">
-              © {new Date().getFullYear()} Carvalho &amp; Furtado Advogados
-            </p>
+            <div className="flex items-center gap-2">
+              <Logo variant="light" className="h-5 w-auto" showSubtitle={false} />
+              <span className="font-display tracking-wide">
+                © {new Date().getFullYear()}
+              </span>
+            </div>
             <p className="font-sans">
               Documento de uso interno — Confidencial
             </p>

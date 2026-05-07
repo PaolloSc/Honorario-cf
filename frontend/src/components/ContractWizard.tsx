@@ -171,9 +171,19 @@ function firstInvalidStepBefore(step: number, data: ContratoFormData): {
   return null;
 }
  
-export default function ContractWizard() {
+interface ContractWizardProps {
+  initialData?: ContratoFormData;
+  editContractId?: string;
+  onSaveComplete?: (contractId: string) => void;
+}
+
+export default function ContractWizard({
+  initialData,
+  editContractId,
+  onSaveComplete,
+}: ContractWizardProps = {}) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<ContratoFormData>(INITIAL_DATA);
+  const [formData, setFormData] = useState<ContratoFormData>(initialData || INITIAL_DATA);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const currentStepErrors = validateStep(currentStep, formData);
   const canGoNext = currentStepErrors.length === 0;
@@ -248,10 +258,12 @@ export default function ContractWizard() {
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
         <h1 className="font-display text-2xl font-semibold text-primary-dark tracking-wide">
-          Novo Contrato de Honorários
+          {editContractId ? "Editar Contrato" : "Novo Contrato de Honorários"}
         </h1>
         <p className="text-sm text-muted mt-1">
-          Preencha as etapas abaixo para gerar o contrato.
+          {editContractId
+            ? "Altere os dados e gere uma nova versao."
+            : "Preencha as etapas abaixo para gerar o contrato."}
         </p>
       </div>
  
@@ -292,7 +304,13 @@ export default function ContractWizard() {
           />
         )}
         {currentStep === 6 && <Step6Revisao data={formData} />}
-        {currentStep === 7 && <Step7Envio data={formData} />}
+        {currentStep === 7 && (
+          <Step7Envio
+            data={formData}
+            editContractId={editContractId}
+            onSaveComplete={onSaveComplete}
+          />
+        )}
       </div>
 
       {validationErrors.length > 0 && (

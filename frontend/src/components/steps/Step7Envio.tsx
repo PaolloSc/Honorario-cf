@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData } from "@/types/contract";
-import { generateContract, sendEmail, sendForSignature } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
+  editContractId?: string;
+  onSaveComplete?: (contractId: string) => void;
 }
 
 function getContratanteNome(c: Contratante): string {
@@ -13,30 +15,37 @@ function getContratanteNome(c: Contratante): string {
   return (c as ContratantePJ).razao_social;
 }
 
-export default function Step7Envio({ data }: Step7EnvioProps) {
+export default function Step7Envio({ data, editContractId, onSaveComplete }: Step7EnvioProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "generating" | "sending" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
-  const [contractId, setContractId] = useState<string | null>(null);
+  const [contractId, setContractId] = useState<string | null>(editContractId || null);
+  const isEdit = !!editContractId;
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     setStatus("generating");
-    setMessage("Gerando contrato...");
+    setMessage(isEdit ? "Salvando nova versao..." : "Gerando contrato...");
 
     try {
-      const result = await generateContract(data);
+      let resultContractId: string;
 
-      if (!result.success) {
-        throw new Error(result.message || "Erro ao gerar contrato");
+      if (isEdit) {
+        const result = await updateContract(editContractId, data as unknown as Record<string, unknown>);
+        if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
+        resultContractId = result.contract_id;
+      } else {
+        const result = await generateContract(data);
+        if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
+        resultContractId = result.contract_id!;
       }
 
-      setContractId(result.contract_id!);
+      setContractId(resultContractId);
       setStatus("sending");
       setMessage("Enviando e-mail...");
 
       const emailResult = await sendEmail({
-        contract_id: result.contract_id!,
+        contract_id: resultContractId,
         destinatario_email: data.email_destinatario || data.contratantes[0].email,
         destinatario_nome: getContratanteNome(data.contratantes[0]),
         assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
@@ -47,7 +56,48 @@ export default function Step7Envio({ data }: Step7EnvioProps) {
       }
 
       setStatus("success");
-      setMessage("Contrato gerado e enviado por e-mail com sucesso!");
+      setMessage(
+        isEdit
+          ? "Nova versao gerada e enviada por e-mail com sucesso!"
+          : "Contrato gerado e enviado por e-mail com sucesso!"
+      );
+
+      if (onSaveComplete) {
+        setTimeout(() => onSaveComplete(resultContractId), 2000);
+      }
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveOnly = async () => {
+    setIsSubmitting(true);
+    setStatus("generating");
+    setMessage(isEdit ? "Salvando nova versao..." : "Gerando contrato...");
+
+    try {
+      let resultContractId: string;
+
+      if (isEdit) {
+        const result = await updateContract(editContractId, data as unknown as Record<string, unknown>);
+        if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
+        resultContractId = result.contract_id;
+      } else {
+        const result = await generateContract(data);
+        if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
+        resultContractId = result.contract_id!;
+      }
+
+      setContractId(resultContractId);
+      setStatus("success");
+      setMessage(isEdit ? "Nova versao salva com sucesso!" : "Contrato gerado com sucesso!");
+
+      if (onSaveComplete) {
+        setTimeout(() => onSaveComplete(resultContractId), 1500);
+      }
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Erro desconhecido");
@@ -91,7 +141,9 @@ export default function Step7Envio({ data }: Step7EnvioProps) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Revisão e Envio</h2>
+      <h2 className="text-xl font-semibold">
+        {isEdit ? "Salvar Nova Versao" : "Revisao e Envio"}
+      </h2>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-medium text-blue-900 mb-2">Resumo do Contrato</h3>
@@ -109,14 +161,25 @@ export default function Step7Envio({ data }: Step7EnvioProps) {
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <h3 className="font-medium text-amber-900 mb-2">Próximos passos</h3>
-        <ol className="text-sm text-amber-800 space-y-1 list-decimal list-inside">
-          <li>O contrato será gerado e enviado por e-mail para conferência</li>
-          <li>Após confirmação, você poderá enviar para assinatura digital</li>
-          <li>O contratante receberá um link para assinar via DocuSeal</li>
-        </ol>
-      </div>
+      {isEdit && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h3 className="font-medium text-amber-900 mb-2">Modo de edicao</h3>
+          <p className="text-sm text-amber-800">
+            Uma nova versao sera criada. O historico anterior sera mantido.
+          </p>
+        </div>
+      )}
+
+      {!isEdit && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h3 className="font-medium text-amber-900 mb-2">Proximos passos</h3>
+          <ol className="text-sm text-amber-800 space-y-1 list-decimal list-inside">
+            <li>O contrato sera gerado e enviado por e-mail para conferencia</li>
+            <li>Apos confirmacao, voce podera enviar para assinatura digital</li>
+            <li>O contratante recebera um link para assinar via DocuSeal</li>
+          </ol>
+        </div>
+      )}
 
       {message && (
         <div
@@ -134,14 +197,26 @@ export default function Step7Envio({ data }: Step7EnvioProps) {
 
       <div className="flex gap-4 flex-wrap">
         <button
+          onClick={handleSaveOnly}
+          disabled={isSubmitting || status === "success"}
+          className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
+        >
+          {isSubmitting && status === "generating"
+            ? "Salvando..."
+            : isEdit
+            ? "Salvar Nova Versao"
+            : "Apenas Gerar Contrato"}
+        </button>
+
+        <button
           onClick={handleSubmit}
           disabled={isSubmitting || status === "success"}
           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition"
         >
-          {isSubmitting && status === "generating"
-            ? "Gerando contrato..."
-            : isSubmitting && status === "sending"
+          {isSubmitting && status === "sending"
             ? "Enviando..."
+            : isEdit
+            ? "Salvar e Enviar por E-mail"
             : "Gerar e Enviar por E-mail"}
         </button>
 

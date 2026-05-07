@@ -107,3 +107,98 @@ export async function lookupCNPJ(cnpj: string) {
     situacao_cadastral: string;
   }>(`/api/cnpj/${cnpjClean}`);
 }
+
+// ── Contracts Management ─────────────────────────────────────────
+
+export interface ContractSummary {
+  contract_id: string;
+  status: string;
+  client_name: string;
+  client_email: string;
+  current_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractListResponse {
+  contracts: ContractSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface VersionSummary {
+  version_number: number;
+  file_path: string | null;
+  docuseal_submission_id: string | null;
+  created_at: string;
+}
+
+export interface AuditEntry {
+  action: string;
+  detail: string | null;
+  version_number: number | null;
+  created_at: string;
+}
+
+export interface ContractDetail {
+  contract_id: string;
+  status: string;
+  client_name: string;
+  client_email: string;
+  current_version: number;
+  created_at: string;
+  updated_at: string;
+  versions: VersionSummary[];
+  audit_log: AuditEntry[];
+}
+
+export interface ContractFormDataResponse {
+  contract_id: string;
+  version_number: number;
+  form_data: Record<string, unknown>;
+}
+
+export async function listContracts(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  search?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.page_size) qs.set("page_size", String(params.page_size));
+  if (params?.status) qs.set("status", params.status);
+  if (params?.search) qs.set("search", params.search);
+  const query = qs.toString();
+  return request<ContractListResponse>(`/api/contracts${query ? `?${query}` : ""}`);
+}
+
+export async function getContract(contractId: string) {
+  return request<ContractDetail>(`/api/contracts/${contractId}`);
+}
+
+export async function getContractFormData(contractId: string, version?: number) {
+  const qs = version ? `?version=${version}` : "";
+  return request<ContractFormDataResponse>(`/api/contracts/${contractId}/form-data${qs}`);
+}
+
+export async function updateContract(contractId: string, formData: Record<string, unknown>) {
+  return request<{
+    success: boolean;
+    message: string;
+    contract_id: string;
+    version: number;
+    download_url: string;
+  }>(`/api/contracts/${contractId}`, {
+    method: "PUT",
+    body: JSON.stringify({ form_data: formData }),
+  });
+}
+
+export async function updateContractStatus(contractId: string, status: string) {
+  return request<{ success: boolean; status: string }>(
+    `/api/contracts/${contractId}/status?status=${encodeURIComponent(status)}`,
+    { method: "PATCH" }
+  );
+}

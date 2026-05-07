@@ -13,5 +13,6 @@ out/
 
 generated_contracts/
 backend/generated_contracts/
+*.db
 
 *.log

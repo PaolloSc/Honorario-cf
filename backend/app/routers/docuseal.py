@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.config import BACKEND_DIR, settings
+from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.docuseal import DocuSealService
 
 logger = logging.getLogger(__name__)
@@ -42,7 +44,7 @@ def resolve_backend_path(value: str) -> Path:
 
 
 @router.post("/send-for-signature", response_model=DocuSealResponse)
-async def send_for_signature(data: DocuSealRequest) -> DocuSealResponse:
+async def send_for_signature(data: DocuSealRequest, db: Session = Depends(get_db)) -> DocuSealResponse:
     """Send contract for digital signature via DocuSeal."""
     try:
         service = get_docuseal_service()
@@ -74,10 +76,35 @@ async def send_for_signature(data: DocuSealRequest) -> DocuSealResponse:
 
         if sign_result.get("success"):
             submission = sign_result.get("submission", {})
+            submission_id = submission.get("id")
+
+            # Update DB: status + audit log
+            contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
+            if contract:
+                contract.status = "enviado"
+                contract.updated_at = utcnow()
+                # Save submission_id on latest version
+                latest_ver = (
+                    db.query(ContractVersionDB)
+                    .filter(ContractVersionDB.contract_id == data.contract_id)
+                    .order_by(ContractVersionDB.version_number.desc())
+                    .first()
+                )
+                if latest_ver:
+                    latest_ver.docuseal_submission_id = str(submission_id) if submission_id else None
+                db.add(AuditLogDB(
+                    contract_id=data.contract_id,
+                    action="envio_assinatura",
+                    detail=f"Enviado para assinatura via DocuSeal (submission {submission_id})",
+                    version_number=contract.current_version,
+                    created_at=utcnow(),
+                ))
+                db.commit()
+
             return DocuSealResponse(
                 success=True,
                 message="Documento enviado para assinatura com sucesso",
-                submission_id=submission.get("id"),
+                submission_id=str(submission_id) if submission_id else None,
             )
         else:
             return DocuSealResponse(
