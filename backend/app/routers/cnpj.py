@@ -9,6 +9,21 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter(prefix="/api/cnpj", tags=["cnpj"])
 
 
+def _title_case(text: str) -> str:
+    """Convert UPPERCASE text to Title Case, keeping common prepositions lowercase."""
+    if not text:
+        return text
+    small_words = {"de", "da", "do", "das", "dos", "e", "em", "no", "na", "nos", "nas", "a", "o", "as", "os", "por", "para", "com"}
+    words = text.lower().split()
+    result = []
+    for i, word in enumerate(words):
+        if i == 0 or word not in small_words:
+            result.append(word.capitalize())
+        else:
+            result.append(word)
+    return " ".join(result)
+
+
 def _format_endereco(
     logradouro: str,
     numero: str,
@@ -18,11 +33,14 @@ def _format_endereco(
     uf: str,
     cep: str,
 ) -> str:
-    parts = [p for p in [logradouro, numero, complemento, bairro] if p]
+    parts = [p for p in [_title_case(logradouro), numero, _title_case(complemento), _title_case(bairro)] if p]
     endereco = ", ".join(parts)
     if municipio:
-        endereco += f", {municipio}/{uf}" if uf else f", {municipio}"
+        endereco += f", {_title_case(municipio)}/{uf.upper()}" if uf else f", {_title_case(municipio)}"
     if cep:
+        clean_cep = re.sub(r"\D", "", cep)
+        if len(clean_cep) == 8:
+            cep = f"{clean_cep[:5]}-{clean_cep[5:]}"
         endereco += f", CEP {cep}"
     return endereco
 
@@ -30,8 +48,8 @@ def _format_endereco(
 def _parse_brasilapi(data: dict, cnpj_clean: str) -> dict:
     return {
         "cnpj": cnpj_clean,
-        "razao_social": data.get("razao_social", "") or "",
-        "nome_fantasia": data.get("nome_fantasia", "") or "",
+        "razao_social": _title_case(data.get("razao_social", "") or ""),
+        "nome_fantasia": _title_case(data.get("nome_fantasia", "") or ""),
         "endereco": _format_endereco(
             data.get("logradouro", "") or "",
             data.get("numero", "") or "",
@@ -60,8 +78,8 @@ def _parse_publica_cnpj_ws(data: dict, cnpj_clean: str) -> dict:
 
     return {
         "cnpj": cnpj_clean,
-        "razao_social": data.get("razao_social", "") or "",
-        "nome_fantasia": estab.get("nome_fantasia", "") or "",
+        "razao_social": _title_case(data.get("razao_social", "") or ""),
+        "nome_fantasia": _title_case(estab.get("nome_fantasia", "") or ""),
         "endereco": _format_endereco(
             full_logradouro,
             estab.get("numero", "") or "",
@@ -84,8 +102,8 @@ def _parse_open_cnpja(data: dict, cnpj_clean: str) -> dict:
 
     return {
         "cnpj": cnpj_clean,
-        "razao_social": company.get("name", "") or "",
-        "nome_fantasia": data.get("alias", "") or "",
+        "razao_social": _title_case(company.get("name", "") or ""),
+        "nome_fantasia": _title_case(data.get("alias", "") or ""),
         "endereco": _format_endereco(
             address.get("street", "") or "",
             str(address.get("number", "") or ""),

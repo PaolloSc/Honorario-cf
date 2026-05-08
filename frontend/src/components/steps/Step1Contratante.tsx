@@ -122,7 +122,7 @@ export default function Step1Contratante({
       try {
         const data = await lookupCNPJ(cnpj);
         updateContratante(index, {
-          razao_social: toTitleCase(data.razao_social),
+          razao_social: data.razao_social,
           endereco: data.endereco,
         });
       } catch (err) {
