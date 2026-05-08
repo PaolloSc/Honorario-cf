@@ -88,22 +88,12 @@ def _decode_token(token: str) -> dict:
             raise ValueError(f"Key {kid} not found in JWKS")
 
         tenant_id = settings.azure_tenant_id
-        allowed_audiences = [
-            settings.azure_client_id,
-            f"api://{settings.azure_client_id}",
-            "https://graph.microsoft.com",
-            "00000003-0000-0000-c000-000000000000",
-        ]
-        allowed_issuers = [
-            f"https://login.microsoftonline.com/{tenant_id}/v2.0",
-            f"https://sts.windows.net/{tenant_id}/",
-        ]
         payload = jwt.decode(
             token,
             rsa_key,
             algorithms=["RS256"],
-            audience=allowed_audiences,
-            issuer=allowed_issuers,
+            audience=settings.azure_client_id,
+            issuer=f"https://login.microsoftonline.com/{tenant_id}/v2.0",
         )
         return payload
 
