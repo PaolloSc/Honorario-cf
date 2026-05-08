@@ -352,6 +352,33 @@ function PFForm({
   data: ContratantePF;
   onUpdate: (partial: Partial<ContratantePF>) => void;
 }) {
+  const [cep, setCep] = useState("");
+  const [loadingCEP, setLoadingCEP] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
+
+  const handleCEPLookup = async (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    setCep(value);
+    if (digits.length !== 8) return;
+
+    setLoadingCEP(true);
+    setCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado.");
+        return;
+      }
+      const endereco = `${data.logradouro}, ${data.bairro}, ${data.localidade}/${data.uf}, CEP ${digits.replace(/(\d{5})(\d{3})/, "$1-$2")}`;
+      onUpdate({ endereco });
+    } catch {
+      setCepError("Erro ao buscar CEP.");
+    } finally {
+      setLoadingCEP(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="Nome completo" required>
@@ -410,12 +437,24 @@ function PFForm({
         />
       </FormField>
 
+      <FormField label="CEP" hint="Digite o CEP para preencher o endereço">
+        <div className="flex gap-2">
+          <Input
+            value={cep}
+            onChange={(e) => handleCEPLookup(e.target.value)}
+            placeholder="00000-000"
+            maxLength={9}
+          />
+          {loadingCEP && <span className="text-sm text-muted self-center">Buscando...</span>}
+        </div>
+        {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
+      </FormField>
+
       <FormField label="Endereço completo" required>
         <Input
           value={data.endereco}
           onChange={(e) => onUpdate({ endereco: e.target.value })}
           placeholder="Rua, número, bairro, cidade/UF, CEP"
-          className="md:col-span-2"
           required
         />
       </FormField>
