@@ -31,17 +31,10 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>
           <header className="bg-primary-dark text-white shadow-md">
-            <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <a href="/" className="flex items-center gap-4">
-                  <Logo variant="light" className="h-10 w-auto" showSubtitle={false} />
-                </a>
-                <div className="leading-tight hidden sm:block">
-                  <p className="text-xs text-brand-verde-claro/90 font-sans">
-                    Automacao de Contratos de Honorarios
-                  </p>
-                </div>
-              </div>
+            <div className="px-6 py-5 flex items-center justify-between">
+              <a href="/" className="flex items-center">
+                <Logo variant="light" className="h-10 w-auto" showSubtitle={false} />
+              </a>
               <div className="flex items-center gap-6">
                 <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
                   <a href="/" className="text-brand-verde-claro/80 hover:text-white transition">
