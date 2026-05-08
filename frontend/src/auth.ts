@@ -26,15 +26,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     MicrosoftEntraID({
       clientId: process.env.AZURE_AD_CLIENT_ID!,
       clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
-      issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
+      issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID!}/v2.0`,
       authorization: {
         params: {
           scope: "openid profile email User.Read",
+          prompt: "select_account",
         },
       },
     }),
   ],
   callbacks: {
+    authorized({ auth, request }) {
+      const isLoggedIn = !!auth?.user;
+      const isOnLogin = request.nextUrl.pathname.startsWith("/login");
+      if (isOnLogin) return true;
+      return isLoggedIn;
+    },
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token;
@@ -52,5 +59,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: "/login",
   },
+  debug: true,
   trustHost: true,
+  logger: {
+    error(error) {
+      console.error("[AUTH ERROR]", error);
+      if (error.cause) console.error("[AUTH CAUSE]", error.cause);
+    },
+  },
 });

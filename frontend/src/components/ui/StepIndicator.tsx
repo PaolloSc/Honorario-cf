@@ -1,18 +1,20 @@
 "use client";
- 
+
 interface Step {
   id: number;
   title: string;
 }
- 
+
 interface StepIndicatorProps {
   steps: Step[];
   currentStep: number;
+  onStepClick?: (stepId: number) => void;
 }
- 
+
 export default function StepIndicator({
   steps,
   currentStep,
+  onStepClick,
 }: StepIndicatorProps) {
   return (
     <nav className="mb-8">
@@ -22,7 +24,11 @@ export default function StepIndicator({
           const isCompleted = step.id < currentStep;
           return (
             <li key={step.id} className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onStepClick?.(step.id)}
+                className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition"
+              >
                 <span
                   className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold transition-all ${
                     isActive
@@ -47,7 +53,7 @@ export default function StepIndicator({
                 >
                   {step.title}
                 </span>
-              </div>
+              </button>
               {idx < steps.length - 1 && (
                 <div
                   className={`w-8 h-0.5 ${

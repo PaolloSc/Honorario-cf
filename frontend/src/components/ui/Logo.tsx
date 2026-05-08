@@ -15,7 +15,7 @@ export default function Logo({
 
   return (
     <svg
-      viewBox="0 0 420 80"
+      viewBox="0 0 600 80"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
@@ -23,13 +23,14 @@ export default function Logo({
       aria-label="Carvalho & Furtado Advogados"
     >
       <text
-        x="0"
+        x="280"
         y="42"
         fontFamily="'Lexend Zetta', sans-serif"
         fontSize="34"
         fontWeight="500"
         letterSpacing="2"
         fill={color}
+        textAnchor="middle"
       >
         Carvalho
         <tspan fontWeight="400" fontSize="38" dx="4" dy="-1">
@@ -41,13 +42,14 @@ export default function Logo({
       </text>
       {showSubtitle && (
         <text
-          x="105"
+          x="280"
           y="66"
           fontFamily="'Lexend Zetta', sans-serif"
           fontSize="13"
           fontWeight="400"
           letterSpacing="8"
           fill={subtitleColor}
+          textAnchor="middle"
         >
           ADVOGADOS
         </text>

@@ -267,7 +267,16 @@ export default function ContractWizard({
         </p>
       </div>
  
-      <StepIndicator steps={STEPS} currentStep={currentStep} />
+      <StepIndicator steps={STEPS} currentStep={currentStep} onStepClick={(id) => {
+        const invalid = firstInvalidStepBefore(id, formData);
+        if (invalid) {
+          setValidationErrors(invalid.errors);
+          setCurrentStep(invalid.step);
+          return;
+        }
+        setValidationErrors([]);
+        setCurrentStep(id);
+      }} />
  
       {/* Step Content */}
       <div className="mb-8">

@@ -160,7 +160,10 @@ class ContractGenerator:
         if "List Bullet" not in doc.styles:
             bullet_style = doc.styles.add_style("List Bullet", WD_STYLE_TYPE.PARAGRAPH)
             bullet_style.base_style = doc.styles["Normal"]
-            bullet_style.paragraph_format.left_indent = Cm(0.5)
+        else:
+            bullet_style = doc.styles["List Bullet"]
+        bullet_style.paragraph_format.left_indent = Cm(0)
+        bullet_style.paragraph_format.first_line_indent = Cm(0)
 
         for level in (1, 2, 3):
             style_name = f"Heading {level}"
@@ -399,7 +402,7 @@ class ContractGenerator:
  
         if has_hora:
             doc.add_paragraph(
-                "Caso a CONTRATANTE solicite atendimento a questões expressamente não "
+                "2.3. Caso a CONTRATANTE solicite atendimento a questões expressamente não "
                 "indicadas no objeto e escopo deste Contrato, serão aplicados os mesmos "
                 "critérios de honorários de hora trabalhada previstos no Contrato."
             )
@@ -693,14 +696,14 @@ class ContractGenerator:
         )
  
     def _add_obligations(self, doc: Document) -> None:
-        doc.add_heading("7. OBRIGAÇÕES DAS PARTES", level=2)
+        doc.add_heading("6. OBRIGAÇÕES DAS PARTES", level=2)
         doc.add_paragraph(
-            "7.1. Obrigações da CONTRATANTE: (i) fornecer informações/documentos de forma "
+            "6.1. Obrigações da CONTRATANTE: (i) fornecer informações/documentos de forma "
             "completa e em tempo hábil; (ii) manter dados cadastrais atualizados; "
             "(iii) efetuar pagamentos dentro dos respectivos prazos."
         )
         doc.add_paragraph(
-            "7.2. Obrigações do C&F: (i) executar o serviço com diligência, técnica e zelo; "
+            "6.2. Obrigações do C&F: (i) executar o serviço com diligência, técnica e zelo; "
             "(ii) manter confidencialidade e sigilo profissional; (iii) fornecer informações/"
             "documentos relativas à prestação de serviço."
         )
@@ -710,7 +713,7 @@ class ContractGenerator:
         )
  
     def _add_integrity(self, doc: Document) -> None:
-        doc.add_heading("11. INTEGRIDADE E OUTROS", level=2)
+        doc.add_heading("7. INTEGRIDADE E OUTROS", level=2)
         doc.add_paragraph(
             "As Partes comprometem-se a observar a legislação aplicável, incluindo Lei "
             "Anticorrupção e outras normas similares."
@@ -726,26 +729,26 @@ class ContractGenerator:
         )
  
     def _add_term_and_termination(self, doc: Document) -> None:
-        doc.add_heading("12. PRAZO, RESCISÃO E OUTROS EFEITOS", level=2)
+        doc.add_heading("8. PRAZO, RESCISÃO E OUTROS EFEITOS", level=2)
         doc.add_paragraph(
             "Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
             "presente Contrato é celebrado por tempo indeterminado, até que seja "
             "esgotado o objeto contratado."
         )
         doc.add_paragraph(
-            "12.1. Qualquer Parte poderá rescindir este Contrato imotivadamente mediante "
+            "8.1. Qualquer Parte poderá rescindir este Contrato imotivadamente mediante "
             "notificação por escrito com antecedência mínima de 30 (trinta) dias."
         )
  
     def _add_ip(self, doc: Document) -> None:
-        doc.add_heading("13. PROPRIEDADE INTELECTUAL", level=2)
+        doc.add_heading("9. PROPRIEDADE INTELECTUAL", level=2)
         doc.add_paragraph(
-            "13.1. A produção intelectual (teses, estratégias, modelos, documentos, "
+            "9.1. A produção intelectual (teses, estratégias, modelos, documentos, "
             "minutas e know-how) desenvolvida pelo C&F permanece de sua titularidade."
         )
  
     def _add_general(self, doc: Document) -> None:
-        doc.add_heading("14. DISPOSIÇÕES GERAIS", level=2)
+        doc.add_heading("10. DISPOSIÇÕES GERAIS", level=2)
         doc.add_paragraph(
             "Será considerada entregue a notificação e/ou comunicação encaminhada ao "
             "endereço declinado no preâmbulo deste Contrato."
@@ -755,9 +758,9 @@ class ContractGenerator:
             "para a execução judicial de quaisquer obrigações nele constantes."
         )
  
-        doc.add_heading("15. FORO", level=2)
+        doc.add_heading("11. FORO", level=2)
         doc.add_paragraph(
-            "15.1. Fica eleito o foro da Comarca de Belo Horizonte/MG para dirimir "
+            "11.1. Fica eleito o foro da Comarca de Belo Horizonte/MG para dirimir "
             "quaisquer dúvidas ou controvérsias decorrentes deste Contrato."
         )
  
