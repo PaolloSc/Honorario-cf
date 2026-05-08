@@ -44,7 +44,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async jwt({ token, account }) {
       if (account) {
-        token.accessToken = account.access_token;
+        token.accessToken = account.id_token;
       }
       return token;
     },
