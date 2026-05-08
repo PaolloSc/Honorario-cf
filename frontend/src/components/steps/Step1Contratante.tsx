@@ -15,6 +15,12 @@ import type {
 } from "@/types/contract";
 import { useCallback, useState } from "react";
 
+function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (char) => char.toUpperCase());
+}
+
 const ESTADOS_CIVIS: Array<{ value: EstadoCivil; label: string }> = [
   { value: "Solteiro(a)", label: "Solteiro(a)" },
   { value: "Casado(a)", label: "Casado(a)" },
@@ -103,7 +109,7 @@ export default function Step1Contratante({
       try {
         const data = await lookupCNPJ(cnpj);
         updateContratante(index, {
-          razao_social: data.razao_social,
+          razao_social: toTitleCase(data.razao_social),
           endereco: data.endereco,
         });
       } catch (err) {
@@ -223,8 +229,12 @@ function PJForm({
         <div className="flex gap-2">
           <Input
             value={data.cnpj}
-            onChange={(e) => onUpdate({ cnpj: e.target.value })}
-            placeholder="00.000.000/0000-00"
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, 14);
+              onUpdate({ cnpj: digits });
+            }}
+            placeholder="00000000000000"
+            maxLength={14}
             required
           />
           <button
@@ -353,8 +363,18 @@ function PFForm({
   onUpdate: (partial: Partial<ContratantePF>) => void;
 }) {
   const [cep, setCep] = useState("");
+  const [numero, setNumero] = useState("");
+  const [cepData, setCepData] = useState<{ logradouro: string; bairro: string; localidade: string; uf: string } | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
+
+  const buildEndereco = (cData: typeof cepData, num: string) => {
+    if (!cData) return;
+    const numPart = num ? `, n. ${num}` : "";
+    const cepFormatado = cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
+    const endereco = `${cData.logradouro}${numPart}, ${cData.bairro}, ${cData.localidade}/${cData.uf}, CEP ${cepFormatado}`;
+    onUpdate({ endereco });
+  };
 
   const handleCEPLookup = async (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -365,18 +385,24 @@ function PFForm({
     setCepError(null);
     try {
       const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      const data = await res.json();
-      if (data.erro) {
+      const result = await res.json();
+      if (result.erro) {
         setCepError("CEP não encontrado.");
         return;
       }
-      const endereco = `${data.logradouro}, ${data.bairro}, ${data.localidade}/${data.uf}, CEP ${digits.replace(/(\d{5})(\d{3})/, "$1-$2")}`;
-      onUpdate({ endereco });
+      const cData = { logradouro: result.logradouro, bairro: result.bairro, localidade: result.localidade, uf: result.uf };
+      setCepData(cData);
+      buildEndereco(cData, numero);
     } catch {
       setCepError("Erro ao buscar CEP.");
     } finally {
       setLoadingCEP(false);
     }
+  };
+
+  const handleNumeroChange = (value: string) => {
+    setNumero(value);
+    buildEndereco(cepData, value);
   };
 
   return (
@@ -448,6 +474,15 @@ function PFForm({
           {loadingCEP && <span className="text-sm text-muted self-center">Buscando...</span>}
         </div>
         {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
+      </FormField>
+
+      <FormField label="Número">
+        <Input
+          value={numero}
+          onChange={(e) => handleNumeroChange(e.target.value)}
+          placeholder="Ex: 271"
+          disabled={!cepData}
+        />
       </FormField>
 
       <FormField label="Endereço completo" required>
