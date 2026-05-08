@@ -21,6 +21,19 @@ function toTitleCase(str: string): string {
     .replace(/(^|\s)\S/g, (char) => char.toUpperCase());
 }
 
+function formatCNPJ(digits: string): string {
+  return digits
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2}\.\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{2}\.\d{3}\.\d{3})(\d)/, "$1/$2")
+    .replace(/^(\d{2}\.\d{3}\.\d{3}\/\d{4})(\d)/, "$1-$2");
+}
+
+function formatCEP(digits: string): string {
+  if (digits.length > 5) return digits.replace(/^(\d{5})(\d)/, "$1-$2");
+  return digits;
+}
+
 const ESTADOS_CIVIS: Array<{ value: EstadoCivil; label: string }> = [
   { value: "Solteiro(a)", label: "Solteiro(a)" },
   { value: "Casado(a)", label: "Casado(a)" },
@@ -228,13 +241,13 @@ function PJForm({
       <FormField label="CNPJ" required hint="Digite o CNPJ para buscar dados automaticamente">
         <div className="flex gap-2">
           <Input
-            value={data.cnpj}
+            value={formatCNPJ(data.cnpj)}
             onChange={(e) => {
               const digits = e.target.value.replace(/\D/g, "").slice(0, 14);
               onUpdate({ cnpj: digits });
             }}
-            placeholder="00000000000000"
-            maxLength={14}
+            placeholder="00.000.000/0000-00"
+            maxLength={18}
             required
           />
           <button
@@ -364,21 +377,23 @@ function PFForm({
 }) {
   const [cep, setCep] = useState("");
   const [numero, setNumero] = useState("");
+  const [complemento, setComplemento] = useState("");
   const [cepData, setCepData] = useState<{ logradouro: string; bairro: string; localidade: string; uf: string } | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
 
-  const buildEndereco = (cData: typeof cepData, num: string) => {
+  const buildEndereco = (cData: typeof cepData, num: string, comp: string) => {
     if (!cData) return;
     const numPart = num ? `, n. ${num}` : "";
+    const compPart = comp ? `, ${comp}` : "";
     const cepFormatado = cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
-    const endereco = `${cData.logradouro}${numPart}, ${cData.bairro}, ${cData.localidade}/${cData.uf}, CEP ${cepFormatado}`;
+    const endereco = `${cData.logradouro}${numPart}${compPart}, ${cData.bairro}, ${cData.localidade}/${cData.uf}, CEP ${cepFormatado}`;
     onUpdate({ endereco });
   };
 
   const handleCEPLookup = async (value: string) => {
-    const digits = value.replace(/\D/g, "");
-    setCep(value);
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    setCep(formatCEP(digits));
     if (digits.length !== 8) return;
 
     setLoadingCEP(true);
@@ -392,7 +407,7 @@ function PFForm({
       }
       const cData = { logradouro: result.logradouro, bairro: result.bairro, localidade: result.localidade, uf: result.uf };
       setCepData(cData);
-      buildEndereco(cData, numero);
+      buildEndereco(cData, numero, complemento);
     } catch {
       setCepError("Erro ao buscar CEP.");
     } finally {
@@ -402,7 +417,12 @@ function PFForm({
 
   const handleNumeroChange = (value: string) => {
     setNumero(value);
-    buildEndereco(cepData, value);
+    buildEndereco(cepData, value, complemento);
+  };
+
+  const handleComplementoChange = (value: string) => {
+    setComplemento(value);
+    buildEndereco(cepData, numero, value);
   };
 
   return (
@@ -481,6 +501,15 @@ function PFForm({
           value={numero}
           onChange={(e) => handleNumeroChange(e.target.value)}
           placeholder="Ex: 271"
+          disabled={!cepData}
+        />
+      </FormField>
+
+      <FormField label="Complemento">
+        <Input
+          value={complemento}
+          onChange={(e) => handleComplementoChange(e.target.value)}
+          placeholder="Apto, sala, bloco..."
           disabled={!cepData}
         />
       </FormField>
