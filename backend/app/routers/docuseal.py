@@ -68,9 +68,22 @@ async def send_for_signature(
     try:
         service = get_docuseal_service()
 
-        # For now, create a simple template from the contract
-        # In production, you'd upload the actual file and create a template first
-        filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
+        # Resolve file path from DB (latest version), with fallback to reconstructed path
+        filepath: Path | None = None
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
+        )
+        if latest_ver and latest_ver.file_path:
+            stored = Path(latest_ver.file_path)
+            if stored.exists():
+                filepath = stored
+
+        if filepath is None:
+            filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
+
         if not filepath.exists():
             raise HTTPException(status_code=404, detail="Contract file not found")
 

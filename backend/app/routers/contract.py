@@ -5,7 +5,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -107,6 +107,7 @@ def generate_contract(
 @router.get("/{contract_id}/download")
 def download_contract(
     contract_id: str,
+    version: int | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FileResponse:
@@ -122,8 +123,25 @@ def download_contract(
     if user.role != "admin" and contract.created_by != user.email:
         raise HTTPException(403, "Sem permissao")
 
-    gen = get_generator()
-    filepath = Path(gen.output_dir) / f"contrato_{contract_id}.docx"
+    # Find the file path from DB (specific version or latest)
+    query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
+    if version:
+        ver = query.filter(ContractVersionDB.version_number == version).first()
+    else:
+        ver = query.order_by(ContractVersionDB.version_number.desc()).first()
+
+    filepath: Path | None = None
+
+    # Try stored path first
+    if ver and ver.file_path:
+        stored = Path(ver.file_path)
+        if stored.exists():
+            filepath = stored
+
+    # Fallback: reconstruct path
+    if filepath is None:
+        gen = get_generator()
+        filepath = Path(gen.output_dir) / f"contrato_{contract_id}.docx"
 
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo nao encontrado")
