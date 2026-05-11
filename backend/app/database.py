@@ -22,7 +22,18 @@ _default_sqlite = f"sqlite:///{Path(__file__).resolve().parent.parent / 'honorar
 DATABASE_URL = os.getenv("DATABASE_URL", _default_sqlite)
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
+
+# Configure pool size for PostgreSQL to avoid cold-start delays
+pool_kwargs: dict = {"pool_pre_ping": True}
+if not DATABASE_URL.startswith("sqlite"):
+    pool_kwargs.update({
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_timeout": 10,
+        "pool_recycle": 1800,
+    })
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args, **pool_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
