@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
@@ -37,6 +37,18 @@ class ParticipacaoEmailRequest(BaseModel):
     responsavel_captacao: str = ""
     responsavel_gestao: str = ""
     contato_financeiro_cliente: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_nulls(cls, data):
+        """Convert null/None values to empty strings for optional text fields."""
+        if isinstance(data, dict):
+            for field in ("percentual_ou_valor", "para_quem", "natureza",
+                          "responsavel_captacao", "responsavel_gestao",
+                          "contato_financeiro_cliente"):
+                if data.get(field) is None:
+                    data[field] = ""
+        return data
 
 
 _email_service: AzureEmailService | None = None
