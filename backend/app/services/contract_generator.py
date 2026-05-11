@@ -687,8 +687,8 @@ class ContractGenerator:
             "multa de 10% (dez por cento) sobre o valor em atraso e atualização monetária "
             "pelo IPCA, sem prejuízo de suspensão do serviço.",
         ]
-        for clause in clauses:
-            doc.add_paragraph(clause, style="List Bullet")
+        for i, clause in enumerate(clauses, 1):
+            doc.add_paragraph(f"4.{i}. {clause}")
  
     def _add_accessories(self, doc: Document, ac: Acessorios) -> None:
         doc.add_heading("5. REEMBOLSOS, DESPESAS E OUTRAS VERBAS", level=2)
@@ -722,22 +722,22 @@ class ContractGenerator:
             "documentos relativas à prestação de serviço."
         )
         doc.add_paragraph(
-            "A prestação de serviço advocatício constitui obrigação de meio, inexistindo "
+            "6.3. A prestação de serviço advocatício constitui obrigação de meio, inexistindo "
             "obrigação de êxito e/ou resultado."
         )
  
     def _add_integrity(self, doc: Document) -> None:
         doc.add_heading("7. INTEGRIDADE E OUTROS", level=2)
         doc.add_paragraph(
-            "As Partes comprometem-se a observar a legislação aplicável, incluindo Lei "
+            "7.1. As Partes comprometem-se a observar a legislação aplicável, incluindo Lei "
             "Anticorrupção e outras normas similares."
         )
         doc.add_paragraph(
-            "As Partes comprometem-se a tratar dados pessoais estritamente para as "
+            "7.2. As Partes comprometem-se a tratar dados pessoais estritamente para as "
             "finalidades deste Contrato, observando medidas razoáveis de segurança."
         )
         doc.add_paragraph(
-            "A CONTRATANTE declara estar ciente de que o C&F, sob supervisão humana, "
+            "7.3. A CONTRATANTE declara estar ciente de que o C&F, sob supervisão humana, "
             "utiliza ferramentas de inteligência artificial e outras tecnologias como "
             "apoio à prestação do serviço."
         )
@@ -745,12 +745,12 @@ class ContractGenerator:
     def _add_term_and_termination(self, doc: Document) -> None:
         doc.add_heading("8. PRAZO, RESCISÃO E OUTROS EFEITOS", level=2)
         doc.add_paragraph(
-            "Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
+            "8.1. Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
             "presente Contrato é celebrado por tempo indeterminado, até que seja "
             "esgotado o objeto contratado."
         )
         doc.add_paragraph(
-            "8.1. Qualquer Parte poderá rescindir este Contrato imotivadamente mediante "
+            "8.2. Qualquer Parte poderá rescindir este Contrato imotivadamente mediante "
             "notificação por escrito com antecedência mínima de 30 (trinta) dias."
         )
  
@@ -764,11 +764,11 @@ class ContractGenerator:
     def _add_general(self, doc: Document) -> None:
         doc.add_heading("10. DISPOSIÇÕES GERAIS", level=2)
         doc.add_paragraph(
-            "Será considerada entregue a notificação e/ou comunicação encaminhada ao "
+            "10.1. Será considerada entregue a notificação e/ou comunicação encaminhada ao "
             "endereço declinado no preâmbulo deste Contrato."
         )
         doc.add_paragraph(
-            "O presente contrato é título executivo extrajudicial, podendo ser utilizado "
+            "10.2. O presente contrato é título executivo extrajudicial, podendo ser utilizado "
             "para a execução judicial de quaisquer obrigações nele constantes."
         )
  
