@@ -97,9 +97,21 @@ class DocuSealService:
         if response.status_code in (200, 201):
             submission_data = response.json()
             logger.info("DocuSeal submission created: %s", submission_data)
+
+            # DocuSeal returns a list of submitters or a single object
+            if isinstance(submission_data, list):
+                # Extract submission_id from first submitter
+                first = submission_data[0] if submission_data else {}
+                submission_obj = {
+                    "id": first.get("submission_id") or first.get("id"),
+                    "submitters": submission_data,
+                }
+            else:
+                submission_obj = submission_data
+
             return {
                 "success": True,
-                "submission": submission_data,
+                "submission": submission_obj,
                 "message": "Documento enviado para assinatura com sucesso",
             }
  
