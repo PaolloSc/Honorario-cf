@@ -94,14 +94,14 @@ class AzureEmailService:
                         "</div>"
                         '<div style="padding: 32px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
                         f"<p>Prezado(a) {to_name},</p>"
-                        "<p>Segue em anexo o Contrato de Honorarios para sua conferencia.</p>"
-                        "<p>Apos a conferencia, o documento sera encaminhado para assinatura "
+                        "<p>Segue em anexo o Contrato de Honorários para sua conferência.</p>"
+                        "<p>Após a conferência, o documento será encaminhado para assinatura "
                         "digital via DocuSeal.</p>"
                         '<p style="margin-top: 24px;">Atenciosamente,<br>'
                         '<strong style="color: #1A3C34;">Carvalho &amp; Furtado Advogados</strong></p>'
                         "</div>"
                         '<div style="text-align: center; padding: 16px; color: #7A6755; font-size: 11px;">'
-                        "Este e-mail e seu conteudo sao confidenciais."
+                        "Este e-mail e seu conteúdo são confidenciais."
                         "</div>"
                         "</div>"
                     ),
@@ -147,3 +147,43 @@ class AzureEmailService:
             "success": False,
             "error": f"Erro ao enviar email: {response.status_code} - {response.text}",
         }
+
+    async def send_html_email(
+        self,
+        to_email: str,
+        to_name: str,
+        subject: str,
+        html_content: str,
+    ) -> dict:
+        """Send a plain HTML email without attachments."""
+        token = await self._get_access_token()
+
+        email_body = {
+            "message": {
+                "subject": subject,
+                "body": {"contentType": "HTML", "content": html_content},
+                "toRecipients": [
+                    {"emailAddress": {"address": to_email, "name": to_name}}
+                ],
+            },
+            "saveToSentItems": "true",
+        }
+
+        url = f"{self.GRAPH_API_URL}/users/{settings.sender_email}/sendMail"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                json=email_body,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30.0,
+            )
+
+        if response.status_code == 202:
+            logger.info("HTML email sent to %s", to_email)
+            return {"success": True}
+
+        logger.error("Failed to send HTML email: %s %s", response.status_code, response.text)
+        return {"success": False, "error": f"{response.status_code} - {response.text}"}
