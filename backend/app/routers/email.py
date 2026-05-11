@@ -28,6 +28,17 @@ class EmailResponse(BaseModel):
     message: str
 
 
+class ParticipacaoEmailRequest(BaseModel):
+    contract_id: str
+    cliente_nome: str
+    percentual_ou_valor: str = ""
+    para_quem: str = ""
+    natureza: str = ""
+    responsavel_captacao: str = ""
+    responsavel_gestao: str = ""
+    contato_financeiro_cliente: str = ""
+
+
 _email_service: AzureEmailService | None = None
 
 
@@ -88,4 +99,76 @@ async def send_contract_email(
         raise
     except Exception as e:
         logger.error("Failed to send email: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/send-participacao", response_model=EmailResponse)
+async def send_participacao_email(
+    data: ParticipacaoEmailRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EmailResponse:
+    """Send participation internal sheet to financeiro."""
+    try:
+        rows = []
+        if data.percentual_ou_valor:
+            rows.append(("Percentual/Valor", data.percentual_ou_valor))
+        if data.para_quem:
+            rows.append(("Para quem", data.para_quem))
+        if data.natureza:
+            rows.append(("Natureza", data.natureza))
+        if data.responsavel_captacao:
+            rows.append(("Resp. Captação", data.responsavel_captacao))
+        if data.responsavel_gestao:
+            rows.append(("Resp. Gestão", data.responsavel_gestao))
+        if data.contato_financeiro_cliente:
+            rows.append(("Contato Financeiro Cliente", data.contato_financeiro_cliente))
+
+        table_rows = "".join(
+            f'<tr><td style="padding:8px;border:1px solid #D7D1CA;font-weight:600;">{k}</td>'
+            f'<td style="padding:8px;border:1px solid #D7D1CA;">{v}</td></tr>'
+            for k, v in rows
+        )
+
+        html = (
+            '<div style="font-family: Segoe UI, Tahoma, sans-serif; max-width: 600px;">'
+            '<div style="background-color: #1A3C34; padding: 20px 28px; border-radius: 8px 8px 0 0;">'
+            '<span style="color: #FFFFFF; font-size: 16px; font-weight: 500;">Ficha de Participação — Uso Interno</span>'
+            '</div>'
+            '<div style="padding: 24px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
+            f'<p><strong>Cliente:</strong> {data.cliente_nome}</p>'
+            f'<p><strong>Contrato:</strong> {data.contract_id}</p>'
+            f'<p><strong>Registrado por:</strong> {user.email}</p>'
+            '<table style="width:100%;border-collapse:collapse;margin-top:16px;">'
+            f'{table_rows}'
+            '</table>'
+            '</div></div>'
+        )
+
+        service = get_email_service()
+        result = await service.send_html_email(
+            to_email=settings.financeiro_email,
+            to_name="Financeiro C&F",
+            subject=f"Ficha de Participação — {data.cliente_nome}",
+            html_content=html,
+        )
+
+        if result["success"]:
+            contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
+            if contract:
+                db.add(AuditLogDB(
+                    contract_id=data.contract_id,
+                    action="envio_ficha_participacao",
+                    detail=f"Ficha de participação enviada para {settings.financeiro_email}",
+                    version_number=contract.current_version,
+                    user_email=user.email,
+                    created_at=utcnow(),
+                ))
+                db.commit()
+            return EmailResponse(success=True, message="Ficha enviada para o financeiro")
+
+        return EmailResponse(success=False, message=result.get("error", "Erro ao enviar ficha"))
+
+    except Exception as e:
+        logger.error("Failed to send participacao email: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -109,6 +110,11 @@ def download_contract(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FileResponse:
+    try:
+        uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(400, "ID de contrato inválido")
+
     # Check ownership or admin
     contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
     if not contract:

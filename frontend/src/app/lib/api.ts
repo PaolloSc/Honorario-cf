@@ -76,10 +76,18 @@ export async function generateContract(data: unknown) {
 }
 
 export async function downloadContract(contractId: string) {
+  const headers: Record<string, string> = {};
+  if (_accessToken) {
+    headers["Authorization"] = `Bearer ${_accessToken}`;
+  }
   const res = await fetch(
-    `${API_BASE}/api/contract/${contractId}/download`
+    `${API_BASE}/api/contract/${contractId}/download`,
+    { headers }
   );
-  if (!res.ok) throw new Error("Failed to download contract");
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Erro ao baixar contrato: ${res.status} - ${body}`);
+  }
   return res.blob();
 }
 
@@ -90,6 +98,22 @@ export async function sendEmail(data: {
   assunto?: string;
 }) {
   return request<{ success: boolean; message: string }>("/api/email/send", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function sendParticipacao(data: {
+  contract_id: string;
+  cliente_nome: string;
+  percentual_ou_valor?: string;
+  para_quem?: string;
+  natureza?: string;
+  responsavel_captacao?: string;
+  responsavel_gestao?: string;
+  contato_financeiro_cliente?: string;
+}) {
+  return request<{ success: boolean; message: string }>("/api/email/send-participacao", {
     method: "POST",
     body: JSON.stringify(data),
   });
