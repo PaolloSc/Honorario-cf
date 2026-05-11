@@ -19,43 +19,45 @@ class AzureEmailService:
     SCOPES = ["https://graph.microsoft.com/.default"]
 
     def __init__(self) -> None:
-        self._token: str | None = None
+        self._msal_app: msal.ConfidentialClientApplication | None = None
+
+    def _get_msal_app(self) -> msal.ConfidentialClientApplication:
+        if self._msal_app is None:
+            missing = [
+                name
+                for name, value in (
+                    ("AZURE_TENANT_ID", settings.azure_tenant_id),
+                    ("AZURE_CLIENT_ID", settings.azure_client_id),
+                    ("AZURE_CLIENT_SECRET", settings.azure_client_secret),
+                )
+                if not value
+            ]
+            if missing:
+                raise RuntimeError(
+                    "Credenciais Azure ausentes: "
+                    + ", ".join(missing)
+                )
+            self._msal_app = msal.ConfidentialClientApplication(
+                settings.azure_client_id,
+                authority=f"https://login.microsoftonline.com/{settings.azure_tenant_id}",
+                client_credential=settings.azure_client_secret,
+            )
+        return self._msal_app
 
     async def _get_access_token(self) -> str:
-        """Get OAuth2 token using client credentials flow."""
-        if self._token:
-            return self._token
+        """Get OAuth2 token using client credentials flow with MSAL cache."""
+        app = self._get_msal_app()
 
-        missing = [
-            name
-            for name, value in (
-                ("AZURE_TENANT_ID", settings.azure_tenant_id),
-                ("AZURE_CLIENT_ID", settings.azure_client_id),
-                ("AZURE_CLIENT_SECRET", settings.azure_client_secret),
-            )
-            if not value
-        ]
-        if missing:
-            raise RuntimeError(
-                "Credenciais Azure ausentes em backend/.env: "
-                + ", ".join(missing)
-                + ". Verifique se o uvicorn esta carregando o .env correto."
-            )
-
-        app = msal.ConfidentialClientApplication(
-            settings.azure_client_id,
-            authority=f"https://login.microsoftonline.com/{settings.azure_tenant_id}",
-            client_credential=settings.azure_client_secret,
-        )
-
-        result = app.acquire_token_for_client(scopes=self.SCOPES)
+        # MSAL handles token caching and refresh automatically
+        result = app.acquire_token_silent(scopes=self.SCOPES, account=None)
+        if not result:
+            result = app.acquire_token_for_client(scopes=self.SCOPES)
 
         if "access_token" not in result:
             error = result.get("error_description", "Unknown error")
             raise RuntimeError(f"Failed to acquire Azure token: {error}")
 
-        self._token = result["access_token"]
-        return self._token
+        return result["access_token"]
 
     async def send_email_with_attachment(
         self,
