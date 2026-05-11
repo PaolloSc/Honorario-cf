@@ -415,147 +415,169 @@ class ContractGenerator:
             for e in data.escopos
         )
  
+        clause_num = 3
         if has_hora:
             doc.add_paragraph(
-                "2.3. Caso a CONTRATANTE solicite atendimento a questões expressamente não "
+                f"2.{clause_num}. Caso a CONTRATANTE solicite atendimento a questões expressamente não "
                 "indicadas no objeto e escopo deste Contrato, serão aplicados os mesmos "
                 "critérios de honorários de hora trabalhada previstos no Contrato."
             )
         else:
             doc.add_paragraph(
-                "2.3. Não estão incluídos na precificação serviços oferecidos pelo C&F "
+                f"2.{clause_num}. Não estão incluídos na precificação serviços oferecidos pelo C&F "
                 "e não expressamente indicados no objeto e escopo deste Contrato, os quais "
                 "poderão ser pactuados posteriormente entre as Partes."
             )
+        clause_num += 1
  
         if has_mensalidade_partido:
             doc.add_paragraph(
-                "Também não estão incluídos na precificação os serviços de consultoria que "
+                f"2.{clause_num}. Também não estão incluídos na precificação os serviços de consultoria que "
                 "constituam um projeto específico multidisciplinar ou dotado de certa "
                 "complexidade, tais como planejamentos e/ou estruturações."
             )
+            clause_num += 1
  
     def _add_fee_details(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("3. OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS", level=2)
  
+        clause_counter = 1
         for escopo in data.escopos:
             for tipo_hon in escopo.honorarios:
                 if tipo_hon == TipoHonorario.HORA_TRABALHADA and escopo.hora_trabalhada:
-                    self._add_hora_trabalhada(doc, escopo.hora_trabalhada)
+                    clause_counter = self._add_hora_trabalhada(doc, escopo.hora_trabalhada, clause_counter)
                 elif tipo_hon == TipoHonorario.PRO_LABORE and escopo.pro_labore:
-                    self._add_pro_labore(doc, escopo.pro_labore)
+                    clause_counter = self._add_pro_labore(doc, escopo.pro_labore, clause_counter)
                 elif tipo_hon == TipoHonorario.MENSALIDADE and escopo.mensalidade:
-                    self._add_mensalidade(doc, escopo.mensalidade)
+                    clause_counter = self._add_mensalidade(doc, escopo.mensalidade, clause_counter)
                 elif tipo_hon == TipoHonorario.EXITO and escopo.exito:
-                    self._add_exito(doc, escopo.exito)
+                    clause_counter = self._add_exito(doc, escopo.exito, clause_counter)
                 elif tipo_hon == TipoHonorario.PERMUTA and escopo.permuta:
-                    self._add_permuta(doc, escopo.permuta)
+                    clause_counter = self._add_permuta(doc, escopo.permuta, clause_counter)
  
-    def _add_hora_trabalhada(self, doc: Document, ht: "HoraTrabalhada") -> None:
+    def _add_hora_trabalhada(self, doc: Document, ht: "HoraTrabalhada", counter: int) -> int:
         doc.add_heading("HORA TRABALHADA", level=3)
-        doc.add_paragraph("Em relação ao honorário por hora trabalhada, será observado o seguinte:")
+        doc.add_paragraph(
+            f"3.{counter}. Em relação ao honorário por hora trabalhada, será observado o seguinte:"
+        )
+        counter += 1
  
         doc.add_paragraph(
-            f"O valor da hora trabalhada será de {valor_com_extenso(ht.valor_hora)}.",
-            style="List Bullet",
+            f"3.{counter}. O valor da hora trabalhada será de {valor_com_extenso(ht.valor_hora)}.",
         )
+        counter += 1
+
         doc.add_paragraph(
-            "As horas trabalhadas serão apuradas ao final de cada mês e faturadas em "
+            f"3.{counter}. As horas trabalhadas serão apuradas ao final de cada mês e faturadas em "
             "parcela única no mês imediatamente subsequente.",
-            style="List Bullet",
         )
+        counter += 1
  
         if ht.tem_hora_urgencia:
             doc.add_paragraph(
-                "As horas trabalhadas serão acrescidas de percentual de 50% (cinquenta por cento) "
+                f"3.{counter}. As horas trabalhadas serão acrescidas de percentual de 50% (cinquenta por cento) "
                 "quando, por solicitação da CONTRATANTE, os serviços forem prestados em regime "
                 "de urgência.",
-                style="List Bullet",
             )
+            counter += 1
  
         if ht.tem_hora_fora_expediente:
             doc.add_paragraph(
-                "Caso a CONTRATANTE demande a prestação dos serviços após as 19:00 horas ou "
+                f"3.{counter}. Caso a CONTRATANTE demande a prestação dos serviços após as 19:00 horas ou "
                 "durante finais de semana ou feriados, as horas trabalhadas serão acrescidas "
                 "do percentual de 100% (cem por cento).",
-                style="List Bullet",
             )
+            counter += 1
  
         if ht.tem_hora_urgencia and ht.tem_hora_fora_expediente:
             doc.add_paragraph(
-                "Caso as horas sejam de urgência e prestadas fora do expediente, serão cobradas "
+                f"3.{counter}. Caso as horas sejam de urgência e prestadas fora do expediente, serão cobradas "
                 "com acréscimo de 150%.",
-                style="List Bullet",
             )
+            counter += 1
  
         if ht.tem_teto_mensal and ht.valor_teto_mensal:
             doc.add_paragraph(
-                f"A fatura mensal das horas trabalhadas respeitará o teto de "
+                f"3.{counter}. A fatura mensal das horas trabalhadas respeitará o teto de "
                 f"{valor_com_extenso(ht.valor_teto_mensal)}, de modo que o valor excedente "
                 f"será cobrado na(s) fatura(s) subsequente(s) respeitando o referido teto.",
-                style="List Bullet",
             )
+            counter += 1
  
         if ht.tem_pacote_horas and ht.quantidade_horas_pacote and ht.valor_pacote:
             doc.add_paragraph(
-                f"Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
+                f"3.{counter}. Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
                 f"{ht.quantidade_horas_pacote} horas, no valor de "
                 f"{valor_com_extenso(ht.valor_pacote)}.",
-                style="List Bullet",
             )
+            counter += 1
             doc.add_paragraph(
-                f"As horas não utilizadas em determinado mês serão acumuladas e poderão ser "
+                f"3.{counter}. As horas não utilizadas em determinado mês serão acumuladas e poderão ser "
                 f"aproveitadas no mês imediatamente subsequente.",
-                style="List Bullet",
             )
+            counter += 1
             if ht.periodo_banco_horas_meses:
                 doc.add_paragraph(
-                    f"O saldo acumulado será zerado a cada {ht.periodo_banco_horas_meses} meses.",
-                    style="List Bullet",
+                    f"3.{counter}. O saldo acumulado será zerado a cada {ht.periodo_banco_horas_meses} meses.",
                 )
+                counter += 1
+
+        return counter
  
-    def _add_pro_labore(self, doc: Document, pl: "ProLabore") -> None:
+    def _add_pro_labore(self, doc: Document, pl: "ProLabore", counter: int) -> int:
         doc.add_heading("PRO-LABORE", level=3)
-        doc.add_paragraph("Em relação ao honorário pró-labore, será observada a seguinte forma de pagamento:")
+        doc.add_paragraph(
+            f"3.{counter}. Em relação ao honorário pró-labore, será observada a seguinte forma de pagamento:"
+        )
+        counter += 1
  
         if pl.tem_parcelamento and pl.numero_parcelas and pl.valor_parcela:
             doc.add_paragraph(
-                f"O valor total de {valor_com_extenso(pl.valor_total)} será pago em "
+                f"3.{counter}. O valor total de {valor_com_extenso(pl.valor_total)} será pago em "
                 f"{pl.numero_parcelas} parcelas de {valor_com_extenso(pl.valor_parcela)}, "
                 f"com vencimento {self._format_vencimento(pl.vencimento_parcelas, recorrente=True)}."
             )
+            counter += 1
         else:
             doc.add_paragraph(
-                f"O valor de {valor_com_extenso(pl.valor_total)} será pago em parcela única, "
+                f"3.{counter}. O valor de {valor_com_extenso(pl.valor_total)} será pago em parcela única, "
                 f"com vencimento {self._format_vencimento(pl.vencimento)}."
             )
+            counter += 1
+
+        return counter
  
-    def _add_mensalidade(self, doc: Document, m: "Mensalidade") -> None:
+    def _add_mensalidade(self, doc: Document, m: "Mensalidade", counter: int) -> int:
         if m.subtipo == SubtipoMensalidade.ADVOCACIA_PARTIDO:
             doc.add_heading("MENSALIDADE DE ADVOCACIA DE PARTIDO", level=3)
             doc.add_paragraph(
-                "Em relação ao honorário por mensalidade de advocacia de partido, "
+                f"3.{counter}. Em relação ao honorário por mensalidade de advocacia de partido, "
                 "será observado o seguinte:"
             )
+            counter += 1
+
             doc.add_paragraph(
-                "O honorário abrange a prestação de serviços advocatícios de consultoria "
+                f"3.{counter}. O honorário abrange a prestação de serviços advocatícios de consultoria "
                 "e contencioso de rotina nas áreas oferecidas pelo C&F.",
-                style="List Bullet",
             )
+            counter += 1
+
             doc.add_paragraph(
-                "A precificação possui como referência o fluxo atual de demanda da "
+                f"3.{counter}. A precificação possui como referência o fluxo atual de demanda da "
                 "CONTRATANTE, sendo que o honorário deverá ser renegociado caso esse "
                 "fluxo aumente.",
-                style="List Bullet",
             )
+            counter += 1
+
             doc.add_paragraph(
-                f"O valor da mensalidade será de {valor_com_extenso(m.valor)}.",
-                style="List Bullet",
+                f"3.{counter}. O valor da mensalidade será de {valor_com_extenso(m.valor)}.",
             )
+            counter += 1
+
             doc.add_paragraph(
-                f"O vencimento da fatura mensal será {self._format_vencimento(m.dia_vencimento, recorrente=True)}.",
-                style="List Bullet",
+                f"3.{counter}. O vencimento da fatura mensal será {self._format_vencimento(m.dia_vencimento, recorrente=True)}.",
             )
+            counter += 1
  
         elif m.subtipo in (SubtipoMensalidade.POR_PROCESSO, SubtipoMensalidade.POR_PASTA):
             tipo_label = "processo" if m.subtipo == SubtipoMensalidade.POR_PROCESSO else "pasta"
@@ -570,17 +592,19 @@ class ContractGenerator:
                 var_label = " com variação por fase processual"
  
             doc.add_paragraph(
-                f"Em relação ao honorário por mensalidade{var_label}, o vencimento "
+                f"3.{counter}. Em relação ao honorário por mensalidade{var_label}, o vencimento "
                 f"da fatura será {self._format_vencimento(m.dia_vencimento, recorrente=True)} "
                 f"e o valor de {valor_com_extenso(m.valor)} será devido por {tipo_label} enquanto este "
                 f"estiver ativo."
             )
+            counter += 1
  
             if m.variacao_preco == VariacaoPrecoMensalidade.LIMITACAO_TEMPORAL and m.limitacao_temporal_anos:
                 doc.add_paragraph(
-                    f"O valor será devido até {m.limitacao_temporal_anos} anos de tramitação "
+                    f"3.{counter}. O valor será devido até {m.limitacao_temporal_anos} anos de tramitação "
                     f"sob o patrocínio do C&F."
                 )
+                counter += 1
  
             if m.faixas_preco:
                 table = doc.add_table(rows=1, cols=2)
@@ -594,21 +618,30 @@ class ContractGenerator:
                     row[1].text = faixa.get("valor", "")
  
             doc.add_paragraph(
-                f"Entende-se por ativo aquele {tipo_label} que não foi definitivamente "
+                f"3.{counter}. Entende-se por ativo aquele {tipo_label} que não foi definitivamente "
                 f"extinto, baixado e arquivado no sistema do Tribunal ou respectivo órgão.",
-                style="List Bullet",
             )
+            counter += 1
+
+        return counter
  
-    def _add_exito(self, doc: Document, ex: "Exito") -> None:
+    def _add_exito(self, doc: Document, ex: "Exito", counter: int) -> int:
         doc.add_heading("ÊXITO", level=3)
-        doc.add_paragraph("Em relação ao honorário de êxito, será observado o seguinte:")
+        doc.add_paragraph(
+            f"3.{counter}. Em relação ao honorário de êxito, será observado o seguinte:"
+        )
+        counter += 1
  
         if ex.subtipo == SubtipoExito.PERCENTUAL_FIXO and ex.percentual:
             doc.add_paragraph(
-                f"O percentual de êxito será de {self._format_percentual(ex.percentual)} sobre {ex.base_calculo}."
+                f"3.{counter}. O percentual de êxito será de {self._format_percentual(ex.percentual)} sobre {ex.base_calculo}."
             )
+            counter += 1
         elif ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
-            doc.add_paragraph("O percentual será calculado conforme o valor do Benefício:")
+            doc.add_paragraph(
+                f"3.{counter}. O percentual será calculado conforme o valor do Benefício:"
+            )
+            counter += 1
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
             hdr = table.rows[0].cells
@@ -620,54 +653,60 @@ class ContractGenerator:
                 row[1].text = faixa.get("percentual", "")
  
         doc.add_paragraph(
-            f"Incidência: {self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)}.",
-            style="List Bullet",
+            f"3.{counter}. Incidência: {self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)}.",
         )
+        counter += 1
  
         doc.add_paragraph(
-            "O percentual incidirá sobre o benefício econômico e/ou financeiro e/ou fiscal "
+            f"3.{counter}. O percentual incidirá sobre o benefício econômico e/ou financeiro e/ou fiscal "
             "e/ou tributário, corrigido monetariamente, aproveitável à CONTRATANTE (Benefício), "
             "ainda que parcial.",
-            style="List Bullet",
         )
+        counter += 1
  
         doc.add_paragraph(
-            f"Forma de pagamento: {self._label_from_map(ex.forma_pagamento, FORMA_PAGAMENTO_LABELS)}.",
-            style="List Bullet",
+            f"3.{counter}. Forma de pagamento: {self._label_from_map(ex.forma_pagamento, FORMA_PAGAMENTO_LABELS)}.",
         )
+        counter += 1
 
         if ex.vencimento:
             doc.add_paragraph(
-                f"Vencimento: {self._format_vencimento(ex.vencimento)}.",
-                style="List Bullet",
+                f"3.{counter}. Vencimento: {self._format_vencimento(ex.vencimento)}.",
             )
+            counter += 1
  
         if ex.tem_beneficio_prospectivo and ex.periodo_prospectivo_meses:
             doc.add_paragraph(
-                f"Nos casos em que os serviços do C&F também proporcionarem Benefício prospectivo "
+                f"3.{counter}. Nos casos em que os serviços do C&F também proporcionarem Benefício prospectivo "
                 f"à CONTRATANTE, incidirão honorários de êxito calculados sobre o período de "
                 f"{ex.periodo_prospectivo_meses} meses.",
-                style="List Bullet",
             )
+            counter += 1
  
         if ex.deduz_outro_honorario and ex.honorario_deduzido:
             doc.add_paragraph(
-                f"O honorário de êxito será pago abatendo-se o valor pago a título de "
+                f"3.{counter}. O honorário de êxito será pago abatendo-se o valor pago a título de "
                 f"{self._label_from_map(ex.honorario_deduzido, HONORARIO_LABELS)}.",
-                style="List Bullet",
             )
+            counter += 1
+
+        return counter
  
-    def _add_permuta(self, doc: Document, perm: "Permuta") -> None:
+    def _add_permuta(self, doc: Document, perm: "Permuta", counter: int) -> int:
         doc.add_heading("PERMUTA", level=3)
         doc.add_paragraph(
-            f"O serviço contratado será permutado com o serviço de {perm.objeto_permuta} "
+            f"3.{counter}. O serviço contratado será permutado com o serviço de {perm.objeto_permuta} "
             f"a ser prestado pela CONTRATANTE ao C&F. {perm.descricao}"
         )
+        counter += 1
         if perm.tem_torna and perm.valor_torna:
             doc.add_paragraph(
-                f"A torna será de {valor_com_extenso(perm.valor_torna)}, "
+                f"3.{counter}. A torna será de {valor_com_extenso(perm.valor_torna)}, "
                 f"paga da seguinte forma: {perm.forma_pagamento_torna or 'a definir'}."
             )
+            counter += 1
+
+        return counter
  
     def _add_common_clauses(self, doc: Document) -> None:
         doc.add_heading("4. CLÁUSULAS COMUNS AOS HONORÁRIOS", level=2)
