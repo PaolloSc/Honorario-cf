@@ -254,3 +254,16 @@ export async function rollbackContract(contractId: string, version: number) {
     method: "POST",
   });
 }
+
+
+
+export interface LawyerInfo {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+}
+
+export async function listLawyers() {
+  return request<{ users: LawyerInfo[]; total: number }>("/api/users/lawyers");
+}
