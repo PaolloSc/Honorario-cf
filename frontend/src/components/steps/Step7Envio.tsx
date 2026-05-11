@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -55,6 +55,24 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         throw new Error(emailResult.message || "Erro ao enviar e-mail");
       }
 
+      // Send participação sheet to financeiro if applicable
+      if (data.participacao?.tem_participacao) {
+        try {
+          await sendParticipacao({
+            contract_id: resultContractId,
+            cliente_nome: getContratanteNome(data.contratantes[0]),
+            percentual_ou_valor: data.participacao.percentual_ou_valor,
+            para_quem: data.participacao.para_quem,
+            natureza: data.participacao.natureza,
+            responsavel_captacao: data.participacao.responsavel_captacao,
+            responsavel_gestao: data.participacao.responsavel_gestao,
+            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
+          });
+        } catch {
+          console.warn("Ficha de participação não enviada ao financeiro");
+        }
+      }
+
       setStatus("success");
       setMessage(
         isEdit
@@ -92,6 +110,25 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       }
 
       setContractId(resultContractId);
+
+      // Send participação sheet to financeiro if applicable
+      if (data.participacao?.tem_participacao) {
+        try {
+          await sendParticipacao({
+            contract_id: resultContractId,
+            cliente_nome: getContratanteNome(data.contratantes[0]),
+            percentual_ou_valor: data.participacao.percentual_ou_valor,
+            para_quem: data.participacao.para_quem,
+            natureza: data.participacao.natureza,
+            responsavel_captacao: data.participacao.responsavel_captacao,
+            responsavel_gestao: data.participacao.responsavel_gestao,
+            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
+          });
+        } catch {
+          console.warn("Ficha de participação não enviada ao financeiro");
+        }
+      }
+
       setStatus("success");
       setMessage(isEdit ? "Nova versao salva com sucesso!" : "Contrato gerado com sucesso!");
 
