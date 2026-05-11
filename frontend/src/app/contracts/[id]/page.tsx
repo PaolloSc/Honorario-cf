@@ -8,6 +8,7 @@ import {
   downloadContract,
   updateContractStatus,
   sendForSignature,
+  sendEmail,
   type ContractDetail,
   type AuditEntry,
   type VersionSummary,
@@ -68,6 +69,7 @@ export default function ContractDetailPage() {
   const [notification, setNotification] = useState<{type: "success" | "error"; message: string} | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [sendingSignature, setSendingSignature] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -150,6 +152,43 @@ export default function ContractDetailPage() {
     }
   };
 
+  const handleResendEmail = async () => {
+    if (!contract) return;
+
+    const recipientEmail = contract.client_email;
+    const recipientName = contract.client_name;
+
+    if (!recipientEmail) {
+      setNotification({type: "error", message: "E-mail do contratante nao encontrado"});
+      return;
+    }
+
+    if (!window.confirm(`Reenviar contrato por e-mail para ${recipientName} (${recipientEmail})?`)) return;
+
+    setSendingEmail(true);
+    setNotification(null);
+
+    try {
+      const result = await sendEmail({
+        contract_id: contractId,
+        destinatario_email: recipientEmail,
+        destinatario_nome: recipientName,
+        assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
+      });
+
+      if (!result.success) {
+        throw new Error(result.message || "Erro ao enviar e-mail");
+      }
+
+      setNotification({type: "success", message: "E-mail reenviado com sucesso!"});
+      fetchContract();
+    } catch (e) {
+      setNotification({type: "error", message: e instanceof Error ? e.message : "Erro ao reenviar e-mail"});
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12 text-center text-muted">
@@ -225,6 +264,13 @@ export default function ContractDetailPage() {
           className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {downloading ? "Baixando..." : "Baixar DOCX"}
+        </button>
+        <button
+          onClick={handleResendEmail}
+          disabled={sendingEmail}
+          className="px-5 py-2.5 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {sendingEmail ? "Enviando..." : "Reenviar por E-mail"}
         </button>
         {canSendForSignature && (
           <button
