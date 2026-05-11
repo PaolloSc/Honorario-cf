@@ -340,3 +340,77 @@ def update_contract_status(
 
     db.commit()
     return {"success": True, "status": status}
+
+
+
+@router.post("/{contract_id}/rollback")
+def rollback_contract(
+    contract_id: str,
+    version: int = Query(..., ge=1),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Rollback a contract to a previous version, regenerating the DOCX from stored form data."""
+    contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
+    if not contract:
+        raise HTTPException(404, "Contrato nao encontrado")
+
+    _check_access(contract, user)
+
+    # Find the target version
+    target_ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id, ContractVersionDB.version_number == version)
+        .first()
+    )
+    if not target_ver:
+        raise HTTPException(404, f"Versao {version} nao encontrada")
+
+    if version == contract.current_version:
+        raise HTTPException(422, "Contrato ja esta nesta versao")
+
+    # Regenerate the DOCX from stored form data
+    try:
+        form_data = json.loads(target_ver.form_data_json)
+        contrato_data = ContratoRequest(**form_data)
+    except Exception as e:
+        raise HTTPException(422, f"Dados da versao {version} invalidos: {e}")
+
+    gen = _gen()
+    _, filepath = gen.generate(contrato_data, contract_id=contract_id)
+
+    # Create a new version based on the old data
+    new_version = contract.current_version + 1
+    client_name, client_email = _extract_client_info(form_data)
+
+    version_entry = ContractVersionDB(
+        contract_id=contract_id,
+        version_number=new_version,
+        form_data_json=target_ver.form_data_json,
+        file_path=str(filepath),
+        created_by=user.email,
+        created_at=utcnow(),
+    )
+    db.add(version_entry)
+
+    contract.current_version = new_version
+    contract.client_name = client_name
+    contract.client_email = client_email
+    contract.status = "rascunho"
+    contract.updated_by = user.email
+    contract.updated_at = utcnow()
+
+    _log_action(
+        db, contract_id, "rollback",
+        f"Revertido para versao {version} (nova versao {new_version}) por {user.email}",
+        new_version, user.email,
+    )
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Contrato revertido para versao {version} (nova versao {new_version})",
+        "contract_id": contract_id,
+        "version": new_version,
+    }

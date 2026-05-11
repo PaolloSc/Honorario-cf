@@ -9,6 +9,7 @@ import {
   updateContractStatus,
   sendForSignature,
   sendEmail,
+  rollbackContract,
   type ContractDetail,
   type AuditEntry,
   type VersionSummary,
@@ -407,7 +408,28 @@ export default function ContractDetailPage() {
                     <span className="ml-2 text-xs text-accent font-medium">DocuSeal #{v.docuseal_submission_id}</span>
                   )}
                 </div>
-                <span className="text-xs text-muted">{formatDate(v.created_at)}</span>
+                <div className="flex items-center gap-2">
+                  {v.version_number !== contract.current_version && (
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`Reverter contrato para a versao ${v.version_number}?`)) return;
+                        try {
+                          const result = await rollbackContract(contractId, v.version_number);
+                          if (result.success) {
+                            setNotification({type: "success", message: result.message});
+                            fetchContract();
+                          }
+                        } catch (e) {
+                          setNotification({type: "error", message: e instanceof Error ? e.message : "Erro ao reverter"});
+                        }
+                      }}
+                      className="px-2 py-0.5 text-xs text-primary border border-primary/30 rounded hover:bg-primary/5 transition"
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                  <span className="text-xs text-muted">{formatDate(v.created_at)}</span>
+                </div>
               </div>
             ))}
           </div>
