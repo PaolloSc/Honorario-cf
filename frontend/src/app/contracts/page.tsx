@@ -6,6 +6,7 @@ import {
   type ContractListResponse,
 } from "@/app/lib/api";
 import { useCallback, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-gray-100 text-gray-700" },
@@ -34,6 +35,7 @@ function formatDate(iso: string) {
 }
 
 export default function ContractsPage() {
+  const { status: sessionStatus } = useSession();
   const [data, setData] = useState<ContractListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,8 +62,10 @@ export default function ContractsPage() {
   }, [page, statusFilter, search]);
 
   useEffect(() => {
-    fetchContracts();
-  }, [fetchContracts]);
+    if (sessionStatus === "authenticated") {
+      fetchContracts();
+    }
+  }, [fetchContracts, sessionStatus]);
 
   const totalPages = data ? Math.ceil(data.total / data.page_size) : 0;
 

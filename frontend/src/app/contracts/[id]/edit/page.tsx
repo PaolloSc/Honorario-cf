@@ -2,11 +2,13 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { getContractFormData, type ContractFormDataResponse } from "@/app/lib/api";
 import ContractWizard from "@/components/ContractWizard";
 import type { ContratoFormData } from "@/types/contract";
 
 export default function EditContractPage() {
+  const { status: sessionStatus } = useSession();
   const params = useParams();
   const router = useRouter();
   const contractId = params.id as string;
@@ -16,6 +18,7 @@ export default function EditContractPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
     async function load() {
       try {
         const result: ContractFormDataResponse = await getContractFormData(contractId);
@@ -27,7 +30,7 @@ export default function EditContractPage() {
       }
     }
     load();
-  }, [contractId]);
+  }, [contractId, sessionStatus]);
 
   if (loading) {
     return (

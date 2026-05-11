@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   getContract,
   downloadContract,
@@ -37,6 +38,7 @@ function formatDate(iso: string) {
 }
 
 export default function ContractDetailPage() {
+  const { status: sessionStatus } = useSession();
   const params = useParams();
   const contractId = params.id as string;
 
@@ -59,8 +61,10 @@ export default function ContractDetailPage() {
   }, [contractId]);
 
   useEffect(() => {
-    fetchContract();
-  }, [fetchContract]);
+    if (sessionStatus === "authenticated") {
+      fetchContract();
+    }
+  }, [fetchContract, sessionStatus]);
 
   const handleDownload = async () => {
     setDownloading(true);
