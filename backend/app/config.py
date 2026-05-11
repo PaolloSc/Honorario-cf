@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
 
-    financeiro_email: str = os.getenv("FINANCEIRO_EMAIL", "financeiro@carvalhofurtadoadv.com.br")
+    financeiro_email: str = os.getenv("FINANCEIRO_EMAIL", "financeiro@carvalhofurtadoadv.com.br,gabriel@carvalhofurtadoadv.com.br")
 
     bank_account_info: str = os.getenv("BANK_ACCOUNT_INFO", "Banco Inter - Ag. 0001 c/c 17841983-4 ou Pix 25463159000173")
 

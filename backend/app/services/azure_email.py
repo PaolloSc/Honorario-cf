@@ -59,6 +59,14 @@ class AzureEmailService:
 
         return result["access_token"]
 
+    def _build_recipients(self, to_email: str, to_name: str) -> list[dict]:
+        """Build recipient list supporting comma-separated emails."""
+        emails = [e.strip() for e in to_email.split(",") if e.strip()]
+        return [
+            {"emailAddress": {"address": email, "name": to_name}}
+            for email in emails
+        ]
+
     async def send_email_with_attachment(
         self,
         to_email: str,
@@ -106,14 +114,7 @@ class AzureEmailService:
                         "</div>"
                     ),
                 },
-                "toRecipients": [
-                    {
-                        "emailAddress": {
-                            "address": to_email,
-                            "name": to_name,
-                        }
-                    }
-                ],
+                "toRecipients": self._build_recipients(to_email, to_name),
                 "attachments": [
                     {
                         "@odata.type": "#microsoft.graph.fileAttachment",
@@ -162,9 +163,7 @@ class AzureEmailService:
             "message": {
                 "subject": subject,
                 "body": {"contentType": "HTML", "content": html_content},
-                "toRecipients": [
-                    {"emailAddress": {"address": to_email, "name": to_name}}
-                ],
+                "toRecipients": self._build_recipients(to_email, to_name),
             },
             "saveToSentItems": "true",
         }
