@@ -829,9 +829,14 @@ class ContractGenerator:
         )
         doc.add_paragraph()
 
-        # DocuSeal signature field for C&F (Contratado) - assinatura digital
+        # DocuSeal signature field for C&F (Contratado) - assinatura digital do escritório
         doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
         doc.add_paragraph("CONTRATADO: CARVALHO & FURTADO ADVOGADOS")
+        doc.add_paragraph()
+
+        # DocuSeal signature field for the responsible lawyer (Advogado)
+        doc.add_paragraph("{{Assinatura Advogado|signature|Advogado}}")
+        doc.add_paragraph("ADVOGADO RESPONSÁVEL")
         doc.add_paragraph()
  
         for i, contratante in enumerate(data.contratantes, 1):
