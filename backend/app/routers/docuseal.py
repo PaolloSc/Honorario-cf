@@ -141,13 +141,15 @@ async def send_for_signature(
             })
 
         # Always include the logged-in lawyer as "Advogado" role
-        advogado_already_included = any(s.get("role") == "Advogado" for s in all_signatarios)
-        if not advogado_already_included and user.email:
-            all_signatarios.append({
-                "email": user.email,
-                "name": user.name or user.email,
-                "role": "Advogado",
-            })
+        if user.email:
+            # Check if the logged-in user is already in the list
+            user_already_included = any(s.get("email") == user.email for s in all_signatarios)
+            if not user_already_included:
+                all_signatarios.append({
+                    "email": user.email,
+                    "name": user.name or user.email,
+                    "role": "Advogado",
+                })
 
         sign_result = await service.send_for_signature(
             template_id=template_id,
