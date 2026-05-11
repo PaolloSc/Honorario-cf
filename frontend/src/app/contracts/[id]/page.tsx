@@ -10,9 +10,11 @@ import {
   sendForSignature,
   sendEmail,
   rollbackContract,
+  listLawyers,
   type ContractDetail,
   type AuditEntry,
   type VersionSummary,
+  type LawyerInfo,
 } from "@/app/lib/api";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -75,6 +77,11 @@ export default function ContractDetailPage() {
   const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
   const [newLawyerEmail, setNewLawyerEmail] = useState("");
   const [newLawyerName, setNewLawyerName] = useState("");
+  const [availableLawyers, setAvailableLawyers] = useState<LawyerInfo[]>([]);
+
+  useEffect(() => {
+    listLawyers().then((res) => setAvailableLawyers(res.users)).catch(() => {});
+  }, []);
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -341,32 +348,56 @@ export default function ContractDetailPage() {
 
           {/* Add lawyer form */}
           <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={newLawyerName}
-              onChange={(e) => setNewLawyerName(e.target.value)}
-              placeholder="Nome do advogado"
-              className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-            />
-            <input
-              type="email"
-              value={newLawyerEmail}
-              onChange={(e) => setNewLawyerEmail(e.target.value)}
-              placeholder="email@exemplo.com"
-              className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-            />
-            <button
-              onClick={() => {
-                if (!newLawyerEmail.trim()) return;
-                setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
-                setNewLawyerEmail("");
-                setNewLawyerName("");
-              }}
-              disabled={!newLawyerEmail.trim()}
-              className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
-            >
-              Adicionar
-            </button>
+            {availableLawyers.length > 0 ? (
+              <select
+                onChange={(e) => {
+                  const lawyer = availableLawyers.find((l) => l.email === e.target.value);
+                  if (lawyer && !additionalLawyers.some((al) => al.email === lawyer.email)) {
+                    setAdditionalLawyers((prev) => [...prev, { email: lawyer.email, name: lawyer.name }]);
+                  }
+                  e.target.value = "";
+                }}
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300 bg-white"
+              >
+                <option value="">Selecionar advogado do escritorio...</option>
+                {availableLawyers
+                  .filter((l) => !additionalLawyers.some((al) => al.email === l.email))
+                  .map((l) => (
+                    <option key={l.id} value={l.email}>
+                      {l.name} ({l.email})
+                    </option>
+                  ))}
+              </select>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  value={newLawyerName}
+                  onChange={(e) => setNewLawyerName(e.target.value)}
+                  placeholder="Nome do advogado"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <input
+                  type="email"
+                  value={newLawyerEmail}
+                  onChange={(e) => setNewLawyerEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <button
+                  onClick={() => {
+                    if (!newLawyerEmail.trim()) return;
+                    setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
+                    setNewLawyerEmail("");
+                    setNewLawyerName("");
+                  }}
+                  disabled={!newLawyerEmail.trim()}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                >
+                  Adicionar
+                </button>
+              </>
+            )}
           </div>
 
           {/* Send button */}

@@ -68,6 +68,26 @@ def list_users(admin: CurrentUser = Depends(require_admin), db: Session = Depend
     )
 
 
+@router.get("/lawyers", response_model=UserListResponse)
+def list_lawyers(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """List all lawyers (advogado + admin) for signature selection. Available to any authenticated user."""
+    users = db.query(UserDB).filter(UserDB.role.in_(["advogado", "admin"])).order_by(UserDB.name).all()
+    return UserListResponse(
+        users=[
+            UserResponse(
+                id=u.id,
+                azure_id=u.azure_id,
+                email=u.email,
+                name=u.name,
+                role=u.role,
+                created_at=u.created_at.isoformat(),
+            )
+            for u in users
+        ],
+        total=len(users),
+    )
+
+
 @router.patch("/{user_id}/role")
 def update_user_role(
     user_id: int,
