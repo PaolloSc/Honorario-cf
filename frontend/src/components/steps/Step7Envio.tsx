@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listLawyers, type LawyerInfo } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -26,13 +26,23 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
   const [newLawyerEmail, setNewLawyerEmail] = useState("");
   const [newLawyerName, setNewLawyerName] = useState("");
+  const [availableLawyers, setAvailableLawyers] = useState<LawyerInfo[]>([]);
   const isEdit = !!editContractId;
+
+  useEffect(() => {
+    listLawyers().then((res) => setAvailableLawyers(res.users)).catch(() => {});
+  }, []);
 
   const handleAddLawyer = () => {
     if (!newLawyerEmail.trim()) return;
     setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
     setNewLawyerEmail("");
     setNewLawyerName("");
+  };
+
+  const handleAddLawyerFromList = (lawyer: LawyerInfo) => {
+    if (additionalLawyers.some((l) => l.email === lawyer.email)) return;
+    setAdditionalLawyers((prev) => [...prev, { email: lawyer.email, name: lawyer.name }]);
   };
 
   const handleRemoveLawyer = (index: number) => {
@@ -338,29 +348,51 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
                   ))}
                 </div>
               )}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newLawyerName}
-                  onChange={(e) => setNewLawyerName(e.target.value)}
-                  placeholder="Nome do advogado"
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-                />
-                <input
-                  type="email"
-                  value={newLawyerEmail}
-                  onChange={(e) => setNewLawyerEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-                />
-                <button
-                  onClick={handleAddLawyer}
-                  disabled={!newLawyerEmail.trim()}
-                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
-                >
-                  Adicionar
-                </button>
-              </div>
+              {availableLawyers.length > 0 ? (
+                <div className="flex gap-2">
+                  <select
+                    onChange={(e) => {
+                      const lawyer = availableLawyers.find((l) => l.email === e.target.value);
+                      if (lawyer) handleAddLawyerFromList(lawyer);
+                      e.target.value = "";
+                    }}
+                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300 bg-white"
+                  >
+                    <option value="">Selecionar advogado do escritorio...</option>
+                    {availableLawyers
+                      .filter((l) => !additionalLawyers.some((al) => al.email === l.email))
+                      .map((l) => (
+                        <option key={l.id} value={l.email}>
+                          {l.name} ({l.email})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newLawyerName}
+                    onChange={(e) => setNewLawyerName(e.target.value)}
+                    placeholder="Nome do advogado"
+                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                  />
+                  <input
+                    type="email"
+                    value={newLawyerEmail}
+                    onChange={(e) => setNewLawyerEmail(e.target.value)}
+                    placeholder="email@exemplo.com"
+                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                  />
+                  <button
+                    onClick={handleAddLawyer}
+                    disabled={!newLawyerEmail.trim()}
+                    className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
