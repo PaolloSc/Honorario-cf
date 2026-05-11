@@ -45,7 +45,7 @@ class DocuSealService:
  
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/templates",
+                f"{self.base_url}/templates/docx",
                 json=payload,
                 headers=self._headers(),
                 timeout=60.0,
@@ -57,7 +57,7 @@ class DocuSealService:
             return template_data
  
         logger.error("Failed to create template: %s %s", response.status_code, response.text)
-        raise RuntimeError(f"DocuSeal template creation failed: {response.status_code}")
+        raise RuntimeError(f"DocuSeal template creation failed: {response.status_code} - {response.text}")
  
     async def send_for_signature(
         self,
