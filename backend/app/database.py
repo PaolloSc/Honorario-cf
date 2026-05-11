@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -10,24 +11,29 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
     event,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
 
-DB_PATH = Path(__file__).resolve().parent.parent / "honorarios.db"
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+# Support PostgreSQL (via DATABASE_URL env var, e.g. on Render) or fallback to local SQLite.
+_default_sqlite = f"sqlite:///{Path(__file__).resolve().parent.parent / 'honorarios.db'}"
+DATABASE_URL = os.getenv("DATABASE_URL", _default_sqlite)
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-@event.listens_for(engine, "connect")
-def _set_sqlite_pragma(dbapi_conn, _connection_record):
-    cursor = dbapi_conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+# SQLite-specific pragmas (no-op when using PostgreSQL)
+if DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, _connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 class Base(DeclarativeBase):
@@ -77,6 +83,9 @@ class ContractDB(Base):
 
 class ContractVersionDB(Base):
     __tablename__ = "contract_versions"
+    __table_args__ = (
+        UniqueConstraint("contract_id", "version_number", name="uq_contract_version"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     contract_id = Column(String(64), ForeignKey("contracts.contract_id"), nullable=False, index=True)
@@ -105,6 +114,8 @@ class AuditLogDB(Base):
 
 
 def init_db():
+    # TODO: For production, replace create_all() with Alembic migrations to handle
+    # schema changes safely (alembic init / alembic revision --autogenerate / alembic upgrade head).
     Base.metadata.create_all(bind=engine)
 
 

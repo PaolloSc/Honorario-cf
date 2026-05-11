@@ -47,11 +47,8 @@ def _decode_token(token: str) -> dict:
         header = jwt.get_unverified_header(token)
         kid = header.get("kid")
 
-        # For development: if no Azure config, accept a simple token format
         if not settings.azure_tenant_id:
-            # Dev mode: decode without verification
-            payload = jwt.decode(token, options={"verify_signature": False})
-            return payload
+            raise HTTPException(503, "Autenticação não configurada")
 
         # Production: validate with Azure AD JWKS
         import asyncio

@@ -20,6 +20,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [status, setStatus] = useState<"idle" | "generating" | "sending" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
+  const [participacaoWarning, setParticipacaoWarning] = useState("");
   const isEdit = !!editContractId;
 
   const handleSubmit = async () => {
@@ -68,8 +69,9 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             responsavel_gestao: data.participacao.responsavel_gestao,
             contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
           });
-        } catch {
-          console.warn("Ficha de participação não enviada ao financeiro");
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : "";
+          setParticipacaoWarning(`Ficha de participação não enviada ao financeiro. ${detail}`);
         }
       }
 
@@ -124,8 +126,9 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             responsavel_gestao: data.participacao.responsavel_gestao,
             contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
           });
-        } catch {
-          console.warn("Ficha de participação não enviada ao financeiro");
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : "";
+          setParticipacaoWarning(`Ficha de participação não enviada ao financeiro. ${detail}`);
         }
       }
 
@@ -229,6 +232,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           }`}
         >
           {message}
+        </div>
+      )}
+
+      {participacaoWarning && (
+        <div className="p-4 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+          {participacaoWarning}
         </div>
       )}
 
