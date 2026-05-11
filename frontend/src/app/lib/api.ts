@@ -242,3 +242,15 @@ export async function updateContractStatus(contractId: string, status: string) {
     { method: "PATCH" }
   );
 }
+
+
+export async function rollbackContract(contractId: string, version: number) {
+  return request<{
+    success: boolean;
+    message: string;
+    contract_id: string;
+    version: number;
+  }>(`/api/contracts/${contractId}/rollback?version=${version}`, {
+    method: "POST",
+  });
+}
