@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -13,10 +15,18 @@ init_db()
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings.validate_critical()
+    yield
+
+
 app = FastAPI(
     title="Honorarios API",
     description="API para automacao de contratos de honorarios advocaticios - C&F Advogados",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
@@ -47,11 +57,6 @@ app.include_router(email.router)
 app.include_router(docuseal.router)
 app.include_router(cnpj.router)
 app.include_router(users.router)
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    settings.validate_critical()
 
 
 @app.get("/api/health")
