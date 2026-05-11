@@ -16,6 +16,9 @@ import type {
   Exito,
   Permuta,
   TipoHonorario,
+  SubtipoMensalidade,
+  VariacaoPrecoMensalidade,
+  SubtipoExito,
 } from "@/types/contract";
 
 const HONORARIO_TYPES: Array<{ value: TipoHonorario; label: string }> = [
@@ -420,7 +423,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         <Select
                           value={escopo.mensalidade.subtipo || "advocacia_partido"}
                           onChange={(e) =>
-                            updateMensalidade(idx, { subtipo: e.target.value as any })
+                            updateMensalidade(idx, { subtipo: e.target.value as SubtipoMensalidade })
                           }
                           options={SUBTIPO_MENSALIDADE}
                         />
@@ -430,7 +433,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         <Select
                           value={escopo.mensalidade.variacao_preco || "sem_variacao"}
                           onChange={(e) =>
-                            updateMensalidade(idx, { variacao_preco: e.target.value as any })
+                            updateMensalidade(idx, { variacao_preco: e.target.value as VariacaoPrecoMensalidade })
                           }
                           options={VARIACAO_PRECO}
                         />
@@ -463,7 +466,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         <Select
                           value={escopo.exito.subtipo || "percentual_fixo"}
                           onChange={(e) =>
-                            updateExito(idx, { subtipo: e.target.value as any })
+                            updateExito(idx, { subtipo: e.target.value as SubtipoExito })
                           }
                           options={SUBTIPO_EXITO}
                         />

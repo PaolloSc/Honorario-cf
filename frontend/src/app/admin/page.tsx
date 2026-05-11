@@ -23,6 +23,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [accessDenied, setAccessDenied] = useState(false);
 
   const token = session?.accessToken;
 
@@ -34,6 +35,7 @@ export default function AdminPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 403) {
+        setAccessDenied(true);
         setError("Acesso restrito a administradores.");
         return;
       }
@@ -69,20 +71,14 @@ export default function AdminPage() {
     }
   };
 
-  if (error === "Acesso restrito a administradores.") {
+  if (accessDenied) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-          <h2 className="font-display text-lg font-semibold text-red-800 mb-2">
-            Acesso Restrito
-          </h2>
-          <p className="text-sm text-red-700">
-            Somente administradores podem acessar esta pagina.
-          </p>
-          <a href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
-            Voltar ao inicio
-          </a>
-        </div>
+      <div className="max-w-xl mx-auto mt-16 p-8 bg-red-50 border border-red-200 rounded-lg text-center">
+        <h2 className="text-lg font-semibold text-red-900 mb-2">Acesso Restrito</h2>
+        <p className="text-red-700">Você não tem permissão para acessar esta página.</p>
+        <a href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
+          Voltar ao inicio
+        </a>
       </div>
     );
   }
@@ -149,7 +145,7 @@ export default function AdminPage() {
         </table>
       </div>
 
-      {error && error !== "Acesso restrito a administradores." && (
+      {error && !accessDenied && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           {error}
         </div>

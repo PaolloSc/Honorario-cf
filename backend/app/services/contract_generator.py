@@ -676,8 +676,7 @@ class ContractGenerator:
             "pela variação positiva e acumulada do IPCA, ou outro índice que vier a "
             "substitui-lo, sempre desde a data da assinatura do Contrato.",
             "Todo e qualquer pagamento devido ao C&F será feito por meio de boleto bancário "
-            "ou transferência bancária para a conta de sua titularidade: Banco Inter - "
-            "Ag. 0001 c/c 17841983-4 ou Pix 25463159000173.",
+            f"ou transferência bancária para a conta de sua titularidade: {settings.bank_account_info}.",
             "A CONTRATANTE se declara ciente das notórias tentativas gerais de fraude e "
             "golpes simulando contatos de advogados e escritórios de advocacia.",
             "A CONTRATANTE reconhece que qualquer pagamento realizado em inobservância ao "

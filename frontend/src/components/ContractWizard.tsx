@@ -64,6 +64,26 @@ function isEmail(value: string | undefined): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text(value));
 }
 
+function isValidCPF(cpf: string): boolean {
+  const d = cpf.replace(/\D/g, "");
+  if (d.length !== 11) return false;
+  // Reject known invalid patterns (all same digit)
+  if (/^(\d)\1{10}$/.test(d)) return false;
+  // First check digit
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(d[i]) * (10 - i);
+  let check = 11 - (sum % 11);
+  if (check >= 10) check = 0;
+  if (parseInt(d[9]) !== check) return false;
+  // Second check digit
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(d[i]) * (11 - i);
+  check = 11 - (sum % 11);
+  if (check >= 10) check = 0;
+  if (parseInt(d[10]) !== check) return false;
+  return true;
+}
+
 function validateContratantes(data: ContratoFormData): string[] {
   const errors: string[] = [];
 
@@ -77,7 +97,7 @@ function validateContratantes(data: ContratoFormData): string[] {
 
     if (contratante.tipo === "PF") {
       if (!text(contratante.nome)) errors.push(`${label}: informe o nome completo.`);
-      if (digits(contratante.cpf).length !== 11) errors.push(`${label}: informe um CPF com 11 digitos.`);
+      if (!isValidCPF(contratante.cpf)) errors.push(`${label}: CPF inválido.`);
       if (!text(contratante.estado_civil)) errors.push(`${label}: informe o estado civil.`);
       if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail valido.`);
       if (!text(contratante.endereco)) errors.push(`${label}: informe o endereco completo.`);
