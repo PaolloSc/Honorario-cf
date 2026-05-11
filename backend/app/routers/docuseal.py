@@ -128,10 +128,20 @@ async def send_for_signature(
                 message="Failed to create DocuSeal template",
             )
 
-        # Send for signature
+        # Send for signature — add C&F (Contratado) as signer alongside the client
+        all_signatarios = list(data.signatarios)
+        # Always include C&F as "Contratado" role
+        cf_already_included = any(s.get("role") == "Contratado" for s in all_signatarios)
+        if not cf_already_included:
+            all_signatarios.append({
+                "email": settings.cf_signer_email,
+                "name": "Carvalho & Furtado Advogados",
+                "role": "Contratado",
+            })
+
         sign_result = await service.send_for_signature(
             template_id=template_id,
-            signatarios=data.signatarios,
+            signatarios=all_signatarios,
             send_email=True,
         )
 

@@ -829,7 +829,7 @@ class ContractGenerator:
         )
         doc.add_paragraph()
 
-        # DocuSeal signature field tag for C&F (Contratado)
+        # DocuSeal signature field for C&F (Contratado) - assinatura digital
         doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
         doc.add_paragraph("CONTRATADO: CARVALHO & FURTADO ADVOGADOS")
         doc.add_paragraph()
@@ -842,19 +842,20 @@ class ContractGenerator:
             else:
                 nome = f"Contratante {i}"
 
-            # DocuSeal signature field tag for each Contratante
-            doc.add_paragraph(f"{{{{Assinatura Contratante {i}|signature|Contratante}}}}")
+            # DocuSeal signature field for each Contratante - assinatura digital
+            doc.add_paragraph(f"{{{{Assinatura {nome}|signature|Contratante}}}}")
             doc.add_paragraph(f"CONTRATANTE {i}: {nome}")
             doc.add_paragraph()
  
+        # Testemunhas - assinatura física (sem DocuSeal)
         doc.add_paragraph()
         doc.add_paragraph("TESTEMUNHAS:")
         doc.add_paragraph()
-        doc.add_paragraph("{{Testemunha 1|signature|Testemunha}}")
+        doc.add_paragraph("_" * 50)
         doc.add_paragraph("Nome:")
         doc.add_paragraph("CPF:")
         doc.add_paragraph()
-        doc.add_paragraph("{{Testemunha 2|signature|Testemunha}}")
+        doc.add_paragraph("_" * 50)
         doc.add_paragraph("Nome:")
         doc.add_paragraph("CPF:")
  

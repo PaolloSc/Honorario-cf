@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     financeiro_email: str = os.getenv("FINANCEIRO_EMAIL", "financeiro@carvalhofurtadoadv.com.br")
 
+    cf_signer_email: str = os.getenv("CF_SIGNER_EMAIL", "contrato@carvalhofurtadoadv.com.br")
+
     bank_account_info: str = os.getenv("BANK_ACCOUNT_INFO", "Banco Inter - Ag. 0001 c/c 17841983-4 ou Pix 25463159000173")
 
     template_path: str = "templates/timbrado_peticao_1.dotx"
