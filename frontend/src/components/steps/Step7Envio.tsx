@@ -64,12 +64,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
-            percentual_ou_valor: data.participacao.percentual_ou_valor,
-            para_quem: data.participacao.para_quem,
-            natureza: data.participacao.natureza,
-            responsavel_captacao: data.participacao.responsavel_captacao,
-            responsavel_gestao: data.participacao.responsavel_gestao,
-            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
+            percentual_ou_valor: data.participacao.percentual_ou_valor || "",
+            para_quem: data.participacao.para_quem || "",
+            natureza: data.participacao.natureza || "",
+            responsavel_captacao: data.participacao.responsavel_captacao || "",
+            responsavel_gestao: data.participacao.responsavel_gestao || "",
+            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente || "",
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
@@ -117,12 +117,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
-            percentual_ou_valor: data.participacao.percentual_ou_valor,
-            para_quem: data.participacao.para_quem,
-            natureza: data.participacao.natureza,
-            responsavel_captacao: data.participacao.responsavel_captacao,
-            responsavel_gestao: data.participacao.responsavel_gestao,
-            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
+            percentual_ou_valor: data.participacao.percentual_ou_valor || "",
+            para_quem: data.participacao.para_quem || "",
+            natureza: data.participacao.natureza || "",
+            responsavel_captacao: data.participacao.responsavel_captacao || "",
+            responsavel_gestao: data.participacao.responsavel_gestao || "",
+            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente || "",
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";

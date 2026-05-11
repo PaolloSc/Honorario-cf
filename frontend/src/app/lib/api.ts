@@ -29,7 +29,7 @@ async function request<T>(
 ): Promise<T> {
   let res: Response;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
