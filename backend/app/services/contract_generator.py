@@ -94,6 +94,7 @@ class ContractGenerator:
     def _build_document(self, data: ContratoRequest) -> Document:
         doc = self._new_document_from_template()
         self._clear_body(doc)
+        self._clear_headers_footers(doc)
         self._ensure_contract_styles(doc)
  
         self._add_title(doc)
@@ -155,6 +156,20 @@ class ContractGenerator:
         for element in list(body):
             if element.tag != qn("w:sectPr"):
                 body.remove(element)
+
+    def _clear_headers_footers(self, doc: DocxDocument) -> None:
+        """Remove all header/footer content (timbrado) from the template."""
+        for section in doc.sections:
+            for header in (section.header, section.first_page_header, section.even_page_header):
+                if header and header._element is not None:
+                    for el in list(header._element):
+                        header._element.remove(el)
+                    header.is_linked_to_previous = False
+            for footer in (section.footer, section.first_page_footer, section.even_page_footer):
+                if footer and footer._element is not None:
+                    for el in list(footer._element):
+                        footer._element.remove(el)
+                    footer.is_linked_to_previous = False
 
     def _ensure_contract_styles(self, doc: DocxDocument) -> None:
         if "List Bullet" not in doc.styles:
