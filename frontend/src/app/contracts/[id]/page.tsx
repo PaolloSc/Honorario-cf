@@ -43,6 +43,8 @@ export default function ContractDetailPage() {
   const [contract, setContract] = useState<ContractDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notification, setNotification] = useState<{type: "success" | "error"; message: string} | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -61,6 +63,7 @@ export default function ContractDetailPage() {
   }, [fetchContract]);
 
   const handleDownload = async () => {
+    setDownloading(true);
     try {
       const blob = await downloadContract(contractId);
       const url = URL.createObjectURL(blob);
@@ -70,16 +73,20 @@ export default function ContractDetailPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert("Erro ao baixar contrato");
+      setNotification({type: "error", message: "Erro ao baixar contrato"});
+    } finally {
+      setDownloading(false);
     }
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (!window.confirm(`Tem certeza que deseja alterar o status para "${newStatus}"?`)) return;
     try {
       await updateContractStatus(contractId, newStatus);
       fetchContract();
+      setNotification({type: "success", message: "Status alterado com sucesso"});
     } catch {
-      alert("Erro ao alterar status");
+      setNotification({type: "error", message: "Erro ao alterar status"});
     }
   };
 
@@ -128,6 +135,15 @@ export default function ContractDetailPage() {
         </div>
       </div>
 
+      {notification && (
+        <div className={`p-4 rounded-lg mb-4 ${notification.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+          <div className="flex justify-between items-center">
+            <span>{notification.message}</span>
+            <button onClick={() => setNotification(null)} className="text-sm underline">Fechar</button>
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3 mb-8">
         <a
@@ -138,9 +154,10 @@ export default function ContractDetailPage() {
         </a>
         <button
           onClick={handleDownload}
-          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+          disabled={downloading}
+          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Baixar DOCX
+          {downloading ? "Baixando..." : "Baixar DOCX"}
         </button>
         {contract.status === "rascunho" && (
           <button

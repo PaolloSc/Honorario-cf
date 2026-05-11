@@ -21,6 +21,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [message, setMessage] = useState("");
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
   const [participacaoWarning, setParticipacaoWarning] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState(data.email_destinatario || data.contratantes[0]?.email || "");
   const isEdit = !!editContractId;
 
   const handleSubmit = async () => {
@@ -47,7 +48,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
 
       const emailResult = await sendEmail({
         contract_id: resultContractId,
-        destinatario_email: data.email_destinatario || data.contratantes[0].email,
+        destinatario_email: recipientEmail,
         destinatario_nome: getContratanteNome(data.contratantes[0]),
         assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
       });
@@ -195,9 +196,15 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             <strong>Escopo(s):</strong> {data.escopos.length}
           </p>
           <p>
-            <strong>E-mail para envio:</strong>{" "}
-            {data.email_destinatario || data.contratantes[0].email}
+            <strong>E-mail para envio:</strong>
           </p>
+          <input
+            type="email"
+            value={recipientEmail}
+            onChange={(e) => setRecipientEmail(e.target.value)}
+            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            placeholder="email@exemplo.com"
+          />
         </div>
       </div>
 
