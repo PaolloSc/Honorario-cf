@@ -17,6 +17,8 @@ declare module "next-auth" {
 declare module "@auth/core/jwt" {
   interface JWT {
     accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: number;
     role?: string;
   }
 }
@@ -29,7 +31,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID!}/v2.0`,
       authorization: {
         params: {
-          scope: "openid profile email User.Read",
+          scope: "openid profile email User.Read offline_access",
           prompt: "select_account",
         },
       },
@@ -45,7 +47,39 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.id_token;
+        token.refreshToken = account.refresh_token;
+        token.expiresAt = account.expires_at;
+        return token;
       }
+
+      // Return token if not expired
+      if (token.expiresAt && Date.now() < token.expiresAt * 1000) {
+        return token;
+      }
+
+      // Refresh expired token
+      if (token.refreshToken) {
+        try {
+          const url = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/token`;
+          const body = new URLSearchParams({
+            client_id: process.env.AZURE_AD_CLIENT_ID!,
+            client_secret: process.env.AZURE_AD_CLIENT_SECRET!,
+            grant_type: "refresh_token",
+            refresh_token: token.refreshToken as string,
+            scope: "openid profile email User.Read offline_access",
+          });
+          const res = await fetch(url, { method: "POST", body, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+          const data = await res.json();
+          if (data.id_token) {
+            token.accessToken = data.id_token;
+            token.refreshToken = data.refresh_token ?? token.refreshToken;
+            token.expiresAt = Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600);
+          }
+        } catch (e) {
+          console.error("[AUTH] Token refresh failed:", e);
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
