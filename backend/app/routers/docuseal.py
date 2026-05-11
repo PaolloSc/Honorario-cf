@@ -68,11 +68,53 @@ async def send_for_signature(
     try:
         service = get_docuseal_service()
 
-        # For now, create a simple template from the contract
-        # In production, you'd upload the actual file and create a template first
-        filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
+        # Resolve file path from DB (latest version), with fallback to reconstructed path
+        filepath: Path | None = None
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
+        )
+        if latest_ver and latest_ver.file_path:
+            stored = Path(latest_ver.file_path)
+            if stored.exists():
+                filepath = stored
+
+        if filepath is None:
+            filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
+
         if not filepath.exists():
             raise HTTPException(status_code=404, detail="Contract file not found")
+
+        # Check if the DOCX contains DocuSeal field tags; if not, regenerate it
+        needs_regen = True
+        try:
+            with open(filepath, "rb") as f:
+                content_bytes = f.read()
+            if b"{{" in content_bytes and b"|signature|" in content_bytes:
+                needs_regen = False
+        except Exception:
+            pass
+
+        if needs_regen and latest_ver and latest_ver.form_data_json:
+            # Regenerate the DOCX with DocuSeal tags
+            import json as _json
+            from app.models.contract import ContratoRequest as _CR
+            from app.services.contract_generator import ContractGenerator as _CG
+
+            try:
+                form_data = _json.loads(latest_ver.form_data_json)
+                contrato_data = _CR(**form_data)
+                gen = _CG()
+                _, new_filepath = gen.generate(contrato_data, contract_id=data.contract_id)
+                filepath = Path(new_filepath)
+                # Update stored path
+                latest_ver.file_path = str(filepath)
+                db.commit()
+                logger.info("Regenerated DOCX with DocuSeal tags for contract %s", data.contract_id)
+            except Exception as regen_err:
+                logger.warning("Failed to regenerate DOCX: %s", regen_err)
 
         result = await service.create_template_from_docx(
             filepath=str(filepath),

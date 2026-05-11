@@ -232,12 +232,13 @@ class ContractGenerator:
     def _format_paragraph(self, paragraph) -> None:
         is_heading = paragraph.style and paragraph.style.name.startswith("Heading")
         is_signature = self._is_signature_paragraph(paragraph.text)
+        is_tag = paragraph.text.strip().startswith("{{")
 
         paragraph.paragraph_format.line_spacing = 1.15
         paragraph.paragraph_format.space_after = Pt(0 if is_signature else 6)
 
         for run in paragraph.runs:
-            if is_heading:
+            if is_heading and not is_tag:
                 run.text = run.text.upper()
             run.font.name = "Segoe UI"
             run._element.rPr.rFonts.set(qn("w:eastAsia"), "Segoe UI")
@@ -278,7 +279,11 @@ class ContractGenerator:
 
     def _is_signature_paragraph(self, text: str) -> bool:
         stripped = text.strip()
-        return stripped.startswith("_") or stripped in {"Nome:", "CPF:", "TESTEMUNHAS:"}
+        return (
+            stripped.startswith("_")
+            or stripped.startswith("{{")
+            or stripped in {"Nome:", "CPF:", "TESTEMUNHAS:"}
+        )
 
     def _format_vencimento(self, value: str | None, *, recorrente: bool = False) -> str:
         raw = (value or "").strip()
@@ -823,26 +828,33 @@ class ContractGenerator:
             f"Belo Horizonte, {self._format_date_pt_br(datetime.now())}."
         )
         doc.add_paragraph()
-        doc.add_paragraph("_" * 50)
+
+        # DocuSeal signature field tag for C&F (Contratado)
+        doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
         doc.add_paragraph("CONTRATADO: CARVALHO & FURTADO ADVOGADOS")
         doc.add_paragraph()
  
         for i, contratante in enumerate(data.contratantes, 1):
-            doc.add_paragraph("_" * 50)
             if isinstance(contratante, ContratantePJ):
-                doc.add_paragraph(f"CONTRATANTE {i}: {contratante.razao_social}")
+                nome = contratante.razao_social
             elif isinstance(contratante, ContratantePF):
-                doc.add_paragraph(f"CONTRATANTE {i}: {contratante.nome}")
+                nome = contratante.nome
+            else:
+                nome = f"Contratante {i}"
+
+            # DocuSeal signature field tag for each Contratante
+            doc.add_paragraph(f"{{{{Assinatura Contratante {i}|signature|Contratante}}}}")
+            doc.add_paragraph(f"CONTRATANTE {i}: {nome}")
             doc.add_paragraph()
  
         doc.add_paragraph()
         doc.add_paragraph("TESTEMUNHAS:")
         doc.add_paragraph()
-        doc.add_paragraph("_" * 50)
+        doc.add_paragraph("{{Testemunha 1|signature|Testemunha}}")
         doc.add_paragraph("Nome:")
         doc.add_paragraph("CPF:")
         doc.add_paragraph()
-        doc.add_paragraph("_" * 50)
+        doc.add_paragraph("{{Testemunha 2|signature|Testemunha}}")
         doc.add_paragraph("Nome:")
         doc.add_paragraph("CPF:")
  
