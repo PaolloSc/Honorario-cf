@@ -23,7 +23,21 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [participacaoWarning, setParticipacaoWarning] = useState("");
   const [recipientEmail, setRecipientEmail] = useState(data.email_destinatario || data.contratantes[0]?.email || "");
   const [signatureSent, setSignatureSent] = useState(false);
+  const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
+  const [newLawyerEmail, setNewLawyerEmail] = useState("");
+  const [newLawyerName, setNewLawyerName] = useState("");
   const isEdit = !!editContractId;
+
+  const handleAddLawyer = () => {
+    if (!newLawyerEmail.trim()) return;
+    setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
+    setNewLawyerEmail("");
+    setNewLawyerName("");
+  };
+
+  const handleRemoveLawyer = (index: number) => {
+    setAdditionalLawyers((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -157,6 +171,15 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         name: getContratanteNome(c),
         role: "Contratante",
       }));
+
+      // Add additional lawyers as "Advogado" role
+      for (const lawyer of additionalLawyers) {
+        signatarios.push({
+          email: lawyer.email,
+          name: lawyer.name,
+          role: "Advogado",
+        });
+      }
 
       const result = await sendForSignature({
         contract_id: contractId,
@@ -292,6 +315,54 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         {/* After save/email success - show signature button */}
         {status === "sent_email" && contractId && (
           <>
+            {/* Additional lawyers section */}
+            <div className="w-full mb-2 p-4 rounded-lg bg-purple-50 border border-purple-200">
+              <h4 className="text-sm font-medium text-purple-900 mb-2">
+                Advogados adicionais para assinatura (opcional)
+              </h4>
+              <p className="text-xs text-purple-700 mb-3">
+                O advogado logado ja sera incluido automaticamente. Adicione outros se necessario.
+              </p>
+              {additionalLawyers.length > 0 && (
+                <div className="space-y-1 mb-3">
+                  {additionalLawyers.map((lawyer, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+                      <span className="flex-1">{lawyer.name} ({lawyer.email})</span>
+                      <button
+                        onClick={() => handleRemoveLawyer(i)}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newLawyerName}
+                  onChange={(e) => setNewLawyerName(e.target.value)}
+                  placeholder="Nome do advogado"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <input
+                  type="email"
+                  value={newLawyerEmail}
+                  onChange={(e) => setNewLawyerEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <button
+                  onClick={handleAddLawyer}
+                  disabled={!newLawyerEmail.trim()}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={handleSendForSignature}
               disabled={isSubmitting}

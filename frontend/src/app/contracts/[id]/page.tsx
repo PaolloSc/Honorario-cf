@@ -71,6 +71,10 @@ export default function ContractDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [sendingSignature, setSendingSignature] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [showSignaturePanel, setShowSignaturePanel] = useState(false);
+  const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
+  const [newLawyerEmail, setNewLawyerEmail] = useState("");
+  const [newLawyerName, setNewLawyerName] = useState("");
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -129,15 +133,22 @@ export default function ContractDetailPage() {
       return;
     }
 
-    if (!window.confirm(`Enviar contrato para assinatura digital de ${signerName} (${signerEmail})?`)) return;
-
     setSendingSignature(true);
     setNotification(null);
 
     try {
+      const signatarios: Array<{email: string; name: string; role: string}> = [
+        { email: signerEmail, name: signerName, role: "Contratante" },
+      ];
+
+      // Add additional lawyers
+      for (const lawyer of additionalLawyers) {
+        signatarios.push({ email: lawyer.email, name: lawyer.name, role: "Advogado" });
+      }
+
       const result = await sendForSignature({
         contract_id: contractId,
-        signatarios: [{ email: signerEmail, name: signerName, role: "Contratante" }],
+        signatarios,
       });
 
       if (!result.success) {
@@ -275,7 +286,7 @@ export default function ContractDetailPage() {
         </button>
         {canSendForSignature && (
           <button
-            onClick={handleSendForSignature}
+            onClick={() => setShowSignaturePanel(!showSignaturePanel)}
             disabled={sendingSignature}
             className="px-5 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -299,6 +310,83 @@ export default function ContractDetailPage() {
           </button>
         )}
       </div>
+
+      {/* Signature Panel - Additional Lawyers */}
+      {showSignaturePanel && canSendForSignature && (
+        <div className="mb-8 p-5 bg-purple-50 border border-purple-200 rounded-xl">
+          <h3 className="font-display text-sm font-semibold text-purple-900 mb-3">
+            Enviar para Assinatura Digital
+          </h3>
+          <p className="text-xs text-purple-700 mb-3">
+            O contratante ({contract.client_email}) e voce (advogado logado) serao incluidos automaticamente.
+            Adicione outros advogados se necessario.
+          </p>
+
+          {/* Additional lawyers list */}
+          {additionalLawyers.length > 0 && (
+            <div className="space-y-1 mb-3">
+              {additionalLawyers.map((lawyer, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+                  <span className="flex-1">{lawyer.name} ({lawyer.email})</span>
+                  <button
+                    onClick={() => setAdditionalLawyers((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="text-red-500 hover:text-red-700 text-xs font-medium"
+                  >
+                    Remover
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add lawyer form */}
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              value={newLawyerName}
+              onChange={(e) => setNewLawyerName(e.target.value)}
+              placeholder="Nome do advogado"
+              className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+            />
+            <input
+              type="email"
+              value={newLawyerEmail}
+              onChange={(e) => setNewLawyerEmail(e.target.value)}
+              placeholder="email@exemplo.com"
+              className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+            />
+            <button
+              onClick={() => {
+                if (!newLawyerEmail.trim()) return;
+                setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
+                setNewLawyerEmail("");
+                setNewLawyerName("");
+              }}
+              disabled={!newLawyerEmail.trim()}
+              className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+            >
+              Adicionar
+            </button>
+          </div>
+
+          {/* Send button */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleSendForSignature}
+              disabled={sendingSignature}
+              className="px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
+            >
+              {sendingSignature ? "Enviando..." : "Confirmar e Enviar"}
+            </button>
+            <button
+              onClick={() => setShowSignaturePanel(false)}
+              className="px-5 py-2 border border-border text-foreground rounded-lg text-sm hover:bg-gray-50 transition"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Signature Status Card */}
       {signatureEntries.length > 0 && (
