@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
+from app.services.azure_email import AzureEmailService
 from app.services.docuseal import DocuSealService
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ class DocuSealResponse(BaseModel):
 
 
 _docuseal_service: DocuSealService | None = None
+_email_service: AzureEmailService | None = None
 
 
 def get_docuseal_service() -> DocuSealService:
@@ -39,6 +42,13 @@ def get_docuseal_service() -> DocuSealService:
     if _docuseal_service is None:
         _docuseal_service = DocuSealService()
     return _docuseal_service
+
+
+def get_email_service() -> AzureEmailService:
+    global _email_service
+    if _email_service is None:
+        _email_service = AzureEmailService()
+    return _email_service
 
 
 def resolve_backend_path(value: str) -> Path:
@@ -111,6 +121,12 @@ async def send_for_signature(
                 ))
                 db.commit()
 
+            # Send copy of contract to financeiro
+            await _send_contract_to_financeiro(data.contract_id, str(filepath), contract, db, user)
+
+            # Send participação sheet to financeiro if available
+            await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user)
+
             return DocuSealResponse(
                 success=True,
                 message="Documento enviado para assinatura com sucesso",
@@ -125,6 +141,129 @@ async def send_for_signature(
     except Exception as e:
         logger.error("DocuSeal error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _send_contract_to_financeiro(
+    contract_id: str,
+    filepath: str,
+    contract: ContractDB | None,
+    db: Session,
+    user: CurrentUser,
+) -> None:
+    """Send a copy of the contract to the financeiro email."""
+    try:
+        email_service = get_email_service()
+        client_name = contract.client_name if contract else "Cliente"
+
+        result = await email_service.send_email_with_attachment(
+            to_email=settings.financeiro_email,
+            to_name="Financeiro C&F",
+            subject=f"Cópia Contrato de Honorários — {client_name}",
+            attachment_path=filepath,
+            attachment_name=f"contrato_honorarios_{contract_id}.docx",
+        )
+
+        if result.get("success"):
+            logger.info("Contract copy sent to financeiro for contract %s", contract_id)
+            if contract:
+                db.add(AuditLogDB(
+                    contract_id=contract_id,
+                    action="envio_copia_financeiro",
+                    detail=f"Cópia do contrato enviada para {settings.financeiro_email}",
+                    version_number=contract.current_version,
+                    user_email=user.email,
+                    created_at=utcnow(),
+                ))
+                db.commit()
+        else:
+            logger.warning("Failed to send contract copy to financeiro: %s", result.get("error"))
+    except Exception as e:
+        logger.error("Error sending contract copy to financeiro: %s", e)
+
+
+async def _send_participacao_to_financeiro(
+    contract_id: str,
+    contract: ContractDB | None,
+    latest_ver: ContractVersionDB | None,
+    db: Session,
+    user: CurrentUser,
+) -> None:
+    """Send participação sheet to financeiro based on stored form data."""
+    try:
+        if not latest_ver or not latest_ver.form_data_json:
+            return
+
+        form_data = json.loads(latest_ver.form_data_json)
+        participacao = form_data.get("participacao", {})
+
+        if not participacao.get("tem_participacao"):
+            return
+
+        client_name = contract.client_name if contract else "Cliente"
+
+        rows = []
+        if participacao.get("percentual_ou_valor"):
+            rows.append(("Percentual/Valor", participacao["percentual_ou_valor"]))
+        if participacao.get("para_quem"):
+            rows.append(("Para quem", participacao["para_quem"]))
+        if participacao.get("natureza"):
+            rows.append(("Natureza", participacao["natureza"]))
+        if participacao.get("responsavel_captacao"):
+            rows.append(("Resp. Captação", participacao["responsavel_captacao"]))
+        if participacao.get("responsavel_gestao"):
+            rows.append(("Resp. Gestão", participacao["responsavel_gestao"]))
+        if participacao.get("contato_financeiro_cliente"):
+            rows.append(("Contato Financeiro Cliente", participacao["contato_financeiro_cliente"]))
+
+        if not rows:
+            return
+
+        table_rows = "".join(
+            f'<tr><td style="padding:8px;border:1px solid #D7D1CA;font-weight:600;">{k}</td>'
+            f'<td style="padding:8px;border:1px solid #D7D1CA;">{v}</td></tr>'
+            for k, v in rows
+        )
+
+        html = (
+            '<div style="font-family: Segoe UI, Tahoma, sans-serif; max-width: 600px;">'
+            '<div style="background-color: #1A3C34; padding: 20px 28px; border-radius: 8px 8px 0 0;">'
+            '<span style="color: #FFFFFF; font-size: 16px; font-weight: 500;">Ficha de Participação — Uso Interno</span>'
+            '</div>'
+            '<div style="padding: 24px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
+            f'<p><strong>Cliente:</strong> {client_name}</p>'
+            f'<p><strong>Contrato:</strong> {contract_id}</p>'
+            f'<p><strong>Registrado por:</strong> {user.email}</p>'
+            f'<p><strong>Momento:</strong> Envio para assinatura digital</p>'
+            '<table style="width:100%;border-collapse:collapse;margin-top:16px;">'
+            f'{table_rows}'
+            '</table>'
+            '</div></div>'
+        )
+
+        email_service = get_email_service()
+        result = await email_service.send_html_email(
+            to_email=settings.financeiro_email,
+            to_name="Financeiro C&F",
+            subject=f"Ficha de Participação (Assinatura) — {client_name}",
+            html_content=html,
+        )
+
+        if result.get("success"):
+            logger.info("Participacao sheet sent to financeiro for contract %s", contract_id)
+            if contract:
+                db.add(AuditLogDB(
+                    contract_id=contract_id,
+                    action="envio_participacao_assinatura",
+                    detail=f"Ficha de participação enviada para {settings.financeiro_email} (assinatura)",
+                    version_number=contract.current_version,
+                    user_email=user.email,
+                    created_at=utcnow(),
+                ))
+                db.commit()
+        else:
+            logger.warning("Failed to send participacao to financeiro: %s", result.get("error"))
+    except Exception as e:
+        logger.error("Error sending participacao to financeiro: %s", e)
 
 
 # ── Webhook (no auth — called externally by DocuSeal) ───────────
