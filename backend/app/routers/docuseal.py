@@ -364,7 +364,7 @@ async def send_for_signature(
             await _send_contract_to_financeiro(data.contract_id, str(filepath), contract, db, user)
 
             # Send participacao sheet to financeiro if available
-            await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user)
+            await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user, contract_filepath=str(filepath))
 
             return DocuSealResponse(
                 success=True,
@@ -426,6 +426,7 @@ async def _send_participacao_to_financeiro(
     latest_ver: ContractVersionDB | None,
     db: Session,
     user: CurrentUser,
+    contract_filepath: str | None = None,
 ) -> None:
     """Send participação sheet to financeiro based on stored form data."""
     try:
@@ -440,7 +441,33 @@ async def _send_participacao_to_financeiro(
 
         client_name = contract.client_name if contract else "Cliente"
 
+        # Extract "Objeto do Contrato" from escopos
+        escopos = form_data.get("escopos", [])
+        objeto_parts = []
+        for escopo in escopos:
+            tipo = escopo.get("tipo_escopo") or escopo.get("tipo", "")
+            desc = escopo.get("escopo_personalizado") or escopo.get("descricao_custom", "")
+            numero_autos = escopo.get("numero_autos", "")
+
+            if desc:
+                part = desc
+            elif tipo:
+                # Convert tipo_escopo enum to readable label
+                part = tipo.replace("_", " ").title()
+            else:
+                part = ""
+
+            if numero_autos:
+                part = f"{part} (Processo: {numero_autos})" if part else f"Processo: {numero_autos}"
+
+            if part:
+                objeto_parts.append(part)
+
+        objeto_contrato = "; ".join(objeto_parts) if objeto_parts else "Não especificado"
+
         rows = []
+        # Objeto do contrato is the FIRST field (as requested by financeiro)
+        rows.append(("Objeto do Contrato", objeto_contrato))
         if participacao.get("percentual_ou_valor"):
             rows.append(("Percentual/Valor", participacao["percentual_ou_valor"]))
         if participacao.get("para_quem"):
@@ -480,12 +507,24 @@ async def _send_participacao_to_financeiro(
         )
 
         email_service = get_email_service()
-        result = await email_service.send_html_email(
-            to_email=settings.financeiro_email,
-            to_name="Financeiro C&F",
-            subject=f"Ficha de Participação (Assinatura) — {client_name}",
-            html_content=html,
-        )
+
+        # Send with contract attachment if filepath is available
+        if contract_filepath and Path(contract_filepath).exists():
+            result = await email_service.send_html_email_with_attachment(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                html_content=html,
+                attachment_path=contract_filepath,
+                attachment_name=f"contrato_honorarios_{contract_id}.docx",
+            )
+        else:
+            result = await email_service.send_html_email(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                html_content=html,
+            )
 
         if result.get("success"):
             logger.info("Participacao sheet sent to financeiro for contract %s", contract_id)
