@@ -31,6 +31,7 @@ class EmailResponse(BaseModel):
 class ParticipacaoEmailRequest(BaseModel):
     contract_id: str
     cliente_nome: str
+    objeto_contrato: str = ""
     percentual_ou_valor: str = ""
     para_quem: str = ""
     natureza: str = ""
@@ -43,7 +44,7 @@ class ParticipacaoEmailRequest(BaseModel):
     def _coerce_nulls(cls, data):
         """Convert null/None values to empty strings for optional text fields."""
         if isinstance(data, dict):
-            for field in ("percentual_ou_valor", "para_quem", "natureza",
+            for field in ("objeto_contrato", "percentual_ou_valor", "para_quem", "natureza",
                           "responsavel_captacao", "responsavel_gestao",
                           "contato_financeiro_cliente"):
                 if data.get(field) is None:
@@ -209,6 +210,9 @@ async def send_participacao_email(
     """Send participation internal sheet to financeiro."""
     try:
         rows = []
+        # Objeto do Contrato first (as requested by financeiro)
+        if data.objeto_contrato:
+            rows.append(("Objeto do Contrato", data.objeto_contrato))
         if data.percentual_ou_valor:
             rows.append(("Percentual/Valor", data.percentual_ou_valor))
         if data.para_quem:
@@ -243,13 +247,43 @@ async def send_participacao_email(
             '</div></div>'
         )
 
-        service = get_email_service()
-        result = await service.send_html_email(
-            to_email=settings.financeiro_email,
-            to_name="Financeiro C&F",
-            subject=f"Ficha de Participação — {data.cliente_nome}",
-            html_content=html,
+        # Look up contract file for attachment
+        contract_filepath = None
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
         )
+        if latest_ver and latest_ver.file_path:
+            stored = Path(latest_ver.file_path)
+            if stored.exists():
+                contract_filepath = str(stored)
+            else:
+                # Try convention path
+                output_dir = BACKEND_DIR / settings.output_dir
+                candidate = output_dir / f"contrato_{data.contract_id}.docx"
+                if candidate.exists():
+                    contract_filepath = str(candidate)
+
+        service = get_email_service()
+
+        if contract_filepath:
+            result = await service.send_html_email_with_attachment(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação — {data.cliente_nome}",
+                html_content=html,
+                attachment_path=contract_filepath,
+                attachment_name=f"contrato_honorarios_{data.contract_id}.docx",
+            )
+        else:
+            result = await service.send_html_email(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação — {data.cliente_nome}",
+                html_content=html,
+            )
 
         if result["success"]:
             contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
