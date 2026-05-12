@@ -59,7 +59,11 @@ def resolve_backend_path(value: str) -> Path:
 
 
 def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
-    """Resolve the contract file path, trying multiple strategies."""
+    """Resolve the contract file path, trying multiple strategies.
+
+    If the file cannot be found on disk (ephemeral filesystem like Render),
+    regenerates from form_data_json stored in the database.
+    """
     output_dir = resolve_backend_path(settings.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -92,12 +96,39 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
         logger.info("Found contract file at fallback path: %s", fallback)
         return fallback
 
-    # Log what was tried for debugging
+    # Strategy 4: Regenerate from form_data_json in DB (handles ephemeral filesystems)
+    if latest_ver and latest_ver.form_data_json:
+        logger.warning(
+            "Contract file not found on disk for %s. Regenerating from stored form data...",
+            contract_id,
+        )
+        try:
+            import json as _json
+            from app.models.contract import ContratoRequest as _CR
+            from app.services.contract_generator import ContractGenerator as _CG
+
+            form_data = _json.loads(latest_ver.form_data_json)
+            contrato_data = _CR(**form_data)
+            gen = _CG()
+            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            regenerated = Path(new_filepath)
+
+            # Update the stored path in DB so next time it's found directly
+            latest_ver.file_path = str(regenerated)
+            db.commit()
+
+            logger.info("Regenerated contract file at: %s", regenerated)
+            return regenerated
+        except Exception as regen_err:
+            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
+
+    # All strategies exhausted
     logger.error(
-        "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
+        "Contract file not found for %s. Tried: stored=%s, output_dir=%s, regeneration=%s",
         contract_id,
         latest_ver.file_path if latest_ver else "N/A",
         output_dir,
+        "failed" if latest_ver and latest_ver.form_data_json else "no form data",
     )
     raise HTTPException(status_code=404, detail="Contract file not found")
 
