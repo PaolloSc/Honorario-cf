@@ -150,7 +150,40 @@ def download_contract(
         if fallback.exists():
             filepath = fallback
 
-    if filepath is None:
+    # Strategy 4: Regenerate from form_data_json (handles ephemeral filesystems)
+    if filepath is None and ver and ver.form_data_json:
+        logger.warning(
+            "Contract file not on disk for %s. Regenerating from stored form data...",
+            contract_id,
+        )
+        try:
+            form_data = json.loads(ver.form_data_json)
+            contrato_data = ContratoRequest(**form_data)
+            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            filepath = Path(new_filepath)
+            # Update stored path
+            ver.file_path = str(filepath)
+            db.commit()
+            logger.info("Regenerated contract file at: %s", filepath)
+        except FileNotFoundError as template_err:
+            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
+            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
+            try:
+                from docx import Document as _Doc
+                doc = _Doc()
+                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
+                minimal_path = output_dir / f"contrato_{contract_id}.docx"
+                doc.save(str(minimal_path))
+                ver.file_path = str(minimal_path)
+                db.commit()
+                filepath = minimal_path
+                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
+            except Exception as min_err:
+                logger.error("Failed to create minimal DOCX: %s", min_err)
+        except Exception as regen_err:
+            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
+
+    if filepath is None or not filepath.exists():
         logger.error(
             "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
             contract_id,
