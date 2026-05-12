@@ -158,57 +158,7 @@ async def send_for_signature(
     try:
         service = get_docuseal_service()
 
-        filepath = _resolve_contract_filepath(data.contract_id, db)
-
-        latest_ver = (
-            db.query(ContractVersionDB)
-            .filter(ContractVersionDB.contract_id == data.contract_id)
-            .order_by(ContractVersionDB.version_number.desc())
-            .first()
-        )
-
-        # Check if the DOCX contains DocuSeal field tags; if not, regenerate it
-        needs_regen = True
-        try:
-            with open(filepath, "rb") as f:
-                content_bytes = f.read()
-            if b"{{" in content_bytes and b"|signature|" in content_bytes:
-                needs_regen = False
-        except Exception:
-            pass
-
-        if needs_regen and latest_ver and latest_ver.form_data_json:
-            # Regenerate the DOCX with DocuSeal tags
-            import json as _json
-            from app.models.contract import ContratoRequest as _CR
-            from app.services.contract_generator import ContractGenerator as _CG
-
-            try:
-                form_data = _json.loads(latest_ver.form_data_json)
-                contrato_data = _CR(**form_data)
-                gen = _CG()
-                _, new_filepath = gen.generate(contrato_data, contract_id=data.contract_id)
-                filepath = Path(new_filepath)
-                # Update stored path
-                latest_ver.file_path = str(filepath)
-                db.commit()
-                logger.info("Regenerated DOCX with DocuSeal tags for contract %s", data.contract_id)
-            except Exception as regen_err:
-                logger.warning("Failed to regenerate DOCX: %s", regen_err)
-
-        result = await service.create_template_from_docx(
-            filepath=str(filepath),
-            name=f"Contrato Honorarios {data.contract_id}",
-        )
-
-        template_id = result.get("id")
-        if not template_id:
-            return DocuSealResponse(
-                success=False,
-                message="Failed to create DocuSeal template",
-            )
-
-        # Send for signature — add C&F (Contratado) and the lawyer (Advogado) alongside the client
+        # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
 
         # Always include C&F as "Contratado" role (the firm)
@@ -222,7 +172,6 @@ async def send_for_signature(
 
         # Always include the logged-in lawyer as "Advogado" role
         if user.email:
-            # Check if the logged-in user is already in the list
             user_already_included = any(s.get("email") == user.email for s in all_signatarios)
             if not user_already_included:
                 all_signatarios.append({
@@ -232,6 +181,7 @@ async def send_for_signature(
                 })
 
         # Deduplicate roles: DocuSeal requires unique role per submitter
+        # and each role must match a signature field in the template
         from collections import Counter
         role_counts = Counter(s.get("role", "Contratante") for s in all_signatarios)
         role_indices: dict[str, int] = {}
@@ -249,6 +199,49 @@ async def send_for_signature(
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
             sig["order"] = _ROLE_ORDER.get(base_role, 1)
 
+        # Regenerate DOCX with signature fields matching the unique signatario roles
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
+        )
+
+        filepath = _resolve_contract_filepath(data.contract_id, db)
+
+        if latest_ver and latest_ver.form_data_json:
+            try:
+                import json as _json
+                from app.models.contract import ContratoRequest as _CR
+                from app.services.contract_generator import ContractGenerator as _CG
+
+                form_data = _json.loads(latest_ver.form_data_json)
+                contrato_data = _CR(**form_data)
+                gen = _CG()
+                _, new_filepath = gen.generate(
+                    contrato_data,
+                    contract_id=data.contract_id,
+                    signatario_roles=all_signatarios,
+                )
+                filepath = Path(new_filepath)
+                latest_ver.file_path = str(filepath)
+                db.commit()
+                logger.info("Regenerated DOCX with matching signature roles for contract %s", data.contract_id)
+            except Exception as regen_err:
+                logger.warning("Failed to regenerate DOCX with roles: %s. Using existing file.", regen_err)
+
+        result = await service.create_template_from_docx(
+            filepath=str(filepath),
+            name=f"Contrato Honorarios {data.contract_id}",
+        )
+
+        template_id = result.get("id")
+        if not template_id:
+            return DocuSealResponse(
+                success=False,
+                message="Failed to create DocuSeal template",
+            )
+
         sign_result = await service.send_for_signature(
             template_id=template_id,
             signatarios=all_signatarios,
@@ -264,13 +257,6 @@ async def send_for_signature(
             if contract:
                 contract.status = "enviado"
                 contract.updated_at = utcnow()
-                # Save submission_id on latest version
-                latest_ver = (
-                    db.query(ContractVersionDB)
-                    .filter(ContractVersionDB.contract_id == data.contract_id)
-                    .order_by(ContractVersionDB.version_number.desc())
-                    .first()
-                )
                 if latest_ver:
                     latest_ver.docuseal_submission_id = str(submission_id) if submission_id else None
                 db.add(AuditLogDB(
@@ -286,7 +272,7 @@ async def send_for_signature(
             # Send copy of contract to financeiro
             await _send_contract_to_financeiro(data.contract_id, str(filepath), contract, db, user)
 
-            # Send participação sheet to financeiro if available
+            # Send participacao sheet to financeiro if available
             await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user)
 
             return DocuSealResponse(
