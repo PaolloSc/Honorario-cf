@@ -1,17 +1,65 @@
 "use client";
  
 import FormField, { Input, TextArea, Toggle } from "@/components/ui/FormField";
-import type { Participacao } from "@/types/contract";
+import type { EscopoItem, Participacao } from "@/types/contract";
+import { ESCOPO_LABELS } from "@/types/contract";
  
+function buildObjetoLines(escopos: EscopoItem[]): string[] {
+  const lines: string[] = [];
+  escopos.forEach((escopo) => {
+    const label = ESCOPO_LABELS[escopo.tipo] || escopo.tipo;
+    let detail = label;
+
+    if (escopo.descricao_custom) {
+      detail += ` - ${escopo.descricao_custom}`;
+    }
+    if (escopo.numero_autos) {
+      detail += ` | Autos: ${escopo.numero_autos}`;
+    }
+    if (escopo.demandas) {
+      detail += ` | Demandas: ${escopo.demandas}`;
+    }
+    if (escopo.pessoas_patrimonios) {
+      detail += ` | Pessoas/Patrimônios: ${escopo.pessoas_patrimonios}`;
+    }
+    if (escopo.tipo_reestruturacao) {
+      detail += ` | Reestruturação: ${escopo.tipo_reestruturacao}`;
+    }
+    if (escopo.documentos) {
+      detail += ` | Documentos: ${escopo.documentos}`;
+    }
+    if (escopo.consulta) {
+      detail += ` | Consulta: ${escopo.consulta}`;
+    }
+    if (escopo.subtipo_memoriais) {
+      const activities: string[] = [];
+      if (escopo.subtipo_memoriais.elaboracao_memoriais) activities.push("Elaboração de memoriais");
+      if (escopo.subtipo_memoriais.despacho_memoriais) activities.push("Despacho de memoriais");
+      if (escopo.subtipo_memoriais.sustentacao_oral_relator) activities.push("Sustentação oral (relator)");
+      if (escopo.subtipo_memoriais.sustentacao_oral_todos_julgadores) activities.push("Sustentação oral (todos julgadores)");
+      if (activities.length > 0) {
+        detail += ` | Atividades: ${activities.join(", ")}`;
+      }
+    }
+
+    lines.push(detail);
+  });
+  return lines;
+}
+
 interface Step5Props {
   participacao: Participacao;
   onChange: (participacao: Participacao) => void;
+  escopos: EscopoItem[];
 }
  
 export default function Step5Participacao({
   participacao,
   onChange,
+  escopos,
 }: Step5Props) {
+  const objetoLines = buildObjetoLines(escopos);
+
   return (
     <div>
       <h2 className="text-xl font-bold text-primary mb-2">
@@ -26,6 +74,21 @@ export default function Step5Participacao({
           Atenção: Esta ficha é apenas para fins internos do escritório.
         </p>
       </div>
+
+      {objetoLines.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p className="text-sm font-semibold text-blue-900 mb-2">
+            Objeto do Contrato
+          </p>
+          <ul className="list-disc list-inside space-y-1">
+            {objetoLines.map((line, idx) => (
+              <li key={idx} className="text-sm text-blue-800">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
  
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
         <Toggle
