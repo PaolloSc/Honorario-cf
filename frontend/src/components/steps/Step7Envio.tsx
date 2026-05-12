@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData } from "@/types/contract";
+import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
+import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao } from "@/app/lib/api";
 
 interface Step7EnvioProps {
@@ -13,6 +14,52 @@ interface Step7EnvioProps {
 function getContratanteNome(c: Contratante): string {
   if (c.tipo === "PF") return (c as ContratantePF).nome;
   return (c as ContratantePJ).razao_social;
+}
+
+function buildObjetoContrato(escopos: EscopoItem[]): string {
+  return escopos
+    .map((e) => {
+      const parts: string[] = [];
+
+      // Main label
+      const label = ESCOPO_LABELS[e.tipo] || e.tipo || "";
+      if (label && e.tipo !== "outro") parts.push(label);
+
+      // Custom description
+      if (e.descricao_custom) parts.push(e.descricao_custom);
+
+      // Process number
+      if (e.numero_autos) parts.push(`Processo: ${e.numero_autos}`);
+
+      // Demands
+      if (e.demandas) parts.push(`Demandas: ${e.demandas}`);
+
+      // People/assets
+      if (e.pessoas_patrimonios) parts.push(`Pessoas/Patrimonios: ${e.pessoas_patrimonios}`);
+
+      // Restructuring type
+      if (e.tipo_reestruturacao) parts.push(`Reestruturacao: ${e.tipo_reestruturacao}`);
+
+      // Documents
+      if (e.documentos) parts.push(`Documentos: ${e.documentos}`);
+
+      // Legal opinion topic
+      if (e.consulta) parts.push(`Consulta: ${e.consulta}`);
+
+      // Memorial activities
+      if (e.subtipo_memoriais) {
+        const atividades: string[] = [];
+        if (e.subtipo_memoriais.elaboracao_memoriais) atividades.push("Elaboracao de Memoriais");
+        if (e.subtipo_memoriais.despacho_memoriais) atividades.push("Despacho de Memoriais");
+        if (e.subtipo_memoriais.sustentacao_oral_relator) atividades.push("Sustentacao oral c/ Relator");
+        if (e.subtipo_memoriais.sustentacao_oral_todos_julgadores) atividades.push("Sustentacao oral c/ todos os julgadores");
+        if (atividades.length > 0) parts.push(`Atividades: ${atividades.join(", ")}`);
+      }
+
+      return parts.join(" | ");
+    })
+    .filter(Boolean)
+    .join("\n");
 }
 
 export default function Step7Envio({ data, editContractId, onSaveComplete }: Step7EnvioProps) {
@@ -78,6 +125,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
+            objeto_contrato: buildObjetoContrato(data.escopos),
             percentual_ou_valor: data.participacao.percentual_ou_valor || "",
             para_quem: data.participacao.para_quem || "",
             natureza: data.participacao.natureza || "",
@@ -131,6 +179,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
+            objeto_contrato: buildObjetoContrato(data.escopos),
             percentual_ou_valor: data.participacao.percentual_ou_valor || "",
             para_quem: data.participacao.para_quem || "",
             natureza: data.participacao.natureza || "",

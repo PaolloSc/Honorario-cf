@@ -364,7 +364,7 @@ async def send_for_signature(
             await _send_contract_to_financeiro(data.contract_id, str(filepath), contract, db, user)
 
             # Send participacao sheet to financeiro if available
-            await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user)
+            await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user, contract_filepath=str(filepath))
 
             return DocuSealResponse(
                 success=True,
@@ -426,6 +426,7 @@ async def _send_participacao_to_financeiro(
     latest_ver: ContractVersionDB | None,
     db: Session,
     user: CurrentUser,
+    contract_filepath: str | None = None,
 ) -> None:
     """Send participação sheet to financeiro based on stored form data."""
     try:
@@ -440,7 +441,94 @@ async def _send_participacao_to_financeiro(
 
         client_name = contract.client_name if contract else "Cliente"
 
+        # Extract "Objeto do Contrato" from escopos - mirror ALL fields the lawyer filled
+        ESCOPO_LABELS = {
+            "consultoria_contencioso_geral": "Consultoria e contencioso nas areas de atuacao do C&F",
+            "contencioso_representacao": "Contencioso para representacao e atuacao em autos",
+            "contencioso_memoriais": "Contencioso para Memoriais e sustentacao oral",
+            "contencioso_tutela_urgencia": "Contencioso para tutela de urgencia",
+            "consultoria_lgpd": "Consultoria LGPD",
+            "consultoria_compliance_trabalhista": "Compliance Trabalhista",
+            "consultoria_planejamento_tributario": "Planejamento tributario",
+            "consultoria_diagnostico_fiscal": "Diagnostico fiscal",
+            "consultoria_planejamento_patrimonial": "Planejamento patrimonial",
+            "consultoria_estruturacao_societaria": "Estruturacao societaria",
+            "consultoria_contratual": "Analise contratual",
+            "consultoria_elaboracao_documentos": "Elaboracao de documentos",
+            "consultoria_opiniao_legal": "Opiniao legal / Parecer",
+            "outro": "",
+        }
+
+        escopos = form_data.get("escopos", [])
+        escopo_descriptions = []
+        for escopo in escopos:
+            parts = []
+            tipo = escopo.get("tipo_escopo") or escopo.get("tipo", "")
+            label = ESCOPO_LABELS.get(tipo, "")
+
+            # Main label (skip for "outro" since descricao_custom will cover it)
+            if label and tipo != "outro":
+                parts.append(label)
+
+            # Custom description
+            desc = escopo.get("escopo_personalizado") or escopo.get("descricao_custom", "")
+            if desc:
+                parts.append(desc)
+
+            # Process number
+            numero_autos = escopo.get("numero_autos", "")
+            if numero_autos:
+                parts.append(f"Processo: {numero_autos}")
+
+            # Demands
+            demandas = escopo.get("demandas", "")
+            if demandas:
+                parts.append(f"Demandas: {demandas}")
+
+            # People/assets
+            pessoas = escopo.get("pessoas_patrimonios", "")
+            if pessoas:
+                parts.append(f"Pessoas/Patrimonios: {pessoas}")
+
+            # Restructuring type
+            reestruturacao = escopo.get("tipo_reestruturacao", "")
+            if reestruturacao:
+                parts.append(f"Reestruturacao: {reestruturacao}")
+
+            # Documents
+            documentos = escopo.get("documentos", "")
+            if documentos:
+                parts.append(f"Documentos: {documentos}")
+
+            # Legal opinion topic
+            consulta = escopo.get("consulta", "")
+            if consulta:
+                parts.append(f"Consulta: {consulta}")
+
+            # Memorial activities
+            subtipo = escopo.get("subtipo_memoriais", {})
+            if subtipo:
+                atividades = []
+                if subtipo.get("elaboracao_memoriais"):
+                    atividades.append("Elaboracao de Memoriais")
+                if subtipo.get("despacho_memoriais"):
+                    atividades.append("Despacho de Memoriais")
+                if subtipo.get("sustentacao_oral_relator"):
+                    atividades.append("Sustentacao oral c/ Relator")
+                if subtipo.get("sustentacao_oral_todos_julgadores"):
+                    atividades.append("Sustentacao oral c/ todos os julgadores")
+                if atividades:
+                    parts.append(f"Atividades: {', '.join(atividades)}")
+
+            if parts:
+                escopo_descriptions.append(" | ".join(parts))
+
+        objeto_contrato = "\n".join(escopo_descriptions) if escopo_descriptions else "Nao especificado"
+
         rows = []
+        # Objeto do contrato is the FIRST field (as requested by financeiro)
+        # Replace newlines with <br> for HTML rendering
+        rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
         if participacao.get("percentual_ou_valor"):
             rows.append(("Percentual/Valor", participacao["percentual_ou_valor"]))
         if participacao.get("para_quem"):
@@ -480,12 +568,24 @@ async def _send_participacao_to_financeiro(
         )
 
         email_service = get_email_service()
-        result = await email_service.send_html_email(
-            to_email=settings.financeiro_email,
-            to_name="Financeiro C&F",
-            subject=f"Ficha de Participação (Assinatura) — {client_name}",
-            html_content=html,
-        )
+
+        # Send with contract attachment if filepath is available
+        if contract_filepath and Path(contract_filepath).exists():
+            result = await email_service.send_html_email_with_attachment(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                html_content=html,
+                attachment_path=contract_filepath,
+                attachment_name=f"contrato_honorarios_{contract_id}.docx",
+            )
+        else:
+            result = await email_service.send_html_email(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                html_content=html,
+            )
 
         if result.get("success"):
             logger.info("Participacao sheet sent to financeiro for contract %s", contract_id)
