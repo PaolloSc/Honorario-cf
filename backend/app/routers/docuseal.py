@@ -148,6 +148,92 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
     raise HTTPException(status_code=404, detail="Contract file not found")
 
 
+def _patch_docx_with_signatures(
+    existing_filepath: Path,
+    signatarios: list[dict],
+    contract_id: str,
+    db: Session,
+    latest_ver,
+) -> Path:
+    """Patch an existing DOCX to ensure it has signature fields for all signatarios.
+
+    If the existing file can be read, appends missing signature fields.
+    If not, creates a new DOCX with all signature fields.
+    """
+    from docx import Document
+
+    output_dir = resolve_backend_path(settings.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"contrato_{contract_id}.docx"
+
+    # Try to open existing file and patch it
+    doc = None
+    if existing_filepath.exists():
+        try:
+            doc = Document(str(existing_filepath))
+        except Exception:
+            pass
+
+    if doc is None:
+        # Create a new minimal document
+        doc = Document()
+        doc.add_paragraph("CONTRATO DE PRESTACAO DE SERVICOS ADVOCATICIOS")
+        doc.add_paragraph()
+        doc.add_paragraph("(Documento regenerado para assinatura digital)")
+        doc.add_paragraph()
+
+    # Check if signature fields already exist for all roles
+    full_text = "\n".join(p.text for p in doc.paragraphs)
+    missing_sigs = []
+    for sig in signatarios:
+        role = sig.get("role", "")
+        if f"|signature|{role}" not in full_text:
+            missing_sigs.append(sig)
+
+    if missing_sigs:
+        # Append signature fields at the end
+        if len(doc.paragraphs) > 3:
+            doc.add_paragraph()
+            doc.add_paragraph("_" * 70)
+            doc.add_paragraph()
+
+        # Add ALL signature fields to ensure consistency
+        contratado_sigs = [s for s in signatarios if s.get("role", "").startswith("Contratado")]
+        advogado_sigs = [s for s in signatarios if s.get("role", "").startswith("Advogado")]
+        contratante_sigs = [s for s in signatarios if s.get("role", "").startswith("Contratante")]
+
+        for sig in contratado_sigs:
+            role = sig["role"]
+            name = sig.get("name", "Contratado")
+            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"CONTRATADO: {name.upper()}")
+            doc.add_paragraph()
+
+        for sig in advogado_sigs:
+            role = sig["role"]
+            name = sig.get("name", "Advogado")
+            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"ADVOGADO: {name.upper()}")
+            doc.add_paragraph()
+
+        for sig in contratante_sigs:
+            role = sig["role"]
+            name = sig.get("name", "Contratante")
+            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"CONTRATANTE: {name.upper()}")
+            doc.add_paragraph()
+
+    doc.save(str(output_path))
+
+    # Update DB
+    if latest_ver:
+        latest_ver.file_path = str(output_path)
+        db.commit()
+
+    logger.info("Patched DOCX with %d signature fields at: %s", len(signatarios), output_path)
+    return output_path
+
+
 @router.post("/send-for-signature", response_model=DocuSealResponse)
 async def send_for_signature(
     data: DocuSealRequest,
@@ -158,57 +244,7 @@ async def send_for_signature(
     try:
         service = get_docuseal_service()
 
-        filepath = _resolve_contract_filepath(data.contract_id, db)
-
-        latest_ver = (
-            db.query(ContractVersionDB)
-            .filter(ContractVersionDB.contract_id == data.contract_id)
-            .order_by(ContractVersionDB.version_number.desc())
-            .first()
-        )
-
-        # Check if the DOCX contains DocuSeal field tags; if not, regenerate it
-        needs_regen = True
-        try:
-            with open(filepath, "rb") as f:
-                content_bytes = f.read()
-            if b"{{" in content_bytes and b"|signature|" in content_bytes:
-                needs_regen = False
-        except Exception:
-            pass
-
-        if needs_regen and latest_ver and latest_ver.form_data_json:
-            # Regenerate the DOCX with DocuSeal tags
-            import json as _json
-            from app.models.contract import ContratoRequest as _CR
-            from app.services.contract_generator import ContractGenerator as _CG
-
-            try:
-                form_data = _json.loads(latest_ver.form_data_json)
-                contrato_data = _CR(**form_data)
-                gen = _CG()
-                _, new_filepath = gen.generate(contrato_data, contract_id=data.contract_id)
-                filepath = Path(new_filepath)
-                # Update stored path
-                latest_ver.file_path = str(filepath)
-                db.commit()
-                logger.info("Regenerated DOCX with DocuSeal tags for contract %s", data.contract_id)
-            except Exception as regen_err:
-                logger.warning("Failed to regenerate DOCX: %s", regen_err)
-
-        result = await service.create_template_from_docx(
-            filepath=str(filepath),
-            name=f"Contrato Honorarios {data.contract_id}",
-        )
-
-        template_id = result.get("id")
-        if not template_id:
-            return DocuSealResponse(
-                success=False,
-                message="Failed to create DocuSeal template",
-            )
-
-        # Send for signature — add C&F (Contratado) and the lawyer (Advogado) alongside the client
+        # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
 
         # Always include C&F as "Contratado" role (the firm)
@@ -222,7 +258,6 @@ async def send_for_signature(
 
         # Always include the logged-in lawyer as "Advogado" role
         if user.email:
-            # Check if the logged-in user is already in the list
             user_already_included = any(s.get("email") == user.email for s in all_signatarios)
             if not user_already_included:
                 all_signatarios.append({
@@ -232,6 +267,7 @@ async def send_for_signature(
                 })
 
         # Deduplicate roles: DocuSeal requires unique role per submitter
+        # and each role must match a signature field in the template
         from collections import Counter
         role_counts = Counter(s.get("role", "Contratante") for s in all_signatarios)
         role_indices: dict[str, int] = {}
@@ -249,6 +285,54 @@ async def send_for_signature(
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
             sig["order"] = _ROLE_ORDER.get(base_role, 1)
 
+        # Regenerate DOCX with signature fields matching the unique signatario roles
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
+        )
+
+        filepath = _resolve_contract_filepath(data.contract_id, db)
+
+        if latest_ver and latest_ver.form_data_json:
+            try:
+                import json as _json
+                from app.models.contract import ContratoRequest as _CR
+                from app.services.contract_generator import ContractGenerator as _CG
+
+                form_data = _json.loads(latest_ver.form_data_json)
+                contrato_data = _CR(**form_data)
+                gen = _CG()
+                _, new_filepath = gen.generate(
+                    contrato_data,
+                    contract_id=data.contract_id,
+                    signatario_roles=all_signatarios,
+                )
+                filepath = Path(new_filepath)
+                latest_ver.file_path = str(filepath)
+                db.commit()
+                logger.info("Regenerated DOCX with matching signature roles for contract %s", data.contract_id)
+            except Exception as regen_err:
+                logger.warning("Full regeneration failed: %s. Patching DOCX with signature fields.", regen_err)
+                # Fallback: patch the existing DOCX or create a new one with signature fields
+                try:
+                    filepath = _patch_docx_with_signatures(filepath, all_signatarios, data.contract_id, db, latest_ver)
+                except Exception as patch_err:
+                    logger.error("Failed to patch DOCX with signatures: %s", patch_err)
+
+        result = await service.create_template_from_docx(
+            filepath=str(filepath),
+            name=f"Contrato Honorarios {data.contract_id}",
+        )
+
+        template_id = result.get("id")
+        if not template_id:
+            return DocuSealResponse(
+                success=False,
+                message="Failed to create DocuSeal template",
+            )
+
         sign_result = await service.send_for_signature(
             template_id=template_id,
             signatarios=all_signatarios,
@@ -264,13 +348,6 @@ async def send_for_signature(
             if contract:
                 contract.status = "enviado"
                 contract.updated_at = utcnow()
-                # Save submission_id on latest version
-                latest_ver = (
-                    db.query(ContractVersionDB)
-                    .filter(ContractVersionDB.contract_id == data.contract_id)
-                    .order_by(ContractVersionDB.version_number.desc())
-                    .first()
-                )
                 if latest_ver:
                     latest_ver.docuseal_submission_id = str(submission_id) if submission_id else None
                 db.add(AuditLogDB(
@@ -286,7 +363,7 @@ async def send_for_signature(
             # Send copy of contract to financeiro
             await _send_contract_to_financeiro(data.contract_id, str(filepath), contract, db, user)
 
-            # Send participação sheet to financeiro if available
+            # Send participacao sheet to financeiro if available
             await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user)
 
             return DocuSealResponse(
