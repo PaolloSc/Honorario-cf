@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
-from app.database import AuditLogDB, ContractDB, get_db, utcnow
+from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
 
 logger = logging.getLogger(__name__)
@@ -76,8 +76,21 @@ async def send_contract_email(
 ) -> EmailResponse:
     """Send contract via email using Azure Communication Services."""
     try:
-        # Find the contract file
-        filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
+        # Resolve file path from DB (latest version), with fallback to reconstructed path
+        filepath: Path | None = None
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
+        )
+        if latest_ver and latest_ver.file_path:
+            stored = Path(latest_ver.file_path)
+            if stored.exists():
+                filepath = stored
+
+        if filepath is None:
+            filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
 
         if not filepath.exists():
             raise HTTPException(status_code=404, detail="Contract file not found")

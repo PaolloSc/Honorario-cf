@@ -32,7 +32,16 @@ export default function Step5Participacao({
           label="Este contrato terá participação?"
           value={participacao.tem_participacao}
           onChange={(v) =>
-            onChange({ ...participacao, tem_participacao: v })
+            onChange({
+              ...participacao,
+              tem_participacao: v,
+              percentual_ou_valor: participacao.percentual_ou_valor || "",
+              para_quem: participacao.para_quem || "",
+              natureza: participacao.natureza || "",
+              responsavel_captacao: participacao.responsavel_captacao || "",
+              responsavel_gestao: participacao.responsavel_gestao || "",
+              contato_financeiro_cliente: participacao.contato_financeiro_cliente || "",
+            })
           }
         />
  
