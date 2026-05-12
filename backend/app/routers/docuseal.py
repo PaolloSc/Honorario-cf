@@ -151,6 +151,12 @@ async def send_for_signature(
                     "role": "Advogado",
                 })
 
+        # Assign order for sequential signing:
+        # Contratante(s) sign first, Advogado second, Contratado (C&F) last
+        _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3}
+        for sig in all_signatarios:
+            sig["order"] = str(_ROLE_ORDER.get(sig.get("role", "Contratante"), 1))
+
         sign_result = await service.send_for_signature(
             template_id=template_id,
             signatarios=all_signatarios,
