@@ -139,7 +139,7 @@ export default function EditContractPage() {
         </div>
       </div>
       <ContractWizard
-        key={selectedVersion || "latest"}
+        key={`${selectedVersion || "latest"}-${formData ? "loaded" : "empty"}`}
         initialData={formData}
         editContractId={contractId}
         onSaveComplete={(contractId) => router.push(`/contracts/${contractId}`)}
