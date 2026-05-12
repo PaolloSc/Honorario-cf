@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData } from "@/types/contract";
+import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
+import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao } from "@/app/lib/api";
 
 interface Step7EnvioProps {
@@ -13,6 +14,19 @@ interface Step7EnvioProps {
 function getContratanteNome(c: Contratante): string {
   if (c.tipo === "PF") return (c as ContratantePF).nome;
   return (c as ContratantePJ).razao_social;
+}
+
+function buildObjetoContrato(escopos: EscopoItem[]): string {
+  return escopos
+    .map((e) => {
+      const desc = e.descricao_custom || ESCOPO_LABELS[e.tipo] || e.tipo || "";
+      const autos = e.numero_autos || "";
+      if (autos && desc) return `${desc} (Processo: ${autos})`;
+      if (autos) return `Processo: ${autos}`;
+      return desc;
+    })
+    .filter(Boolean)
+    .join("; ");
 }
 
 export default function Step7Envio({ data, editContractId, onSaveComplete }: Step7EnvioProps) {
@@ -78,6 +92,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
+            objeto_contrato: buildObjetoContrato(data.escopos),
             percentual_ou_valor: data.participacao.percentual_ou_valor || "",
             para_quem: data.participacao.para_quem || "",
             natureza: data.participacao.natureza || "",
@@ -131,6 +146,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
+            objeto_contrato: buildObjetoContrato(data.escopos),
             percentual_ou_valor: data.participacao.percentual_ou_valor || "",
             para_quem: data.participacao.para_quem || "",
             natureza: data.participacao.natureza || "",
