@@ -201,6 +201,80 @@ async def send_contract_email(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _build_objeto_contrato_from_db(contract_id: str, db: Session) -> str:
+    """Build 'Objeto do Contrato' text from stored form_data_json as fallback."""
+    import json as _json
+
+    ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id)
+        .order_by(ContractVersionDB.version_number.desc())
+        .first()
+    )
+    if not ver or not ver.form_data_json:
+        return ""
+
+    try:
+        form_data = _json.loads(ver.form_data_json)
+    except (ValueError, TypeError):
+        return ""
+
+    escopos = form_data.get("escopos", [])
+    if not escopos:
+        return ""
+
+    from app.models.contract import ESCOPO_LABELS, TipoEscopo
+
+    lines: list[str] = []
+    for escopo in escopos:
+        parts: list[str] = []
+        tipo_raw = escopo.get("tipo", "")
+
+        # Get label from ESCOPO_LABELS enum map
+        try:
+            tipo_enum = TipoEscopo(tipo_raw)
+            label = ESCOPO_LABELS.get(tipo_enum, tipo_raw)
+        except ValueError:
+            label = tipo_raw
+
+        if label and tipo_raw != "outro":
+            parts.append(label)
+        if escopo.get("descricao_custom"):
+            parts.append(escopo["descricao_custom"])
+        if escopo.get("numero_autos"):
+            parts.append(f"Processo: {escopo['numero_autos']}")
+        if escopo.get("demandas"):
+            parts.append(f"Demandas: {escopo['demandas']}")
+        if escopo.get("pessoas_patrimonios"):
+            parts.append(f"Pessoas/Patrimônios: {escopo['pessoas_patrimonios']}")
+        if escopo.get("tipo_reestruturacao"):
+            parts.append(f"Reestruturação: {escopo['tipo_reestruturacao']}")
+        if escopo.get("documentos"):
+            parts.append(f"Documentos: {escopo['documentos']}")
+        if escopo.get("consulta"):
+            parts.append(f"Consulta: {escopo['consulta']}")
+
+        subtipo_mem = escopo.get("subtipo_memoriais")
+        if subtipo_mem:
+            atividades: list[str] = []
+            if subtipo_mem.get("elaboracao_memoriais"):
+                atividades.append("Elaboração de memoriais")
+            if subtipo_mem.get("despacho_memoriais"):
+                atividades.append("Despacho de memoriais")
+            if subtipo_mem.get("sustentacao_oral_relator"):
+                atividades.append("Sustentação oral c/ Relator")
+            if subtipo_mem.get("sustentacao_oral_todos_julgadores"):
+                atividades.append("Sustentação oral c/ todos os julgadores")
+            if atividades:
+                parts.append(f"Atividades: {', '.join(atividades)}")
+
+        line = " | ".join(parts)
+        if line:
+            lines.append(line)
+
+    return "\n".join(lines)
+
+
 @router.post("/send-participacao", response_model=EmailResponse)
 async def send_participacao_email(
     data: ParticipacaoEmailRequest,
@@ -209,11 +283,16 @@ async def send_participacao_email(
 ) -> EmailResponse:
     """Send participation internal sheet to financeiro."""
     try:
+        # Use objeto_contrato from request; if empty, build from stored form data
+        objeto_contrato = data.objeto_contrato.strip()
+        if not objeto_contrato:
+            objeto_contrato = _build_objeto_contrato_from_db(data.contract_id, db)
+
         rows = []
         # Objeto do Contrato first (as requested by financeiro)
         # Replace newlines with <br> for HTML rendering
-        if data.objeto_contrato:
-            rows.append(("Objeto do Contrato", data.objeto_contrato.replace("\n", "<br>")))
+        if objeto_contrato:
+            rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
         if data.percentual_ou_valor:
             rows.append(("Percentual/Valor", data.percentual_ou_valor))
         if data.para_quem:
