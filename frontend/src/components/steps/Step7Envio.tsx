@@ -19,14 +19,47 @@ function getContratanteNome(c: Contratante): string {
 function buildObjetoContrato(escopos: EscopoItem[]): string {
   return escopos
     .map((e) => {
-      const desc = e.descricao_custom || ESCOPO_LABELS[e.tipo] || e.tipo || "";
-      const autos = e.numero_autos || "";
-      if (autos && desc) return `${desc} (Processo: ${autos})`;
-      if (autos) return `Processo: ${autos}`;
-      return desc;
+      const parts: string[] = [];
+
+      // Main label
+      const label = ESCOPO_LABELS[e.tipo] || e.tipo || "";
+      if (label && e.tipo !== "outro") parts.push(label);
+
+      // Custom description
+      if (e.descricao_custom) parts.push(e.descricao_custom);
+
+      // Process number
+      if (e.numero_autos) parts.push(`Processo: ${e.numero_autos}`);
+
+      // Demands
+      if (e.demandas) parts.push(`Demandas: ${e.demandas}`);
+
+      // People/assets
+      if (e.pessoas_patrimonios) parts.push(`Pessoas/Patrimonios: ${e.pessoas_patrimonios}`);
+
+      // Restructuring type
+      if (e.tipo_reestruturacao) parts.push(`Reestruturacao: ${e.tipo_reestruturacao}`);
+
+      // Documents
+      if (e.documentos) parts.push(`Documentos: ${e.documentos}`);
+
+      // Legal opinion topic
+      if (e.consulta) parts.push(`Consulta: ${e.consulta}`);
+
+      // Memorial activities
+      if (e.subtipo_memoriais) {
+        const atividades: string[] = [];
+        if (e.subtipo_memoriais.elaboracao_memoriais) atividades.push("Elaboracao de Memoriais");
+        if (e.subtipo_memoriais.despacho_memoriais) atividades.push("Despacho de Memoriais");
+        if (e.subtipo_memoriais.sustentacao_oral_relator) atividades.push("Sustentacao oral c/ Relator");
+        if (e.subtipo_memoriais.sustentacao_oral_todos_julgadores) atividades.push("Sustentacao oral c/ todos os julgadores");
+        if (atividades.length > 0) parts.push(`Atividades: ${atividades.join(", ")}`);
+      }
+
+      return parts.join(" | ");
     })
     .filter(Boolean)
-    .join("; ");
+    .join("\n");
 }
 
 export default function Step7Envio({ data, editContractId, onSaveComplete }: Step7EnvioProps) {
