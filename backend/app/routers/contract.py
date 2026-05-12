@@ -165,6 +165,21 @@ def download_contract(
             ver.file_path = str(filepath)
             db.commit()
             logger.info("Regenerated contract file at: %s", filepath)
+        except FileNotFoundError as template_err:
+            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
+            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
+            try:
+                from docx import Document as _Doc
+                doc = _Doc()
+                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
+                minimal_path = output_dir / f"contrato_{contract_id}.docx"
+                doc.save(str(minimal_path))
+                ver.file_path = str(minimal_path)
+                db.commit()
+                filepath = minimal_path
+                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
+            except Exception as min_err:
+                logger.error("Failed to create minimal DOCX: %s", min_err)
         except Exception as regen_err:
             logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
 
