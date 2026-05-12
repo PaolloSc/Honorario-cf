@@ -59,7 +59,11 @@ def resolve_backend_path(value: str) -> Path:
 
 
 def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
-    """Resolve the contract file path, trying multiple strategies."""
+    """Resolve the contract file path, trying multiple strategies.
+
+    If the file cannot be found on disk (ephemeral filesystem like Render),
+    regenerates from form_data_json stored in the database.
+    """
     output_dir = resolve_backend_path(settings.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -92,12 +96,54 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
         logger.info("Found contract file at fallback path: %s", fallback)
         return fallback
 
-    # Log what was tried for debugging
+    # Strategy 4: Regenerate from form_data_json in DB (handles ephemeral filesystems)
+    if latest_ver and latest_ver.form_data_json:
+        logger.warning(
+            "Contract file not found on disk for %s. Regenerating from stored form data...",
+            contract_id,
+        )
+        try:
+            import json as _json
+            from app.models.contract import ContratoRequest as _CR
+            from app.services.contract_generator import ContractGenerator as _CG
+
+            form_data = _json.loads(latest_ver.form_data_json)
+            contrato_data = _CR(**form_data)
+            gen = _CG()
+            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            regenerated = Path(new_filepath)
+
+            # Update the stored path in DB so next time it's found directly
+            latest_ver.file_path = str(regenerated)
+            db.commit()
+
+            logger.info("Regenerated contract file at: %s", regenerated)
+            return regenerated
+        except FileNotFoundError as template_err:
+            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
+            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
+            try:
+                from docx import Document as _Doc
+                doc = _Doc()
+                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
+                minimal_path = output_dir / f"contrato_{contract_id}.docx"
+                doc.save(str(minimal_path))
+                latest_ver.file_path = str(minimal_path)
+                db.commit()
+                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
+                return minimal_path
+            except Exception as min_err:
+                logger.error("Failed to create minimal DOCX: %s", min_err)
+        except Exception as regen_err:
+            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
+
+    # All strategies exhausted
     logger.error(
-        "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
+        "Contract file not found for %s. Tried: stored=%s, output_dir=%s, regeneration=%s",
         contract_id,
         latest_ver.file_path if latest_ver else "N/A",
         output_dir,
+        "failed" if latest_ver and latest_ver.form_data_json else "no form data",
     )
     raise HTTPException(status_code=404, detail="Contract file not found")
 
@@ -185,11 +231,23 @@ async def send_for_signature(
                     "role": "Advogado",
                 })
 
+        # Deduplicate roles: DocuSeal requires unique role per submitter
+        from collections import Counter
+        role_counts = Counter(s.get("role", "Contratante") for s in all_signatarios)
+        role_indices: dict[str, int] = {}
+        for sig in all_signatarios:
+            role = sig.get("role", "Contratante")
+            if role_counts[role] > 1:
+                role_indices[role] = role_indices.get(role, 0) + 1
+                sig["role"] = f"{role} {role_indices[role]}"
+
         # Assign order for sequential signing:
         # Contratante(s) sign first, Advogado second, Contratado (C&F) last
         _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3}
         for sig in all_signatarios:
-            sig["order"] = _ROLE_ORDER.get(sig.get("role", "Contratante"), 1)
+            # Extract base role (without number suffix) for order lookup
+            base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
+            sig["order"] = _ROLE_ORDER.get(base_role, 1)
 
         sign_result = await service.send_for_signature(
             template_id=template_id,
