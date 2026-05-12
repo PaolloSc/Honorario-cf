@@ -357,6 +357,7 @@ export default function ContractWizard({
           <Step5Participacao
             participacao={formData.participacao}
             onChange={updateParticipacao}
+            escopos={formData.escopos}
           />
         )}
         {currentStep === 6 && <Step6Revisao data={formData} />}
