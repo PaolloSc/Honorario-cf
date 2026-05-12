@@ -5,7 +5,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -104,6 +104,50 @@ def generate_contract(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _resolve_contract_filepath(contract_id: str, db: Session, version_number: int | None = None) -> Path:
+    """Resolve the contract file path, trying multiple strategies."""
+    gen = get_generator()
+    output_dir = Path(gen.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Strategy 1: Get path from DB and check if file exists at that exact location
+    query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
+    if version_number:
+        latest_ver = query.filter(ContractVersionDB.version_number == version_number).first()
+    else:
+        latest_ver = query.order_by(ContractVersionDB.version_number.desc()).first()
+
+    if latest_ver and latest_ver.file_path:
+        stored = Path(latest_ver.file_path)
+
+        # Try the stored path directly
+        if stored.exists():
+            logger.info("Found contract file at stored path: %s", stored)
+            return stored
+
+        # Strategy 2: Try the filename from stored path in current output_dir
+        filename = stored.name
+        candidate = output_dir / filename
+        if candidate.exists():
+            logger.info("Found contract file at reconstructed path: %s", candidate)
+            return candidate
+
+    # Strategy 3: Convention-based path
+    fallback = output_dir / f"contrato_{contract_id}.docx"
+    if fallback.exists():
+        logger.info("Found contract file at fallback path: %s", fallback)
+        return fallback
+
+    # Log what was tried for debugging
+    logger.error(
+        "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
+        contract_id,
+        latest_ver.file_path if latest_ver else "N/A",
+        output_dir,
+    )
+    raise HTTPException(status_code=404, detail="Arquivo nao encontrado")
+
+
 @router.get("/{contract_id}/download")
 def download_contract(
     contract_id: str,
@@ -123,31 +167,7 @@ def download_contract(
     if user.role != "admin" and contract.created_by != user.email:
         raise HTTPException(403, "Sem permissao")
 
-    # Find the file path from DB (specific version or latest)
-    query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
-    if version:
-        ver = query.filter(ContractVersionDB.version_number == version).first()
-    else:
-        ver = query.order_by(ContractVersionDB.version_number.desc()).first()
-
-    filepath: Path | None = None
-
-    gen = get_generator()
-
-    # Try stored path first
-    if ver and ver.file_path:
-        stored = Path(ver.file_path)
-        # Validate path is within expected output directory
-        expected_root = Path(gen.output_dir).resolve()
-        if stored.resolve().is_relative_to(expected_root) and stored.exists():
-            filepath = stored
-
-    # Fallback: reconstruct path
-    if filepath is None:
-        filepath = Path(gen.output_dir) / f"contrato_{contract_id}.docx"
-
-    if not filepath.exists():
-        raise HTTPException(status_code=404, detail="Arquivo nao encontrado")
+    filepath = _resolve_contract_filepath(contract_id, db, version_number=version)
 
     return FileResponse(
         path=str(filepath),
