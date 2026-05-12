@@ -52,6 +52,33 @@ const INITIAL_DATA: ContratoFormData = {
   },
 };
 
+function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): ContratoFormData {
+  if (!data) return { ...INITIAL_DATA };
+
+  return {
+    contratantes: data.contratantes?.length ? data.contratantes : INITIAL_DATA.contratantes,
+    incluir_partes_relacionadas: data.incluir_partes_relacionadas ?? false,
+    escopos: data.escopos ?? [],
+    acessorios: {
+      tem_reembolso: data.acessorios?.tem_reembolso ?? true,
+      reembolso_limitado: data.acessorios?.reembolso_limitado ?? false,
+      descricao_limitacao_reembolso: data.acessorios?.descricao_limitacao_reembolso,
+      tem_penalidade_inadimplemento: data.acessorios?.tem_penalidade_inadimplemento ?? true,
+      valor_diligencia: data.acessorios?.valor_diligencia,
+    },
+    participacao: {
+      tem_participacao: data.participacao?.tem_participacao ?? false,
+      percentual_ou_valor: data.participacao?.percentual_ou_valor || "",
+      para_quem: data.participacao?.para_quem || "",
+      natureza: data.participacao?.natureza || "",
+      responsavel_captacao: data.participacao?.responsavel_captacao || "",
+      responsavel_gestao: data.participacao?.responsavel_gestao || "",
+      contato_financeiro_cliente: data.participacao?.contato_financeiro_cliente || "",
+    },
+    email_destinatario: data.email_destinatario,
+  };
+}
+
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -203,7 +230,7 @@ export default function ContractWizard({
   onSaveComplete,
 }: ContractWizardProps = {}) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<ContratoFormData>(initialData || INITIAL_DATA);
+  const [formData, setFormData] = useState<ContratoFormData>(normalizeFormData(initialData));
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const currentStepErrors = validateStep(currentStep, formData);
   const canGoNext = currentStepErrors.length === 0;
