@@ -92,6 +92,7 @@ class TestEmailFilePathResolution:
         """When ContractVersionDB has a file_path that exists, use it."""
         from app.auth import CurrentUser, get_current_user
         from app.database import Base, ContractDB, ContractVersionDB, SessionLocal, engine, utcnow
+        from app.config import BACKEND_DIR, settings
 
         # Override auth
         def fake_user():
@@ -101,10 +102,12 @@ class TestEmailFilePathResolution:
         app.dependency_overrides[get_current_user] = fake_user
 
         try:
-            # Create a temp file to simulate a stored contract
-            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
-                f.write(b"fake docx content")
-                temp_path = f.name
+            # Create a temp file inside the expected output directory
+            output_dir = BACKEND_DIR / settings.output_dir
+            output_dir.mkdir(parents=True, exist_ok=True)
+            temp_file = output_dir / "test_contract_email_001.docx"
+            temp_file.write_bytes(b"fake docx content")
+            temp_path = str(temp_file)
 
             # Insert contract and version into DB
             db = SessionLocal()
@@ -227,11 +230,11 @@ class TestDocuSealOrdering:
         ]
 
         for sig in signatarios:
-            sig["order"] = str(_ROLE_ORDER.get(sig.get("role", "Contratante"), 1))
+            sig["order"] = _ROLE_ORDER.get(sig.get("role", "Contratante"), 1)
 
-        assert signatarios[0]["order"] == "1"
-        assert signatarios[1]["order"] == "2"
-        assert signatarios[2]["order"] == "3"
+        assert signatarios[0]["order"] == 1
+        assert signatarios[1]["order"] == 2
+        assert signatarios[2]["order"] == 3
 
     def test_multiple_contratantes_get_same_order(self):
         """Multiple clients all get order=1."""
@@ -245,12 +248,12 @@ class TestDocuSealOrdering:
         ]
 
         for sig in signatarios:
-            sig["order"] = str(_ROLE_ORDER.get(sig.get("role", "Contratante"), 1))
+            sig["order"] = _ROLE_ORDER.get(sig.get("role", "Contratante"), 1)
 
-        assert signatarios[0]["order"] == "1"
-        assert signatarios[1]["order"] == "1"
-        assert signatarios[2]["order"] == "2"
-        assert signatarios[3]["order"] == "3"
+        assert signatarios[0]["order"] == 1
+        assert signatarios[1]["order"] == 1
+        assert signatarios[2]["order"] == 2
+        assert signatarios[3]["order"] == 3
 
     def test_service_includes_order_in_submitters(self):
         """DocuSealService.send_for_signature includes order in submitters payload."""
@@ -259,9 +262,9 @@ class TestDocuSealOrdering:
         service = DocuSealService()
 
         signatarios = [
-            {"email": "client@test.com", "name": "Client", "role": "Contratante", "order": "1"},
-            {"email": "lawyer@test.com", "name": "Lawyer", "role": "Advogado", "order": "2"},
-            {"email": "cf@test.com", "name": "C&F", "role": "Contratado", "order": "3"},
+            {"email": "client@test.com", "name": "Client", "role": "Contratante", "order": 1},
+            {"email": "lawyer@test.com", "name": "Lawyer", "role": "Advogado", "order": 2},
+            {"email": "cf@test.com", "name": "C&F", "role": "Contratado", "order": 3},
         ]
 
         # We test that the payload building logic includes order
