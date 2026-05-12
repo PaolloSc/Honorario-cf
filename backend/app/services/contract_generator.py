@@ -76,14 +76,14 @@ class ContractGenerator:
         self.output_dir = self._resolve_backend_path(settings.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
  
-    def generate(self, data: ContratoRequest, contract_id: str | None = None) -> tuple[str, str]:
+    def generate(self, data: ContratoRequest, contract_id: str | None = None, signatario_roles: list[dict] | None = None) -> tuple[str, str]:
         """Generate a contract document from form data.
 
         Returns (contract_id, file_path).
         """
         if contract_id is None:
             contract_id = str(uuid.uuid4())
-        doc = self._build_document(data)
+        doc = self._build_document(data, signatario_roles=signatario_roles)
  
         filename = f"contrato_{contract_id}.docx"
         filepath = self.output_dir / filename
@@ -91,7 +91,7 @@ class ContractGenerator:
  
         return contract_id, str(filepath)
  
-    def _build_document(self, data: ContratoRequest) -> Document:
+    def _build_document(self, data: ContratoRequest, signatario_roles: list[dict] | None = None) -> Document:
         doc = self._new_document_from_template()
         self._clear_body(doc)
         self._clear_headers_footers(doc)
@@ -108,7 +108,7 @@ class ContractGenerator:
         self._add_term_and_termination(doc)
         self._add_ip(doc)
         self._add_general(doc)
-        self._add_signatures(doc, data)
+        self._add_signatures(doc, data, signatario_roles=signatario_roles)
         self._apply_document_standard(doc)
  
         return doc
@@ -822,37 +822,65 @@ class ContractGenerator:
             "quaisquer dúvidas ou controvérsias decorrentes deste Contrato."
         )
  
-    def _add_signatures(self, doc: Document, data: ContratoRequest) -> None:
+    def _add_signatures(self, doc: Document, data: ContratoRequest, signatario_roles: list[dict] | None = None) -> None:
         doc.add_paragraph()
         doc.add_paragraph(
             f"Belo Horizonte, {self._format_date_pt_br(datetime.now())}."
         )
         doc.add_paragraph()
 
-        # DocuSeal signature field for C&F (Contratado) - assinatura digital do escritório
-        doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
-        doc.add_paragraph("CONTRATADO: CARVALHO & FURTADO ADVOGADOS")
-        doc.add_paragraph()
+        if signatario_roles:
+            # Generate signature fields matching the exact unique roles from signatarios
+            # Group by base role for display ordering: Contratado first, then Advogado(s), then Contratante(s)
+            contratado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratado")]
+            advogado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Advogado")]
+            contratante_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratante")]
 
-        # DocuSeal signature field for the responsible lawyer (Advogado)
-        doc.add_paragraph("{{Assinatura Advogado|signature|Advogado}}")
-        doc.add_paragraph("ADVOGADO RESPONSÁVEL")
-        doc.add_paragraph()
- 
-        for i, contratante in enumerate(data.contratantes, 1):
-            if isinstance(contratante, ContratantePJ):
-                nome = contratante.razao_social
-            elif isinstance(contratante, ContratantePF):
-                nome = contratante.nome
-            else:
-                nome = f"Contratante {i}"
+            for sig in contratado_sigs:
+                role = sig["role"]
+                name = sig.get("name", "Contratado")
+                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                doc.add_paragraph(f"CONTRATADO: {name.upper()}")
+                doc.add_paragraph()
 
-            # DocuSeal signature field for each Contratante - assinatura digital
-            doc.add_paragraph(f"{{{{Assinatura {nome}|signature|Contratante}}}}")
-            doc.add_paragraph(f"CONTRATANTE {i}: {nome}")
+            for sig in advogado_sigs:
+                role = sig["role"]
+                name = sig.get("name", "Advogado")
+                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                doc.add_paragraph(f"ADVOGADO: {name.upper()}")
+                doc.add_paragraph()
+
+            for sig in contratante_sigs:
+                role = sig["role"]
+                name = sig.get("name", "Contratante")
+                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                doc.add_paragraph(f"CONTRATANTE: {name.upper()}")
+                doc.add_paragraph()
+        else:
+            # Default: single fields per role (for initial generation without specific signatarios)
+            doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
+            doc.add_paragraph("CONTRATADO: CARVALHO & FURTADO ADVOGADOS")
             doc.add_paragraph()
- 
-        # Testemunhas - assinatura física (sem DocuSeal)
+
+            doc.add_paragraph("{{Assinatura Advogado|signature|Advogado}}")
+            doc.add_paragraph("ADVOGADO RESPONSAVEL")
+            doc.add_paragraph()
+
+            for i, contratante in enumerate(data.contratantes, 1):
+                if isinstance(contratante, ContratantePJ):
+                    nome = contratante.razao_social
+                elif isinstance(contratante, ContratantePF):
+                    nome = contratante.nome
+                else:
+                    nome = f"Contratante {i}"
+
+                # Each contratante gets a unique role
+                role = "Contratante" if len(data.contratantes) == 1 else f"Contratante {i}"
+                doc.add_paragraph(f"{{{{Assinatura {nome}|signature|{role}}}}}")
+                doc.add_paragraph(f"CONTRATANTE {i}: {nome}")
+                doc.add_paragraph()
+
+        # Testemunhas - assinatura fisica (sem DocuSeal)
         doc.add_paragraph()
         doc.add_paragraph("TESTEMUNHAS:")
         doc.add_paragraph()
