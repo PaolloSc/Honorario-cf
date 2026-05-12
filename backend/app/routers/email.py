@@ -211,8 +211,9 @@ async def send_participacao_email(
     try:
         rows = []
         # Objeto do Contrato first (as requested by financeiro)
+        # Replace newlines with <br> for HTML rendering
         if data.objeto_contrato:
-            rows.append(("Objeto do Contrato", data.objeto_contrato))
+            rows.append(("Objeto do Contrato", data.objeto_contrato.replace("\n", "<br>")))
         if data.percentual_ou_valor:
             rows.append(("Percentual/Valor", data.percentual_ou_valor))
         if data.para_quem:
