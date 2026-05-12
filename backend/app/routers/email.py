@@ -86,7 +86,9 @@ async def send_contract_email(
         )
         if latest_ver and latest_ver.file_path:
             stored = Path(latest_ver.file_path)
-            if stored.exists():
+            # Validate path is within expected output directory
+            expected_root = resolve_backend_path(settings.output_dir).resolve()
+            if stored.resolve().is_relative_to(expected_root) and stored.exists():
                 filepath = stored
 
         if filepath is None:
