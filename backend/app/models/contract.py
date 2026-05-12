@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Optional
  
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
  
  
 class TipoPessoa(str, Enum):
@@ -203,6 +203,18 @@ class Participacao(BaseModel):
     responsavel_captacao: Optional[str] = None
     responsavel_gestao: Optional[str] = None
     contato_financeiro_cliente: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_nulls(cls, data):
+        """Convert null/None values to empty strings for optional text fields."""
+        if isinstance(data, dict):
+            for field in ("percentual_ou_valor", "para_quem", "natureza",
+                          "responsavel_captacao", "responsavel_gestao",
+                          "contato_financeiro_cliente"):
+                if data.get(field) is None:
+                    data[field] = ""
+        return data
  
  
 class ContratoRequest(BaseModel):
