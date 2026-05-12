@@ -132,15 +132,18 @@ def download_contract(
 
     filepath: Path | None = None
 
+    gen = get_generator()
+
     # Try stored path first
     if ver and ver.file_path:
         stored = Path(ver.file_path)
-        if stored.exists():
+        # Validate path is within expected output directory
+        expected_root = Path(gen.output_dir).resolve()
+        if stored.resolve().is_relative_to(expected_root) and stored.exists():
             filepath = stored
 
     # Fallback: reconstruct path
     if filepath is None:
-        gen = get_generator()
         filepath = Path(gen.output_dir) / f"contrato_{contract_id}.docx"
 
     if not filepath.exists():
