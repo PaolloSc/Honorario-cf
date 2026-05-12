@@ -150,7 +150,25 @@ def download_contract(
         if fallback.exists():
             filepath = fallback
 
-    if filepath is None:
+    # Strategy 4: Regenerate from form_data_json (handles ephemeral filesystems)
+    if filepath is None and ver and ver.form_data_json:
+        logger.warning(
+            "Contract file not on disk for %s. Regenerating from stored form data...",
+            contract_id,
+        )
+        try:
+            form_data = json.loads(ver.form_data_json)
+            contrato_data = ContratoRequest(**form_data)
+            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            filepath = Path(new_filepath)
+            # Update stored path
+            ver.file_path = str(filepath)
+            db.commit()
+            logger.info("Regenerated contract file at: %s", filepath)
+        except Exception as regen_err:
+            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
+
+    if filepath is None or not filepath.exists():
         logger.error(
             "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
             contract_id,

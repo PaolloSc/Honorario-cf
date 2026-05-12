@@ -221,6 +221,66 @@ class TestResolveContractFilepath:
         finally:
             db.close()
 
+    def test_resolve_regenerates_from_form_data_when_no_file(self):
+        """Strategy 4: No file on disk but form_data_json exists; regenerates the DOCX."""
+        db = SessionLocal()
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        contract_id = "resolve-regen-001"
+        regen_file = output_dir / f"contrato_{contract_id}.docx"
+
+        try:
+            # Store a non-existent file_path but valid form_data_json
+            form_data = json.dumps({
+                "contratantes": [{
+                    "tipo": "PF", "nome": "Test", "cpf": "000.000.000-00",
+                    "email": "t@t.com", "endereco": "R Test",
+                    "nacionalidade": "brasileira", "profissao": "dev",
+                    "estado_civil": "Solteiro(a)"
+                }],
+                "escopos": [{
+                    "tipo": "outro",
+                    "honorarios": ["pro_labore"],
+                    "pro_labore": {"valor_total": 1000, "tem_parcelamento": False}
+                }],
+                "acessorios": {"tem_reembolso": True, "tem_penalidade_inadimplemento": True},
+                "participacao": {"tem_participacao": False}
+            })
+            _create_contract_in_db(
+                db, contract_id,
+                file_path="/nonexistent/contrato_resolve-regen-001.docx",
+                form_data_json=form_data,
+            )
+
+            # Ensure the convention fallback file does NOT exist yet
+            if regen_file.exists():
+                regen_file.unlink()
+
+            mock_gen_instance = MagicMock()
+
+            def _mock_generate(data, contract_id=None):
+                # Simulate the generator creating the file
+                regen_file.write_bytes(b"regenerated docx content")
+                return (contract_id, str(regen_file))
+
+            mock_gen_instance.generate.side_effect = _mock_generate
+
+            with patch("app.services.contract_generator.ContractGenerator", return_value=mock_gen_instance):
+                result = _resolve_contract_filepath(contract_id, db)
+
+            assert result == regen_file
+            assert result.exists()
+
+            # Verify DB was updated with new path
+            ver = db.query(ContractVersionDB).filter(
+                ContractVersionDB.contract_id == contract_id
+            ).first()
+            assert ver.file_path == str(regen_file)
+        finally:
+            db.close()
+            if regen_file.exists():
+                regen_file.unlink()
+
     def test_resolve_creates_output_dir_if_missing(self):
         """output_dir doesn't exist yet; the function creates it (mkdir)."""
         db = SessionLocal()
