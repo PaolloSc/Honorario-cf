@@ -646,6 +646,140 @@ class TestSendForSignatureEndpoint:
         if temp_file.exists():
             temp_file.unlink()
 
+    def test_send_for_signature_deduplicates_roles(self, client):
+        """Multiple Contratantes and Advogados get unique role suffixes."""
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        contract_id = "sig-dedup-009"
+        temp_file = output_dir / f"contrato_{contract_id}.docx"
+        temp_file.write_bytes(b"content with {{field|signature|req}} tags")
+
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(db, contract_id, file_path=str(temp_file))
+        finally:
+            db.close()
+
+        mock_service = MagicMock()
+        mock_service.create_template_from_docx = AsyncMock(
+            return_value={"id": 123, "name": "Template"}
+        )
+
+        captured_signatarios = []
+
+        async def capture_send(template_id, signatarios, send_email=True):
+            captured_signatarios.extend(signatarios)
+            return {
+                "success": True,
+                "submission": {"id": 789, "submitters": []},
+                "message": "ok",
+            }
+
+        mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
+
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
+             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={
+                    "contract_id": contract_id,
+                    "signatarios": [
+                        {"email": "client1@example.com", "name": "Client 1", "role": "Contratante"},
+                        {"email": "client2@example.com", "name": "Client 2", "role": "Contratante"},
+                        {"email": "extra_lawyer@example.com", "name": "Extra Lawyer", "role": "Advogado"},
+                    ],
+                },
+            )
+
+        assert response.status_code == 200
+
+        # Collect all roles
+        roles = [s["role"] for s in captured_signatarios]
+
+        # All roles must be unique
+        assert len(roles) == len(set(roles)), f"Roles are not unique: {roles}"
+
+        # Contratantes should be "Contratante 1" and "Contratante 2"
+        contratante_roles = sorted(r for r in roles if r.startswith("Contratante"))
+        assert contratante_roles == ["Contratante 1", "Contratante 2"]
+
+        # Advogados should be "Advogado 1" and "Advogado 2" (extra + logged-in user)
+        advogado_roles = sorted(r for r in roles if r.startswith("Advogado"))
+        assert advogado_roles == ["Advogado 1", "Advogado 2"]
+
+        # Contratado stays as-is (single)
+        assert "Contratado" in roles
+
+        # Cleanup
+        if temp_file.exists():
+            temp_file.unlink()
+
+    def test_send_for_signature_single_of_each_role_no_suffix(self, client):
+        """Single Contratante, single Advogado, single Contratado: no number suffixes."""
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        contract_id = "sig-nosuffix-010"
+        temp_file = output_dir / f"contrato_{contract_id}.docx"
+        temp_file.write_bytes(b"content with {{field|signature|req}} tags")
+
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(db, contract_id, file_path=str(temp_file))
+        finally:
+            db.close()
+
+        mock_service = MagicMock()
+        mock_service.create_template_from_docx = AsyncMock(
+            return_value={"id": 123, "name": "Template"}
+        )
+
+        captured_signatarios = []
+
+        async def capture_send(template_id, signatarios, send_email=True):
+            captured_signatarios.extend(signatarios)
+            return {
+                "success": True,
+                "submission": {"id": 789, "submitters": []},
+                "message": "ok",
+            }
+
+        mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
+
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
+             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={
+                    "contract_id": contract_id,
+                    "signatarios": [
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"},
+                    ],
+                },
+            )
+
+        assert response.status_code == 200
+
+        # Collect all roles
+        roles = [s["role"] for s in captured_signatarios]
+
+        # Should be exactly: Contratante, Advogado, Contratado (no numbers)
+        assert "Contratante" in roles
+        assert "Advogado" in roles
+        assert "Contratado" in roles
+
+        # No numbered suffixes
+        for role in roles:
+            assert not any(role.endswith(f" {i}") for i in range(1, 10)), \
+                f"Role '{role}' has unexpected number suffix"
+
+        # Cleanup
+        if temp_file.exists():
+            temp_file.unlink()
+
     def test_send_for_signature_assigns_correct_order(self, client):
         """Order: Contratante=1, Advogado=2, Contratado=3."""
         output_dir = _get_output_dir()

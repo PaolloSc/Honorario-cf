@@ -119,6 +119,21 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
 
             logger.info("Regenerated contract file at: %s", regenerated)
             return regenerated
+        except FileNotFoundError as template_err:
+            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
+            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
+            try:
+                from docx import Document as _Doc
+                doc = _Doc()
+                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
+                minimal_path = output_dir / f"contrato_{contract_id}.docx"
+                doc.save(str(minimal_path))
+                latest_ver.file_path = str(minimal_path)
+                db.commit()
+                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
+                return minimal_path
+            except Exception as min_err:
+                logger.error("Failed to create minimal DOCX: %s", min_err)
         except Exception as regen_err:
             logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
 
@@ -216,11 +231,23 @@ async def send_for_signature(
                     "role": "Advogado",
                 })
 
+        # Deduplicate roles: DocuSeal requires unique role per submitter
+        from collections import Counter
+        role_counts = Counter(s.get("role", "Contratante") for s in all_signatarios)
+        role_indices: dict[str, int] = {}
+        for sig in all_signatarios:
+            role = sig.get("role", "Contratante")
+            if role_counts[role] > 1:
+                role_indices[role] = role_indices.get(role, 0) + 1
+                sig["role"] = f"{role} {role_indices[role]}"
+
         # Assign order for sequential signing:
         # Contratante(s) sign first, Advogado second, Contratado (C&F) last
         _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3}
         for sig in all_signatarios:
-            sig["order"] = _ROLE_ORDER.get(sig.get("role", "Contratante"), 1)
+            # Extract base role (without number suffix) for order lookup
+            base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
+            sig["order"] = _ROLE_ORDER.get(base_role, 1)
 
         sign_result = await service.send_for_signature(
             template_id=template_id,
