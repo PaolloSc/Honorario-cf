@@ -78,7 +78,9 @@ async def send_for_signature(
         )
         if latest_ver and latest_ver.file_path:
             stored = Path(latest_ver.file_path)
-            if stored.exists():
+            # Validate path is within expected output directory
+            expected_root = resolve_backend_path(settings.output_dir).resolve()
+            if stored.resolve().is_relative_to(expected_root) and stored.exists():
                 filepath = stored
 
         if filepath is None:
@@ -150,6 +152,12 @@ async def send_for_signature(
                     "name": user.name or user.email,
                     "role": "Advogado",
                 })
+
+        # Assign order for sequential signing:
+        # Contratante(s) sign first, Advogado second, Contratado (C&F) last
+        _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3}
+        for sig in all_signatarios:
+            sig["order"] = _ROLE_ORDER.get(sig.get("role", "Contratante"), 1)
 
         sign_result = await service.send_for_signature(
             template_id=template_id,
