@@ -68,6 +68,50 @@ def resolve_backend_path(value: str) -> Path:
     return BACKEND_DIR / path
 
 
+def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
+    """Resolve the contract file path, trying multiple strategies."""
+    output_dir = resolve_backend_path(settings.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Strategy 1: Get path from DB and check if file exists at that exact location
+    latest_ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id)
+        .order_by(ContractVersionDB.version_number.desc())
+        .first()
+    )
+
+    if latest_ver and latest_ver.file_path:
+        stored = Path(latest_ver.file_path)
+
+        # Try the stored path directly
+        if stored.exists():
+            logger.info("Found contract file at stored path: %s", stored)
+            return stored
+
+        # Strategy 2: Try the filename from stored path in current output_dir
+        filename = stored.name
+        candidate = output_dir / filename
+        if candidate.exists():
+            logger.info("Found contract file at reconstructed path: %s", candidate)
+            return candidate
+
+    # Strategy 3: Convention-based path
+    fallback = output_dir / f"contrato_{contract_id}.docx"
+    if fallback.exists():
+        logger.info("Found contract file at fallback path: %s", fallback)
+        return fallback
+
+    # Log what was tried for debugging
+    logger.error(
+        "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
+        contract_id,
+        latest_ver.file_path if latest_ver else "N/A",
+        output_dir,
+    )
+    raise HTTPException(status_code=404, detail="Contract file not found")
+
+
 @router.post("/send", response_model=EmailResponse)
 async def send_contract_email(
     data: EmailRequest,
@@ -76,26 +120,7 @@ async def send_contract_email(
 ) -> EmailResponse:
     """Send contract via email using Azure Communication Services."""
     try:
-        # Resolve file path from DB (latest version), with fallback to reconstructed path
-        filepath: Path | None = None
-        latest_ver = (
-            db.query(ContractVersionDB)
-            .filter(ContractVersionDB.contract_id == data.contract_id)
-            .order_by(ContractVersionDB.version_number.desc())
-            .first()
-        )
-        if latest_ver and latest_ver.file_path:
-            stored = Path(latest_ver.file_path)
-            # Validate path is within expected output directory
-            expected_root = resolve_backend_path(settings.output_dir).resolve()
-            if stored.resolve().is_relative_to(expected_root) and stored.exists():
-                filepath = stored
-
-        if filepath is None:
-            filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
-
-        if not filepath.exists():
-            raise HTTPException(status_code=404, detail="Contract file not found")
+        filepath = _resolve_contract_filepath(data.contract_id, db)
 
         service = get_email_service()
         result = await service.send_email_with_attachment(
