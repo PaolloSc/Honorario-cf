@@ -106,6 +106,7 @@ export async function sendEmail(data: {
 export async function sendParticipacao(data: {
   contract_id: string;
   cliente_nome: string;
+  objeto_contrato?: string;
   percentual_ou_valor?: string;
   para_quem?: string;
   natureza?: string;
