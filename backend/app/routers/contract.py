@@ -130,23 +130,33 @@ def download_contract(
     else:
         ver = query.order_by(ContractVersionDB.version_number.desc()).first()
 
+    gen = get_generator()
+    output_dir = Path(gen.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     filepath: Path | None = None
 
-    gen = get_generator()
-
-    # Try stored path first
     if ver and ver.file_path:
         stored = Path(ver.file_path)
-        # Validate path is within expected output directory
-        expected_root = Path(gen.output_dir).resolve()
-        if stored.resolve().is_relative_to(expected_root) and stored.exists():
+        if stored.exists():
             filepath = stored
+        else:
+            candidate = output_dir / stored.name
+            if candidate.exists():
+                filepath = candidate
 
-    # Fallback: reconstruct path
     if filepath is None:
-        filepath = Path(gen.output_dir) / f"contrato_{contract_id}.docx"
+        fallback = output_dir / f"contrato_{contract_id}.docx"
+        if fallback.exists():
+            filepath = fallback
 
-    if not filepath.exists():
+    if filepath is None:
+        logger.error(
+            "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
+            contract_id,
+            ver.file_path if ver else "N/A",
+            output_dir,
+        )
         raise HTTPException(status_code=404, detail="Arquivo nao encontrado")
 
     return FileResponse(
