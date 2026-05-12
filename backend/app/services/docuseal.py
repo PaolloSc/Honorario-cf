@@ -77,12 +77,14 @@ class DocuSealService:
                     "name": sig.get("name", ""),
                     "role": sig.get("role", "Contratante"),
                     "send_email": send_email,
+                    "order": sig.get("order", 1),
                 }
             )
  
         payload = {
             "template_id": template_id,
             "send_email": send_email,
+            "order": "preserved",
             "submitters": submitters,
         }
  
