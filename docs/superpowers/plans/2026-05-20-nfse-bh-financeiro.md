@@ -2072,7 +2072,7 @@ git commit -m "feat(nfse): orquestrador ingest_payload (parse->match->payment, i
 **Files:**
 - Modify: `backend/app/services/nfse_sync.py`
 
-- [ ] **Step 1: Escrever teste de concorrência**
+- [x] **Step 1: Escrever teste de concorrência**
 
 Adicionar em `backend/tests/test_nfse_sync_orchestrator.py`:
 
@@ -2099,7 +2099,7 @@ def test_lock_concorrente_segunda_chamada_e_no_op(db):
         )
 ```
 
-- [ ] **Step 2: Rodar — falha**
+- [x] **Step 2: Rodar — falha**
 
 ```powershell
 pytest tests/test_nfse_sync_orchestrator.py::test_lock_concorrente_segunda_chamada_e_no_op -v
@@ -2107,7 +2107,7 @@ pytest tests/test_nfse_sync_orchestrator.py::test_lock_concorrente_segunda_chama
 
 Esperado: `JobLockError` não existe.
 
-- [ ] **Step 3: Adicionar lock em `nfse_sync.py`**
+- [x] **Step 3: Adicionar lock em `nfse_sync.py`**
 
 Adicionar perto do topo do arquivo:
 
@@ -2131,7 +2131,7 @@ E no início de `ingest_payload`, antes de `_create_job`:
         raise JobLockError(f"sync_job {em_andamento[0]} ainda em andamento")
 ```
 
-- [ ] **Step 4: Rodar teste — passa**
+- [x] **Step 4: Rodar teste — passa**
 
 ```powershell
 pytest tests/test_nfse_sync_orchestrator.py -v
@@ -2139,7 +2139,7 @@ pytest tests/test_nfse_sync_orchestrator.py -v
 
 Esperado: 5 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/nfse_sync.py backend/tests/test_nfse_sync_orchestrator.py
