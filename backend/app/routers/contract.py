@@ -15,6 +15,7 @@ from app.database import (
     ContractDB,
     ContractVersionDB,
     get_db,
+    serialize_cliente_docs,
     utcnow,
 )
 from app.models.contract import ContratoRequest, ContratoResponse
@@ -53,6 +54,7 @@ def generate_contract(
         contract_id, filepath = gen.generate(data)
 
         client_name, client_email = _extract_client_info(data)
+        form_dict = data.model_dump(mode="json")
 
         contract = ContractDB(
             contract_id=contract_id,
@@ -64,10 +66,11 @@ def generate_contract(
             updated_by=user.email,
             created_at=utcnow(),
             updated_at=utcnow(),
+            cliente_docs=serialize_cliente_docs(form_dict),
         )
         db.add(contract)
 
-        form_data_json = json.dumps(data.model_dump(mode="json"), ensure_ascii=False)
+        form_data_json = json.dumps(form_dict, ensure_ascii=False)
         version = ContractVersionDB(
             contract_id=contract_id,
             version_number=1,

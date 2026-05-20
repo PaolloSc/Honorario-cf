@@ -502,7 +502,7 @@ git commit -m "feat(nfse): alembic setup + migration 0001 (credencial_pbh, nfse_
 - Modify: `backend/app/database.py` (adicionar coluna no `ContractDB`)
 - Modify: `backend/app/routers/contract.py` (atualizar `cliente_docs` ao salvar)
 
-- [ ] **Step 1: Adicionar coluna em `ContractDB`**
+- [x] **Step 1: Adicionar coluna em `ContractDB`**
 
 Em `backend/app/database.py`, dentro da classe `ContractDB`, após `updated_at`:
 
@@ -512,7 +512,7 @@ Em `backend/app/database.py`, dentro da classe `ContractDB`, após `updated_at`:
 
 (Usamos `Text` JSON serializado p/ compatibilidade SQLite. Postgres aceitaria `JSONB`, mas mantemos consistência.)
 
-- [ ] **Step 2: Criar migration `0002_contracts_cliente_docs.py`**
+- [x] **Step 2: Criar migration `0002_contracts_cliente_docs.py`**
 
 ```python
 """contracts cliente_docs
@@ -581,7 +581,7 @@ def downgrade() -> None:
     op.drop_column("contracts", "cliente_docs")
 ```
 
-- [ ] **Step 3: Helper p/ derivar `cliente_docs` ao salvar contrato**
+- [x] **Step 3: Helper p/ derivar `cliente_docs` ao salvar contrato**
 
 Em `backend/app/database.py`, após classe `ContractDB`, adicionar função utilitária:
 
@@ -605,7 +605,7 @@ def serialize_cliente_docs(form_data: dict) -> str:
     return _json.dumps(derive_cliente_docs(form_data))
 ```
 
-- [ ] **Step 4: Chamar derive em `routers/contract.py`**
+- [x] **Step 4: Chamar derive em `routers/contract.py`**
 
 Localizar em `backend/app/routers/contract.py` os pontos que criam ou atualizam `ContractDB` (procurar por `ContractDB(` e `current_version`). Em cada save/update, antes do commit, definir `contract.cliente_docs = serialize_cliente_docs(form_data_dict)`.
 
@@ -623,7 +623,7 @@ contract.cliente_docs = serialize_cliente_docs(form_dict)
 
 onde `form_dict` é o dict do `ContratoRequest.model_dump()` ou equivalente já presente no contexto.
 
-- [ ] **Step 5: Aplicar migração**
+- [x] **Step 5: Aplicar migração**
 
 ```powershell
 cd backend
@@ -633,7 +633,7 @@ python -c "from app.database import SessionLocal; from sqlalchemy import text; s
 
 Esperado: linhas com `cliente_docs` populadas (JSON arrays) ou `[]` se contrato sem contratante.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/alembic/versions/0002_contracts_cliente_docs.py backend/app/database.py backend/app/routers/contract.py

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json as _json
 import os
+import re as _re
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -72,6 +74,7 @@ class ContractDB(Base):
     updated_by = Column(String(256), nullable=True)  # user email
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    cliente_docs = Column(Text, nullable=False, default="[]")
 
     versions = relationship(
         "ContractVersionDB", back_populates="contract", order_by="ContractVersionDB.version_number"
@@ -79,6 +82,21 @@ class ContractDB(Base):
     audit_logs = relationship(
         "AuditLogDB", back_populates="contract", order_by="AuditLogDB.created_at.desc()"
     )
+
+
+def derive_cliente_docs(form_data: dict) -> list[str]:
+    """Extrai CPF/CNPJ normalizados dos contratantes."""
+    docs: set[str] = set()
+    for contratante in form_data.get("contratantes", []) or []:
+        raw = contratante.get("cnpj") or contratante.get("cpf") or ""
+        doc = _re.sub(r"\D", "", raw)
+        if doc:
+            docs.add(doc)
+    return sorted(docs)
+
+
+def serialize_cliente_docs(form_data: dict) -> str:
+    return _json.dumps(derive_cliente_docs(form_data))
 
 
 class ContractVersionDB(Base):
