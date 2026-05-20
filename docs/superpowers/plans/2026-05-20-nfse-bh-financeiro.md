@@ -929,7 +929,7 @@ git commit -m "feat(nfse): Pydantic schemas (NFSeData, Credencial, Vincular, Ing
 - Create: `backend/tests/test_nfse_parser.py`
 - Create: `backend/app/services/nfse_parser.py`
 
-- [ ] **Step 1: Criar fixtures XML**
+- [x] **Step 1: Criar fixtures XML**
 
 Criar `backend/tests/fixtures/nfse/abrasf_minimo.xml`:
 
@@ -1085,7 +1085,7 @@ Criar `backend/tests/fixtures/nfse/xxe_attack.xml`:
 <CompNfse><Nfse><InfNfse><Numero>&xxe;</Numero></InfNfse></Nfse></CompNfse>
 ```
 
-- [ ] **Step 2: Escrever testes**
+- [x] **Step 2: Escrever testes**
 
 Criar `backend/tests/test_nfse_parser.py`:
 
@@ -1151,7 +1151,7 @@ def test_xxe_bloqueado():
         parse_nfse_xml(_load("xxe_attack.xml"))
 ```
 
-- [ ] **Step 3: Rodar e ver falha**
+- [x] **Step 3: Rodar e ver falha**
 
 ```powershell
 cd backend
@@ -1160,7 +1160,7 @@ pytest tests/test_nfse_parser.py -v
 
 Esperado: `ModuleNotFoundError: No module named 'app.services.nfse_parser'`.
 
-- [ ] **Step 4: Implementar parser**
+- [x] **Step 4: Implementar parser**
 
 Criar `backend/app/services/nfse_parser.py`:
 
@@ -1297,7 +1297,7 @@ def parse_nfse_xml(xml: bytes) -> "NFSeData":
     )
 ```
 
-- [ ] **Step 5: Rodar testes — devem passar**
+- [x] **Step 5: Rodar testes — devem passar**
 
 ```powershell
 pytest tests/test_nfse_parser.py -v
@@ -1305,7 +1305,7 @@ pytest tests/test_nfse_parser.py -v
 
 Esperado: 6 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/app/services/nfse_parser.py backend/tests/test_nfse_parser.py backend/tests/fixtures/nfse
