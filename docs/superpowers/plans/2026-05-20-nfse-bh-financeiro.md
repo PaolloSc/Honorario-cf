@@ -2578,7 +2578,7 @@ git commit -m "feat(nfse): router interno (worker bearer): /credenciais, /ingest
 **Files:**
 - Modify: `backend/app/routers/nfse.py`
 
-- [ ] **Step 1: Estender `nfse.py` com endpoints do financeiro**
+- [x] **Step 1: Estender `nfse.py` com endpoints do financeiro**
 
 Adicionar a `backend/app/routers/nfse.py` (após o endpoint `/health` existente):
 
@@ -2701,7 +2701,7 @@ def sync_manual(
 
 Garantir imports no topo do arquivo: `import re`, `from sqlalchemy import text`.
 
-- [ ] **Step 2: Smoke**
+- [x] **Step 2: Smoke**
 
 ```powershell
 curl "http://localhost:8000/api/nfse?competencia_mes=2026-05" `
@@ -2710,7 +2710,7 @@ curl "http://localhost:8000/api/nfse?competencia_mes=2026-05" `
 
 Esperado: 200 com array (vazio se DB sem dados).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/app/routers/nfse.py
