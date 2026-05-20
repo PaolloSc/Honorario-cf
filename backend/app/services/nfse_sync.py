@@ -25,6 +25,10 @@ class JobOutcome:
     motivo_falha: str | None = None
 
 
+class JobLockError(Exception):
+    """Outro sync ainda em andamento para o mesmo CNPJ."""
+
+
 def _contratos_candidatos(db: Session, tomador_doc: str) -> list:
     rows = db.execute(
         text("""
@@ -121,6 +125,17 @@ def ingest_payload(
     disparado_por: str | None,
     xmls: Iterable[bytes],
 ) -> JobOutcome:
+    em_andamento = db.execute(
+        text("""
+            SELECT id FROM sync_jobs
+            WHERE cnpj_prestador = :c AND status = 'em_andamento'
+            ORDER BY iniciado_em DESC LIMIT 1
+        """),
+        {"c": cnpj_prestador},
+    ).fetchone()
+    if em_andamento:
+        raise JobLockError(f"sync_job {em_andamento[0]} ainda em andamento")
+
     job_id = _create_job(db, cnpj_prestador, origem, disparado_por, periodo_inicio, periodo_fim)
     total = auto = pend = sem = errs = 0
 

@@ -1,4 +1,5 @@
 from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -119,3 +120,26 @@ def test_cancelamento_detectado(db):
     row = db.execute(text("SELECT cancelada, status_matching FROM nfse_recebidas")).fetchone()
     assert row[0] == 1
     assert row[1] == "cancelada"
+
+
+def test_lock_concorrente_segunda_chamada_e_no_op(db):
+    """2 chamadas paralelas mesma janela: 2a retorna ja_rodando."""
+    from app.services.nfse_sync import JobLockError, ingest_payload
+
+    db.execute(text("""
+        INSERT INTO sync_jobs (cnpj_prestador, origem, iniciado_em,
+                               periodo_inicio, periodo_fim, status)
+        VALUES ('12345678000199', 'cron', :n, '2026-05-01', '2026-05-31', 'em_andamento')
+    """), {"n": datetime.now(timezone.utc)})
+    db.commit()
+
+    with pytest.raises(JobLockError):
+        ingest_payload(
+            db,
+            cnpj_prestador="12345678000199",
+            periodo_inicio=date(2026, 5, 1),
+            periodo_fim=date(2026, 5, 31),
+            origem="cron",
+            disparado_por=None,
+            xmls=[],
+        )
