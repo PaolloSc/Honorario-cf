@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.database import init_db
-from app.routers import admin_credenciais, cnpj, contract, contracts, docuseal, email, nfse, nfse_internal, users
+from app.routers import admin_credenciais, cnpj, contract, contracts, docuseal, email, nfse, nfse_internal, participacoes, users
 
 init_db()
 
@@ -48,7 +48,14 @@ app.add_middleware(
     allow_origin_regex=lan_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "X-Dev-User-Email",
+        "X-Dev-User-Role",
+        "X-Dev-User-Name",
+    ],
 )
 
 app.include_router(contract.router)
@@ -57,6 +64,7 @@ app.include_router(email.router)
 app.include_router(docuseal.router)
 app.include_router(cnpj.router)
 app.include_router(users.router)
+app.include_router(participacoes.router)
 app.include_router(nfse.router)
 app.include_router(admin_credenciais.router)
 app.include_router(nfse_internal.router)

@@ -2724,7 +2724,7 @@ git commit -m "feat(nfse): endpoints financeiro (listar, vincular manual, sync m
 **Files:**
 - Modify: `backend/app/main.py`
 
-- [ ] **Step 1: Confirmar inclusão de routers**
+- [x] **Step 1: Confirmar inclusão de routers**
 
 Garantir que `backend/app/main.py` tem (após Task 13–16):
 
@@ -2739,7 +2739,7 @@ app.include_router(nfse_internal.router)
 app.include_router(admin_credenciais.router)
 ```
 
-- [ ] **Step 2: Smoke completo**
+- [x] **Step 2: Smoke completo**
 
 ```powershell
 uvicorn app.main:app --port 8000 &
@@ -2749,7 +2749,7 @@ curl http://localhost:8000/api/health
 
 Ambos respondem 200.
 
-- [ ] **Step 3: Commit (se houver diff)**
+- [x] **Step 3: Commit (se houver diff)**
 
 ```bash
 git add backend/app/main.py
