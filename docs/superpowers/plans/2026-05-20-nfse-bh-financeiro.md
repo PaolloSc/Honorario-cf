@@ -649,7 +649,7 @@ git commit -m "feat(nfse): coluna contracts.cliente_docs + backfill + derive on 
 **Files:**
 - Create: `backend/app/models/nfse_db.py`
 
-- [ ] **Step 1: Criar `app/models/nfse_db.py`**
+- [x] **Step 1: Criar `app/models/nfse_db.py`**
 
 ```python
 """SQLAlchemy models para NFS-e (espelha migration 0001)."""
@@ -759,7 +759,7 @@ class NFSeAuditLogDB(Base):
     ts = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 ```
 
-- [ ] **Step 2: Smoke import**
+- [x] **Step 2: Smoke import**
 
 ```powershell
 cd backend
@@ -768,7 +768,7 @@ python -c "from app.models.nfse_db import CredencialPbhDB, NFSeRecebidaDB, SyncJ
 
 Esperado: `ok`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/app/models/nfse_db.py
