@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.database import init_db
-from app.routers import admin_credenciais, cnpj, contract, contracts, docuseal, email, nfse, users
+from app.routers import admin_credenciais, cnpj, contract, contracts, docuseal, email, nfse, nfse_internal, users
 
 init_db()
 
@@ -59,6 +59,7 @@ app.include_router(cnpj.router)
 app.include_router(users.router)
 app.include_router(nfse.router)
 app.include_router(admin_credenciais.router)
+app.include_router(nfse_internal.router)
 
 
 @app.get("/api/health")
