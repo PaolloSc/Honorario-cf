@@ -2237,7 +2237,7 @@ git commit -m "feat(nfse): router nfse + endpoint /api/nfse/health"
 - Create: `backend/app/routers/admin_credenciais.py`
 - Modify: `backend/app/main.py`
 
-- [ ] **Step 1: Implementar router**
+- [x] **Step 1: Implementar router**
 
 ```python
 # backend/app/routers/admin_credenciais.py
@@ -2384,7 +2384,7 @@ def desativar(cnpj: str, motivo: str = "",
                            criado_em=row[3], criado_por=row[4], motivo_inativacao=row[5])
 ```
 
-- [ ] **Step 2: Wire em `main.py`**
+- [x] **Step 2: Wire em `main.py`**
 
 ```python
 from app.routers import admin_credenciais  # add to imports
@@ -2392,7 +2392,7 @@ from app.routers import admin_credenciais  # add to imports
 app.include_router(admin_credenciais.router)
 ```
 
-- [ ] **Step 3: Smoke**
+- [x] **Step 3: Smoke**
 
 ```powershell
 # Definir env temporário
@@ -2407,7 +2407,7 @@ curl -X POST http://localhost:8000/api/admin/credencial-pbh `
 
 Esperado: 201 c/ payload da credencial.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/app/routers/admin_credenciais.py backend/app/main.py
