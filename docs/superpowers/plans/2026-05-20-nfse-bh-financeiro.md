@@ -2821,7 +2821,7 @@ git commit -m "feat(nfse-worker): seletores BHISS Digital centralizados"
 **Files:**
 - Create: `backend/workers/nfse_scraper/client.py`
 
-- [ ] **Step 1: Implementar cliente**
+- [x] **Step 1: Implementar cliente**
 
 ```python
 # backend/workers/nfse_scraper/client.py
@@ -2989,7 +2989,7 @@ class BHISSClient:
         return [data]
 ```
 
-- [ ] **Step 2: Smoke offline (sem rede)**
+- [x] **Step 2: Smoke offline (sem rede)**
 
 ```powershell
 cd backend
@@ -2998,7 +2998,7 @@ python -c "from workers.nfse_scraper.client import BHISSClient, LoginError; prin
 
 Esperado: `ok`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/workers/nfse_scraper/client.py
