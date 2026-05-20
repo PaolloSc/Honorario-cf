@@ -2767,12 +2767,12 @@ git commit -m "chore(nfse): wire routers em main.py" || echo "nada a commitar"
 - Create: `backend/workers/nfse_scraper/__init__.py`
 - Create: `backend/workers/nfse_scraper/selectors.py`
 
-- [ ] **Step 1: Criar pacote**
+- [x] **Step 1: Criar pacote**
 
 `backend/workers/__init__.py` — vazio.
 `backend/workers/nfse_scraper/__init__.py` — vazio.
 
-- [ ] **Step 2: Criar `selectors.py`**
+- [x] **Step 2: Criar `selectors.py`**
 
 ```python
 # backend/workers/nfse_scraper/selectors.py
@@ -2807,7 +2807,7 @@ SEL_BTN_FILTRAR = "button:has-text('Filtrar'), input[value='Filtrar']"
 SEL_BTN_EXPORTAR_XML = "a:has-text('Exportar XML'), button:has-text('XML')"
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/workers
