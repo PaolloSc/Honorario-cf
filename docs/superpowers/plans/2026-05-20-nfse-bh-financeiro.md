@@ -1513,7 +1513,7 @@ git commit -m "feat(nfse): matcher NF<->contrato (CNPJ/CPF+periodo, fallback #id
 - Create: `backend/tests/test_nfse_pagamento.py`
 - Create: `backend/app/services/nfse_pagamento.py`
 
-- [ ] **Step 1: Escrever teste**
+- [x] **Step 1: Escrever teste**
 
 ```python
 # backend/tests/test_nfse_pagamento.py
@@ -1599,7 +1599,7 @@ def test_idempotente_nao_duplica(db):
     assert n_pagamentos == 1
 ```
 
-- [ ] **Step 2: Rodar e ver falha**
+- [x] **Step 2: Rodar e ver falha**
 
 ```powershell
 pytest tests/test_nfse_pagamento.py -v
@@ -1607,7 +1607,7 @@ pytest tests/test_nfse_pagamento.py -v
 
 Esperado: import error.
 
-- [ ] **Step 3: Implementar bridge**
+- [x] **Step 3: Implementar bridge**
 
 ```python
 # backend/app/services/nfse_pagamento.py
@@ -1696,7 +1696,7 @@ def gerar_pagamento_para_nfse(db: Session, nfse_id: int) -> PagamentoResult:
     return PagamentoResult(nfse_id=nfse_id, pagamento_id=new_id)
 ```
 
-- [ ] **Step 4: Rodar testes — devem passar**
+- [x] **Step 4: Rodar testes — devem passar**
 
 ```powershell
 pytest tests/test_nfse_pagamento.py -v
@@ -1704,7 +1704,7 @@ pytest tests/test_nfse_pagamento.py -v
 
 Esperado: 2 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/nfse_pagamento.py backend/tests/test_nfse_pagamento.py
