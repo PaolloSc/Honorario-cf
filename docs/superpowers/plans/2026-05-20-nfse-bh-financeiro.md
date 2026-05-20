@@ -3012,7 +3012,7 @@ git commit -m "feat(nfse-worker): BHISSClient Playwright (login, fetch_periodo, 
 **Files:**
 - Create: `backend/workers/nfse_scraper/run.py`
 
-- [ ] **Step 1: Implementar CLI**
+- [x] **Step 1: Implementar CLI**
 
 ```python
 # backend/workers/nfse_scraper/run.py
@@ -3128,7 +3128,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Smoke (sem rede, deve imprimir help)**
+- [x] **Step 2: Smoke (sem rede, deve imprimir help)**
 
 ```powershell
 cd backend
@@ -3137,7 +3137,7 @@ python -m workers.nfse_scraper.run --help
 
 Esperado: usage / help.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/workers/nfse_scraper/run.py
