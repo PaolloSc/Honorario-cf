@@ -1320,7 +1320,7 @@ git commit -m "feat(nfse): parser ABRASF XML + fixtures (PJ, PF, cancelada, rete
 - Create: `backend/tests/test_nfse_matcher.py`
 - Create: `backend/app/services/nfse_matcher.py`
 
-- [ ] **Step 1: Escrever testes**
+- [x] **Step 1: Escrever testes**
 
 ```python
 # backend/tests/test_nfse_matcher.py
@@ -1408,7 +1408,7 @@ def test_normaliza_discriminacao_case_insensitive():
     assert r.contract_id == "bbbbbbbb"
 ```
 
-- [ ] **Step 2: Rodar e ver falha**
+- [x] **Step 2: Rodar e ver falha**
 
 ```powershell
 pytest tests/test_nfse_matcher.py -v
@@ -1416,7 +1416,7 @@ pytest tests/test_nfse_matcher.py -v
 
 Esperado: import error.
 
-- [ ] **Step 3: Implementar matcher**
+- [x] **Step 3: Implementar matcher**
 
 ```python
 # backend/app/services/nfse_matcher.py
@@ -1490,7 +1490,7 @@ def match_nfse(nf, contratos: Iterable[_ContractLike]) -> MatchResult:
     )
 ```
 
-- [ ] **Step 4: Rodar testes — devem passar**
+- [x] **Step 4: Rodar testes — devem passar**
 
 ```powershell
 pytest tests/test_nfse_matcher.py -v
@@ -1498,7 +1498,7 @@ pytest tests/test_nfse_matcher.py -v
 
 Esperado: 7 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/nfse_matcher.py backend/tests/test_nfse_matcher.py
