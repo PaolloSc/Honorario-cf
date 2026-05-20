@@ -21,7 +21,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e . && pip install pytest httpx
+        run: pip install -r requirements.txt && pip install pytest httpx
 
       - name: Lint (syntax check)
         run: python -m py_compile app/main.py
@@ -60,3 +60,5 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
+          AUTH_SECRET: "ci-test-secret-not-used-in-production"
+          AUTH_URL: http://localhost:3000
