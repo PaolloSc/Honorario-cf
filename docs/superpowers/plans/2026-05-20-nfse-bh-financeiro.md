@@ -270,7 +270,7 @@ git commit -m "feat(nfse): CryptoBox AES-GCM com testes de roundtrip, nonces, ta
 - Create: `backend/alembic/versions/0001_nfse_tables.py`
 - Modify: `backend/app/database.py` (remove `init_db()` chamada em `main.py` em Task 17; aqui só adicionamos suporte)
 
-- [ ] **Step 1: Inicializar Alembic**
+- [x] **Step 1: Inicializar Alembic**
 
 ```powershell
 cd backend
@@ -280,7 +280,7 @@ alembic init alembic
 
 Isso cria `alembic.ini` e diretório `alembic/`.
 
-- [ ] **Step 2: Configurar `alembic.ini`**
+- [x] **Step 2: Configurar `alembic.ini`**
 
 Editar `backend/alembic.ini`, localizar `sqlalchemy.url =` e deixar **vazio** (será lido via env):
 
@@ -288,7 +288,7 @@ Editar `backend/alembic.ini`, localizar `sqlalchemy.url =` e deixar **vazio** (s
 sqlalchemy.url =
 ```
 
-- [ ] **Step 3: Configurar `alembic/env.py`**
+- [x] **Step 3: Configurar `alembic/env.py`**
 
 Substituir conteúdo de `backend/alembic/env.py` por:
 
@@ -348,7 +348,7 @@ else:
     run_migrations_online()
 ```
 
-- [ ] **Step 4: Criar migração `0001_nfse_tables.py`**
+- [x] **Step 4: Criar migração `0001_nfse_tables.py`**
 
 Criar `backend/alembic/versions/__init__.py` (vazio) se necessário.
 
@@ -466,7 +466,7 @@ def downgrade() -> None:
     op.drop_table("credencial_pbh")
 ```
 
-- [ ] **Step 5: Stamp DB existente como base e aplicar migração**
+- [x] **Step 5: Stamp DB existente como base e aplicar migração**
 
 ```powershell
 cd backend
@@ -486,7 +486,7 @@ python -c "from app.database import engine; from sqlalchemy import inspect; prin
 
 Esperado inclui: `credencial_pbh`, `nfse_audit_log`, `nfse_recebidas`, `sync_jobs`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/alembic.ini backend/alembic
