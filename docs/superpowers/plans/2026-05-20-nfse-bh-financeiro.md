@@ -782,7 +782,7 @@ git commit -m "feat(nfse): SQLAlchemy models (Credencial, NFSeRecebida, SyncJob,
 **Files:**
 - Create: `backend/app/models/nfse.py`
 
-- [ ] **Step 1: Criar `app/models/nfse.py`**
+- [x] **Step 1: Criar `app/models/nfse.py`**
 
 ```python
 """Schemas Pydantic para NFS-e."""
@@ -899,7 +899,7 @@ class SyncJobOut(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 2: Smoke**
+- [x] **Step 2: Smoke**
 
 ```powershell
 cd backend
@@ -908,7 +908,7 @@ python -c "from app.models.nfse import NFSeData; from decimal import Decimal; fr
 
 Esperado: `970`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/app/models/nfse.py
