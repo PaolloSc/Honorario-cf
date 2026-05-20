@@ -2154,7 +2154,7 @@ git commit -m "feat(nfse): lock por CNPJ no ingest_payload (JobLockError em conf
 - Create: `backend/app/routers/nfse.py` (stub apenas health p/ agora)
 - Modify: `backend/app/main.py`
 
-- [ ] **Step 1: Criar router stub**
+- [x] **Step 1: Criar router stub**
 
 ```python
 # backend/app/routers/nfse.py
@@ -2196,7 +2196,7 @@ def nfse_health() -> dict:
     }
 ```
 
-- [ ] **Step 2: Wire em `main.py`**
+- [x] **Step 2: Wire em `main.py`**
 
 Em `backend/app/main.py`, adicionar à lista de imports:
 
@@ -2210,7 +2210,7 @@ E adicionar após os outros `include_router`:
 app.include_router(nfse.router)
 ```
 
-- [ ] **Step 3: Smoke**
+- [x] **Step 3: Smoke**
 
 ```powershell
 cd backend
@@ -2220,7 +2220,7 @@ curl http://localhost:8000/api/nfse/health
 
 Esperado (com `NFSE_ENABLED=false`): `{"enabled":false}`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/app/routers/nfse.py backend/app/main.py
