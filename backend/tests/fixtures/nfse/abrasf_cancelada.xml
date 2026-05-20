@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompNfse xmlns="http://www.abrasf.org.br/nfse.xsd">
+  <Nfse>
+    <InfNfse Id="nfse-3">
+      <Numero>1002</Numero>
+      <DataEmissao>2026-05-13T11:00:00</DataEmissao>
+      <Competencia>2026-05-01</Competencia>
+      <Servico>
+        <Valores><ValorServicos>500.00</ValorServicos></Valores>
+        <Discriminacao>servicos</Discriminacao>
+      </Servico>
+      <PrestadorServico>
+        <IdentificacaoPrestador><Cnpj>12345678000199</Cnpj></IdentificacaoPrestador>
+      </PrestadorServico>
+      <TomadorServico>
+        <IdentificacaoTomador>
+          <CpfCnpj><Cnpj>98765432000100</Cnpj></CpfCnpj>
+        </IdentificacaoTomador>
+      </TomadorServico>
+    </InfNfse>
+  </Nfse>
+  <NfseCancelamento>
+    <Confirmacao>
+      <DataHora>2026-05-14T15:00:00</DataHora>
+    </Confirmacao>
+  </NfseCancelamento>
+</CompNfse>
