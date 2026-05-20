@@ -2422,7 +2422,7 @@ git commit -m "feat(nfse): router admin credencial PBH (upsert/list/desativar) +
 - Create: `backend/app/routers/nfse_internal.py`
 - Modify: `backend/app/main.py`
 
-- [ ] **Step 1: Implementar router**
+- [x] **Step 1: Implementar router**
 
 ```python
 # backend/app/routers/nfse_internal.py
@@ -2546,7 +2546,7 @@ def report_status(cnpj_prestador: str, status: str, motivo: str | None = None,
     return {"ok": True}
 ```
 
-- [ ] **Step 2: Wire em `main.py`**
+- [x] **Step 2: Wire em `main.py`**
 
 ```python
 from app.routers import admin_credenciais, nfse_internal  # adicionar
@@ -2554,7 +2554,7 @@ from app.routers import admin_credenciais, nfse_internal  # adicionar
 app.include_router(nfse_internal.router)
 ```
 
-- [ ] **Step 3: Smoke**
+- [x] **Step 3: Smoke**
 
 ```powershell
 $env:NFSE_WORKER_TOKEN="testtoken"
@@ -2564,7 +2564,7 @@ curl http://localhost:8000/api/nfse/credenciais/12345678000199 `
 
 Esperado: 200 com `{login, senha}` da credencial inserida no Task 14, OU 404 se ainda não inserida.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/app/routers/nfse_internal.py backend/app/main.py
