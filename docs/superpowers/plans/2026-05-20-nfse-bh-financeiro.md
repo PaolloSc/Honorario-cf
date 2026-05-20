@@ -1721,7 +1721,7 @@ git commit -m "feat(nfse): bridge nfse_pagamento -> participacao_pagamentos (ide
 - Create: `backend/tests/test_nfse_sync_orchestrator.py`
 - Create: `backend/app/services/nfse_sync.py`
 
-- [ ] **Step 1: Escrever teste**
+- [x] **Step 1: Escrever teste**
 
 ```python
 # backend/tests/test_nfse_sync_orchestrator.py
@@ -1826,7 +1826,7 @@ def test_cancelamento_detectado(db):
     assert row[1] == "cancelada"
 ```
 
-- [ ] **Step 2: Rodar e ver falha**
+- [x] **Step 2: Rodar e ver falha**
 
 ```powershell
 pytest tests/test_nfse_sync_orchestrator.py -v
@@ -1834,7 +1834,7 @@ pytest tests/test_nfse_sync_orchestrator.py -v
 
 Esperado: import error.
 
-- [ ] **Step 3: Implementar orchestrator**
+- [x] **Step 3: Implementar orchestrator**
 
 ```python
 # backend/app/services/nfse_sync.py
@@ -2050,7 +2050,7 @@ def ingest_payload(
     return outcome
 ```
 
-- [ ] **Step 4: Rodar testes — devem passar**
+- [x] **Step 4: Rodar testes — devem passar**
 
 ```powershell
 pytest tests/test_nfse_sync_orchestrator.py -v
@@ -2058,7 +2058,7 @@ pytest tests/test_nfse_sync_orchestrator.py -v
 
 Esperado: 4 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/nfse_sync.py backend/tests/test_nfse_sync_orchestrator.py
