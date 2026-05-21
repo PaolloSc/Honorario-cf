@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData } from "@/types/contract";
+import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
+import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao } from "@/app/lib/api";
 
 interface Step7EnvioProps {
@@ -15,14 +16,75 @@ function getContratanteNome(c: Contratante): string {
   return (c as ContratantePJ).razao_social;
 }
 
+function buildObjetoContrato(escopos: EscopoItem[]): string {
+  return escopos
+    .map((e) => {
+      const parts: string[] = [];
+
+      // Main label
+      const label = ESCOPO_LABELS[e.tipo] || e.tipo || "";
+      if (label && e.tipo !== "outro") parts.push(label);
+
+      // Custom description
+      if (e.descricao_custom) parts.push(e.descricao_custom);
+
+      // Process number
+      if (e.numero_autos) parts.push(`Processo: ${e.numero_autos}`);
+
+      // Demands
+      if (e.demandas) parts.push(`Demandas: ${e.demandas}`);
+
+      // People/assets
+      if (e.pessoas_patrimonios) parts.push(`Pessoas/Patrimonios: ${e.pessoas_patrimonios}`);
+
+      // Restructuring type
+      if (e.tipo_reestruturacao) parts.push(`Reestruturacao: ${e.tipo_reestruturacao}`);
+
+      // Documents
+      if (e.documentos) parts.push(`Documentos: ${e.documentos}`);
+
+      // Legal opinion topic
+      if (e.consulta) parts.push(`Consulta: ${e.consulta}`);
+
+      // Memorial activities
+      if (e.subtipo_memoriais) {
+        const atividades: string[] = [];
+        if (e.subtipo_memoriais.elaboracao_memoriais) atividades.push("Elaboracao de Memoriais");
+        if (e.subtipo_memoriais.despacho_memoriais) atividades.push("Despacho de Memoriais");
+        if (e.subtipo_memoriais.sustentacao_oral_relator) atividades.push("Sustentacao oral c/ Relator");
+        if (e.subtipo_memoriais.sustentacao_oral_todos_julgadores) atividades.push("Sustentacao oral c/ todos os julgadores");
+        if (atividades.length > 0) parts.push(`Atividades: ${atividades.join(", ")}`);
+      }
+
+      return parts.join(" | ");
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 export default function Step7Envio({ data, editContractId, onSaveComplete }: Step7EnvioProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [status, setStatus] = useState<"idle" | "generating" | "sending" | "success" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "generating" | "sending" | "sent_email" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
   const [participacaoWarning, setParticipacaoWarning] = useState("");
   const [recipientEmail, setRecipientEmail] = useState(data.email_destinatario || data.contratantes[0]?.email || "");
+  const [signatureSent, setSignatureSent] = useState(false);
+  const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
+  const [newLawyerEmail, setNewLawyerEmail] = useState("");
+  const [newLawyerName, setNewLawyerName] = useState("");
   const isEdit = !!editContractId;
+
+  const handleAddLawyer = () => {
+    if (!newLawyerEmail.trim()) return;
+    setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
+    setNewLawyerEmail("");
+    setNewLawyerName("");
+  };
+
+  const handleRemoveLawyer = (index: number) => {
+    setAdditionalLawyers((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -63,12 +125,13 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
-            percentual_ou_valor: data.participacao.percentual_ou_valor,
-            para_quem: data.participacao.para_quem,
-            natureza: data.participacao.natureza,
-            responsavel_captacao: data.participacao.responsavel_captacao,
-            responsavel_gestao: data.participacao.responsavel_gestao,
-            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
+            objeto_contrato: buildObjetoContrato(data.escopos),
+            percentual_ou_valor: data.participacao.percentual_ou_valor || "",
+            para_quem: data.participacao.para_quem || "",
+            natureza: data.participacao.natureza || "",
+            responsavel_captacao: data.participacao.responsavel_captacao || "",
+            responsavel_gestao: data.participacao.responsavel_gestao || "",
+            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente || "",
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
@@ -76,16 +139,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         }
       }
 
-      setStatus("success");
+      setStatus("sent_email");
       setMessage(
         isEdit
-          ? "Nova versao gerada e enviada por e-mail com sucesso!"
-          : "Contrato gerado e enviado por e-mail com sucesso!"
+          ? "Nova versao gerada e enviada por e-mail com sucesso! Agora voce pode enviar para assinatura digital ou voltar para a lista."
+          : "Contrato gerado e enviado por e-mail com sucesso! Agora voce pode enviar para assinatura digital ou voltar para a lista."
       );
-
-      if (onSaveComplete) {
-        setTimeout(() => onSaveComplete(resultContractId), 2000);
-      }
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Erro desconhecido");
@@ -120,12 +179,13 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           await sendParticipacao({
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
-            percentual_ou_valor: data.participacao.percentual_ou_valor,
-            para_quem: data.participacao.para_quem,
-            natureza: data.participacao.natureza,
-            responsavel_captacao: data.participacao.responsavel_captacao,
-            responsavel_gestao: data.participacao.responsavel_gestao,
-            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente,
+            objeto_contrato: buildObjetoContrato(data.escopos),
+            percentual_ou_valor: data.participacao.percentual_ou_valor || "",
+            para_quem: data.participacao.para_quem || "",
+            natureza: data.participacao.natureza || "",
+            responsavel_captacao: data.participacao.responsavel_captacao || "",
+            responsavel_gestao: data.participacao.responsavel_gestao || "",
+            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente || "",
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
@@ -133,12 +193,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         }
       }
 
-      setStatus("success");
-      setMessage(isEdit ? "Nova versao salva com sucesso!" : "Contrato gerado com sucesso!");
-
-      if (onSaveComplete) {
-        setTimeout(() => onSaveComplete(resultContractId), 1500);
-      }
+      setStatus("sent_email");
+      setMessage(
+        isEdit
+          ? "Nova versao salva com sucesso! Voce pode enviar para assinatura ou voltar para a lista."
+          : "Contrato gerado com sucesso! Voce pode enviar para assinatura ou voltar para a lista."
+      );
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Erro desconhecido");
@@ -161,6 +221,15 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         role: "Contratante",
       }));
 
+      // Add additional lawyers as "Advogado" role
+      for (const lawyer of additionalLawyers) {
+        signatarios.push({
+          email: lawyer.email,
+          name: lawyer.name,
+          role: "Advogado",
+        });
+      }
+
       const result = await sendForSignature({
         contract_id: contractId,
         signatarios,
@@ -170,13 +239,25 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         throw new Error(result.message || "Erro ao enviar para assinatura");
       }
 
+      setSignatureSent(true);
       setStatus("success");
       setMessage("Documento enviado para assinatura digital com sucesso!");
+
+      // Navigate to detail page after signature is sent
+      if (onSaveComplete) {
+        setTimeout(() => onSaveComplete(contractId), 2000);
+      }
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Erro desconhecido");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoToContract = () => {
+    if (contractId && onSaveComplete) {
+      onSaveComplete(contractId);
     }
   };
 
@@ -202,13 +283,14 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             type="email"
             value={recipientEmail}
             onChange={(e) => setRecipientEmail(e.target.value)}
-            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            disabled={status === "sent_email" || status === "success"}
+            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:bg-gray-100"
             placeholder="email@exemplo.com"
           />
         </div>
       </div>
 
-      {isEdit && (
+      {isEdit && status === "idle" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <h3 className="font-medium text-amber-900 mb-2">Modo de edicao</h3>
           <p className="text-sm text-amber-800">
@@ -217,7 +299,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         </div>
       )}
 
-      {!isEdit && (
+      {!isEdit && status === "idle" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <h3 className="font-medium text-amber-900 mb-2">Proximos passos</h3>
           <ol className="text-sm text-amber-800 space-y-1 list-decimal list-inside">
@@ -232,6 +314,8 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         <div
           className={`p-4 rounded-lg ${
             status === "success"
+              ? "bg-green-50 text-green-800 border border-green-200"
+              : status === "sent_email"
               ? "bg-green-50 text-green-800 border border-green-200"
               : status === "error"
               ? "bg-red-50 text-red-800 border border-red-200"
@@ -249,37 +333,119 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       )}
 
       <div className="flex gap-4 flex-wrap">
-        <button
-          onClick={handleSaveOnly}
-          disabled={isSubmitting || status === "success"}
-          className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
-        >
-          {isSubmitting && status === "generating"
-            ? "Salvando..."
-            : isEdit
-            ? "Salvar Nova Versao"
-            : "Apenas Gerar Contrato"}
-        </button>
+        {/* Initial actions - before save */}
+        {status === "idle" && (
+          <>
+            <button
+              onClick={handleSaveOnly}
+              disabled={isSubmitting}
+              className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
+            >
+              {isEdit ? "Salvar Nova Versao" : "Apenas Gerar Contrato"}
+            </button>
 
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || status === "success"}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition"
-        >
-          {isSubmitting && status === "sending"
-            ? "Enviando..."
-            : isEdit
-            ? "Salvar e Enviar por E-mail"
-            : "Gerar e Enviar por E-mail"}
-        </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition"
+            >
+              {isEdit ? "Salvar e Enviar por E-mail" : "Gerar e Enviar por E-mail"}
+            </button>
+          </>
+        )}
 
-        {contractId && status === "success" && (
+        {/* Loading state */}
+        {(status === "generating" || status === "sending") && !signatureSent && (
+          <button disabled className="px-4 py-2 bg-gray-200 text-gray-500 rounded-lg cursor-not-allowed">
+            {status === "generating" ? "Salvando..." : "Enviando..."}
+          </button>
+        )}
+
+        {/* After save/email success - show signature button */}
+        {status === "sent_email" && contractId && (
+          <>
+            {/* Additional lawyers section */}
+            <div className="w-full mb-2 p-4 rounded-lg bg-purple-50 border border-purple-200">
+              <h4 className="text-sm font-medium text-purple-900 mb-2">
+                Advogados adicionais para assinatura (opcional)
+              </h4>
+              <p className="text-xs text-purple-700 mb-3">
+                O advogado logado ja sera incluido automaticamente. Adicione outros se necessario.
+              </p>
+              {additionalLawyers.length > 0 && (
+                <div className="space-y-1 mb-3">
+                  {additionalLawyers.map((lawyer, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+                      <span className="flex-1">{lawyer.name} ({lawyer.email})</span>
+                      <button
+                        onClick={() => handleRemoveLawyer(i)}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newLawyerName}
+                  onChange={(e) => setNewLawyerName(e.target.value)}
+                  placeholder="Nome do advogado"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <input
+                  type="email"
+                  value={newLawyerEmail}
+                  onChange={(e) => setNewLawyerEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <button
+                  onClick={handleAddLawyer}
+                  disabled={!newLawyerEmail.trim()}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSendForSignature}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition"
+            >
+              Enviar para Assinatura Digital
+            </button>
+
+            <button
+              onClick={handleGoToContract}
+              className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-gray-50 transition"
+            >
+              Ir para o Contrato
+            </button>
+          </>
+        )}
+
+        {/* After signature sent or final success */}
+        {status === "success" && contractId && (
           <button
-            onClick={handleSendForSignature}
-            disabled={isSubmitting}
-            className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition"
+            onClick={handleGoToContract}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition"
           >
-            Enviar para Assinatura Digital
+            Ver Contrato
+          </button>
+        )}
+
+        {/* Error state - allow retry */}
+        {status === "error" && (
+          <button
+            onClick={() => { setStatus("idle"); setMessage(""); }}
+            className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-gray-50 transition"
+          >
+            Tentar Novamente
           </button>
         )}
       </div>

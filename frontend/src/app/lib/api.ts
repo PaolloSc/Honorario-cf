@@ -53,7 +53,7 @@ async function request<T>(
 ): Promise<T> {
   let res: Response;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -131,6 +131,7 @@ export async function sendEmail(data: {
 export async function sendParticipacao(data: {
   contract_id: string;
   cliente_nome: string;
+  objeto_contrato?: string;
   percentual_ou_valor?: string;
   para_quem?: string;
   natureza?: string;
@@ -453,5 +454,16 @@ export async function simularParticipacao(body: {
   }>("/api/participacoes/simular", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export async function rollbackContract(contractId: string, version: number) {
+  return request<{
+    success: boolean;
+    message: string;
+    contract_id: string;
+    version: number;
+  }>(`/api/contracts/${contractId}/rollback?version=${version}`, {
+    method: "POST",
   });
 }

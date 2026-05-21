@@ -59,6 +59,14 @@ class AzureEmailService:
 
         return result["access_token"]
 
+    def _build_recipients(self, to_email: str, to_name: str) -> list[dict]:
+        """Build recipient list supporting comma-separated emails."""
+        emails = [e.strip() for e in to_email.split(",") if e.strip()]
+        return [
+            {"emailAddress": {"address": email, "name": to_name}}
+            for email in emails
+        ]
+
     async def send_email_with_attachment(
         self,
         to_email: str,
@@ -106,14 +114,7 @@ class AzureEmailService:
                         "</div>"
                     ),
                 },
-                "toRecipients": [
-                    {
-                        "emailAddress": {
-                            "address": to_email,
-                            "name": to_name,
-                        }
-                    }
-                ],
+                "toRecipients": self._build_recipients(to_email, to_name),
                 "attachments": [
                     {
                         "@odata.type": "#microsoft.graph.fileAttachment",
@@ -162,9 +163,7 @@ class AzureEmailService:
             "message": {
                 "subject": subject,
                 "body": {"contentType": "HTML", "content": html_content},
-                "toRecipients": [
-                    {"emailAddress": {"address": to_email, "name": to_name}}
-                ],
+                "toRecipients": self._build_recipients(to_email, to_name),
             },
             "saveToSentItems": "true",
         }
@@ -186,4 +185,61 @@ class AzureEmailService:
             return {"success": True}
 
         logger.error("Failed to send HTML email: %s %s", response.status_code, response.text)
+        return {"success": False, "error": f"{response.status_code} - {response.text}"}
+
+    async def send_html_email_with_attachment(
+        self,
+        to_email: str,
+        to_name: str,
+        subject: str,
+        html_content: str,
+        attachment_path: str,
+        attachment_name: str | None = None,
+    ) -> dict:
+        """Send an HTML email with a file attachment."""
+        token = await self._get_access_token()
+
+        file_path = Path(attachment_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Attachment file not found: {attachment_path}")
+
+        display_name = attachment_name or file_path.name
+
+        with open(file_path, "rb") as f:
+            file_content = base64.b64encode(f.read()).decode("utf-8")
+
+        email_body = {
+            "message": {
+                "subject": subject,
+                "body": {"contentType": "HTML", "content": html_content},
+                "toRecipients": self._build_recipients(to_email, to_name),
+                "attachments": [
+                    {
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        "name": display_name,
+                        "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "contentBytes": file_content,
+                    }
+                ],
+            },
+            "saveToSentItems": "true",
+        }
+
+        url = f"{self.GRAPH_API_URL}/users/{settings.sender_email}/sendMail"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                json=email_body,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30.0,
+            )
+
+        if response.status_code == 202:
+            logger.info("HTML email with attachment sent to %s", to_email)
+            return {"success": True}
+
+        logger.error("Failed to send HTML email with attachment: %s %s", response.status_code, response.text)
         return {"success": False, "error": f"{response.status_code} - {response.text}"}

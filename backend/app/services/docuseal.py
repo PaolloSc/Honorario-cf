@@ -45,7 +45,7 @@ class DocuSealService:
  
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/templates",
+                f"{self.base_url}/templates/docx",
                 json=payload,
                 headers=self._headers(),
                 timeout=60.0,
@@ -57,7 +57,7 @@ class DocuSealService:
             return template_data
  
         logger.error("Failed to create template: %s %s", response.status_code, response.text)
-        raise RuntimeError(f"DocuSeal template creation failed: {response.status_code}")
+        raise RuntimeError(f"DocuSeal template creation failed: {response.status_code} - {response.text}")
  
     async def send_for_signature(
         self,
@@ -77,12 +77,14 @@ class DocuSealService:
                     "name": sig.get("name", ""),
                     "role": sig.get("role", "Contratante"),
                     "send_email": send_email,
+                    "order": sig.get("order", 1),
                 }
             )
  
         payload = {
             "template_id": template_id,
             "send_email": send_email,
+            "order": "preserved",
             "submitters": submitters,
         }
  
@@ -97,9 +99,21 @@ class DocuSealService:
         if response.status_code in (200, 201):
             submission_data = response.json()
             logger.info("DocuSeal submission created: %s", submission_data)
+
+            # DocuSeal returns a list of submitters or a single object
+            if isinstance(submission_data, list):
+                # Extract submission_id from first submitter
+                first = submission_data[0] if submission_data else {}
+                submission_obj = {
+                    "id": first.get("submission_id") or first.get("id"),
+                    "submitters": submission_data,
+                }
+            else:
+                submission_obj = submission_data
+
             return {
                 "success": True,
-                "submission": submission_data,
+                "submission": submission_obj,
                 "message": "Documento enviado para assinatura com sucesso",
             }
  
