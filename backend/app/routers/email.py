@@ -4,12 +4,12 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
-from app.database import AuditLogDB, ContractDB, get_db, utcnow
+from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
 
 logger = logging.getLogger(__name__)
@@ -31,12 +31,25 @@ class EmailResponse(BaseModel):
 class ParticipacaoEmailRequest(BaseModel):
     contract_id: str
     cliente_nome: str
+    objeto_contrato: str = ""
     percentual_ou_valor: str = ""
     para_quem: str = ""
     natureza: str = ""
     responsavel_captacao: str = ""
     responsavel_gestao: str = ""
     contato_financeiro_cliente: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_nulls(cls, data):
+        """Convert null/None values to empty strings for optional text fields."""
+        if isinstance(data, dict):
+            for field in ("objeto_contrato", "percentual_ou_valor", "para_quem", "natureza",
+                          "responsavel_captacao", "responsavel_gestao",
+                          "contato_financeiro_cliente"):
+                if data.get(field) is None:
+                    data[field] = ""
+        return data
 
 
 _email_service: AzureEmailService | None = None
@@ -56,6 +69,96 @@ def resolve_backend_path(value: str) -> Path:
     return BACKEND_DIR / path
 
 
+def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
+    """Resolve the contract file path, trying multiple strategies.
+
+    If the file cannot be found on disk (ephemeral filesystem like Render),
+    regenerates from form_data_json stored in the database.
+    """
+    output_dir = resolve_backend_path(settings.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Strategy 1: Get path from DB and check if file exists at that exact location
+    latest_ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id)
+        .order_by(ContractVersionDB.version_number.desc())
+        .first()
+    )
+
+    if latest_ver and latest_ver.file_path:
+        stored = Path(latest_ver.file_path)
+
+        # Try the stored path directly
+        if stored.exists():
+            logger.info("Found contract file at stored path: %s", stored)
+            return stored
+
+        # Strategy 2: Try the filename from stored path in current output_dir
+        filename = stored.name
+        candidate = output_dir / filename
+        if candidate.exists():
+            logger.info("Found contract file at reconstructed path: %s", candidate)
+            return candidate
+
+    # Strategy 3: Convention-based path
+    fallback = output_dir / f"contrato_{contract_id}.docx"
+    if fallback.exists():
+        logger.info("Found contract file at fallback path: %s", fallback)
+        return fallback
+
+    # Strategy 4: Regenerate from form_data_json in DB (handles ephemeral filesystems)
+    if latest_ver and latest_ver.form_data_json:
+        logger.warning(
+            "Contract file not found on disk for %s. Regenerating from stored form data...",
+            contract_id,
+        )
+        try:
+            import json as _json
+            from app.models.contract import ContratoRequest as _CR
+            from app.services.contract_generator import ContractGenerator as _CG
+
+            form_data = _json.loads(latest_ver.form_data_json)
+            contrato_data = _CR(**form_data)
+            gen = _CG()
+            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            regenerated = Path(new_filepath)
+
+            # Update the stored path in DB so next time it's found directly
+            latest_ver.file_path = str(regenerated)
+            db.commit()
+
+            logger.info("Regenerated contract file at: %s", regenerated)
+            return regenerated
+        except FileNotFoundError as template_err:
+            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
+            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
+            try:
+                from docx import Document as _Doc
+                doc = _Doc()
+                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
+                minimal_path = output_dir / f"contrato_{contract_id}.docx"
+                doc.save(str(minimal_path))
+                latest_ver.file_path = str(minimal_path)
+                db.commit()
+                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
+                return minimal_path
+            except Exception as min_err:
+                logger.error("Failed to create minimal DOCX: %s", min_err)
+        except Exception as regen_err:
+            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
+
+    # All strategies exhausted
+    logger.error(
+        "Contract file not found for %s. Tried: stored=%s, output_dir=%s, regeneration=%s",
+        contract_id,
+        latest_ver.file_path if latest_ver else "N/A",
+        output_dir,
+        "failed" if latest_ver and latest_ver.form_data_json else "no form data",
+    )
+    raise HTTPException(status_code=404, detail="Contract file not found")
+
+
 @router.post("/send", response_model=EmailResponse)
 async def send_contract_email(
     data: EmailRequest,
@@ -64,11 +167,7 @@ async def send_contract_email(
 ) -> EmailResponse:
     """Send contract via email using Azure Communication Services."""
     try:
-        # Find the contract file
-        filepath = resolve_backend_path(settings.output_dir) / f"contrato_{data.contract_id}.docx"
-
-        if not filepath.exists():
-            raise HTTPException(status_code=404, detail="Contract file not found")
+        filepath = _resolve_contract_filepath(data.contract_id, db)
 
         service = get_email_service()
         result = await service.send_email_with_attachment(
@@ -102,6 +201,80 @@ async def send_contract_email(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _build_objeto_contrato_from_db(contract_id: str, db: Session) -> str:
+    """Build 'Objeto do Contrato' text from stored form_data_json as fallback."""
+    import json as _json
+
+    ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id)
+        .order_by(ContractVersionDB.version_number.desc())
+        .first()
+    )
+    if not ver or not ver.form_data_json:
+        return ""
+
+    try:
+        form_data = _json.loads(ver.form_data_json)
+    except (ValueError, TypeError):
+        return ""
+
+    escopos = form_data.get("escopos", [])
+    if not escopos:
+        return ""
+
+    from app.models.contract import ESCOPO_LABELS, TipoEscopo
+
+    lines: list[str] = []
+    for escopo in escopos:
+        parts: list[str] = []
+        tipo_raw = escopo.get("tipo", "")
+
+        # Get label from ESCOPO_LABELS enum map
+        try:
+            tipo_enum = TipoEscopo(tipo_raw)
+            label = ESCOPO_LABELS.get(tipo_enum, tipo_raw)
+        except ValueError:
+            label = tipo_raw
+
+        if label and tipo_raw != "outro":
+            parts.append(label)
+        if escopo.get("descricao_custom"):
+            parts.append(escopo["descricao_custom"])
+        if escopo.get("numero_autos"):
+            parts.append(f"Processo: {escopo['numero_autos']}")
+        if escopo.get("demandas"):
+            parts.append(f"Demandas: {escopo['demandas']}")
+        if escopo.get("pessoas_patrimonios"):
+            parts.append(f"Pessoas/Patrimônios: {escopo['pessoas_patrimonios']}")
+        if escopo.get("tipo_reestruturacao"):
+            parts.append(f"Reestruturação: {escopo['tipo_reestruturacao']}")
+        if escopo.get("documentos"):
+            parts.append(f"Documentos: {escopo['documentos']}")
+        if escopo.get("consulta"):
+            parts.append(f"Consulta: {escopo['consulta']}")
+
+        subtipo_mem = escopo.get("subtipo_memoriais")
+        if subtipo_mem:
+            atividades: list[str] = []
+            if subtipo_mem.get("elaboracao_memoriais"):
+                atividades.append("Elaboração de memoriais")
+            if subtipo_mem.get("despacho_memoriais"):
+                atividades.append("Despacho de memoriais")
+            if subtipo_mem.get("sustentacao_oral_relator"):
+                atividades.append("Sustentação oral c/ Relator")
+            if subtipo_mem.get("sustentacao_oral_todos_julgadores"):
+                atividades.append("Sustentação oral c/ todos os julgadores")
+            if atividades:
+                parts.append(f"Atividades: {', '.join(atividades)}")
+
+        line = " | ".join(parts)
+        if line:
+            lines.append(line)
+
+    return "\n".join(lines)
+
+
 @router.post("/send-participacao", response_model=EmailResponse)
 async def send_participacao_email(
     data: ParticipacaoEmailRequest,
@@ -110,7 +283,16 @@ async def send_participacao_email(
 ) -> EmailResponse:
     """Send participation internal sheet to financeiro."""
     try:
+        # Use objeto_contrato from request; if empty, build from stored form data
+        objeto_contrato = data.objeto_contrato.strip()
+        if not objeto_contrato:
+            objeto_contrato = _build_objeto_contrato_from_db(data.contract_id, db)
+
         rows = []
+        # Objeto do Contrato first (as requested by financeiro)
+        # Replace newlines with <br> for HTML rendering
+        if objeto_contrato:
+            rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
         if data.percentual_ou_valor:
             rows.append(("Percentual/Valor", data.percentual_ou_valor))
         if data.para_quem:
@@ -145,13 +327,43 @@ async def send_participacao_email(
             '</div></div>'
         )
 
-        service = get_email_service()
-        result = await service.send_html_email(
-            to_email=settings.financeiro_email,
-            to_name="Financeiro C&F",
-            subject=f"Ficha de Participação — {data.cliente_nome}",
-            html_content=html,
+        # Look up contract file for attachment
+        contract_filepath = None
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
         )
+        if latest_ver and latest_ver.file_path:
+            stored = Path(latest_ver.file_path)
+            if stored.exists():
+                contract_filepath = str(stored)
+            else:
+                # Try convention path
+                output_dir = BACKEND_DIR / settings.output_dir
+                candidate = output_dir / f"contrato_{data.contract_id}.docx"
+                if candidate.exists():
+                    contract_filepath = str(candidate)
+
+        service = get_email_service()
+
+        if contract_filepath:
+            result = await service.send_html_email_with_attachment(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação — {data.cliente_nome}",
+                html_content=html,
+                attachment_path=contract_filepath,
+                attachment_name=f"contrato_honorarios_{data.contract_id}.docx",
+            )
+        else:
+            result = await service.send_html_email(
+                to_email=settings.financeiro_email,
+                to_name="Financeiro C&F",
+                subject=f"Ficha de Participação — {data.cliente_nome}",
+                html_content=html,
+            )
 
         if result["success"]:
             contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()

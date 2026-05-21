@@ -32,7 +32,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       authorization: {
         params: {
           scope: "openid profile email User.Read offline_access",
-          prompt: "select_account",
         },
       },
     }),
@@ -52,8 +51,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token;
       }
 
-      // Return token if not expired
-      if (token.expiresAt && Date.now() < token.expiresAt * 1000) {
+      // Return token if not expired (with 60s buffer to avoid edge-case expiry during request)
+      if (token.expiresAt && Date.now() < (token.expiresAt * 1000 - 60000)) {
         return token;
       }
 
@@ -95,6 +94,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   debug: process.env.NODE_ENV === "development",
   trustHost: true,
+  secret: process.env.AUTH_SECRET,
   logger: {
     error(error) {
       console.error("[AUTH ERROR]", error);

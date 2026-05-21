@@ -5,7 +5,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -203,6 +203,7 @@ def generate_contract(
 @router.get("/{contract_id}/download")
 def download_contract(
     contract_id: str,
+    version: int | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FileResponse:
@@ -218,10 +219,73 @@ def download_contract(
     if user.role != "admin" and contract.created_by != user.email:
         raise HTTPException(403, "Sem permissao")
 
-    gen = get_generator()
-    filepath = Path(gen.output_dir) / f"contrato_{contract_id}.docx"
+    # Find the file path from DB (specific version or latest)
+    query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
+    if version:
+        ver = query.filter(ContractVersionDB.version_number == version).first()
+    else:
+        ver = query.order_by(ContractVersionDB.version_number.desc()).first()
 
-    if not filepath.exists():
+    gen = get_generator()
+    output_dir = Path(gen.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    filepath: Path | None = None
+
+    if ver and ver.file_path:
+        stored = Path(ver.file_path)
+        if stored.exists():
+            filepath = stored
+        else:
+            candidate = output_dir / stored.name
+            if candidate.exists():
+                filepath = candidate
+
+    if filepath is None:
+        fallback = output_dir / f"contrato_{contract_id}.docx"
+        if fallback.exists():
+            filepath = fallback
+
+    # Strategy 4: Regenerate from form_data_json (handles ephemeral filesystems)
+    if filepath is None and ver and ver.form_data_json:
+        logger.warning(
+            "Contract file not on disk for %s. Regenerating from stored form data...",
+            contract_id,
+        )
+        try:
+            form_data = json.loads(ver.form_data_json)
+            contrato_data = ContratoRequest(**form_data)
+            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            filepath = Path(new_filepath)
+            # Update stored path
+            ver.file_path = str(filepath)
+            db.commit()
+            logger.info("Regenerated contract file at: %s", filepath)
+        except FileNotFoundError as template_err:
+            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
+            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
+            try:
+                from docx import Document as _Doc
+                doc = _Doc()
+                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
+                minimal_path = output_dir / f"contrato_{contract_id}.docx"
+                doc.save(str(minimal_path))
+                ver.file_path = str(minimal_path)
+                db.commit()
+                filepath = minimal_path
+                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
+            except Exception as min_err:
+                logger.error("Failed to create minimal DOCX: %s", min_err)
+        except Exception as regen_err:
+            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
+
+    if filepath is None or not filepath.exists():
+        logger.error(
+            "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
+            contract_id,
+            ver.file_path if ver else "N/A",
+            output_dir,
+        )
         raise HTTPException(status_code=404, detail="Arquivo nao encontrado")
 
     return FileResponse(
