@@ -1,0 +1,3 @@
+# backend/workers/nfse_scraper/requirements.txt
+playwright==1.49.0
+httpx==0.27.2

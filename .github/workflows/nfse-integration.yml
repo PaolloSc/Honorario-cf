@@ -1,0 +1,28 @@
+name: nfse-integration
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # 01:00 SP — antes do sync diário
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PBH_TEST_USER: ${{ secrets.PBH_TEST_USER }}
+      PBH_TEST_PASS: ${{ secrets.PBH_TEST_PASS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r backend/requirements.txt -r backend/workers/nfse_scraper/requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - name: Run integration tests
+        working-directory: backend
+        run: |
+          if [ -z "$PBH_TEST_USER" ]; then
+            echo "PBH_TEST_USER ausente, pulando."
+            exit 0
+          fi
+          pytest tests/integration/ -m integration -v

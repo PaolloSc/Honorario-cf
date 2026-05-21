@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json as _json
 import os
+import re as _re
 from pathlib import Path
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
+    Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -83,6 +88,7 @@ class ContractDB(Base):
     updated_by = Column(String(256), nullable=True)  # user email
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    cliente_docs = Column(Text, nullable=False, default="[]")
 
     versions = relationship(
         "ContractVersionDB", back_populates="contract", order_by="ContractVersionDB.version_number"
@@ -90,6 +96,21 @@ class ContractDB(Base):
     audit_logs = relationship(
         "AuditLogDB", back_populates="contract", order_by="AuditLogDB.created_at.desc()"
     )
+
+
+def derive_cliente_docs(form_data: dict) -> list[str]:
+    """Extrai CPF/CNPJ normalizados dos contratantes."""
+    docs: set[str] = set()
+    for contratante in form_data.get("contratantes", []) or []:
+        raw = contratante.get("cnpj") or contratante.get("cpf") or ""
+        doc = _re.sub(r"\D", "", raw)
+        if doc:
+            docs.add(doc)
+    return sorted(docs)
+
+
+def serialize_cliente_docs(form_data: dict) -> str:
+    return _json.dumps(derive_cliente_docs(form_data))
 
 
 class ContractVersionDB(Base):
@@ -122,6 +143,66 @@ class AuditLogDB(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     contract = relationship("ContractDB", back_populates="audit_logs")
+
+
+# ── Participações (Setor Financeiro) ─────────────────────────────
+
+class ParticipacaoDB(Base):
+    """Participação interna de advogado em honorários contratuais.
+
+    Regras (vigência a partir de 2024-08-01, sem retroatividade):
+    - Aplica-se apenas a honorários contratuais (sucumbenciais excluídos).
+    - Captação até 20%, Performance até 20%, combo até 40%.
+    - Limite temporal por tipo: hora=3a, partido=2a, mensalidade=2a, êxito/prolabore=sem limite.
+    - Vínculo ativo (contratual ou societário) é pré-condição de pagamento.
+    """
+
+    __tablename__ = "participacoes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    contract_id = Column(String(64), ForeignKey("contracts.contract_id"), nullable=False, index=True)
+    beneficiario_email = Column(String(256), nullable=False, index=True)
+    beneficiario_nome = Column(String(256), nullable=False, default="")
+    tipo_honorario = Column(String(32), nullable=False)  # hora|partido|mensalidade|exito|prolabore|misto
+    percentual_captacao = Column(Float, nullable=False, default=0.0)
+    percentual_performance = Column(Float, nullable=False, default=0.0)
+    motivo_captacao = Column(Text, nullable=True)
+    motivo_performance = Column(Text, nullable=True)
+    natureza = Column(String(32), nullable=False, default="contratual")  # contratual|societario
+    cliente_cpf_cnpj = Column(String(32), nullable=True, index=True)
+    data_inicio = Column(Date, nullable=False)  # >= 2024-08-01
+    vinculo_ativo = Column(Boolean, nullable=False, default=True)
+    data_fim_vinculo = Column(Date, nullable=True)
+    aprovado_por = Column(String(256), nullable=True)
+    aprovada = Column(Boolean, nullable=False, default=False)  # False=rascunho do wizard; True=validada pelo financeiro
+    observacoes = Column(Text, nullable=True)
+    created_by = Column(String(256), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    pagamentos = relationship(
+        "ParticipacaoPagamentoDB",
+        back_populates="participacao",
+        order_by="ParticipacaoPagamentoDB.data_recebimento",
+    )
+
+
+class ParticipacaoPagamentoDB(Base):
+    """Recebimento de honorário (valor líquido) a partir do qual se calcula a participação."""
+
+    __tablename__ = "participacao_pagamentos"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    participacao_id = Column(Integer, ForeignKey("participacoes.id"), nullable=False, index=True)
+    data_recebimento = Column(Date, nullable=False)
+    valor_liquido_recebido = Column(Float, nullable=False)
+    valor_participacao = Column(Float, nullable=False)
+    dentro_limite_temporal = Column(Boolean, nullable=False, default=True)
+    observacoes = Column(Text, nullable=True)
+    registrado_por = Column(String(256), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+    participacao = relationship("ParticipacaoDB", back_populates="pagamentos")
 
 
 def init_db():

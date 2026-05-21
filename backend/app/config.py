@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     template_path: str = "templates/timbrado_peticao_1.dotx"
     output_dir: str = "generated_contracts"
 
+    # Modo dev: aceita header X-Dev-User-Email/Role no lugar do JWT Azure AD.
+    # NUNCA habilitar em produção.
+    dev_mode: bool = False
+
+    # NFS-e BH (financeiro)
+    nfse_enabled: bool = False
+    nfse_kek: str = ""                       # base64 32 bytes (AES-GCM)
+    nfse_worker_token: str = ""              # bearer p/ worker GH Actions
+    nfse_backfill_days: int = 90
+    nfse_gh_actions_cidrs: str = ""          # CSV, opcional (allowlist)
+
     model_config = {"env_file": str(ENV_FILE), "env_file_encoding": "utf-8"}
 
     def validate_critical(self) -> None:
@@ -46,6 +57,11 @@ class Settings(BaseSettings):
             missing.append("AZURE_CLIENT_ID")
         if not self.azure_client_secret:
             missing.append("AZURE_CLIENT_SECRET")
+        if self.nfse_enabled:
+            if not self.nfse_kek:
+                missing.append("NFSE_KEK")
+            if not self.nfse_worker_token:
+                missing.append("NFSE_WORKER_TOKEN")
         if missing:
             _config_logger.warning(
                 "Variáveis de configuração críticas não definidas: %s",

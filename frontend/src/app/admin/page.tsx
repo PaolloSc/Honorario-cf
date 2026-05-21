@@ -53,8 +53,7 @@ export default function AdminPage() {
     fetchUsers();
   }, [fetchUsers]);
 
-  const toggleRole = async (userId: number, currentRole: string) => {
-    const newRole = currentRole === "admin" ? "advogado" : "admin";
+  const setRole = async (userId: number, newRole: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/users/${userId}/role`, {
         method: "PATCH",
@@ -125,19 +124,28 @@ export default function AdminPage() {
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         u.role === "admin"
                           ? "bg-purple-100 text-purple-800"
+                          : u.role === "financeiro"
+                          ? "bg-emerald-100 text-emerald-800"
                           : "bg-blue-100 text-blue-800"
                       }`}
                     >
-                      {u.role === "admin" ? "Administrador" : "Advogado"}
+                      {u.role === "admin"
+                        ? "Administrador"
+                        : u.role === "financeiro"
+                        ? "Financeiro"
+                        : "Advogado"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => toggleRole(u.id, u.role)}
-                      className="text-xs text-accent hover:underline"
+                    <select
+                      value={u.role}
+                      onChange={(e) => setRole(u.id, e.target.value)}
+                      className="text-xs border border-border rounded px-2 py-1"
                     >
-                      {u.role === "admin" ? "Tornar Advogado" : "Tornar Admin"}
-                    </button>
+                      <option value="advogado">Advogado</option>
+                      <option value="financeiro">Financeiro</option>
+                      <option value="admin">Admin</option>
+                    </select>
                   </td>
                 </tr>
               ))}
