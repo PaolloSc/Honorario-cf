@@ -7,6 +7,10 @@ function resolveApiBase(): string {
   if (typeof window !== "undefined") {
     const protocol = window.location.protocol;
     const host = window.location.hostname;
+    // Dev local: backend separado em :8000
+    if (host === "localhost" || host === "127.0.0.1") {
+      return `${protocol}//${host}:8000`;
+    }
     // Vercel serverless functions are at /api on the same domain
     return `${protocol}//${host}`;
   }
@@ -21,6 +25,26 @@ let _accessToken: string | null = null;
 
 export function setAccessToken(token: string | null) {
   _accessToken = token;
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (_accessToken) h["Authorization"] = `Bearer ${_accessToken}`;
+  Object.assign(h, getDevHeaders());
+  return h;
+}
+
+function getDevHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  if (process.env.NEXT_PUBLIC_DEV_MODE !== "true") return {};
+  const email = localStorage.getItem("dev_user_email");
+  const role = localStorage.getItem("dev_user_role");
+  const name = localStorage.getItem("dev_user_name");
+  if (!email) return {};
+  const h: Record<string, string> = { "X-Dev-User-Email": email };
+  if (role) h["X-Dev-User-Role"] = role;
+  if (name) h["X-Dev-User-Name"] = name;
+  return h;
 }
 
 async function request<T>(
@@ -38,6 +62,7 @@ async function request<T>(
   if (_accessToken) {
     headers["Authorization"] = `Bearer ${_accessToken}`;
   }
+  Object.assign(headers, getDevHeaders());
 
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -241,4 +266,192 @@ export async function updateContractStatus(contractId: string, status: string) {
     `/api/contracts/${contractId}/status?status=${encodeURIComponent(status)}`,
     { method: "PATCH" }
   );
+}
+
+// ── Participações (Setor Financeiro) ─────────────────────────────
+
+export interface Participacao {
+  id: number;
+  contract_id: string;
+  beneficiario_email: string;
+  beneficiario_nome: string;
+  tipo_honorario: string;
+  percentual_captacao: number;
+  percentual_performance: number;
+  percentual_total: number;
+  motivo_captacao: string | null;
+  motivo_performance: string | null;
+  natureza: string;
+  cliente_cpf_cnpj: string | null;
+  data_inicio: string;
+  vinculo_ativo: boolean;
+  data_fim_vinculo: string | null;
+  aprovado_por: string | null;
+  observacoes: string | null;
+  limite_temporal_anos: number | null;
+  data_limite_temporal: string | null;
+  total_pago: number;
+  created_at: string;
+}
+
+export interface Pagamento {
+  id: number;
+  participacao_id: number;
+  data_recebimento: string;
+  valor_liquido_recebido: number;
+  valor_participacao: number;
+  dentro_limite_temporal: boolean;
+  observacoes: string | null;
+  created_at: string;
+}
+
+export interface ResumoParticipacao {
+  participacao: Participacao;
+  pagamentos: Pagamento[];
+  total_recebido_liquido: number;
+  total_participacao: number;
+}
+
+export interface RegrasParticipacao {
+  vigencia_inicio: string;
+  limite_captacao_pct: number;
+  limite_performance_pct: number;
+  limite_combo_pct: number;
+  limites_temporais_anos: Record<string, number | string>;
+  honorarios_aplicaveis: string;
+  regra_alvara_indiscriminado: string;
+  captacao_criterios: string;
+  performance_criterios: string;
+  excecoes: string;
+  condicao_pagamento: string;
+}
+
+export async function getRegrasParticipacao() {
+  return request<RegrasParticipacao>("/api/participacoes/regras");
+}
+
+export async function listParticipacoes(params?: {
+  contract_id?: string;
+  beneficiario_email?: string;
+  apenas_ativos?: boolean;
+}) {
+  const qs = new URLSearchParams();
+  if (params?.contract_id) qs.set("contract_id", params.contract_id);
+  if (params?.beneficiario_email) qs.set("beneficiario_email", params.beneficiario_email);
+  if (params?.apenas_ativos) qs.set("apenas_ativos", "true");
+  const query = qs.toString();
+  return request<{ participacoes: Participacao[]; total: number }>(
+    `/api/participacoes${query ? `?${query}` : ""}`
+  );
+}
+
+export async function createParticipacao(body: {
+  contract_id: string;
+  beneficiario_email: string;
+  beneficiario_nome: string;
+  tipo_honorario: string;
+  percentual_captacao: number;
+  percentual_performance: number;
+  motivo_captacao?: string;
+  motivo_performance?: string;
+  natureza: string;
+  cliente_cpf_cnpj?: string;
+  data_inicio: string;
+  aprovado_por?: string;
+  observacoes?: string;
+}) {
+  return request<Participacao>("/api/participacoes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getResumoParticipacao(pid: number) {
+  return request<ResumoParticipacao>(`/api/participacoes/${pid}/resumo`);
+}
+
+export async function registrarPagamento(
+  pid: number,
+  body: {
+    data_recebimento: string;
+    valor_bruto: number;
+    discriminado: boolean;
+    valor_contratual?: number;
+    observacoes?: string;
+  }
+) {
+  return request<Pagamento>(`/api/participacoes/${pid}/pagamentos`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function encerrarVinculo(pid: number, data_fim: string) {
+  return request<Participacao>(
+    `/api/participacoes/${pid}/encerrar-vinculo?data_fim=${encodeURIComponent(data_fim)}`,
+    { method: "POST" }
+  );
+}
+
+export interface ContratoPendente {
+  contract_id: string;
+  status: string;
+  client_name: string;
+  client_email: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  tem_rascunho: boolean;
+  participacao_id: number | null;
+  tipo_honorario_inferido: string | null;
+  cliente_cpf_cnpj: string | null;
+}
+
+export async function listContratosPendentes(incluir_rascunhos = true) {
+  return request<{ contratos: ContratoPendente[]; total: number }>(
+    `/api/participacoes/contratos-pendentes?incluir_rascunhos=${incluir_rascunhos}`
+  );
+}
+
+export async function aprovarParticipacao(
+  pid: number,
+  body: {
+    percentual_captacao: number;
+    percentual_performance: number;
+    motivo_captacao?: string;
+    motivo_performance?: string;
+    tipo_honorario?: string;
+    cliente_cpf_cnpj?: string;
+    aprovado_por?: string;
+    natureza?: string;
+    observacoes?: string;
+  }
+) {
+  return request<Participacao>(`/api/participacoes/${pid}/aprovar`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function simularParticipacao(body: {
+  tipo_honorario: string;
+  percentual_captacao: number;
+  percentual_performance: number;
+  data_inicio_participacao: string;
+  data_recebimento: string;
+  valor_liquido_recebido: number;
+  vinculo_ativo: boolean;
+  data_fim_vinculo?: string;
+  eh_contratual: boolean;
+}) {
+  return request<{
+    valor_participacao: number;
+    dentro_limite_temporal: boolean;
+    vinculo_ativo: boolean;
+    motivo_zerado: string | null;
+    percentual_aplicado: number;
+  }>("/api/participacoes/simular", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
