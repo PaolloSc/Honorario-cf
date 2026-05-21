@@ -25,7 +25,7 @@
 **Files:**
 - Modify: `backend/requirements.txt`
 
-- [ ] **Step 1: Adicionar novas dependências ao requirements.txt**
+- [x] **Step 1: Adicionar novas dependências ao requirements.txt**
 
 Adicionar (ou garantir presença) ao final do arquivo:
 
@@ -40,7 +40,7 @@ tzdata==2024.2
 
 `slowapi` já presente (visto em `app/main.py`). Não duplicar.
 
-- [ ] **Step 2: Instalar e verificar**
+- [x] **Step 2: Instalar e verificar**
 
 ```powershell
 cd backend
@@ -51,7 +51,7 @@ python -c "import alembic, cryptography, defusedxml, lxml, dateutil, tzdata; pri
 
 Esperado: `ok`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/requirements.txt
@@ -65,7 +65,7 @@ git commit -m "chore(nfse): add deps para NFS-e (alembic, cryptography, defusedx
 **Files:**
 - Modify: `backend/app/config.py`
 
-- [ ] **Step 1: Adicionar campos ao `Settings`**
+- [x] **Step 1: Adicionar campos ao `Settings`**
 
 Localizar bloco de campos em `app/config.py` (após `dev_mode: bool = False`) e adicionar antes de `model_config`:
 
@@ -88,7 +88,7 @@ E ao final de `validate_critical()`:
                 missing.append("NFSE_WORKER_TOKEN")
 ```
 
-- [ ] **Step 2: Smoke local**
+- [x] **Step 2: Smoke local**
 
 ```powershell
 cd backend
@@ -98,7 +98,7 @@ python -c "from app.config import settings; print(settings.nfse_enabled, setting
 
 Esperado: `False 90`.
 
-- [ ] **Step 3: Atualizar `.env.example`**
+- [x] **Step 3: Atualizar `.env.example`**
 
 Adicionar ao final de `backend/.env.example`:
 
@@ -111,7 +111,7 @@ NFSE_BACKFILL_DAYS=90
 NFSE_GH_ACTIONS_CIDRS=               # opcional, CSV
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/app/config.py backend/.env.example
@@ -126,7 +126,7 @@ git commit -m "feat(nfse): config envs (NFSE_ENABLED, NFSE_KEK, NFSE_WORKER_TOKE
 - Create: `backend/app/services/crypto.py`
 - Test: `backend/tests/test_crypto.py`
 
-- [ ] **Step 1: Escrever testes que falham**
+- [x] **Step 1: Escrever testes que falham**
 
 Criar `backend/tests/__init__.py` se não existir (arquivo vazio).
 
@@ -184,7 +184,7 @@ def test_invalid_kek_length():
         CryptoBox(bad)
 ```
 
-- [ ] **Step 2: Rodar e verificar que falha**
+- [x] **Step 2: Rodar e verificar que falha**
 
 ```powershell
 cd backend
@@ -193,7 +193,7 @@ pytest tests/test_crypto.py -v
 
 Esperado: `ModuleNotFoundError: No module named 'app.services.crypto'`.
 
-- [ ] **Step 3: Implementar `app/services/crypto.py`**
+- [x] **Step 3: Implementar `app/services/crypto.py`**
 
 ```python
 """AES-GCM envelope encryption para credenciais PBH em repouso.
@@ -243,7 +243,7 @@ class CryptoBox:
         return pt.decode("utf-8")
 ```
 
-- [ ] **Step 4: Rodar testes — devem passar**
+- [x] **Step 4: Rodar testes — devem passar**
 
 ```powershell
 pytest tests/test_crypto.py -v
@@ -251,7 +251,7 @@ pytest tests/test_crypto.py -v
 
 Esperado: 5 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/crypto.py backend/tests/test_crypto.py backend/tests/__init__.py
@@ -3151,7 +3151,7 @@ git commit -m "feat(nfse-worker): CLI run.py (fetch credencial -> scrape -> POST
 **Files:**
 - Create: `backend/workers/nfse_scraper/requirements.txt`
 
-- [ ] **Step 1: Criar requirements isolado**
+- [x] **Step 1: Criar requirements isolado**
 
 ```
 # backend/workers/nfse_scraper/requirements.txt
@@ -3159,7 +3159,7 @@ playwright==1.49.0
 httpx==0.27.2
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add backend/workers/nfse_scraper/requirements.txt
@@ -3175,7 +3175,7 @@ git commit -m "chore(nfse-worker): requirements isolados (playwright, httpx)"
 
 > **Nota:** GH Actions detecta workflows na raiz do repositório. Confirme se `Honorario-cf` é submodule do repo principal `Codigo` — se sim, este arquivo vai em `Codigo/.github/workflows/`. Se `Honorario-cf` tem seu próprio repo GitHub, vai em `Honorario-cf/.github/workflows/`. Assumimos o último.
 
-- [ ] **Step 1: Criar workflow**
+- [x] **Step 1: Criar workflow**
 
 Caminho: `Honorario-cf/.github/workflows/nfse-sync.yml`.
 
@@ -3251,7 +3251,7 @@ jobs:
           retention-days: 7
 ```
 
-- [ ] **Step 2: Documentar setup necessário**
+- [x] **Step 2: Documentar setup necessário**
 
 Criar `Honorario-cf/docs/runbooks/nfse-gh-actions-setup.md`:
 
@@ -3274,7 +3274,7 @@ Criar `Honorario-cf/docs/runbooks/nfse-gh-actions-setup.md`:
 - Em falha, artifacts `screenshots-<cnpj>` ficam disponíveis 7 dias.
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/nfse-sync.yml docs/runbooks/nfse-gh-actions-setup.md
@@ -3288,7 +3288,7 @@ git commit -m "feat(nfse-worker): GH Actions workflow nfse-sync (cron diário + 
 **Files:**
 - Create: `Honorario-cf/.github/workflows/nfse-integration.yml`
 
-- [ ] **Step 1: Criar workflow integration**
+- [x] **Step 1: Criar workflow integration**
 
 ```yaml
 name: nfse-integration
@@ -3321,7 +3321,7 @@ jobs:
           pytest tests/integration/ -m integration -v
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add .github/workflows/nfse-integration.yml
@@ -3337,7 +3337,7 @@ git commit -m "ci(nfse): workflow integration noturno contra portal PBH (opt-in 
 **Files:**
 - Create: `frontend/src/app/lib/nfse-api.ts`
 
-- [ ] **Step 1: Criar cliente**
+- [x] **Step 1: Criar cliente**
 
 ```typescript
 // frontend/src/app/lib/nfse-api.ts
@@ -3438,7 +3438,7 @@ export const credencialApi = {
 };
 ```
 
-- [ ] **Step 2: Smoke (tsc)**
+- [x] **Step 2: Smoke (tsc)**
 
 ```powershell
 cd frontend
@@ -3447,7 +3447,7 @@ npx tsc --noEmit
 
 Esperado: sem erros relacionados a `nfse-api.ts`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/app/lib/nfse-api.ts
@@ -3462,7 +3462,7 @@ git commit -m "feat(nfse-ui): cliente API (health, listar, vincular, sync, crede
 - Create: `frontend/src/components/nfse/HealthBanner.tsx`
 - Create: `frontend/src/components/nfse/SyncButton.tsx`
 
-- [ ] **Step 1: HealthBanner**
+- [x] **Step 1: HealthBanner**
 
 ```tsx
 // frontend/src/components/nfse/HealthBanner.tsx
@@ -3500,7 +3500,7 @@ export function HealthBanner() {
 }
 ```
 
-- [ ] **Step 2: SyncButton**
+- [x] **Step 2: SyncButton**
 
 ```tsx
 // frontend/src/components/nfse/SyncButton.tsx
@@ -3539,7 +3539,7 @@ export function SyncButton({ cnpj }: { cnpj: string }) {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/nfse/HealthBanner.tsx frontend/src/components/nfse/SyncButton.tsx
@@ -3554,7 +3554,7 @@ git commit -m "feat(nfse-ui): HealthBanner + SyncButton"
 - Create: `frontend/src/components/nfse/NotasFiscaisLista.tsx`
 - Create: `frontend/src/components/nfse/VincularModal.tsx`
 
-- [ ] **Step 1: NotasFiscaisLista**
+- [x] **Step 1: NotasFiscaisLista**
 
 ```tsx
 // frontend/src/components/nfse/NotasFiscaisLista.tsx
@@ -3686,7 +3686,7 @@ export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string
 }
 ```
 
-- [ ] **Step 2: VincularModal**
+- [x] **Step 2: VincularModal**
 
 ```tsx
 // frontend/src/components/nfse/VincularModal.tsx
@@ -3759,7 +3759,7 @@ export function VincularModal({
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/nfse
@@ -3773,7 +3773,7 @@ git commit -m "feat(nfse-ui): NotasFiscaisLista + VincularModal"
 **Files:**
 - Modify: `frontend/src/app/financeiro/page.tsx`
 
-- [ ] **Step 1: Editar tipos de aba**
+- [x] **Step 1: Editar tipos de aba**
 
 Em `frontend/src/app/financeiro/page.tsx`, localizar:
 
@@ -3848,7 +3848,7 @@ function AbaNotasFiscais() {
 }
 ```
 
-- [ ] **Step 2: Smoke**
+- [x] **Step 2: Smoke**
 
 ```powershell
 cd frontend
@@ -3857,7 +3857,7 @@ npm run dev
 
 Abrir `http://localhost:3000/financeiro` logado como financeiro — aba "Notas Fiscais" aparece.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/app/financeiro/page.tsx
@@ -3872,7 +3872,7 @@ git commit -m "feat(nfse-ui): aba Notas Fiscais em /financeiro"
 - Create: `frontend/src/app/admin/credenciais-pbh/page.tsx`
 - Create: `frontend/src/components/admin/CredencialPbhForm.tsx`
 
-- [ ] **Step 1: Component form**
+- [x] **Step 1: Component form**
 
 ```tsx
 // frontend/src/components/admin/CredencialPbhForm.tsx
@@ -3991,7 +3991,7 @@ export function CredencialPbhPanel() {
 }
 ```
 
-- [ ] **Step 2: Página**
+- [x] **Step 2: Página**
 
 ```tsx
 // frontend/src/app/admin/credenciais-pbh/page.tsx
@@ -4016,7 +4016,7 @@ export default function Page() {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/app/admin/credenciais-pbh frontend/src/components/admin/CredencialPbhForm.tsx
@@ -4033,7 +4033,7 @@ git commit -m "feat(nfse-ui): tela admin /admin/credenciais-pbh"
 - Create: `backend/scripts/rotate_kek.py`
 - Create: `Honorario-cf/docs/runbooks/rotate-kek.md`
 
-- [ ] **Step 1: Script**
+- [x] **Step 1: Script**
 
 ```python
 # backend/scripts/rotate_kek.py
@@ -4104,7 +4104,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 2: Runbook**
+- [x] **Step 2: Runbook**
 
 ```markdown
 <!-- Honorario-cf/docs/runbooks/rotate-kek.md -->
@@ -4143,7 +4143,7 @@ if __name__ == "__main__":
 Se o passo 4 falhar, troque `NFSE_KEK` de volta para o valor antigo e investigue.
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/scripts/rotate_kek.py docs/runbooks/rotate-kek.md
@@ -4157,7 +4157,7 @@ git commit -m "ops(nfse): script rotate_kek + runbook"
 **Files:**
 - Create: `Honorario-cf/docs/qa/nfse-smoke.md`
 
-- [ ] **Step 1: Documento**
+- [x] **Step 1: Documento**
 
 ```markdown
 <!-- Honorario-cf/docs/qa/nfse-smoke.md -->
@@ -4220,7 +4220,7 @@ Executar antes de habilitar `NFSE_ENABLED=true` em produção.
 - [ ] KEK rotation runbook executado em dev sem perda de credenciais.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/qa/nfse-smoke.md
@@ -4234,7 +4234,7 @@ git commit -m "docs(nfse): smoke checklist E2E"
 **Files:**
 - (nenhum — task de execução)
 
-- [ ] **Step 1: Suíte completa**
+- [x] **Step 1: Suíte completa**
 
 ```powershell
 cd backend
@@ -4244,7 +4244,7 @@ pytest tests/ -v --ignore=tests/integration
 
 Esperado: todos os testes unit verdes. Falha = parar e corrigir antes de prosseguir.
 
-- [ ] **Step 2: Type/lint frontend**
+- [x] **Step 2: Type/lint frontend**
 
 ```powershell
 cd frontend
@@ -4254,7 +4254,7 @@ npm run lint
 
 Esperado: sem erros novos.
 
-- [ ] **Step 3: Smoke local backend + frontend**
+- [x] **Step 3: Smoke local backend + frontend**
 
 ```powershell
 # Terminal 1
@@ -4273,9 +4273,9 @@ Em `http://localhost:3000/financeiro` → aba Notas Fiscais aparece (vazia).
 Em `http://localhost:3000/admin/credenciais-pbh` → form aparece p/ admin.
 `http://localhost:8000/api/nfse/health` → `{"enabled": true, "last_job": null, ...}`.
 
-- [ ] **Step 4: Executar smoke E2E** documentado em `docs/qa/nfse-smoke.md`.
+- [x] **Step 4: Executar smoke E2E** documentado em `docs/qa/nfse-smoke.md`.
 
-- [ ] **Step 5: Confirmar gate de verificação**
+- [x] **Step 5: Confirmar gate de verificação**
 
 Antes de mergear/habilitar em prod:
 
@@ -4285,7 +4285,7 @@ Antes de mergear/habilitar em prod:
 - [ ] Audit log conferido.
 - [ ] KEK rotation runbook testado em dev.
 
-- [ ] **Step 6: Commit final (se houver ajustes pós-verificação)**
+- [x] **Step 6: Commit final (se houver ajustes pós-verificação)**
 
 ```bash
 git add -A
