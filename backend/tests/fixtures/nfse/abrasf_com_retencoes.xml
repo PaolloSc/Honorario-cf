@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompNfse xmlns="http://www.abrasf.org.br/nfse.xsd">
+  <Nfse>
+    <InfNfse Id="nfse-4">
+      <Numero>1003</Numero>
+      <DataEmissao>2026-05-15T08:00:00</DataEmissao>
+      <Competencia>2026-05-01</Competencia>
+      <Servico>
+        <Valores>
+          <ValorServicos>10000.00</ValorServicos>
+          <ValorIss>500.00</ValorIss>
+          <IssRetido>1</IssRetido>
+          <ValorPis>65.00</ValorPis>
+          <ValorCofins>300.00</ValorCofins>
+          <ValorIr>150.00</ValorIr>
+          <ValorCsll>100.00</ValorCsll>
+        </Valores>
+        <Discriminacao>Honorarios consultoria</Discriminacao>
+      </Servico>
+      <PrestadorServico>
+        <IdentificacaoPrestador><Cnpj>12345678000199</Cnpj></IdentificacaoPrestador>
+      </PrestadorServico>
+      <TomadorServico>
+        <IdentificacaoTomador>
+          <CpfCnpj><Cnpj>11222333000144</Cnpj></CpfCnpj>
+        </IdentificacaoTomador>
+      </TomadorServico>
+    </InfNfse>
+  </Nfse>
+</CompNfse>

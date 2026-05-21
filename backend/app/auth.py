@@ -132,6 +132,27 @@ def _get_or_create_user(db: Session, azure_id: str, email: str, name: str) -> Us
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> CurrentUser:
+    # ── Dev bypass: aceita X-Dev-User-Email/Role quando settings.dev_mode=True ──
+    if settings.dev_mode:
+        dev_email = request.headers.get("X-Dev-User-Email")
+        if dev_email:
+            dev_role = request.headers.get("X-Dev-User-Role", "advogado")
+            dev_name = request.headers.get("X-Dev-User-Name", dev_email.split("@")[0])
+            if dev_role not in ("admin", "advogado", "financeiro"):
+                raise HTTPException(422, "X-Dev-User-Role inválida")
+            azure_id = f"dev::{dev_email}"
+            user = _get_or_create_user(db, azure_id, dev_email, dev_name)
+            # Atualiza role se diferente (permite trocar via header)
+            if user.role != dev_role:
+                user.role = dev_role
+                db.commit()
+            return CurrentUser(
+                azure_id=user.azure_id,
+                email=user.email,
+                name=user.name,
+                role=user.role,
+            )
+
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(401, "Token de autenticacao ausente")
@@ -159,4 +180,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
 def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if user.role != "admin":
         raise HTTPException(403, "Acesso restrito a administradores")
+    return user
+
+
+def require_financeiro(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    if user.role not in ("financeiro", "admin"):
+        raise HTTPException(403, "Acesso restrito ao setor financeiro")
     return user

@@ -15,6 +15,12 @@ psycopg2-binary>=2.9.0
 aiosqlite>=0.20.0
 pyjwt>=2.12.0
 slowapi>=0.1.9
+# NFS-e BH (financeiro)
+alembic==1.13.2
+defusedxml==0.7.1
+python-dateutil==2.9.0
+tzdata==2024.2
+# Snyk pins (security)
 zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
 urllib3>=2.6.3 # not directly required, pinned by Snyk to avoid a vulnerability
 lxml>=6.1.0 # not directly required, pinned by Snyk to avoid a vulnerability

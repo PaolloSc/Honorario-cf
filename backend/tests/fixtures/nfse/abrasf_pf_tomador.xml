@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompNfse xmlns="http://www.abrasf.org.br/nfse.xsd">
+  <Nfse>
+    <InfNfse Id="nfse-2">
+      <Numero>1001</Numero>
+      <DataEmissao>2026-05-12T09:00:00</DataEmissao>
+      <Competencia>2026-05-01</Competencia>
+      <Servico>
+        <Valores>
+          <ValorServicos>2000.00</ValorServicos>
+        </Valores>
+        <Discriminacao>Consultoria #abc12345 maio</Discriminacao>
+      </Servico>
+      <PrestadorServico>
+        <IdentificacaoPrestador>
+          <Cnpj>12345678000199</Cnpj>
+        </IdentificacaoPrestador>
+      </PrestadorServico>
+      <TomadorServico>
+        <IdentificacaoTomador>
+          <CpfCnpj>
+            <Cpf>12345678901</Cpf>
+          </CpfCnpj>
+        </IdentificacaoTomador>
+        <RazaoSocial>Joao Silva</RazaoSocial>
+      </TomadorServico>
+    </InfNfse>
+  </Nfse>
+</CompNfse>

@@ -44,6 +44,12 @@ export default function UserMenu() {
             >
               Administracao
             </a>
+            <a
+              href="/financeiro"
+              className="block px-4 py-2 text-sm text-foreground hover:bg-gray-50 transition"
+            >
+              Setor Financeiro
+            </a>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition"
