@@ -18,6 +18,9 @@ import {
   simularParticipacao,
   type ContratoPendente,
 } from "@/app/lib/api";
+import { HealthBanner } from "@/components/nfse/HealthBanner";
+import { NotasFiscaisLista } from "@/components/nfse/NotasFiscaisLista";
+import { SyncButton } from "@/components/nfse/SyncButton";
 
 const TIPOS_HONORARIO = [
   { value: "hora", label: "Hora trabalhada (limite 3 anos)" },
@@ -40,7 +43,7 @@ export default function FinanceiroPage() {
   const [items, setItems] = useState<Participacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"pendentes" | "lista" | "nova" | "simular">("pendentes");
+  const [tab, setTab] = useState<"pendentes" | "lista" | "nova" | "simular" | "nfse">("pendentes");
   const [pendentes, setPendentes] = useState<ContratoPendente[]>([]);
 
   const token = session?.accessToken;
@@ -123,7 +126,7 @@ export default function FinanceiroPage() {
       {regras && <RegrasBox regras={regras} />}
 
       <nav className="flex gap-2 mt-6 mb-4 border-b border-border">
-        {(["pendentes", "lista", "nova", "simular"] as const).map((t) => (
+        {(["pendentes", "lista", "nova", "simular", "nfse"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -137,6 +140,7 @@ export default function FinanceiroPage() {
             {t === "lista" && `Participações (${items.length})`}
             {t === "nova" && "Nova Participação"}
             {t === "simular" && "Simulador"}
+            {t === "nfse" && "Notas Fiscais"}
           </button>
         ))}
       </nav>
@@ -155,6 +159,42 @@ export default function FinanceiroPage() {
       )}
       {tab === "nova" && <FormNovaParticipacao onCreated={refresh} setTab={setTab} />}
       {tab === "simular" && <Simulador />}
+      {tab === "nfse" && <AbaNotasFiscais />}
+    </div>
+  );
+}
+
+function AbaNotasFiscais() {
+  const now = new Date();
+  const defaultMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [mes, setMes] = useState(defaultMes);
+  const [cnpj, setCnpj] = useState("");
+
+  return (
+    <div className="space-y-4">
+      <HealthBanner />
+      <div className="flex items-end gap-3">
+        <label className="block text-xs">
+          <span className="block text-muted mb-1">Competência</span>
+          <input
+            type="month"
+            value={mes}
+            onChange={(e) => setMes(e.target.value)}
+            className="px-2 py-1 border border-border rounded"
+          />
+        </label>
+        <label className="block text-xs">
+          <span className="block text-muted mb-1">CNPJ prestador</span>
+          <input
+            value={cnpj}
+            onChange={(e) => setCnpj(e.target.value)}
+            placeholder="só dígitos"
+            className="px-2 py-1 border border-border rounded font-mono"
+          />
+        </label>
+        <SyncButton cnpj={cnpj} />
+      </div>
+      <NotasFiscaisLista competencia_mes={mes} />
     </div>
   );
 }
