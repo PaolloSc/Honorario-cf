@@ -4,8 +4,15 @@ from fastapi.testclient import TestClient
 
 import pytest
 
+from app.auth import CurrentUser, get_current_user
 from app.main import app
 from app.database import Base, ContractDB, engine, SessionLocal, ParticipacaoDB, TaxCodeDB
+
+
+def _fake_financeiro():
+    return CurrentUser(
+        azure_id="test-fin", email="fin@test.local", name="Fin", role="financeiro"
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -30,14 +37,13 @@ def setup_db():
             )
             s.commit()
     yield
+    app.dependency_overrides.pop(get_current_user, None)
     Base.metadata.drop_all(bind=engine)
 
 
 def _client():
-    c = TestClient(app)
-    c.headers["X-Dev-User-Email"] = "fin@test.local"
-    c.headers["X-Dev-User-Role"] = "financeiro"
-    return c
+    app.dependency_overrides[get_current_user] = _fake_financeiro
+    return TestClient(app)
 
 
 def _criar_participacao() -> int:
@@ -113,6 +119,7 @@ def test_tax_code_desativado_422():
         "aliquota_iss": 0, "aliquota_pis": 0, "aliquota_cofins": 0,
         "aliquota_irrf": 0, "aliquota_csll": 0,
     })
+    assert r0.status_code == 201, r0.text
     tid = r0.json()["id"]
     c.post(f"/api/tax-codes/{tid}/desativar")
     r = c.post(f"/api/participacoes/{pid}/pagamentos", json={

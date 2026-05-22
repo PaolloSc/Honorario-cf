@@ -4,14 +4,26 @@ from fastapi.testclient import TestClient
 
 import pytest
 
+from app.auth import CurrentUser, get_current_user
 from app.main import app
 from app.database import Base, engine, SessionLocal, TaxCodeDB
+
+
+def _fake_financeiro():
+    return CurrentUser(
+        azure_id="test-fin", email="financeiro@test.local", name="Fin", role="financeiro"
+    )
+
+
+def _fake_advogado():
+    return CurrentUser(
+        azure_id="test-adv", email="adv@test.local", name="Adv", role="advogado"
+    )
 
 
 @pytest.fixture(autouse=True)
 def setup_db():
     Base.metadata.create_all(bind=engine)
-    # seed PADRAO_1545
     with SessionLocal() as s:
         if not s.query(TaxCodeDB).filter(TaxCodeDB.codigo == "PADRAO_1545").first():
             s.add(
@@ -31,18 +43,17 @@ def setup_db():
             )
             s.commit()
     yield
+    app.dependency_overrides.pop(get_current_user, None)
     Base.metadata.drop_all(bind=engine)
 
 
-def _client_with_dev_user():
-    c = TestClient(app)
-    c.headers["X-Dev-User-Email"] = "financeiro@test.local"
-    c.headers["X-Dev-User-Role"] = "financeiro"
-    return c
+def _client_financeiro():
+    app.dependency_overrides[get_current_user] = _fake_financeiro
+    return TestClient(app)
 
 
 def test_lista_tax_codes_inclui_padrao():
-    c = _client_with_dev_user()
+    c = _client_financeiro()
     r = c.get("/api/tax-codes")
     assert r.status_code == 200
     codigos = {tc["codigo"] for tc in r.json()}
@@ -50,7 +61,7 @@ def test_lista_tax_codes_inclui_padrao():
 
 
 def test_default_retorna_padrao():
-    c = _client_with_dev_user()
+    c = _client_financeiro()
     r = c.get("/api/tax-codes/default")
     assert r.status_code == 200
     assert r.json()["codigo"] == "PADRAO_1545"
@@ -58,7 +69,7 @@ def test_default_retorna_padrao():
 
 
 def test_cria_tax_code():
-    c = _client_with_dev_user()
+    c = _client_financeiro()
     r = c.post("/api/tax-codes", json={
         "codigo": "isento",
         "descricao": "Sem retencao",
@@ -73,7 +84,7 @@ def test_cria_tax_code():
 
 
 def test_cria_duplicado_falha():
-    c = _client_with_dev_user()
+    c = _client_financeiro()
     payload = {
         "codigo": "DUP", "descricao": "x", "aliquota_total": 0,
         "aliquota_iss": 0, "aliquota_pis": 0, "aliquota_cofins": 0,
@@ -85,12 +96,13 @@ def test_cria_duplicado_falha():
 
 
 def test_patch_aliquota():
-    c = _client_with_dev_user()
+    c = _client_financeiro()
     r0 = c.post("/api/tax-codes", json={
         "codigo": "TEMP", "descricao": "tmp", "aliquota_total": 0.10,
         "aliquota_iss": 0.10, "aliquota_pis": 0, "aliquota_cofins": 0,
         "aliquota_irrf": 0, "aliquota_csll": 0,
     })
+    assert r0.status_code == 201, r0.text
     tid = r0.json()["id"]
     r = c.patch(f"/api/tax-codes/{tid}", json={"aliquota_total": 0.05})
     assert r.status_code == 200
@@ -98,7 +110,7 @@ def test_patch_aliquota():
 
 
 def test_desativar_padrao_falha_quando_unico_ativo():
-    c = _client_with_dev_user()
+    c = _client_financeiro()
     with SessionLocal() as s:
         padrao = s.query(TaxCodeDB).filter(TaxCodeDB.codigo == "PADRAO_1545").first()
         pid = padrao.id
@@ -107,8 +119,7 @@ def test_desativar_padrao_falha_quando_unico_ativo():
 
 
 def test_role_advogado_bloqueado():
+    app.dependency_overrides[get_current_user] = _fake_advogado
     c = TestClient(app)
-    c.headers["X-Dev-User-Email"] = "adv@test.local"
-    c.headers["X-Dev-User-Role"] = "advogado"
     r = c.get("/api/tax-codes")
     assert r.status_code == 403
