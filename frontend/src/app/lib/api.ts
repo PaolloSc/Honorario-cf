@@ -306,6 +306,9 @@ export interface Pagamento {
   dentro_limite_temporal: boolean;
   observacoes: string | null;
   status: PagamentoStatus;
+  parcela_num: number;
+  parcela_total: number;
+  nf_referencia: string | null;
   created_at: string;
 }
 
@@ -383,6 +386,9 @@ export async function registrarPagamento(
     valor_contratual?: number;
     observacoes?: string;
     status?: PagamentoStatus;
+    parcela_num?: number;
+    parcela_total?: number;
+    nf_referencia?: string;
   }
 ) {
   return request<Pagamento>(`/api/participacoes/${pid}/pagamentos`, {

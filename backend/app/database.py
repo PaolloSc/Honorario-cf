@@ -201,6 +201,9 @@ class ParticipacaoPagamentoDB(Base):
     observacoes = Column(Text, nullable=True)
     registrado_por = Column(String(256), nullable=True)
     status = Column(String(32), nullable=False, default="aguardando_pagamento", index=True)
+    parcela_num = Column(Integer, nullable=False, default=1)
+    parcela_total = Column(Integer, nullable=False, default=1)
+    nf_referencia = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     participacao = relationship("ParticipacaoDB", back_populates="pagamentos")

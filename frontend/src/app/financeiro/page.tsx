@@ -702,6 +702,8 @@ function DetalheParticipacao({
               <thead>
                 <tr className="text-muted border-b border-border">
                   <th className="text-left py-1">Data</th>
+                  <th className="text-left py-1">NF</th>
+                  <th className="text-left py-1">Parcela</th>
                   <th className="text-right py-1">Líquido contratual</th>
                   <th className="text-right py-1">Participação</th>
                   <th className="text-left py-1">Status</th>
@@ -712,6 +714,12 @@ function DetalheParticipacao({
                 {resumo.pagamentos.map((pg) => (
                   <tr key={pg.id} className={`border-b border-border/40 ${rowBgByStatus(pg.status)}`}>
                     <td className="py-1">{pg.data_recebimento}</td>
+                    <td className="py-1 font-mono text-[10px]">{pg.nf_referencia || "—"}</td>
+                    <td className="py-1">
+                      {pg.parcela_total > 1
+                        ? `${pg.parcela_num}/${pg.parcela_total}`
+                        : "Única"}
+                    </td>
                     <td className="py-1 text-right">{brl(pg.valor_liquido_recebido)}</td>
                     <td className={`py-1 text-right ${pg.valor_participacao === 0 ? "text-red-700" : ""}`}>
                       {brl(pg.valor_participacao)}
@@ -1045,6 +1053,9 @@ function FormPagamento({
     discriminado: true,
     valor_contratual: 0,
     observacoes: "",
+    parcela_num: 1,
+    parcela_total: 1,
+    nf_referencia: "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -1060,6 +1071,9 @@ function FormPagamento({
         discriminado: form.discriminado,
         valor_contratual: form.discriminado ? form.valor_contratual : undefined,
         observacoes: form.observacoes || undefined,
+        parcela_num: form.parcela_num,
+        parcela_total: form.parcela_total,
+        nf_referencia: form.nf_referencia || undefined,
       });
       onDone();
     } catch (e) {
@@ -1121,6 +1135,38 @@ function FormPagamento({
       ) : (
         <p className="text-muted">Sem discriminação → 50% contratual / 50% sucumbencial.</p>
       )}
+
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
+        <label>
+          <span className="block text-muted mb-1">Parcela nº</span>
+          <input
+            type="number"
+            min={1}
+            value={form.parcela_num}
+            onChange={(e) => setForm({ ...form, parcela_num: parseInt(e.target.value) || 1 })}
+            className="input"
+          />
+        </label>
+        <label>
+          <span className="block text-muted mb-1">Total parcelas</span>
+          <input
+            type="number"
+            min={1}
+            value={form.parcela_total}
+            onChange={(e) => setForm({ ...form, parcela_total: parseInt(e.target.value) || 1 })}
+            className="input"
+          />
+        </label>
+        <label>
+          <span className="block text-muted mb-1">NF referência</span>
+          <input
+            value={form.nf_referencia}
+            onChange={(e) => setForm({ ...form, nf_referencia: e.target.value })}
+            placeholder="NF2026.XXX ou emitir"
+            className="input"
+          />
+        </label>
+      </div>
 
       <label>
         <span className="block text-muted mb-1">Observações</span>
