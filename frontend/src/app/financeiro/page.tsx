@@ -23,6 +23,17 @@ import {
 import { HealthBanner } from "@/components/nfse/HealthBanner";
 import { NotasFiscaisLista } from "@/components/nfse/NotasFiscaisLista";
 import { SyncButton } from "@/components/nfse/SyncButton";
+import { AbaImpostos } from "@/components/financeiro/AbaImpostos";
+import {
+  taxCodeApi,
+  TIPOS_COBRANCA,
+  NATUREZAS_PAGAMENTO,
+  TIPOS_DOCUMENTO,
+  LABEL_TIPO_COBRANCA,
+  LABEL_NATUREZA,
+  LABEL_TIPO_DOC,
+  type TaxCode,
+} from "@/app/lib/finance-api";
 
 const TIPOS_HONORARIO = [
   { value: "hora", label: "Hora trabalhada (limite 3 anos)" },
@@ -79,7 +90,7 @@ export default function FinanceiroPage() {
   const [items, setItems] = useState<Participacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"pendentes" | "lista" | "nova" | "simular" | "nfse">("pendentes");
+  const [tab, setTab] = useState<"pendentes" | "lista" | "nova" | "simular" | "nfse" | "impostos">("pendentes");
   const [pendentes, setPendentes] = useState<ContratoPendente[]>([]);
 
   const token = session?.accessToken;
@@ -162,7 +173,7 @@ export default function FinanceiroPage() {
       {regras && <RegrasBox regras={regras} />}
 
       <nav className="flex gap-2 mt-6 mb-4 border-b border-border">
-        {(["pendentes", "lista", "nova", "simular", "nfse"] as const).map((t) => (
+        {(["pendentes", "lista", "nova", "simular", "nfse", "impostos"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -177,6 +188,7 @@ export default function FinanceiroPage() {
             {t === "nova" && "Nova Participação"}
             {t === "simular" && "Simulador"}
             {t === "nfse" && "Notas Fiscais"}
+            {t === "impostos" && "Impostos"}
           </button>
         ))}
       </nav>
@@ -196,6 +208,7 @@ export default function FinanceiroPage() {
       {tab === "nova" && <FormNovaParticipacao onCreated={refresh} setTab={setTab} />}
       {tab === "simular" && <Simulador />}
       {tab === "nfse" && <AbaNotasFiscais />}
+      {tab === "impostos" && <AbaImpostos />}
     </div>
   );
 }
