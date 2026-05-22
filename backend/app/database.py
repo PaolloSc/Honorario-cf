@@ -200,6 +200,7 @@ class ParticipacaoPagamentoDB(Base):
     dentro_limite_temporal = Column(Boolean, nullable=False, default=True)
     observacoes = Column(Text, nullable=True)
     registrado_por = Column(String(256), nullable=True)
+    status = Column(String(32), nullable=False, default="aguardando_pagamento", index=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     participacao = relationship("ParticipacaoDB", back_populates="pagamentos")
