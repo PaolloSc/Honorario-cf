@@ -79,12 +79,20 @@ class ListaParticipacoesResponse(BaseModel):
     total: int
 
 
+PAGAMENTO_STATUS_VALIDOS = ("a_receber", "aguardando_pagamento", "pago")
+
+
 class RegistrarPagamentoRequest(BaseModel):
     data_recebimento: date
     valor_bruto: float
     discriminado: bool = True  # alvará/acordo discrimina contratual x sucumbencial?
     valor_contratual: Optional[float] = None  # se discriminado=True
     observacoes: Optional[str] = None
+    status: str = "aguardando_pagamento"  # a_receber | aguardando_pagamento | pago
+
+
+class AtualizarStatusRequest(BaseModel):
+    status: str  # a_receber | aguardando_pagamento | pago
 
 
 class CalculoSimulacaoRequest(BaseModel):
@@ -115,6 +123,7 @@ class PagamentoResponse(BaseModel):
     valor_participacao: float
     dentro_limite_temporal: bool
     observacoes: Optional[str]
+    status: str
     created_at: str
 
 
@@ -369,6 +378,7 @@ def resumo_participacao(
             valor_participacao=pag.valor_participacao,
             dentro_limite_temporal=pag.dentro_limite_temporal,
             observacoes=pag.observacoes,
+            status=pag.status,
             created_at=pag.created_at.isoformat(),
         )
         for pag in p.pagamentos
@@ -411,6 +421,9 @@ def registrar_pagamento(
         eh_contratual=True,  # já separamos a parcela contratual acima
     )
 
+    if body.status not in PAGAMENTO_STATUS_VALIDOS:
+        raise HTTPException(422, f"status inválido. Aceitos: {PAGAMENTO_STATUS_VALIDOS}")
+
     pag = ParticipacaoPagamentoDB(
         participacao_id=p.id,
         data_recebimento=body.data_recebimento,
@@ -421,6 +434,7 @@ def registrar_pagamento(
         + (f" | {resultado.motivo_zerado}" if resultado.motivo_zerado else "")
         if body.observacoes
         else resultado.motivo_zerado,
+        status=body.status,
         registrado_por=user.email,
         created_at=utcnow(),
     )
@@ -435,6 +449,45 @@ def registrar_pagamento(
         valor_participacao=pag.valor_participacao,
         dentro_limite_temporal=pag.dentro_limite_temporal,
         observacoes=pag.observacoes,
+        status=pag.status,
+        created_at=pag.created_at.isoformat(),
+    )
+
+
+@router.patch("/pagamentos/{pag_id}/status", response_model=PagamentoResponse)
+def atualizar_status_pagamento(
+    pag_id: int,
+    body: AtualizarStatusRequest,
+    user: CurrentUser = Depends(require_financeiro),
+    db: Session = Depends(get_db),
+):
+    """Workflow do pagamento: a_receber -> aguardando_pagamento -> pago.
+
+    Transição livre (estorno possível). Valida apenas valor do enum.
+    """
+    if body.status not in PAGAMENTO_STATUS_VALIDOS:
+        raise HTTPException(422, f"status inválido. Aceitos: {PAGAMENTO_STATUS_VALIDOS}")
+
+    pag = (
+        db.query(ParticipacaoPagamentoDB)
+        .filter(ParticipacaoPagamentoDB.id == pag_id)
+        .first()
+    )
+    if not pag:
+        raise HTTPException(404, "Pagamento não encontrado")
+
+    pag.status = body.status
+    db.commit()
+    db.refresh(pag)
+    return PagamentoResponse(
+        id=pag.id,
+        participacao_id=pag.participacao_id,
+        data_recebimento=pag.data_recebimento.isoformat(),
+        valor_liquido_recebido=pag.valor_liquido_recebido,
+        valor_participacao=pag.valor_participacao,
+        dentro_limite_temporal=pag.dentro_limite_temporal,
+        observacoes=pag.observacoes,
+        status=pag.status,
         created_at=pag.created_at.isoformat(),
     )
 
