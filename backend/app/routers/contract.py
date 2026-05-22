@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from pathlib import Path
 
@@ -57,6 +58,43 @@ def _extract_cpf_cnpj(data: ContratoRequest) -> str | None:
         return None
     first = data.contratantes[0]
     return getattr(first, "cpf", None) or getattr(first, "cnpj", None)
+
+
+_EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+\.\w+")
+_PCT_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
+
+
+def _parse_percentual(text: str | None) -> float:
+    """Extrai primeiro numero seguido de % do texto livre. '10% de 5000' -> 10.0."""
+    if not text:
+        return 0.0
+    m = _PCT_RE.search(text)
+    if not m:
+        return 0.0
+    try:
+        return float(m.group(1).replace(",", "."))
+    except ValueError:
+        return 0.0
+
+
+def _parse_email(text: str | None) -> str | None:
+    if not text:
+        return None
+    m = _EMAIL_RE.search(text)
+    return m.group(0) if m else None
+
+
+def _map_natureza_wizard(natureza_text: str | None) -> tuple[bool, bool]:
+    """Retorna (eh_captacao, eh_performance) com base no texto livre da wizard."""
+    if not natureza_text:
+        return False, False
+    s = natureza_text.lower()
+    eh_cap = "capta" in s
+    eh_perf = "perform" in s
+    if not eh_cap and not eh_perf:
+        # Default: assume captacao se texto livre nao bate
+        eh_cap = True
+    return eh_cap, eh_perf
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/contract", tags=["Contract"])
@@ -133,40 +171,71 @@ def generate_contract(
         try:
             tipo = _infer_tipo_honorario(data)
             participacao_data = data.participacao
-            beneficiario_email = (
-                participacao_data.para_quem
-                if participacao_data and participacao_data.tem_participacao and participacao_data.para_quem
-                else user.email
+
+            # Parse valores da wizard
+            pct = _parse_percentual(
+                participacao_data.percentual_ou_valor if participacao_data else None
             )
+            eh_cap, eh_perf = _map_natureza_wizard(
+                participacao_data.natureza if participacao_data else None
+            )
+            pct_captacao = pct if eh_cap else 0.0
+            pct_performance = pct if eh_perf else 0.0
+
+            # Beneficiário: prioriza email extraído do contato_financeiro_cliente,
+            # fallback user.email. Nome: para_quem da wizard, fallback user.name.
+            email_wizard = _parse_email(
+                participacao_data.contato_financeiro_cliente if participacao_data else None
+            )
+            beneficiario_email = email_wizard or user.email
             beneficiario_nome = (
-                participacao_data.responsavel_captacao
-                if participacao_data and participacao_data.responsavel_captacao
+                participacao_data.para_quem
+                if participacao_data and participacao_data.para_quem
                 else user.name
             )
-            natureza_val = (
-                participacao_data.natureza
-                if participacao_data and participacao_data.natureza in ("contratual", "societario")
-                else "contratual"
+
+            # Backend natureza = contratual/societario (campo legal, nao wizard)
+            natureza_val = "contratual"
+
+            # Motivos: usa texto da wizard quando aplicável
+            motivo_cap = (
+                participacao_data.responsavel_captacao
+                if participacao_data and pct_captacao > 0 and participacao_data.responsavel_captacao
+                else None
             )
+            motivo_perf = (
+                participacao_data.responsavel_gestao
+                if participacao_data and pct_performance > 0 and participacao_data.responsavel_gestao
+                else None
+            )
+
+            obs_extra = ""
+            if participacao_data:
+                obs_extra = (
+                    f"Rascunho automatico do wizard. "
+                    f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
+                    f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
+                    f"Valor wizard: {participacao_data.percentual_ou_valor or '-'} · "
+                    f"Natureza wizard: {participacao_data.natureza or '-'}"
+                )
+            else:
+                obs_extra = "Rascunho automatico do wizard."
+
             rascunho = ParticipacaoDB(
                 contract_id=contract_id,
-                beneficiario_email=beneficiario_email or user.email,
+                beneficiario_email=beneficiario_email,
                 beneficiario_nome=beneficiario_nome or "",
                 tipo_honorario=tipo,
-                percentual_captacao=0.0,
-                percentual_performance=0.0,
+                percentual_captacao=pct_captacao,
+                percentual_performance=pct_performance,
+                motivo_captacao=motivo_cap,
+                motivo_performance=motivo_perf,
                 natureza=natureza_val,
                 cliente_cpf_cnpj=_extract_cpf_cnpj(data),
                 data_inicio=utcnow().date(),
                 vinculo_ativo=True,
                 aprovada=False,
-                observacoes=(
-                    f"Rascunho gerado automaticamente pelo wizard. "
-                    f"Captação responsável: {participacao_data.responsavel_captacao or '—'} · "
-                    f"Gestão: {participacao_data.responsavel_gestao or '—'}"
-                    if participacao_data
-                    else "Rascunho gerado automaticamente pelo wizard."
-                ),
+                observacoes=obs_extra,
                 created_by=user.email,
                 created_at=utcnow(),
             )
