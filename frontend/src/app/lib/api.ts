@@ -417,6 +417,14 @@ export interface ContratoPendente {
   participacao_id: number | null;
   tipo_honorario_inferido: string | null;
   cliente_cpf_cnpj: string | null;
+  percentual_captacao_rascunho?: number;
+  percentual_performance_rascunho?: number;
+  motivo_captacao_rascunho?: string | null;
+  motivo_performance_rascunho?: string | null;
+  beneficiario_email_rascunho?: string | null;
+  beneficiario_nome_rascunho?: string | null;
+  natureza_rascunho?: string | null;
+  observacoes_rascunho?: string | null;
 }
 
 export async function listContratosPendentes(incluir_rascunhos = true) {

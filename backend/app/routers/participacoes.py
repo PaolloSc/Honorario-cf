@@ -222,6 +222,14 @@ class ContratoPendenteResponse(BaseModel):
     participacao_id: Optional[int] = None
     tipo_honorario_inferido: Optional[str] = None
     cliente_cpf_cnpj: Optional[str] = None
+    percentual_captacao_rascunho: float = 0.0
+    percentual_performance_rascunho: float = 0.0
+    motivo_captacao_rascunho: Optional[str] = None
+    motivo_performance_rascunho: Optional[str] = None
+    beneficiario_email_rascunho: Optional[str] = None
+    beneficiario_nome_rascunho: Optional[str] = None
+    natureza_rascunho: Optional[str] = None
+    observacoes_rascunho: Optional[str] = None
 
 
 class ListaContratosPendentesResponse(BaseModel):
@@ -559,6 +567,14 @@ def listar_contratos_pendentes(
                     participacao_id=rascunho.id,
                     tipo_honorario_inferido=rascunho.tipo_honorario,
                     cliente_cpf_cnpj=rascunho.cliente_cpf_cnpj,
+                    percentual_captacao_rascunho=rascunho.percentual_captacao,
+                    percentual_performance_rascunho=rascunho.percentual_performance,
+                    motivo_captacao_rascunho=rascunho.motivo_captacao,
+                    motivo_performance_rascunho=rascunho.motivo_performance,
+                    beneficiario_email_rascunho=rascunho.beneficiario_email,
+                    beneficiario_nome_rascunho=rascunho.beneficiario_nome,
+                    natureza_rascunho=rascunho.natureza,
+                    observacoes_rascunho=rascunho.observacoes,
                 )
             )
     return ListaContratosPendentesResponse(contratos=out, total=len(out))
