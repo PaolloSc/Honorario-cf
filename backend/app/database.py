@@ -14,6 +14,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -204,9 +205,34 @@ class ParticipacaoPagamentoDB(Base):
     parcela_num = Column(Integer, nullable=False, default=1)
     parcela_total = Column(Integer, nullable=False, default=1)
     nf_referencia = Column(String(64), nullable=True, index=True)
+    tax_code_id = Column(Integer, ForeignKey("tax_codes.id"), nullable=True, index=True)
+    valor_bruto = Column(Float, nullable=True)
+    imposto_total = Column(Float, nullable=False, default=0)
+    tipo_cobranca = Column(String(32), nullable=True)
+    natureza_pagamento = Column(String(32), nullable=True, index=True)
+    tipo_documento = Column(String(32), nullable=False, default="nf")
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     participacao = relationship("ParticipacaoDB", back_populates="pagamentos")
+
+
+class TaxCodeDB(Base):
+    """Código fiscal (master data SAP-like). Alíquotas agregadas para retenções."""
+
+    __tablename__ = "tax_codes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(32), unique=True, nullable=False, index=True)
+    descricao = Column(String(256), nullable=False)
+    aliquota_total = Column(Numeric(5, 4), nullable=False)
+    aliquota_iss = Column(Numeric(5, 4), nullable=False, default=0)
+    aliquota_pis = Column(Numeric(5, 4), nullable=False, default=0)
+    aliquota_cofins = Column(Numeric(5, 4), nullable=False, default=0)
+    aliquota_irrf = Column(Numeric(5, 4), nullable=False, default=0)
+    aliquota_csll = Column(Numeric(5, 4), nullable=False, default=0)
+    ativo = Column(Boolean, nullable=False, default=True)
+    criado_em = Column(DateTime, nullable=False, default=utcnow)
+    criado_por = Column(String(256), nullable=False)
 
 
 def init_db():
