@@ -89,6 +89,9 @@ class RegistrarPagamentoRequest(BaseModel):
     valor_contratual: Optional[float] = None  # se discriminado=True
     observacoes: Optional[str] = None
     status: str = "aguardando_pagamento"  # a_receber | aguardando_pagamento | pago
+    parcela_num: int = 1
+    parcela_total: int = 1
+    nf_referencia: Optional[str] = None
 
 
 class AtualizarStatusRequest(BaseModel):
@@ -124,6 +127,9 @@ class PagamentoResponse(BaseModel):
     dentro_limite_temporal: bool
     observacoes: Optional[str]
     status: str
+    parcela_num: int
+    parcela_total: int
+    nf_referencia: Optional[str]
     created_at: str
 
 
@@ -387,6 +393,9 @@ def resumo_participacao(
             dentro_limite_temporal=pag.dentro_limite_temporal,
             observacoes=pag.observacoes,
             status=pag.status,
+            parcela_num=pag.parcela_num,
+            parcela_total=pag.parcela_total,
+            nf_referencia=pag.nf_referencia,
             created_at=pag.created_at.isoformat(),
         )
         for pag in p.pagamentos
@@ -431,6 +440,8 @@ def registrar_pagamento(
 
     if body.status not in PAGAMENTO_STATUS_VALIDOS:
         raise HTTPException(422, f"status inválido. Aceitos: {PAGAMENTO_STATUS_VALIDOS}")
+    if body.parcela_num < 1 or body.parcela_total < 1 or body.parcela_num > body.parcela_total:
+        raise HTTPException(422, "parcela_num/parcela_total invalidos (1<=num<=total)")
 
     pag = ParticipacaoPagamentoDB(
         participacao_id=p.id,
@@ -443,6 +454,9 @@ def registrar_pagamento(
         if body.observacoes
         else resultado.motivo_zerado,
         status=body.status,
+        parcela_num=body.parcela_num,
+        parcela_total=body.parcela_total,
+        nf_referencia=body.nf_referencia,
         registrado_por=user.email,
         created_at=utcnow(),
     )
@@ -458,6 +472,9 @@ def registrar_pagamento(
         dentro_limite_temporal=pag.dentro_limite_temporal,
         observacoes=pag.observacoes,
         status=pag.status,
+        parcela_num=pag.parcela_num,
+        parcela_total=pag.parcela_total,
+        nf_referencia=pag.nf_referencia,
         created_at=pag.created_at.isoformat(),
     )
 
@@ -494,6 +511,9 @@ def atualizar_status_pagamento(
         valor_liquido_recebido=pag.valor_liquido_recebido,
         valor_participacao=pag.valor_participacao,
         dentro_limite_temporal=pag.dentro_limite_temporal,
+        parcela_num=pag.parcela_num,
+        parcela_total=pag.parcela_total,
+        nf_referencia=pag.nf_referencia,
         observacoes=pag.observacoes,
         status=pag.status,
         created_at=pag.created_at.isoformat(),
