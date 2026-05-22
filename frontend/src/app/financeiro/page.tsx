@@ -7,6 +7,7 @@ import {
   RegrasParticipacao,
   ResumoParticipacao,
   aprovarParticipacao,
+  atualizarStatusPagamento,
   createParticipacao,
   encerrarVinculo,
   getAuthHeaders,
@@ -17,6 +18,7 @@ import {
   registrarPagamento,
   simularParticipacao,
   type ContratoPendente,
+  type PagamentoStatus,
 } from "@/app/lib/api";
 import { HealthBanner } from "@/components/nfse/HealthBanner";
 import { NotasFiscaisLista } from "@/components/nfse/NotasFiscaisLista";
@@ -33,6 +35,40 @@ const TIPOS_HONORARIO = [
 
 function brl(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+const STATUS_LABELS: Record<PagamentoStatus, string> = {
+  a_receber: "A receber",
+  aguardando_pagamento: "Aguardando pagamento",
+  pago: "Pago",
+};
+
+function rowBgByStatus(s: PagamentoStatus): string {
+  // Cores da planilha: A receber=amarelo, Aguardando=laranja, Pago=azul
+  if (s === "a_receber") return "bg-yellow-50";
+  if (s === "aguardando_pagamento") return "bg-orange-50";
+  if (s === "pago") return "bg-blue-50";
+  return "";
+}
+
+function StatusSelect({
+  value,
+  onChange,
+}: {
+  value: PagamentoStatus;
+  onChange: (next: PagamentoStatus) => void | Promise<void>;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as PagamentoStatus)}
+      className="text-xs border border-border rounded px-1 py-0.5 bg-white"
+    >
+      <option value="a_receber">{STATUS_LABELS.a_receber}</option>
+      <option value="aguardando_pagamento">{STATUS_LABELS.aguardando_pagamento}</option>
+      <option value="pago">{STATUS_LABELS.pago}</option>
+    </select>
+  );
 }
 
 export default function FinanceiroPage() {
@@ -668,16 +704,30 @@ function DetalheParticipacao({
                   <th className="text-left py-1">Data</th>
                   <th className="text-right py-1">Líquido contratual</th>
                   <th className="text-right py-1">Participação</th>
+                  <th className="text-left py-1">Status</th>
                   <th className="text-left py-1">Obs.</th>
                 </tr>
               </thead>
               <tbody>
                 {resumo.pagamentos.map((pg) => (
-                  <tr key={pg.id} className="border-b border-border/40">
+                  <tr key={pg.id} className={`border-b border-border/40 ${rowBgByStatus(pg.status)}`}>
                     <td className="py-1">{pg.data_recebimento}</td>
                     <td className="py-1 text-right">{brl(pg.valor_liquido_recebido)}</td>
                     <td className={`py-1 text-right ${pg.valor_participacao === 0 ? "text-red-700" : ""}`}>
                       {brl(pg.valor_participacao)}
+                    </td>
+                    <td className="py-1">
+                      <StatusSelect
+                        value={pg.status}
+                        onChange={async (next) => {
+                          try {
+                            await atualizarStatusPagamento(pg.id, next);
+                            reload();
+                          } catch (e) {
+                            alert(e instanceof Error ? e.message : "Erro ao atualizar status");
+                          }
+                        }}
+                      />
                     </td>
                     <td className="py-1 text-muted">{pg.observacoes || ""}</td>
                   </tr>
