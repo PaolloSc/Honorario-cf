@@ -207,10 +207,10 @@ class ParticipacaoPagamentoDB(Base):
     nf_referencia = Column(String(64), nullable=True, index=True)
     tax_code_id = Column(Integer, ForeignKey("tax_codes.id"), nullable=True, index=True)
     valor_bruto = Column(Float, nullable=True)
-    imposto_total = Column(Float, nullable=False, default=0)
+    imposto_total = Column(Float, nullable=False, default=0, server_default="0")
     tipo_cobranca = Column(String(32), nullable=True)
     natureza_pagamento = Column(String(32), nullable=True, index=True)
-    tipo_documento = Column(String(32), nullable=False, default="nf")
+    tipo_documento = Column(String(32), nullable=False, default="nf", server_default="nf")
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
     participacao = relationship("ParticipacaoDB", back_populates="pagamentos")
