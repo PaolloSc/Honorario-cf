@@ -711,50 +711,64 @@ function DetalheParticipacao({
           )}
 
           {resumo.pagamentos.length > 0 && (
-            <table className="w-full text-xs mt-2">
-              <thead>
-                <tr className="text-muted border-b border-border">
-                  <th className="text-left py-1">Data</th>
-                  <th className="text-left py-1">NF</th>
-                  <th className="text-left py-1">Parcela</th>
-                  <th className="text-right py-1">Líquido contratual</th>
-                  <th className="text-right py-1">Participação</th>
-                  <th className="text-left py-1">Status</th>
-                  <th className="text-left py-1">Obs.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resumo.pagamentos.map((pg) => (
-                  <tr key={pg.id} className={`border-b border-border/40 ${rowBgByStatus(pg.status)}`}>
-                    <td className="py-1">{pg.data_recebimento}</td>
-                    <td className="py-1 font-mono text-[10px]">{pg.nf_referencia || "—"}</td>
-                    <td className="py-1">
-                      {pg.parcela_total > 1
-                        ? `${pg.parcela_num}/${pg.parcela_total}`
-                        : "Única"}
-                    </td>
-                    <td className="py-1 text-right">{brl(pg.valor_liquido_recebido)}</td>
-                    <td className={`py-1 text-right ${pg.valor_participacao === 0 ? "text-red-700" : ""}`}>
-                      {brl(pg.valor_participacao)}
-                    </td>
-                    <td className="py-1">
-                      <StatusSelect
-                        value={pg.status}
-                        onChange={async (next) => {
-                          try {
-                            await atualizarStatusPagamento(pg.id, next);
-                            reload();
-                          } catch (e) {
-                            alert(e instanceof Error ? e.message : "Erro ao atualizar status");
-                          }
-                        }}
-                      />
-                    </td>
-                    <td className="py-1 text-muted">{pg.observacoes || ""}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs mt-2 min-w-[900px]">
+                <thead>
+                  <tr className="text-muted border-b border-border">
+                    <th className="text-left py-1">Data</th>
+                    <th className="text-left py-1">NF</th>
+                    <th className="text-left py-1">Parcela</th>
+                    <th className="text-left py-1">Doc</th>
+                    <th className="text-left py-1">Cobr</th>
+                    <th className="text-left py-1">Natureza</th>
+                    <th className="text-right py-1">Bruto</th>
+                    <th className="text-right py-1">Imposto</th>
+                    <th className="text-right py-1">Líquido</th>
+                    <th className="text-right py-1">Participação</th>
+                    <th className="text-left py-1">Status</th>
+                    <th className="text-left py-1">Obs.</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {resumo.pagamentos.map((pg) => (
+                    <tr key={pg.id} className={`border-b border-border/40 ${rowBgByStatus(pg.status)}`}>
+                      <td className="py-1">{pg.data_recebimento}</td>
+                      <td className="py-1 font-mono text-[10px]">{pg.nf_referencia || "—"}</td>
+                      <td className="py-1">
+                        {pg.parcela_total > 1
+                          ? `${pg.parcela_num}/${pg.parcela_total}`
+                          : "Única"}
+                      </td>
+                      <td className="py-1 text-[10px]">{pg.tipo_documento}</td>
+                      <td className="py-1 text-[10px]">{pg.tipo_cobranca || "—"}</td>
+                      <td className="py-1 text-[10px]">{pg.natureza_pagamento || "—"}</td>
+                      <td className="py-1 text-right">
+                        {pg.valor_bruto != null ? brl(pg.valor_bruto) : "—"}
+                      </td>
+                      <td className="py-1 text-right">{brl(pg.imposto_total)}</td>
+                      <td className="py-1 text-right">{brl(pg.valor_liquido_recebido)}</td>
+                      <td className={`py-1 text-right ${pg.valor_participacao === 0 ? "text-red-700" : ""}`}>
+                        {brl(pg.valor_participacao)}
+                      </td>
+                      <td className="py-1">
+                        <StatusSelect
+                          value={pg.status}
+                          onChange={async (next) => {
+                            try {
+                              await atualizarStatusPagamento(pg.id, next);
+                              reload();
+                            } catch (e) {
+                              alert(e instanceof Error ? e.message : "Erro ao atualizar status");
+                            }
+                          }}
+                        />
+                      </td>
+                      <td className="py-1 text-muted text-[10px]">{pg.observacoes || ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -1060,6 +1074,7 @@ function FormPagamento({
   participacaoId: number;
   onDone: () => void;
 }) {
+  const [taxCodes, setTaxCodes] = useState<TaxCode[]>([]);
   const [form, setForm] = useState({
     data_recebimento: new Date().toISOString().slice(0, 10),
     valor_bruto: 0,
@@ -1069,9 +1084,30 @@ function FormPagamento({
     parcela_num: 1,
     parcela_total: 1,
     nf_referencia: "",
+    tax_code_id: 0,
+    tipo_cobranca: "",
+    natureza_pagamento: "",
+    tipo_documento: "nf",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
+  useEffect(() => {
+    Promise.all([taxCodeApi.listar(false), taxCodeApi.getDefault()])
+      .then(([list, def]) => {
+        setTaxCodes(list);
+        setForm((f) => ({ ...f, tax_code_id: def.id }));
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  const selectedTc = taxCodes.find((tc) => tc.id === form.tax_code_id);
+  const aliquota = selectedTc?.aliquota_total ?? 0;
+  const previewImposto = +(form.valor_bruto * aliquota).toFixed(2);
+  const previewLiquido = +(form.valor_bruto - previewImposto).toFixed(2);
+  const previewContratual = form.discriminado
+    ? form.valor_contratual || previewLiquido
+    : +(previewLiquido * 0.5).toFixed(2);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1087,6 +1123,10 @@ function FormPagamento({
         parcela_num: form.parcela_num,
         parcela_total: form.parcela_total,
         nf_referencia: form.nf_referencia || undefined,
+        tax_code_id: form.tax_code_id || undefined,
+        tipo_cobranca: form.tipo_cobranca || undefined,
+        natureza_pagamento: form.natureza_pagamento || undefined,
+        tipo_documento: form.tipo_documento,
       });
       onDone();
     } catch (e) {
@@ -1113,7 +1153,7 @@ function FormPagamento({
           />
         </label>
         <label>
-          <span className="block text-muted mb-1">Valor bruto recebido (R$)</span>
+          <span className="block text-muted mb-1">Valor bruto NF (R$)</span>
           <input
             type="number"
             step={0.01}
@@ -1122,6 +1162,64 @@ function FormPagamento({
             onChange={(e) => setForm({ ...form, valor_bruto: parseFloat(e.target.value) || 0 })}
             className="input"
           />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label>
+          <span className="block text-muted mb-1">Código fiscal</span>
+          <select
+            value={form.tax_code_id}
+            onChange={(e) => setForm({ ...form, tax_code_id: parseInt(e.target.value) || 0 })}
+            className="input"
+          >
+            {taxCodes.map((tc) => (
+              <option key={tc.id} value={tc.id}>
+                {tc.codigo} ({(tc.aliquota_total * 100).toFixed(2)}%)
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="block text-muted mb-1">Tipo documento</span>
+          <select
+            value={form.tipo_documento}
+            onChange={(e) => setForm({ ...form, tipo_documento: e.target.value })}
+            className="input"
+          >
+            {TIPOS_DOCUMENTO.map((t) => (
+              <option key={t} value={t}>{LABEL_TIPO_DOC[t]}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label>
+          <span className="block text-muted mb-1">Tipo cobrança</span>
+          <select
+            value={form.tipo_cobranca}
+            onChange={(e) => setForm({ ...form, tipo_cobranca: e.target.value })}
+            className="input"
+          >
+            <option value="">(herdar da participação)</option>
+            {TIPOS_COBRANCA.map((t) => (
+              <option key={t} value={t}>{LABEL_TIPO_COBRANCA[t]}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="block text-muted mb-1">Natureza</span>
+          <select
+            value={form.natureza_pagamento}
+            onChange={(e) => setForm({ ...form, natureza_pagamento: e.target.value })}
+            className="input"
+          >
+            <option value="">(usar da participação)</option>
+            {NATUREZAS_PAGAMENTO.map((n) => (
+              <option key={n} value={n}>{LABEL_NATUREZA[n]}</option>
+            ))}
+          </select>
         </label>
       </div>
 
@@ -1134,19 +1232,18 @@ function FormPagamento({
         <span>Alvará/acordo discrimina parcela contratual?</span>
       </label>
 
-      {form.discriminado ? (
+      {form.discriminado && (
         <label>
-          <span className="block text-muted mb-1">Parcela contratual (R$)</span>
+          <span className="block text-muted mb-1">Parcela contratual informada (R$) — opcional</span>
           <input
             type="number"
             step={0.01}
             value={form.valor_contratual}
             onChange={(e) => setForm({ ...form, valor_contratual: parseFloat(e.target.value) || 0 })}
+            placeholder="Deixe 0 para usar líquido inteiro"
             className="input"
           />
         </label>
-      ) : (
-        <p className="text-muted">Sem discriminação → 50% contratual / 50% sucumbencial.</p>
       )}
 
       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
@@ -1181,7 +1278,7 @@ function FormPagamento({
         </label>
       </div>
 
-      <label>
+      <label className="block">
         <span className="block text-muted mb-1">Observações</span>
         <input
           value={form.observacoes}
@@ -1190,13 +1287,20 @@ function FormPagamento({
         />
       </label>
 
+      <div className="bg-gray-50 border border-border/40 rounded p-2 grid grid-cols-2 gap-2 text-[11px]">
+        <span>Bruto: <strong>{brl(form.valor_bruto)}</strong></span>
+        <span>Imposto ({(aliquota * 100).toFixed(2)}%): <strong>{brl(previewImposto)}</strong></span>
+        <span>Líquido: <strong>{brl(previewLiquido)}</strong></span>
+        <span>Contratual: <strong>{brl(previewContratual)}</strong></span>
+      </div>
+
       {err && (
         <div className="rounded border border-red-200 bg-red-50 p-2 text-red-800">{err}</div>
       )}
 
       <button
         type="submit"
-        disabled={saving}
+        disabled={saving || !form.tax_code_id || !form.valor_bruto}
         className="px-3 py-1.5 bg-primary-dark text-white rounded font-medium hover:bg-primary-dark/90 disabled:opacity-50"
       >
         {saving ? "Calculando..." : "Registrar e calcular participação"}
