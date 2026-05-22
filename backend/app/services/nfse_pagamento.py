@@ -59,9 +59,10 @@ def gerar_pagamento_para_nfse(db: Session, nfse_id: int) -> PagamentoResult:
             INSERT INTO participacao_pagamentos (
                 participacao_id, data_recebimento, valor_liquido_recebido,
                 valor_participacao, dentro_limite_temporal, observacoes,
-                registrado_por, status, created_at
+                registrado_por, status, parcela_num, parcela_total, created_at
             ) VALUES (
-                :pid, :dt, :vl, :vp, 1, 'NFS-e auto', 'sistema', 'aguardando_pagamento', :now
+                :pid, :dt, :vl, :vp, 1, 'NFS-e auto', 'sistema',
+                'aguardando_pagamento', 1, 1, :now
             )
         """),
         {
