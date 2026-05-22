@@ -16,3 +16,4 @@ backend/generated_contracts/
 *.db
 
 *.log
+backend/_tmp_planilha.xlsx
