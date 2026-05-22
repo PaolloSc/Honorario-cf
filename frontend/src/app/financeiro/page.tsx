@@ -364,13 +364,13 @@ function FormAprovarRascunho({
   const [form, setForm] = useState({
     tipo_honorario: pendente.tipo_honorario_inferido || "mensalidade",
     cliente_cpf_cnpj: pendente.cliente_cpf_cnpj || "",
-    percentual_captacao: 0,
-    percentual_performance: 0,
-    motivo_captacao: "",
-    motivo_performance: "",
+    percentual_captacao: pendente.percentual_captacao_rascunho ?? 0,
+    percentual_performance: pendente.percentual_performance_rascunho ?? 0,
+    motivo_captacao: pendente.motivo_captacao_rascunho || "",
+    motivo_performance: pendente.motivo_performance_rascunho || "",
     aprovado_por: "",
-    natureza: "contratual",
-    observacoes: "",
+    natureza: pendente.natureza_rascunho || "contratual",
+    observacoes: pendente.observacoes_rascunho || "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
