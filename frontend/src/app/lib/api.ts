@@ -295,6 +295,8 @@ export interface Participacao {
   created_at: string;
 }
 
+export type PagamentoStatus = "a_receber" | "aguardando_pagamento" | "pago";
+
 export interface Pagamento {
   id: number;
   participacao_id: number;
@@ -303,6 +305,7 @@ export interface Pagamento {
   valor_participacao: number;
   dentro_limite_temporal: boolean;
   observacoes: string | null;
+  status: PagamentoStatus;
   created_at: string;
 }
 
@@ -379,11 +382,19 @@ export async function registrarPagamento(
     discriminado: boolean;
     valor_contratual?: number;
     observacoes?: string;
+    status?: PagamentoStatus;
   }
 ) {
   return request<Pagamento>(`/api/participacoes/${pid}/pagamentos`, {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export async function atualizarStatusPagamento(pag_id: number, status: PagamentoStatus) {
+  return request<Pagamento>(`/api/participacoes/pagamentos/${pag_id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
   });
 }
 
