@@ -301,6 +301,8 @@ export interface Pagamento {
   id: number;
   participacao_id: number;
   data_recebimento: string;
+  valor_bruto: number | null;
+  imposto_total: number;
   valor_liquido_recebido: number;
   valor_participacao: number;
   dentro_limite_temporal: boolean;
@@ -309,6 +311,12 @@ export interface Pagamento {
   parcela_num: number;
   parcela_total: number;
   nf_referencia: string | null;
+  tax_code_id: number | null;
+  tax_code_codigo: string | null;
+  aliquota_aplicada: number | null;
+  tipo_cobranca: string | null;
+  natureza_pagamento: string | null;
+  tipo_documento: string;
   created_at: string;
 }
 
@@ -389,6 +397,10 @@ export async function registrarPagamento(
     parcela_num?: number;
     parcela_total?: number;
     nf_referencia?: string;
+    tax_code_id?: number;
+    tipo_cobranca?: string;
+    natureza_pagamento?: string;
+    tipo_documento?: string;
   }
 ) {
   return request<Pagamento>(`/api/participacoes/${pid}/pagamentos`, {
