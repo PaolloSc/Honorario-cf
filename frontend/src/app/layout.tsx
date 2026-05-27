@@ -55,7 +55,7 @@ export default function RootLayout({
           <footer className="bg-primary-dark text-brand-verde-claro/90 mt-12">
             <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2">
-                <Logo variant="light" className="h-5 w-auto" showSubtitle={false} />
+                <Logo variant="light" format="35" className="h-6 w-auto" showSubtitle={false} />
                 <span className="font-display tracking-wide">
                   &copy; {new Date().getFullYear()}
                 </span>

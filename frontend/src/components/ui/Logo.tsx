@@ -1,17 +1,19 @@
+type LogoFormat = "horizontal" | "vertical" | "35";
+
 interface LogoProps {
   variant?: "dark" | "light";
+  format?: LogoFormat;
   className?: string;
   showSubtitle?: boolean;
 }
 
 export default function Logo({
   variant = "dark",
+  format = "horizontal",
   className = "",
 }: LogoProps) {
-  const src =
-    variant === "dark"
-      ? "/brand/logo-horizontal-verde.png"
-      : "/brand/logo-horizontal-bege.png";
+  const color = variant === "dark" ? "verde" : "bege";
+  const src = `/brand/logo-${format}-${color}.png`;
   return (
     <img
       src={src}
