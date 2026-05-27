@@ -15,9 +15,16 @@ from app.database import (
     ContractDB,
     ParticipacaoDB,
     ParticipacaoPagamentoDB,
+    TaxCodeDB,
     get_db,
     utcnow,
 )
+from app.services.financeiro_enums import (
+    NATUREZAS_PAGAMENTO,
+    TIPOS_COBRANCA,
+    TIPOS_DOCUMENTO,
+)
+from app.services.pagamento_calculator import calcular_componentes_pagamento
 from app.services.participation_calculator import (
     DATA_VIGENCIA,
     LIMITES_TEMPORAIS_ANOS,
@@ -85,13 +92,17 @@ PAGAMENTO_STATUS_VALIDOS = ("a_receber", "aguardando_pagamento", "pago")
 class RegistrarPagamentoRequest(BaseModel):
     data_recebimento: date
     valor_bruto: float
-    discriminado: bool = True  # alvará/acordo discrimina contratual x sucumbencial?
-    valor_contratual: Optional[float] = None  # se discriminado=True
+    discriminado: bool = True
+    valor_contratual: Optional[float] = None
     observacoes: Optional[str] = None
-    status: str = "aguardando_pagamento"  # a_receber | aguardando_pagamento | pago
+    status: str = "aguardando_pagamento"
     parcela_num: int = 1
     parcela_total: int = 1
     nf_referencia: Optional[str] = None
+    tax_code_id: Optional[int] = None
+    tipo_cobranca: Optional[str] = None
+    natureza_pagamento: Optional[str] = None
+    tipo_documento: str = "nf"
 
 
 class AtualizarStatusRequest(BaseModel):
@@ -122,6 +133,8 @@ class PagamentoResponse(BaseModel):
     id: int
     participacao_id: int
     data_recebimento: str
+    valor_bruto: Optional[float]
+    imposto_total: float
     valor_liquido_recebido: float
     valor_participacao: float
     dentro_limite_temporal: bool
@@ -130,7 +143,40 @@ class PagamentoResponse(BaseModel):
     parcela_num: int
     parcela_total: int
     nf_referencia: Optional[str]
+    tax_code_id: Optional[int]
+    tax_code_codigo: Optional[str]
+    aliquota_aplicada: Optional[float]
+    tipo_cobranca: Optional[str]
+    natureza_pagamento: Optional[str]
+    tipo_documento: str
     created_at: str
+
+
+def _pagamento_response(
+    pag: ParticipacaoPagamentoDB, tc: Optional[TaxCodeDB]
+) -> "PagamentoResponse":
+    return PagamentoResponse(
+        id=pag.id,
+        participacao_id=pag.participacao_id,
+        data_recebimento=pag.data_recebimento.isoformat(),
+        valor_bruto=pag.valor_bruto,
+        imposto_total=pag.imposto_total or 0,
+        valor_liquido_recebido=pag.valor_liquido_recebido,
+        valor_participacao=pag.valor_participacao,
+        dentro_limite_temporal=pag.dentro_limite_temporal,
+        observacoes=pag.observacoes,
+        status=pag.status,
+        parcela_num=pag.parcela_num,
+        parcela_total=pag.parcela_total,
+        nf_referencia=pag.nf_referencia,
+        tax_code_id=pag.tax_code_id,
+        tax_code_codigo=tc.codigo if tc else None,
+        aliquota_aplicada=float(tc.aliquota_total) if tc else None,
+        tipo_cobranca=pag.tipo_cobranca,
+        natureza_pagamento=pag.natureza_pagamento,
+        tipo_documento=pag.tipo_documento or "nf",
+        created_at=pag.created_at.isoformat(),
+    )
 
 
 class ResumoParticipacaoResponse(BaseModel):
@@ -383,23 +429,16 @@ def resumo_participacao(
     if not p:
         raise HTTPException(404, "Participação não encontrada")
 
-    pagamentos = [
-        PagamentoResponse(
-            id=pag.id,
-            participacao_id=pag.participacao_id,
-            data_recebimento=pag.data_recebimento.isoformat(),
-            valor_liquido_recebido=pag.valor_liquido_recebido,
-            valor_participacao=pag.valor_participacao,
-            dentro_limite_temporal=pag.dentro_limite_temporal,
-            observacoes=pag.observacoes,
-            status=pag.status,
-            parcela_num=pag.parcela_num,
-            parcela_total=pag.parcela_total,
-            nf_referencia=pag.nf_referencia,
-            created_at=pag.created_at.isoformat(),
-        )
-        for pag in p.pagamentos
-    ]
+    tc_ids = {pag.tax_code_id for pag in p.pagamentos if pag.tax_code_id}
+    tcs_map = (
+        {
+            tc.id: tc
+            for tc in db.query(TaxCodeDB).filter(TaxCodeDB.id.in_(tc_ids)).all()
+        }
+        if tc_ids
+        else {}
+    )
+    pagamentos = [_pagamento_response(pag, tcs_map.get(pag.tax_code_id)) for pag in p.pagamentos]
     total_liquido = sum(x.valor_liquido_recebido for x in pagamentos)
     total_part = sum(x.valor_participacao for x in pagamentos)
 
@@ -422,12 +461,43 @@ def registrar_pagamento(
     if not p:
         raise HTTPException(404, "Participação não encontrada")
 
-    valor_contratual, _ = split_contratual_sucumbencial(
-        body.valor_bruto, body.discriminado, body.valor_contratual
+    if body.status not in PAGAMENTO_STATUS_VALIDOS:
+        raise HTTPException(422, f"status inválido. Aceitos: {PAGAMENTO_STATUS_VALIDOS}")
+    if body.parcela_num < 1 or body.parcela_total < 1 or body.parcela_num > body.parcela_total:
+        raise HTTPException(422, "parcela_num/parcela_total invalidos (1<=num<=total)")
+    if body.tipo_documento not in TIPOS_DOCUMENTO:
+        raise HTTPException(422, f"tipo_documento invalido. Aceitos: {TIPOS_DOCUMENTO}")
+    if body.tipo_cobranca is not None and body.tipo_cobranca not in TIPOS_COBRANCA:
+        raise HTTPException(422, f"tipo_cobranca invalido. Aceitos: {TIPOS_COBRANCA}")
+    if body.natureza_pagamento is not None and body.natureza_pagamento not in NATUREZAS_PAGAMENTO:
+        raise HTTPException(422, f"natureza_pagamento invalida. Aceitos: {NATUREZAS_PAGAMENTO}")
+
+    if body.tax_code_id is not None:
+        tc = db.query(TaxCodeDB).filter(TaxCodeDB.id == body.tax_code_id).first()
+        if not tc:
+            raise HTTPException(422, f"tax_code_id {body.tax_code_id} nao encontrado")
+        if not tc.ativo:
+            raise HTTPException(422, "Tax code desativado, escolha outro")
+    else:
+        tc = (
+            db.query(TaxCodeDB)
+            .filter(TaxCodeDB.codigo == "PADRAO_1545", TaxCodeDB.ativo == True)  # noqa: E712
+            .first()
+        )
+        if not tc:
+            raise HTTPException(500, "PADRAO_1545 ausente — rodar migration 0005")
+
+    comp = calcular_componentes_pagamento(
+        valor_bruto=body.valor_bruto,
+        aliquota_total=float(tc.aliquota_total),
+        percentual_captacao=p.percentual_captacao,
+        percentual_performance=p.percentual_performance,
+        discriminado=body.discriminado,
+        valor_contratual_informado=body.valor_contratual if body.discriminado else None,
     )
 
     resultado = calcular_valor_participacao(
-        valor_liquido_recebido=valor_contratual,
+        valor_liquido_recebido=comp["valor_contratual"],
         percentual_captacao=p.percentual_captacao,
         percentual_performance=p.percentual_performance,
         tipo_honorario=p.tipo_honorario,
@@ -435,48 +505,44 @@ def registrar_pagamento(
         data_recebimento=body.data_recebimento,
         vinculo_ativo=p.vinculo_ativo,
         data_fim_vinculo=p.data_fim_vinculo,
-        eh_contratual=True,  # já separamos a parcela contratual acima
+        eh_contratual=True,
     )
 
-    if body.status not in PAGAMENTO_STATUS_VALIDOS:
-        raise HTTPException(422, f"status inválido. Aceitos: {PAGAMENTO_STATUS_VALIDOS}")
-    if body.parcela_num < 1 or body.parcela_total < 1 or body.parcela_num > body.parcela_total:
-        raise HTTPException(422, "parcela_num/parcela_total invalidos (1<=num<=total)")
+    valor_participacao_final = (
+        comp["valor_participacao"]
+        if resultado.dentro_limite_temporal and p.vinculo_ativo
+        else 0.0
+    )
+
+    obs = (body.observacoes or "")
+    if resultado.motivo_zerado:
+        obs = (obs + f" | {resultado.motivo_zerado}").strip(" |")
+    obs = obs or None
 
     pag = ParticipacaoPagamentoDB(
         participacao_id=p.id,
         data_recebimento=body.data_recebimento,
-        valor_liquido_recebido=valor_contratual,
-        valor_participacao=resultado.valor_participacao,
+        valor_bruto=body.valor_bruto,
+        imposto_total=comp["imposto_total"],
+        valor_liquido_recebido=comp["valor_contratual"],
+        valor_participacao=valor_participacao_final,
         dentro_limite_temporal=resultado.dentro_limite_temporal,
-        observacoes=body.observacoes
-        + (f" | {resultado.motivo_zerado}" if resultado.motivo_zerado else "")
-        if body.observacoes
-        else resultado.motivo_zerado,
+        observacoes=obs,
         status=body.status,
         parcela_num=body.parcela_num,
         parcela_total=body.parcela_total,
         nf_referencia=body.nf_referencia,
+        tax_code_id=tc.id,
+        tipo_cobranca=body.tipo_cobranca or p.tipo_honorario,
+        natureza_pagamento=body.natureza_pagamento,
+        tipo_documento=body.tipo_documento,
         registrado_por=user.email,
         created_at=utcnow(),
     )
     db.add(pag)
     db.commit()
     db.refresh(pag)
-    return PagamentoResponse(
-        id=pag.id,
-        participacao_id=pag.participacao_id,
-        data_recebimento=pag.data_recebimento.isoformat(),
-        valor_liquido_recebido=pag.valor_liquido_recebido,
-        valor_participacao=pag.valor_participacao,
-        dentro_limite_temporal=pag.dentro_limite_temporal,
-        observacoes=pag.observacoes,
-        status=pag.status,
-        parcela_num=pag.parcela_num,
-        parcela_total=pag.parcela_total,
-        nf_referencia=pag.nf_referencia,
-        created_at=pag.created_at.isoformat(),
-    )
+    return _pagamento_response(pag, tc)
 
 
 @router.patch("/pagamentos/{pag_id}/status", response_model=PagamentoResponse)
@@ -504,20 +570,12 @@ def atualizar_status_pagamento(
     pag.status = body.status
     db.commit()
     db.refresh(pag)
-    return PagamentoResponse(
-        id=pag.id,
-        participacao_id=pag.participacao_id,
-        data_recebimento=pag.data_recebimento.isoformat(),
-        valor_liquido_recebido=pag.valor_liquido_recebido,
-        valor_participacao=pag.valor_participacao,
-        dentro_limite_temporal=pag.dentro_limite_temporal,
-        parcela_num=pag.parcela_num,
-        parcela_total=pag.parcela_total,
-        nf_referencia=pag.nf_referencia,
-        observacoes=pag.observacoes,
-        status=pag.status,
-        created_at=pag.created_at.isoformat(),
+    tc = (
+        db.query(TaxCodeDB).filter(TaxCodeDB.id == pag.tax_code_id).first()
+        if pag.tax_code_id
+        else None
     )
+    return _pagamento_response(pag, tc)
 
 
 @router.post("/{pid}/encerrar-vinculo", response_model=ParticipacaoResponse)
