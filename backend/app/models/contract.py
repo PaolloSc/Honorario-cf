@@ -131,7 +131,11 @@ class ProLabore(BaseModel):
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
     vencimento: Optional[str] = None
+    vencimento_data: Optional[str] = None
+    vencimento_obs: Optional[str] = None
     vencimento_parcelas: Optional[str] = None
+    vencimento_parcelas_data: Optional[str] = None
+    vencimento_parcelas_obs: Optional[str] = None
     data_inicio: Optional[str] = None
     data_fim: Optional[str] = None
     duracao_meses: Optional[int] = None
@@ -141,6 +145,8 @@ class Mensalidade(BaseModel):
     valor: float
     subtipo: SubtipoMensalidade
     dia_vencimento: str
+    dia_vencimento_data: Optional[str] = None
+    dia_vencimento_obs: Optional[str] = None
     variacao_preco: VariacaoPrecoMensalidade = VariacaoPrecoMensalidade.SEM_VARIACAO
     limitacao_temporal_anos: Optional[int] = None
     data_inicio: Optional[str] = None
@@ -161,6 +167,8 @@ class Exito(BaseModel):
     incidencia: str = ""
     base_calculo: str = ""
     vencimento: str = ""
+    vencimento_data: Optional[str] = None
+    vencimento_obs: Optional[str] = None
     forma_pagamento: str = ""
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
