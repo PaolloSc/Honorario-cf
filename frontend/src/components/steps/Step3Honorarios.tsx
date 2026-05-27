@@ -8,6 +8,7 @@ import FormField, {
   Toggle,
 } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import DateRangePicker from "@/components/ui/DateRangePicker";
 import type {
   EscopoItem,
   HoraTrabalhada,
@@ -310,6 +311,23 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         value={escopo.hora_trabalhada.tem_hora_fora_expediente ?? true}
                         onChange={(v) => updateHoraTrabalhada(idx, { tem_hora_fora_expediente: v })}
                       />
+
+                      <div className="md:col-span-2 pt-2 border-t border-blue-200">
+                        <p className="text-xs font-medium text-blue-900 mb-2 uppercase tracking-wide">
+                          Período do contrato
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.hora_trabalhada.data_inicio}
+                          dataFim={escopo.hora_trabalhada.data_fim}
+                          onChange={(di, df, dur) =>
+                            updateHoraTrabalhada(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -537,16 +555,19 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         onChange={(v) => updateExito(idx, { tem_beneficio_prospectivo: v })}
                       />
                       {escopo.exito.tem_beneficio_prospectivo && (
-                        <FormField label="Meses do benefício prospectivo">
-                          <Input
-                            type="number"
-                            value={escopo.exito.periodo_prospectivo_meses || ""}
-                            onChange={(e) =>
-                              updateExito(idx, { periodo_prospectivo_meses: parseInt(e.target.value) || 0 })
+                        <div className="md:col-span-2">
+                          <DateRangePicker
+                            dataInicio={escopo.exito.prospectivo_data_inicio}
+                            dataFim={escopo.exito.prospectivo_data_fim}
+                            onChange={(di, df, dur) =>
+                              updateExito(idx, {
+                                prospectivo_data_inicio: di,
+                                prospectivo_data_fim: df,
+                                prospectivo_duracao_meses: dur,
+                              })
                             }
-                            placeholder="Ex: 12"
                           />
-                        </FormField>
+                        </div>
                       )}
 
                       <Toggle
