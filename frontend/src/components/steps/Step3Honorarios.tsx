@@ -49,6 +49,34 @@ const SUBTIPO_EXITO = [
   { value: "percentual_variavel", label: "Percentual Variável" },
 ];
 
+function calcHorasContratadas(
+  ht: HoraTrabalhada,
+  duracaoMeses?: number
+): number | undefined {
+  if (!ht.valor_hora || ht.valor_hora <= 0) return undefined;
+  if (ht.tem_pacote_horas && ht.valor_pacote && ht.valor_pacote > 0) {
+    return ht.valor_pacote / ht.valor_hora;
+  }
+  if (
+    ht.tem_teto_mensal &&
+    ht.valor_teto_mensal &&
+    ht.valor_teto_mensal > 0 &&
+    duracaoMeses &&
+    duracaoMeses > 0
+  ) {
+    return (ht.valor_teto_mensal * duracaoMeses) / ht.valor_hora;
+  }
+  return undefined;
+}
+
+function formatHorasBR(v?: number): string {
+  if (v == null || Number.isNaN(v)) return "";
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
+}
+
 interface Step3Props {
   escopos: EscopoItem[];
   onChange: (escopos: EscopoItem[]) => void;
@@ -132,10 +160,22 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
   const updateHoraTrabalhada = useCallback(
     (escopoIdx: number, partial: Partial<HoraTrabalhada>) => {
       const escopo = escopos[escopoIdx];
-      const updated: EscopoItem = {
-        ...escopo,
-        hora_trabalhada: { ...escopo.hora_trabalhada!, ...partial },
-      };
+      const merged: HoraTrabalhada = { ...escopo.hora_trabalhada!, ...partial };
+      const recalcFields = [
+        "valor_hora",
+        "valor_teto_mensal",
+        "tem_teto_mensal",
+        "valor_pacote",
+        "tem_pacote_horas",
+        "duracao_meses",
+      ];
+      const shouldRecalc =
+        partial.horas_contratadas === undefined &&
+        Object.keys(partial).some((k) => recalcFields.includes(k));
+      if (shouldRecalc) {
+        merged.horas_contratadas = calcHorasContratadas(merged, merged.duracao_meses);
+      }
+      const updated: EscopoItem = { ...escopo, hora_trabalhada: merged };
       const final = [...escopos];
       final[escopoIdx] = updated;
       onChange(final);
@@ -319,15 +359,87 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         <DateRangePicker
                           dataInicio={escopo.hora_trabalhada.data_inicio}
                           dataFim={escopo.hora_trabalhada.data_fim}
-                          onChange={(di, df, dur) =>
+                          onChange={(di, df, dur) => {
+                            const horasContratadas = calcHorasContratadas(
+                              escopo.hora_trabalhada!,
+                              dur
+                            );
                             updateHoraTrabalhada(idx, {
                               data_inicio: di,
                               data_fim: df,
                               duracao_meses: dur,
-                            })
-                          }
+                              horas_contratadas: horasContratadas,
+                            });
+                          }}
                         />
                       </div>
+
+                      {(() => {
+                        const horasContratadas = calcHorasContratadas(
+                          escopo.hora_trabalhada,
+                          escopo.hora_trabalhada.duracao_meses
+                        );
+                        const horasTrabalhadas = escopo.hora_trabalhada.horas_trabalhadas ?? 0;
+                        const saldo = (horasContratadas ?? 0) - horasTrabalhadas;
+                        return (
+                          <div className="md:col-span-2 pt-2 border-t border-blue-200">
+                            <p className="text-xs font-medium text-blue-900 mb-2 uppercase tracking-wide">
+                              Horas
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div>
+                                <label className="block text-sm font-semibold text-foreground mb-1">
+                                  Horas contratadas
+                                </label>
+                                <input
+                                  readOnly
+                                  value={formatHorasBR(horasContratadas)}
+                                  placeholder="—"
+                                  className="w-full px-3 py-2 rounded-lg border border-border bg-gray-50 text-foreground text-sm cursor-not-allowed"
+                                />
+                              </div>
+                              <FormField label="Horas já trabalhadas">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={horasTrabalhadas || ""}
+                                  onChange={(e) =>
+                                    updateHoraTrabalhada(idx, {
+                                      horas_trabalhadas: parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="0"
+                                />
+                              </FormField>
+                              <div>
+                                <label className="block text-sm font-semibold text-foreground mb-1">
+                                  Saldo
+                                </label>
+                                <div
+                                  className={`px-3 py-2 rounded-lg border text-sm ${
+                                    horasContratadas == null
+                                      ? "bg-gray-50 border-border text-muted"
+                                      : saldo > 0
+                                        ? "bg-green-50 border-green-200 text-green-800"
+                                        : saldo < 0
+                                          ? "bg-red-50 border-red-200 text-red-800"
+                                          : "bg-amber-50 border-amber-200 text-amber-800"
+                                  }`}
+                                >
+                                  {horasContratadas == null
+                                    ? "—"
+                                    : saldo > 0
+                                      ? `Saldo positivo: ${formatHorasBR(saldo)} horas`
+                                      : saldo < 0
+                                        ? `Horas excedidas: ${formatHorasBR(Math.abs(saldo))} horas`
+                                        : "Horas integralmente utilizadas"}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
