@@ -17,7 +17,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
-            <Logo variant="dark" className="h-12 w-auto" />
+            <Logo variant="dark" format="vertical" className="h-24 w-auto" />
           </div>
           <h1 className="font-display text-xl font-semibold text-primary-dark tracking-wide">
             Contrato de Honorário
