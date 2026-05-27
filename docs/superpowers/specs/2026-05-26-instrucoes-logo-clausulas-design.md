@@ -211,8 +211,63 @@ Valores enviados ao backend mantêm string. Sem mudança de modelo.
 - Gerar contrato com flag OFF (ou sem tipo aplicável) → DOCX omite 2.4; seção 4 usa "SEM PARTE RELACIONADA"
 - Step5 → dropdown Natureza mostra 5 opções; selecionar grava no payload
 
-## Fora de escopo
+## Status pré-existente (descoberto na revisão)
 
-- Revisão geral de acentuação em outras telas além de login (item 4 INSTRUÇOES). Faremos só no que estamos tocando.
-- Migração para `next/image` (otimização de logo) — manter `<img>` simples.
-- Outras divergências do gerador atual vs modelo padrão (cláusulas de propriedade intelectual, rescisão, etc.) — não pedido.
+- `incluir_partes_relacionadas` já no `ContratoFormData` (`ContractWizard.tsx:43`)
+- Toggle "Cláusula de Partes Relacionadas (2.4)" já em `Step2Escopo.tsx:124-133`
+- `Step6Revisao` já mostra a flag (L59-63)
+- **Falta:** envio do campo ao backend (verificar `api.ts`), gerador (`contract_generator.py`)
+
+## Item 5 — Correção ortográfica completa (TODOS arquivos do wizard + login + layout)
+
+### Arquivos e correções
+
+**`frontend/src/app/login/page.tsx`:**
+- L23: `Sistema de Honorarios` → `Contrato de Honorário`
+- L26: `Faca login` → `Faça login`
+- L26-27: `escritorio` → `escritório`
+
+**`frontend/src/app/layout.tsx`:**
+- L35, L40, L43: `<a href="...">` → `<Link href="...">` (next/link), com import
+
+**`frontend/src/components/ContractWizard.tsx`:**
+- L129, L135: `valido` → `válido`
+- L130: `endereco` → `endereço`
+- L134: `digitos` → `dígitos`
+- L175: `honorario` → `honorário`
+- L312: `nova versao` → `nova versão`
+- L376: `obrigatorios antes de avancar` → `obrigatórios antes de avançar`
+
+**`frontend/src/components/steps/Step2Escopo.tsx`:**
+- L22: `tributario` → `tributário`
+- L23: `diagnostico` → `diagnóstico`
+- L159: `informacoes` → `informações`
+
+**`frontend/src/components/steps/Step3Honorarios.tsx`:**
+- L218: `escopo.tipo.replace(/_/g, " ")` → `ESCOPO_LABELS[escopo.tipo] ?? escopo.tipo` (com import)
+
+**`frontend/src/components/steps/Step5Participacao.tsx`:**
+- Item 4 INSTRUÇOES: trocar `<Input>` por `<select>` em L141-150 com 5 opções (Captação, Performance, Captação e performance, Projeto, Outro)
+
+**`frontend/src/components/steps/Step7Envio.tsx`:**
+- L38: `Patrimonios` → `Patrimônios`
+- L41: `Reestruturacao` → `Reestruturação`
+- L52: `Elaboracao` → `Elaboração`
+- L54, L55: `Sustentacao` → `Sustentação`
+- L92, L159: `nova versao` → `nova versão`
+- L145-146: `versao gerada`, `voce` → `versão gerada`, `você`
+- L199-200: `Nova versao salva`, `Voce` → `Nova versão salva`, `Você`
+- L267: `Salvar Nova Versao`, `Revisao e Envio` → `Salvar Nova Versão`, `Revisão e Envio`
+- L295: `Modo de edicao` → `Modo de edição`
+- L297: `versao sera criada`, `historico anterior sera mantido` → `versão será criada`, `histórico anterior será mantido`
+- L304: `Proximos passos` → `Próximos passos`
+- L306: `sera gerado`, `conferencia` → `será gerado`, `conferência`
+- L307: `Apos confirmacao`, `voce podera` → `Após confirmação`, `você poderá`
+- L308: `recebera` → `receberá`
+- L344: `Salvar Nova Versao` → `Salvar Nova Versão`
+- L373: `ja sera incluido`, `necessario` → `já será incluído`, `necessário`
+
+### Fora de escopo
+- Outras páginas (`/admin`, `/financeiro`, `/contracts`) — só wizard + login + layout (header/footer)
+- Migração para `next/image`
+- Outras divergências do gerador vs modelo padrão
