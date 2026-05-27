@@ -9,6 +9,7 @@ import FormField, {
 } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateRangePicker from "@/components/ui/DateRangePicker";
+import DatePicker from "@/components/ui/DatePicker";
 import type {
   EscopoItem,
   HoraTrabalhada,
@@ -462,18 +463,28 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       </FormField>
 
                       {!escopo.pro_labore.tem_parcelamento && (
-                        <FormField
-                          label="Vencimento"
-                          hint="Informe uma data completa (ex.: 05/06/2026) ou descreva a condição de vencimento."
-                        >
-                          <Input
-                            value={escopo.pro_labore.vencimento || ""}
-                            onChange={(e) =>
-                              updateProLabore(idx, { vencimento: e.target.value })
-                            }
-                            placeholder="05/06/2026"
-                          />
-                        </FormField>
+                        <>
+                          <FormField label="Vencimento (data)">
+                            <DatePicker
+                              value={escopo.pro_labore.vencimento_data}
+                              onChange={(v) =>
+                                updateProLabore(idx, { vencimento_data: v })
+                              }
+                            />
+                          </FormField>
+                          <FormField
+                            label="Observação"
+                            hint="Opcional: regra ou condição de vencimento."
+                          >
+                            <Input
+                              value={escopo.pro_labore.vencimento_obs || ""}
+                              onChange={(e) =>
+                                updateProLabore(idx, { vencimento_obs: e.target.value })
+                              }
+                              placeholder="Ex: após assinatura"
+                            />
+                          </FormField>
+                        </>
                       )}
 
                       <Toggle
@@ -502,16 +513,24 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                               placeholder="0,00"
                             />
                           </FormField>
+                          <FormField label="Vencimento 1ª parcela (data)">
+                            <DatePicker
+                              value={escopo.pro_labore.vencimento_parcelas_data}
+                              onChange={(v) =>
+                                updateProLabore(idx, { vencimento_parcelas_data: v })
+                              }
+                            />
+                          </FormField>
                           <FormField
-                            label="Vencimento das parcelas"
-                            hint="Informe o dia mensal (ex.: 5), a primeira data (ex.: 05/06/2026) ou uma regra de vencimento."
+                            label="Observação parcelas"
+                            hint="Opcional: dia mensal ou regra (ex: 'todo dia 5')."
                           >
                             <Input
-                              value={escopo.pro_labore.vencimento_parcelas || ""}
+                              value={escopo.pro_labore.vencimento_parcelas_obs || ""}
                               onChange={(e) =>
-                                updateProLabore(idx, { vencimento_parcelas: e.target.value })
+                                updateProLabore(idx, { vencimento_parcelas_obs: e.target.value })
                               }
-                              placeholder="5 ou 05/06/2026"
+                              placeholder="Ex: todo dia 5"
                             />
                           </FormField>
                         </>
@@ -554,16 +573,25 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </FormField>
 
+                      <FormField label="1º vencimento (data)">
+                        <DatePicker
+                          value={escopo.mensalidade.dia_vencimento_data}
+                          onChange={(v) =>
+                            updateMensalidade(idx, { dia_vencimento_data: v })
+                          }
+                        />
+                      </FormField>
+
                       <FormField
-                        label="Vencimento"
-                        hint="Informe apenas o dia para cobranças mensais (ex.: 5) ou uma data completa (ex.: 05/06/2026)."
+                        label="Observação"
+                        hint="Opcional: dia mensal recorrente (ex.: 5) ou regra."
                       >
                         <Input
-                          value={escopo.mensalidade.dia_vencimento || ""}
+                          value={escopo.mensalidade.dia_vencimento_obs || ""}
                           onChange={(e) =>
-                            updateMensalidade(idx, { dia_vencimento: e.target.value })
+                            updateMensalidade(idx, { dia_vencimento_obs: e.target.value })
                           }
-                          placeholder="5 ou 05/06/2026"
+                          placeholder="Ex: todo dia 5"
                         />
                       </FormField>
 
@@ -682,14 +710,23 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </FormField>
 
+                      <FormField label="Vencimento (data)">
+                        <DatePicker
+                          value={escopo.exito.vencimento_data}
+                          onChange={(v) =>
+                            updateExito(idx, { vencimento_data: v })
+                          }
+                        />
+                      </FormField>
+
                       <FormField
-                        label="Vencimento do êxito"
-                        hint="Informe uma data, prazo ou condição de vencimento."
+                        label="Observação"
+                        hint="Opcional: prazo ou condição (ex: 'em até 5 dias após o benefício')."
                       >
                         <Input
-                          value={escopo.exito.vencimento || ""}
+                          value={escopo.exito.vencimento_obs || ""}
                           onChange={(e) =>
-                            updateExito(idx, { vencimento: e.target.value })
+                            updateExito(idx, { vencimento_obs: e.target.value })
                           }
                           placeholder="Ex: em até 5 dias após o benefício"
                         />

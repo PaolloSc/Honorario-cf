@@ -129,7 +129,11 @@ export interface ProLabore {
   numero_parcelas?: number;
   valor_parcela?: number;
   vencimento?: string;
+  vencimento_data?: string;
+  vencimento_obs?: string;
   vencimento_parcelas?: string;
+  vencimento_parcelas_data?: string;
+  vencimento_parcelas_obs?: string;
   data_inicio?: string;
   data_fim?: string;
   duracao_meses?: number;
@@ -139,6 +143,8 @@ export interface Mensalidade {
   valor: number;
   subtipo: SubtipoMensalidade;
   dia_vencimento: string;
+  dia_vencimento_data?: string;
+  dia_vencimento_obs?: string;
   variacao_preco: VariacaoPrecoMensalidade;
   limitacao_temporal_anos?: number;
   data_inicio?: string;
@@ -154,6 +160,8 @@ export interface Exito {
   incidencia: string;
   base_calculo: string;
   vencimento: string;
+  vencimento_data?: string;
+  vencimento_obs?: string;
   forma_pagamento: string;
   numero_parcelas?: number;
   valor_parcela?: number;
