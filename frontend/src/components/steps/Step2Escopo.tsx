@@ -19,8 +19,8 @@ const GENERIC_DETAIL_LABELS: Partial<Record<TipoEscopo, string>> = {
   consultoria_contencioso_geral: "Detalhes da consultoria/contencioso",
   consultoria_lgpd: "Detalhes da consultoria LGPD",
   consultoria_compliance_trabalhista: "Detalhes do compliance trabalhista",
-  consultoria_planejamento_tributario: "Detalhes do planejamento tributario",
-  consultoria_diagnostico_fiscal: "Detalhes do diagnostico fiscal",
+  consultoria_planejamento_tributario: "Detalhes do planejamento tributário",
+  consultoria_diagnostico_fiscal: "Detalhes do diagnóstico fiscal",
   consultoria_contratual: "Contratos ou temas a analisar",
 };
 
@@ -156,7 +156,7 @@ function EscopoDetails({
           <TextArea
             value={escopo.descricao_custom || ""}
             onChange={(e) => onUpdate({ descricao_custom: e.target.value })}
-            placeholder="Descreva os pontos principais, limites do escopo e informacoes relevantes..."
+            placeholder="Descreva os pontos principais, limites do escopo e informações relevantes..."
           />
         </FormField>
       )}

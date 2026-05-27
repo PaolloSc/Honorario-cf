@@ -1,6 +1,6 @@
 "use client";
  
-import FormField, { Input, TextArea, Toggle } from "@/components/ui/FormField";
+import FormField, { Input, Select, TextArea, Toggle } from "@/components/ui/FormField";
 import type { EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
  
@@ -138,7 +138,7 @@ export default function Step5Participacao({
               </FormField>
  
               <FormField label="Natureza da participação">
-                <Input
+                <Select
                   value={participacao.natureza || ""}
                   onChange={(e) =>
                     onChange({
@@ -146,7 +146,14 @@ export default function Step5Participacao({
                       natureza: e.target.value,
                     })
                   }
-                  placeholder="Ex: captação, performance, projeto"
+                  placeholder="Selecione a natureza da participação"
+                  options={[
+                    { value: "Captação", label: "Captação" },
+                    { value: "Performance", label: "Performance" },
+                    { value: "Captação e performance", label: "Captação e performance" },
+                    { value: "Projeto", label: "Projeto" },
+                    { value: "Outro", label: "Outro" },
+                  ]}
                 />
               </FormField>
             </div>
