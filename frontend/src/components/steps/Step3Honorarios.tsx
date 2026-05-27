@@ -20,6 +20,7 @@ import type {
   VariacaoPrecoMensalidade,
   SubtipoExito,
 } from "@/types/contract";
+import { ESCOPO_LABELS } from "@/types/contract";
 
 const HONORARIO_TYPES: Array<{ value: TipoHonorario; label: string }> = [
   { value: "hora_trabalhada", label: "Hora Trabalhada" },
@@ -215,7 +216,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
           {escopos.map((escopo, idx) => (
             <div key={idx} className="bg-card border border-border rounded-xl p-5 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4">
-                Escopo {idx + 1}: {escopo.tipo.replace(/_/g, " ")}
+                Escopo {idx + 1}: {ESCOPO_LABELS[escopo.tipo] ?? escopo.tipo}
               </h3>
 
               <div className="space-y-4">

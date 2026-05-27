@@ -35,10 +35,10 @@ function buildObjetoContrato(escopos: EscopoItem[]): string {
       if (e.demandas) parts.push(`Demandas: ${e.demandas}`);
 
       // People/assets
-      if (e.pessoas_patrimonios) parts.push(`Pessoas/Patrimonios: ${e.pessoas_patrimonios}`);
+      if (e.pessoas_patrimonios) parts.push(`Pessoas/Patrimônios: ${e.pessoas_patrimonios}`);
 
       // Restructuring type
-      if (e.tipo_reestruturacao) parts.push(`Reestruturacao: ${e.tipo_reestruturacao}`);
+      if (e.tipo_reestruturacao) parts.push(`Reestruturação: ${e.tipo_reestruturacao}`);
 
       // Documents
       if (e.documentos) parts.push(`Documentos: ${e.documentos}`);
@@ -49,10 +49,10 @@ function buildObjetoContrato(escopos: EscopoItem[]): string {
       // Memorial activities
       if (e.subtipo_memoriais) {
         const atividades: string[] = [];
-        if (e.subtipo_memoriais.elaboracao_memoriais) atividades.push("Elaboracao de Memoriais");
+        if (e.subtipo_memoriais.elaboracao_memoriais) atividades.push("Elaboração de Memoriais");
         if (e.subtipo_memoriais.despacho_memoriais) atividades.push("Despacho de Memoriais");
-        if (e.subtipo_memoriais.sustentacao_oral_relator) atividades.push("Sustentacao oral c/ Relator");
-        if (e.subtipo_memoriais.sustentacao_oral_todos_julgadores) atividades.push("Sustentacao oral c/ todos os julgadores");
+        if (e.subtipo_memoriais.sustentacao_oral_relator) atividades.push("Sustentação oral c/ Relator");
+        if (e.subtipo_memoriais.sustentacao_oral_todos_julgadores) atividades.push("Sustentação oral c/ todos os julgadores");
         if (atividades.length > 0) parts.push(`Atividades: ${atividades.join(", ")}`);
       }
 
@@ -89,7 +89,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const handleSubmit = async () => {
     setIsSubmitting(true);
     setStatus("generating");
-    setMessage(isEdit ? "Salvando nova versao..." : "Gerando contrato...");
+    setMessage(isEdit ? "Salvando nova versão..." : "Gerando contrato...");
 
     try {
       let resultContractId: string;
@@ -142,8 +142,8 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       setStatus("sent_email");
       setMessage(
         isEdit
-          ? "Nova versao gerada e enviada por e-mail com sucesso! Agora voce pode enviar para assinatura digital ou voltar para a lista."
-          : "Contrato gerado e enviado por e-mail com sucesso! Agora voce pode enviar para assinatura digital ou voltar para a lista."
+          ? "Nova versão gerada e enviada por e-mail com sucesso! Agora você pode enviar para assinatura digital ou voltar para a lista."
+          : "Contrato gerado e enviado por e-mail com sucesso! Agora você pode enviar para assinatura digital ou voltar para a lista."
       );
     } catch (error) {
       setStatus("error");
@@ -156,7 +156,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const handleSaveOnly = async () => {
     setIsSubmitting(true);
     setStatus("generating");
-    setMessage(isEdit ? "Salvando nova versao..." : "Gerando contrato...");
+    setMessage(isEdit ? "Salvando nova versão..." : "Gerando contrato...");
 
     try {
       let resultContractId: string;
@@ -196,8 +196,8 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       setStatus("sent_email");
       setMessage(
         isEdit
-          ? "Nova versao salva com sucesso! Voce pode enviar para assinatura ou voltar para a lista."
-          : "Contrato gerado com sucesso! Voce pode enviar para assinatura ou voltar para a lista."
+          ? "Nova versão salva com sucesso! Você pode enviar para assinatura ou voltar para a lista."
+          : "Contrato gerado com sucesso! Você pode enviar para assinatura ou voltar para a lista."
       );
     } catch (error) {
       setStatus("error");
@@ -264,7 +264,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">
-        {isEdit ? "Salvar Nova Versao" : "Revisao e Envio"}
+        {isEdit ? "Salvar Nova Versão" : "Revisão e Envio"}
       </h2>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -292,20 +292,20 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
 
       {isEdit && status === "idle" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <h3 className="font-medium text-amber-900 mb-2">Modo de edicao</h3>
+          <h3 className="font-medium text-amber-900 mb-2">Modo de edição</h3>
           <p className="text-sm text-amber-800">
-            Uma nova versao sera criada. O historico anterior sera mantido.
+            Uma nova versão será criada. O histórico anterior será mantido.
           </p>
         </div>
       )}
 
       {!isEdit && status === "idle" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <h3 className="font-medium text-amber-900 mb-2">Proximos passos</h3>
+          <h3 className="font-medium text-amber-900 mb-2">Próximos passos</h3>
           <ol className="text-sm text-amber-800 space-y-1 list-decimal list-inside">
-            <li>O contrato sera gerado e enviado por e-mail para conferencia</li>
-            <li>Apos confirmacao, voce podera enviar para assinatura digital</li>
-            <li>O contratante recebera um link para assinar via DocuSeal</li>
+            <li>O contrato será gerado e enviado por e-mail para conferência</li>
+            <li>Após confirmação, você poderá enviar para assinatura digital</li>
+            <li>O contratante receberá um link para assinar via DocuSeal</li>
           </ol>
         </div>
       )}
@@ -341,7 +341,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
               disabled={isSubmitting}
               className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
             >
-              {isEdit ? "Salvar Nova Versao" : "Apenas Gerar Contrato"}
+              {isEdit ? "Salvar Nova Versão" : "Apenas Gerar Contrato"}
             </button>
 
             <button
@@ -370,7 +370,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
                 Advogados adicionais para assinatura (opcional)
               </h4>
               <p className="text-xs text-purple-700 mb-3">
-                O advogado logado ja sera incluido automaticamente. Adicione outros se necessario.
+                O advogado logado já será incluído automaticamente. Adicione outros se necessário.
               </p>
               {additionalLawyers.length > 0 && (
                 <div className="space-y-1 mb-3">

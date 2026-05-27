@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Lexend_Zetta } from "next/font/google";
 import Logo from "@/components/ui/Logo";
 import Providers from "@/components/Providers";
@@ -32,17 +33,17 @@ export default function RootLayout({
         <Providers>
           <header className="bg-primary-dark text-white shadow-md">
             <div className="px-6 py-5 flex items-center justify-between">
-              <a href="/" className="flex items-center">
+              <Link href="/" className="flex items-center">
                 <Logo variant="light" className="h-10 w-auto" showSubtitle={false} />
-              </a>
+              </Link>
               <div className="flex items-center gap-6">
                 <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
-                  <a href="/" className="text-brand-verde-claro/80 hover:text-white transition">
+                  <Link href="/" className="text-brand-verde-claro/80 hover:text-white transition">
                     Novo Contrato
-                  </a>
-                  <a href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
+                  </Link>
+                  <Link href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
                     Contratos
-                  </a>
+                  </Link>
                 </nav>
                 <UserMenu />
               </div>
