@@ -20,10 +20,10 @@ export default function LoginPage() {
             <Logo variant="dark" className="h-12 w-auto" />
           </div>
           <h1 className="font-display text-xl font-semibold text-primary-dark tracking-wide">
-            Sistema de Honorarios
+            Contrato de Honorário
           </h1>
           <p className="text-sm text-muted mt-2">
-            Faca login com sua conta Microsoft do escritorio.
+            Faça login com sua conta Microsoft do escritório.
           </p>
         </div>
 
