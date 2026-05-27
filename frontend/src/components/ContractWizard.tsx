@@ -126,13 +126,13 @@ function validateContratantes(data: ContratoFormData): string[] {
       if (!text(contratante.nome)) errors.push(`${label}: informe o nome completo.`);
       if (!isValidCPF(contratante.cpf)) errors.push(`${label}: CPF inválido.`);
       if (!text(contratante.estado_civil)) errors.push(`${label}: informe o estado civil.`);
-      if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail valido.`);
-      if (!text(contratante.endereco)) errors.push(`${label}: informe o endereco completo.`);
+      if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
+      if (!text(contratante.endereco)) errors.push(`${label}: informe o endereço completo.`);
       return;
     }
 
-    if (digits(contratante.cnpj).length !== 14) errors.push(`${label}: informe um CNPJ com 14 digitos.`);
-    if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail valido.`);
+    if (digits(contratante.cnpj).length !== 14) errors.push(`${label}: informe um CNPJ com 14 dígitos.`);
+    if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
   });
 
   return errors;
@@ -172,7 +172,7 @@ function validateHonorarios(data: ContratoFormData): string[] {
     const label = `Escopo ${index + 1}`;
 
     if (escopo.honorarios.length === 0) {
-      errors.push(`${label}: selecione pelo menos um tipo de honorario.`);
+      errors.push(`${label}: selecione pelo menos um tipo de honorário.`);
     }
   });
 
@@ -309,7 +309,7 @@ export default function ContractWizard({
         </h1>
         <p className="text-sm text-muted mt-1">
           {editContractId
-            ? "Altere os dados e gere uma nova versao."
+            ? "Altere os dados e gere uma nova versão."
             : "Preencha as etapas abaixo para gerar o contrato."}
         </p>
       </div>
@@ -373,7 +373,7 @@ export default function ContractWizard({
       {validationErrors.length > 0 && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           <p className="font-semibold mb-2">
-            Preencha os campos obrigatorios antes de avancar:
+            Preencha os campos obrigatórios antes de avançar:
           </p>
           <ul className="list-disc list-inside space-y-1">
             {validationErrors.map((error) => (

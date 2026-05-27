@@ -101,7 +101,7 @@ class ContractGenerator:
         self._add_parties(doc, data)
         self._add_scope_and_fees(doc, data)
         self._add_fee_details(doc, data)
-        self._add_common_clauses(doc)
+        self._add_common_clauses(doc, data)
         self._add_accessories(doc, data.acessorios)
         self._add_obligations(doc)
         self._add_integrity(doc)
@@ -370,19 +370,6 @@ class ContractGenerator:
                 "n. 271, 5º andar, Savassi, Belo Horizonte/MG, doravante denominado C&F."
         )
  
-        if data.incluir_partes_relacionadas:
-            doc.add_heading("1.1. Partes Relacionadas", level=3)
-            doc.add_paragraph(
-                "Para fins deste Contrato, são Partes Relacionadas: (i) cônjuge, "
-                "companheiro(a) ou parente de primeiro ou segundo grau da CONTRATANTE; "
-                "(ii) entidade(s) ou pessoa(s) jurídica(s) cujo controle fático ou jurídico "
-                "pertença à CONTRATANTE ou às pessoas físicas referidas no item (i)."
-            )
-            doc.add_paragraph(
-                "Caso a CONTRATANTE solicite atendimento a Partes Relacionadas, salvo ajuste "
-                "expresso em contrário, serão aplicados os mesmos critérios de honorários "
-                "previstos no Contrato, constituindo nova contratação para todos os fins."
-            )
  
     def _add_scope_and_fees(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("2. OBJETO, ESCOPO E HONORÁRIO", level=2)
@@ -419,7 +406,13 @@ class ContractGenerator:
             and e.mensalidade.subtipo == SubtipoMensalidade.ADVOCACIA_PARTIDO
             for e in data.escopos
         )
- 
+        has_mensalidade_processo = any(
+            TipoHonorario.MENSALIDADE in e.honorarios
+            and e.mensalidade
+            and e.mensalidade.subtipo in (SubtipoMensalidade.POR_PROCESSO, SubtipoMensalidade.POR_PASTA)
+            for e in data.escopos
+        )
+
         clause_num = 3
         if has_hora:
             doc.add_paragraph(
@@ -442,7 +435,22 @@ class ContractGenerator:
                 "complexidade, tais como planejamentos e/ou estruturações."
             )
             clause_num += 1
- 
+
+        if data.incluir_partes_relacionadas and (has_hora or has_mensalidade_processo):
+            doc.add_paragraph(
+                f"2.{clause_num}. Para fins deste Contrato, são Partes Relacionadas: "
+                "(i) cônjuge, companheiro(a) ou parente de primeiro ou segundo grau da "
+                "CONTRATANTE; (ii) entidade(s) ou pessoa(s) jurídica(s) cujo controle "
+                "fático ou jurídico seja da CONTRATANTE."
+            )
+            doc.add_paragraph(
+                f"2.{clause_num}.1. Caso a CONTRATANTE solicite atendimento a Partes "
+                "Relacionadas, salvo ajuste expresso em contrário, serão aplicados os "
+                "mesmos critérios de honorários previstos no Contrato, constituindo "
+                "nova contratação para todos os fins."
+            )
+            clause_num += 1
+
     def _add_fee_details(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("3. OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS", level=2)
  
@@ -713,8 +721,37 @@ class ContractGenerator:
 
         return counter
  
-    def _add_common_clauses(self, doc: Document) -> None:
+    def _add_common_clauses(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("4. CLÁUSULAS COMUNS AOS HONORÁRIOS", level=2)
+
+        has_hora = any(TipoHonorario.HORA_TRABALHADA in e.honorarios for e in data.escopos)
+        has_mensalidade_processo = any(
+            TipoHonorario.MENSALIDADE in e.honorarios
+            and e.mensalidade
+            and e.mensalidade.subtipo in (SubtipoMensalidade.POR_PROCESSO, SubtipoMensalidade.POR_PASTA)
+            for e in data.escopos
+        )
+        com_parte_relacionada = data.incluir_partes_relacionadas and (has_hora or has_mensalidade_processo)
+
+        if com_parte_relacionada:
+            solidariedade = (
+                "Caso qualificada mais de uma pessoa ou entidade no campo CONTRATANTE, "
+                "haverá solidariedade entre elas, assim como no caso de prestação de "
+                "serviço a Partes Relacionadas. Na hipótese de obrigações devidas ao "
+                "C&F, as Partes reconhecem a possibilidade de encontro de contas, "
+                "deduções e compensações ainda que multilaterais entre as partes "
+                "signatárias e/ou Partes Relacionadas, de modo a adimplir tais "
+                "obrigações em ordem preferencial."
+            )
+        else:
+            solidariedade = (
+                "Caso qualificada mais de uma pessoa ou entidade no campo CONTRATANTE, "
+                "haverá solidariedade entre elas. Na hipótese de obrigações devidas ao "
+                "C&F, as Partes reconhecem a possibilidade de encontro de contas, "
+                "deduções e compensações ainda que multilaterais entre as partes "
+                "signatárias, de modo a adimplir tais obrigações em ordem preferencial."
+            )
+
         clauses = [
             "Todos os valores previstos nesta contratação serão reajustados anualmente "
             "pela variação positiva e acumulada do IPCA, ou outro índice que vier a "
@@ -730,6 +767,7 @@ class ContractGenerator:
             "O atraso no pagamento implicará na incidência do seguinte: juros de 1% a.m.; "
             "multa de 10% (dez por cento) sobre o valor em atraso e atualização monetária "
             "pelo IPCA, sem prejuízo de suspensão do serviço.",
+            solidariedade,
         ]
         for i, clause in enumerate(clauses, 1):
             doc.add_paragraph(f"4.{i}. {clause}")
