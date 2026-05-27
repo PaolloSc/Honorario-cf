@@ -119,8 +119,8 @@ def upgrade() -> None:
         sa.text(
             """
             UPDATE participacao_pagamentos
-            SET valor_bruto = ROUND(valor_liquido_recebido / (1 - :aliq), 2),
-                imposto_total = ROUND(valor_liquido_recebido / (1 - :aliq) - valor_liquido_recebido, 2)
+            SET valor_bruto = ROUND(CAST(valor_liquido_recebido / (1 - :aliq) AS NUMERIC), 2),
+                imposto_total = ROUND(CAST(valor_liquido_recebido / (1 - :aliq) - valor_liquido_recebido AS NUMERIC), 2)
             WHERE valor_bruto IS NULL
             """
         ),
