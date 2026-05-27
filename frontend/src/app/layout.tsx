@@ -4,6 +4,7 @@ import { Lexend_Zetta } from "next/font/google";
 import Logo from "@/components/ui/Logo";
 import Providers from "@/components/Providers";
 import UserMenu from "@/components/UserMenu";
+import { auth } from "@/auth";
 import "./globals.css";
 
 const lexendZetta = Lexend_Zetta({
@@ -19,11 +20,13 @@ export const metadata: Metadata = {
     "Sistema de automação para geração de contratos de honorários advocatícios — Carvalho & Furtado Advogados",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
+  const isAuthenticated = !!session?.user;
   return (
     <html
       lang="pt-BR"
@@ -37,14 +40,16 @@ export default function RootLayout({
                 <Logo variant="light" className="h-10 w-auto" showSubtitle={false} />
               </Link>
               <div className="flex items-center gap-6">
-                <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
-                  <Link href="/" className="text-brand-verde-claro/80 hover:text-white transition">
-                    Novo Contrato
-                  </Link>
-                  <Link href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
-                    Contratos
-                  </Link>
-                </nav>
+                {isAuthenticated && (
+                  <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
+                    <Link href="/" className="text-brand-verde-claro/80 hover:text-white transition">
+                      Novo Contrato
+                    </Link>
+                    <Link href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
+                      Contratos
+                    </Link>
+                  </nav>
+                )}
                 <UserMenu />
               </div>
             </div>
