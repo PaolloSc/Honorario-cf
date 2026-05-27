@@ -172,15 +172,17 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
       }
       parts.push(s);
     } else if (tipo === "pro_labore" && escopo.pro_labore) {
-      parts.push(
-        `${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`
-      );
+      let s = `${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`;
+      if (escopo.pro_labore.duracao_meses) s += ` · ${escopo.pro_labore.duracao_meses} meses`;
+      parts.push(s);
     } else if (tipo === "mensalidade" && escopo.mensalidade) {
-      parts.push(
-        `${formatCurrency(escopo.mensalidade.valor)}/mês`
-      );
+      let s = `${formatCurrency(escopo.mensalidade.valor)}/mês`;
+      if (escopo.mensalidade.duracao_meses) s += ` · ${escopo.mensalidade.duracao_meses} meses`;
+      parts.push(s);
     } else if (tipo === "exito" && escopo.exito?.percentual) {
-      parts.push(`${escopo.exito.percentual}% êxito`);
+      let s = `${escopo.exito.percentual}% êxito`;
+      if (escopo.exito.duracao_meses) s += ` · ${escopo.exito.duracao_meses} meses`;
+      parts.push(s);
     } else if (tipo === "permuta" && escopo.permuta) {
       parts.push(`Permuta: ${escopo.permuta.objeto_permuta}`);
     } else {
