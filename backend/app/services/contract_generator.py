@@ -299,6 +299,29 @@ class ContractGenerator:
 
         return raw
 
+    def _vencimento_combined(
+        self,
+        data: str | None,
+        obs: str | None,
+        legacy: str | None,
+        *,
+        recorrente: bool = False,
+    ) -> str:
+        if data:
+            try:
+                from datetime import datetime as _dt
+                dt = _dt.fromisoformat(data)
+                base = f"em {dt.day:02d}/{dt.month:02d}/{dt.year}"
+            except Exception:
+                base = self._format_vencimento(data, recorrente=recorrente)
+            obs_clean = (obs or "").strip()
+            if obs_clean:
+                return f"{base} ({obs_clean})"
+            return base
+        if obs and obs.strip():
+            return obs.strip()
+        return self._format_vencimento(legacy, recorrente=recorrente)
+
     def _format_percentual(self, value: float) -> str:
         if float(value).is_integer():
             return f"{int(value)}%"
@@ -548,13 +571,13 @@ class ContractGenerator:
             doc.add_paragraph(
                 f"3.{counter}. O valor total de {valor_com_extenso(pl.valor_total)} será pago em "
                 f"{pl.numero_parcelas} parcelas de {valor_com_extenso(pl.valor_parcela)}, "
-                f"com vencimento {self._format_vencimento(pl.vencimento_parcelas, recorrente=True)}."
+                f"com vencimento {self._vencimento_combined(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}."
             )
             counter += 1
         else:
             doc.add_paragraph(
                 f"3.{counter}. O valor de {valor_com_extenso(pl.valor_total)} será pago em parcela única, "
-                f"com vencimento {self._format_vencimento(pl.vencimento)}."
+                f"com vencimento {self._vencimento_combined(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}."
             )
             counter += 1
 
@@ -588,7 +611,7 @@ class ContractGenerator:
             counter += 1
 
             doc.add_paragraph(
-                f"3.{counter}. O vencimento da fatura mensal será {self._format_vencimento(m.dia_vencimento, recorrente=True)}.",
+                f"3.{counter}. O vencimento da fatura mensal será {self._vencimento_combined(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)}.",
             )
             counter += 1
  
@@ -606,7 +629,7 @@ class ContractGenerator:
  
             doc.add_paragraph(
                 f"3.{counter}. Em relação ao honorário por mensalidade{var_label}, o vencimento "
-                f"da fatura será {self._format_vencimento(m.dia_vencimento, recorrente=True)} "
+                f"da fatura será {self._vencimento_combined(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)} "
                 f"e o valor de {valor_com_extenso(m.valor)} será devido por {tipo_label} enquanto este "
                 f"estiver ativo."
             )
@@ -682,9 +705,9 @@ class ContractGenerator:
         )
         counter += 1
 
-        if ex.vencimento:
+        if ex.vencimento or ex.vencimento_data or ex.vencimento_obs:
             doc.add_paragraph(
-                f"3.{counter}. Vencimento: {self._format_vencimento(ex.vencimento)}.",
+                f"3.{counter}. Vencimento: {self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)}.",
             )
             counter += 1
  
