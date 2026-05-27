@@ -52,9 +52,10 @@ def upgrade() -> None:
               (codigo, descricao, aliquota_total, aliquota_iss, aliquota_pis,
                aliquota_cofins, aliquota_irrf, aliquota_csll, ativo, criado_em, criado_por)
             VALUES
-              (:codigo, :descricao, :total, :iss, :pis, :cofins, :irrf, :csll, 1, :now, 'sistema')
+              (:codigo, :descricao, :total, :iss, :pis, :cofins, :irrf, :csll, :ativo, :now, 'sistema')
             """
         ).bindparams(
+            sa.bindparam("ativo", True, type_=sa.Boolean()),
             codigo="PADRAO_1545",
             descricao="Retencoes federais agregadas (PIS+COFINS+IRRF+CSLL)",
             total=ALIQUOTA_PADRAO,
