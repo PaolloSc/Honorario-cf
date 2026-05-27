@@ -45,7 +45,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-xs text-muted text-center mt-6">
-          Acesso restrito a advogados de Carvalho &amp; Furtado.
+          Acesso restrito ao Carvalho &amp; Furtado Advogados.
         </p>
       </div>
     </div>
