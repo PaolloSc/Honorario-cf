@@ -114,7 +114,11 @@ export interface HoraTrabalhada {
   tem_pacote_horas: boolean;
   quantidade_horas_pacote?: number;
   valor_pacote?: number;
-  periodo_banco_horas_meses?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
+  horas_contratadas?: number;
+  horas_trabalhadas?: number;
   tem_hora_urgencia: boolean;
   tem_hora_fora_expediente: boolean;
 }
@@ -148,7 +152,9 @@ export interface Exito {
   numero_parcelas?: number;
   valor_parcela?: number;
   tem_beneficio_prospectivo: boolean;
-  periodo_prospectivo_meses?: number;
+  prospectivo_data_inicio?: string;
+  prospectivo_data_fim?: string;
+  prospectivo_duracao_meses?: number;
   faixas_percentual?: Array<{ faixa: string; percentual: string }>;
   deduz_outro_honorario: boolean;
   honorario_deduzido?: string;
