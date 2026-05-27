@@ -132,6 +132,9 @@ class ProLabore(BaseModel):
     valor_parcela: Optional[float] = None
     vencimento: Optional[str] = None
     vencimento_parcelas: Optional[str] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
  
  
 class Mensalidade(BaseModel):
@@ -140,6 +143,9 @@ class Mensalidade(BaseModel):
     dia_vencimento: str
     variacao_preco: VariacaoPrecoMensalidade = VariacaoPrecoMensalidade.SEM_VARIACAO
     limitacao_temporal_anos: Optional[int] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
     faixas_preco: Optional[list[dict[str, str]]] = None
     fases_processuais: Optional[list[dict[str, str]]] = None
  
@@ -158,6 +164,9 @@ class Exito(BaseModel):
     forma_pagamento: str = ""
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
     tem_beneficio_prospectivo: bool = False
     prospectivo_data_inicio: Optional[str] = None
     prospectivo_data_fim: Optional[str] = None

@@ -516,6 +516,23 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           </FormField>
                         </>
                       )}
+
+                      <div className="md:col-span-2 pt-2 border-t border-green-200">
+                        <p className="text-xs font-medium text-green-900 mb-2 uppercase tracking-wide">
+                          Vigência
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.pro_labore.data_inicio}
+                          dataFim={escopo.pro_labore.data_fim}
+                          onChange={(di, df, dur) =>
+                            updateProLabore(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -582,6 +599,23 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           />
                         </FormField>
                       )}
+
+                      <div className="md:col-span-2 pt-2 border-t border-purple-200">
+                        <p className="text-xs font-medium text-purple-900 mb-2 uppercase tracking-wide">
+                          Período da mensalidade
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.mensalidade.data_inicio}
+                          dataFim={escopo.mensalidade.data_fim}
+                          onChange={(di, df, dur) =>
+                            updateMensalidade(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -660,6 +694,23 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           placeholder="Ex: em até 5 dias após o benefício"
                         />
                       </FormField>
+
+                      <div className="md:col-span-2 pt-2 border-t border-amber-200">
+                        <p className="text-xs font-medium text-amber-900 mb-2 uppercase tracking-wide">
+                          Período do êxito
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.exito.data_inicio}
+                          dataFim={escopo.exito.data_fim}
+                          onChange={(di, df, dur) =>
+                            updateExito(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                            })
+                          }
+                        />
+                      </div>
 
                       <Toggle
                         label="Benefício prospectivo?"
