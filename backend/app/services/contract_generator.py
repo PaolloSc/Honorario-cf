@@ -529,9 +529,9 @@ class ContractGenerator:
                 f"aproveitadas no mês imediatamente subsequente.",
             )
             counter += 1
-            if ht.periodo_banco_horas_meses:
+            if ht.duracao_meses:
                 doc.add_paragraph(
-                    f"3.{counter}. O saldo acumulado será zerado a cada {ht.periodo_banco_horas_meses} meses.",
+                    f"3.{counter}. O saldo acumulado será zerado a cada {ht.duracao_meses} meses.",
                 )
                 counter += 1
 
@@ -688,11 +688,11 @@ class ContractGenerator:
             )
             counter += 1
  
-        if ex.tem_beneficio_prospectivo and ex.periodo_prospectivo_meses:
+        if ex.tem_beneficio_prospectivo and ex.prospectivo_duracao_meses:
             doc.add_paragraph(
                 f"3.{counter}. Nos casos em que os serviços do C&F também proporcionarem Benefício prospectivo "
                 f"à CONTRATANTE, incidirão honorários de êxito calculados sobre o período de "
-                f"{ex.periodo_prospectivo_meses} meses.",
+                f"{ex.prospectivo_duracao_meses} meses.",
             )
             counter += 1
  
