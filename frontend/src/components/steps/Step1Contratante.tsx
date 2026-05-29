@@ -95,6 +95,14 @@ export default function Step1Contratante({
   const removeContratante = useCallback(
     (index: number) => {
       if (contratantes.length <= 1) return;
+      setCnpjLoaded((prev) => {
+        const next = new Set<number>();
+        prev.forEach((i) => {
+          if (i < index) next.add(i);
+          else if (i > index) next.add(i - 1);
+        });
+        return next;
+      });
       onChange(contratantes.filter((_, i) => i !== index));
     },
     [contratantes, onChange]
@@ -102,6 +110,11 @@ export default function Step1Contratante({
 
   const switchTipo = useCallback(
     (index: number, tipo: TipoPessoa) => {
+      setCnpjLoaded((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
       const updated = [...contratantes];
       updated[index] = tipo === "PF" ? emptyPF() : emptyPJ();
       onChange(updated);
@@ -196,7 +209,6 @@ export default function Step1Contratante({
           {c.tipo === "PJ" ? (
             <PJForm
               data={c}
-              index={idx}
               loadingCNPJ={loadingCNPJ === idx}
               loaded={cnpjLoaded.has(idx) || (c.tipo === "PJ" && !!c.razao_social)}
               onUpdate={(partial) => updateContratante(idx, partial)}
@@ -228,14 +240,12 @@ export default function Step1Contratante({
 
 function PJForm({
   data,
-  index,
   loadingCNPJ,
   loaded,
   onUpdate,
   onCNPJLookup,
 }: {
   data: ContratantePJ;
-  index: number;
   loadingCNPJ: boolean;
   loaded: boolean;
   onUpdate: (partial: Partial<ContratantePJ>) => void;
