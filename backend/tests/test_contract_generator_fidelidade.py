@@ -123,3 +123,26 @@ def test_secao8_tabela_exito_presente_com_exito():
 def test_secao8_tabela_exito_ausente_sem_exito():
     paras = _paras_for(_base_req(honorario="hora_trabalhada"))
     assert not _has(paras, "50% do percentual de êxito pactuado")
+
+
+def test_secao9_pi_uso_de_nome_marca():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "vedada a disponibilização a terceiros")
+    assert _has(paras, "utilizar seu nome, marca e logotipo")
+
+
+def test_secao10_disposicoes_gerais_completas():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "título executivo extrajudicial")
+    assert _has(paras, "MP 2200-2")
+    assert _has(paras, "deverá prevalecer em caso de dúvida")
+
+
+def test_secao11_foro_com_renuncia():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "com renúncia de qualquer outro, por mais privilegiado que seja")
+
+
+def test_documento_termina_em_assinaturas():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "TESTEMUNHAS:")
