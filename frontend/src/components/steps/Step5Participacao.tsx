@@ -56,12 +56,14 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
   const objetoLines = buildObjetoLines(escopos);
   const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
   const [colabError, setColabError] = useState("");
+  const [loadingColab, setLoadingColab] = useState(true);
 
   useEffect(() => {
     let active = true;
     listColaboradores()
       .then((res) => { if (active) setColaboradores(res.colaboradores); })
-      .catch(() => { if (active) setColabError("Não foi possível carregar a lista de advogados."); });
+      .catch(() => { if (active) setColabError("Não foi possível carregar a lista de advogados."); })
+      .finally(() => { if (active) setLoadingColab(false); });
     return () => { active = false; };
   }, []);
 
@@ -75,7 +77,15 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
     set({ para_quem: checked ? [...atual, nome] : atual.filter((n) => n !== nome) });
   };
 
-  const nomeOptions = colaboradores.map((c) => ({ value: c.name, label: c.name }));
+  const baseNomeOptions = colaboradores.map((c) => ({ value: c.name, label: c.name }));
+  const optionsComSalvo = (saved?: string) =>
+    saved && !baseNomeOptions.some((o) => o.value === saved)
+      ? [...baseNomeOptions, { value: saved, label: saved }]
+      : baseNomeOptions;
+
+  const nomesColab = colaboradores.map((c) => c.name);
+  const paraQuemSel = participacao.para_quem ?? [];
+  const nomesParaExibir = Array.from(new Set([...nomesColab, ...paraQuemSel]));
 
   return (
     <div>
@@ -166,16 +176,17 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
             <div>
               <p className="text-sm font-semibold text-foreground mb-2">Para quem?</p>
               {colabError && <p className="text-xs text-red-500 mb-2">{colabError}</p>}
-              {colaboradores.length === 0 && !colabError && (
+              {loadingColab && <p className="text-xs text-muted">Carregando advogados...</p>}
+              {!loadingColab && nomesParaExibir.length === 0 && (
                 <p className="text-xs text-muted">Nenhum colaborador encontrado.</p>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {colaboradores.map((c) => (
+                {nomesParaExibir.map((nome) => (
                   <Checkbox
-                    key={c.email}
-                    label={c.name}
-                    checked={(participacao.para_quem ?? []).includes(c.name)}
-                    onChange={(checked) => toggleParaQuem(c.name, checked)}
+                    key={nome}
+                    label={nome}
+                    checked={paraQuemSel.includes(nome)}
+                    onChange={(checked) => toggleParaQuem(nome, checked)}
                   />
                 ))}
               </div>
@@ -203,7 +214,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   value={participacao.responsavel_captacao || ""}
                   onChange={(e) => set({ responsavel_captacao: e.target.value })}
                   placeholder="Selecione o advogado"
-                  options={nomeOptions}
+                  options={optionsComSalvo(participacao.responsavel_captacao)}
                 />
               </FormField>
 
@@ -212,7 +223,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   value={participacao.responsavel_gestao || ""}
                   onChange={(e) => set({ responsavel_gestao: e.target.value })}
                   placeholder="Selecione o advogado"
-                  options={nomeOptions}
+                  options={optionsComSalvo(participacao.responsavel_gestao)}
                 />
               </FormField>
             </div>
