@@ -8,6 +8,8 @@ import FormField, {
   Toggle,
 } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import DateRangePicker from "@/components/ui/DateRangePicker";
+import DatePicker from "@/components/ui/DatePicker";
 import type {
   EscopoItem,
   HoraTrabalhada,
@@ -47,6 +49,34 @@ const SUBTIPO_EXITO = [
   { value: "percentual_fixo", label: "Percentual Fixo" },
   { value: "percentual_variavel", label: "Percentual Variável" },
 ];
+
+function calcHorasContratadas(
+  ht: HoraTrabalhada,
+  duracaoMeses?: number
+): number | undefined {
+  if (!ht.valor_hora || ht.valor_hora <= 0) return undefined;
+  if (ht.tem_pacote_horas && ht.valor_pacote && ht.valor_pacote > 0) {
+    return ht.valor_pacote / ht.valor_hora;
+  }
+  if (
+    ht.tem_teto_mensal &&
+    ht.valor_teto_mensal &&
+    ht.valor_teto_mensal > 0 &&
+    duracaoMeses &&
+    duracaoMeses > 0
+  ) {
+    return (ht.valor_teto_mensal * duracaoMeses) / ht.valor_hora;
+  }
+  return undefined;
+}
+
+function formatHorasBR(v?: number): string {
+  if (v == null || Number.isNaN(v)) return "";
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
+}
 
 interface Step3Props {
   escopos: EscopoItem[];
@@ -131,10 +161,22 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
   const updateHoraTrabalhada = useCallback(
     (escopoIdx: number, partial: Partial<HoraTrabalhada>) => {
       const escopo = escopos[escopoIdx];
-      const updated: EscopoItem = {
-        ...escopo,
-        hora_trabalhada: { ...escopo.hora_trabalhada!, ...partial },
-      };
+      const merged: HoraTrabalhada = { ...escopo.hora_trabalhada!, ...partial };
+      const recalcFields = [
+        "valor_hora",
+        "valor_teto_mensal",
+        "tem_teto_mensal",
+        "valor_pacote",
+        "tem_pacote_horas",
+        "duracao_meses",
+      ];
+      const shouldRecalc =
+        partial.horas_contratadas === undefined &&
+        Object.keys(partial).some((k) => recalcFields.includes(k));
+      if (shouldRecalc) {
+        merged.horas_contratadas = calcHorasContratadas(merged, merged.duracao_meses);
+      }
+      const updated: EscopoItem = { ...escopo, hora_trabalhada: merged };
       const final = [...escopos];
       final[escopoIdx] = updated;
       onChange(final);
@@ -310,6 +352,95 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         value={escopo.hora_trabalhada.tem_hora_fora_expediente ?? true}
                         onChange={(v) => updateHoraTrabalhada(idx, { tem_hora_fora_expediente: v })}
                       />
+
+                      <div className="md:col-span-2 pt-2 border-t border-blue-200">
+                        <p className="text-xs font-medium text-blue-900 mb-2 uppercase tracking-wide">
+                          Período do contrato
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.hora_trabalhada.data_inicio}
+                          dataFim={escopo.hora_trabalhada.data_fim}
+                          onChange={(di, df, dur) => {
+                            const horasContratadas = calcHorasContratadas(
+                              escopo.hora_trabalhada!,
+                              dur
+                            );
+                            updateHoraTrabalhada(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                              horas_contratadas: horasContratadas,
+                            });
+                          }}
+                        />
+                      </div>
+
+                      {(() => {
+                        const horasContratadas = calcHorasContratadas(
+                          escopo.hora_trabalhada,
+                          escopo.hora_trabalhada.duracao_meses
+                        );
+                        const horasTrabalhadas = escopo.hora_trabalhada.horas_trabalhadas ?? 0;
+                        const saldo = (horasContratadas ?? 0) - horasTrabalhadas;
+                        return (
+                          <div className="md:col-span-2 pt-2 border-t border-blue-200">
+                            <p className="text-xs font-medium text-blue-900 mb-2 uppercase tracking-wide">
+                              Horas
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div>
+                                <label className="block text-sm font-semibold text-foreground mb-1">
+                                  Horas contratadas
+                                </label>
+                                <input
+                                  readOnly
+                                  value={formatHorasBR(horasContratadas)}
+                                  placeholder="—"
+                                  className="w-full px-3 py-2 rounded-lg border border-border bg-gray-50 text-foreground text-sm cursor-not-allowed"
+                                />
+                              </div>
+                              <FormField label="Horas já trabalhadas">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={horasTrabalhadas || ""}
+                                  onChange={(e) =>
+                                    updateHoraTrabalhada(idx, {
+                                      horas_trabalhadas: parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="0"
+                                />
+                              </FormField>
+                              <div>
+                                <label className="block text-sm font-semibold text-foreground mb-1">
+                                  Saldo
+                                </label>
+                                <div
+                                  className={`px-3 py-2 rounded-lg border text-sm ${
+                                    horasContratadas == null
+                                      ? "bg-gray-50 border-border text-muted"
+                                      : saldo > 0
+                                        ? "bg-green-50 border-green-200 text-green-800"
+                                        : saldo < 0
+                                          ? "bg-red-50 border-red-200 text-red-800"
+                                          : "bg-amber-50 border-amber-200 text-amber-800"
+                                  }`}
+                                >
+                                  {horasContratadas == null
+                                    ? "—"
+                                    : saldo > 0
+                                      ? `Saldo positivo: ${formatHorasBR(saldo)} horas`
+                                      : saldo < 0
+                                        ? `Horas excedidas: ${formatHorasBR(Math.abs(saldo))} horas`
+                                        : "Horas integralmente utilizadas"}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -332,16 +463,12 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       </FormField>
 
                       {!escopo.pro_labore.tem_parcelamento && (
-                        <FormField
-                          label="Vencimento"
-                          hint="Informe uma data completa (ex.: 05/06/2026) ou descreva a condição de vencimento."
-                        >
-                          <Input
-                            value={escopo.pro_labore.vencimento || ""}
-                            onChange={(e) =>
-                              updateProLabore(idx, { vencimento: e.target.value })
+                        <FormField label="Vencimento (data)">
+                          <DatePicker
+                            value={escopo.pro_labore.vencimento_data}
+                            onChange={(v) =>
+                              updateProLabore(idx, { vencimento_data: v })
                             }
-                            placeholder="05/06/2026"
                           />
                         </FormField>
                       )}
@@ -372,20 +499,33 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                               placeholder="0,00"
                             />
                           </FormField>
-                          <FormField
-                            label="Vencimento das parcelas"
-                            hint="Informe o dia mensal (ex.: 5), a primeira data (ex.: 05/06/2026) ou uma regra de vencimento."
-                          >
-                            <Input
-                              value={escopo.pro_labore.vencimento_parcelas || ""}
-                              onChange={(e) =>
-                                updateProLabore(idx, { vencimento_parcelas: e.target.value })
+                          <FormField label="Vencimento 1ª parcela (data)">
+                            <DatePicker
+                              value={escopo.pro_labore.vencimento_parcelas_data}
+                              onChange={(v) =>
+                                updateProLabore(idx, { vencimento_parcelas_data: v })
                               }
-                              placeholder="5 ou 05/06/2026"
                             />
                           </FormField>
                         </>
                       )}
+
+                      <div className="md:col-span-2 pt-2 border-t border-green-200">
+                        <p className="text-xs font-medium text-green-900 mb-2 uppercase tracking-wide">
+                          Vigência
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.pro_labore.data_inicio}
+                          dataFim={escopo.pro_labore.data_fim}
+                          onChange={(di, df, dur) =>
+                            updateProLabore(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -407,16 +547,12 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </FormField>
 
-                      <FormField
-                        label="Vencimento"
-                        hint="Informe apenas o dia para cobranças mensais (ex.: 5) ou uma data completa (ex.: 05/06/2026)."
-                      >
-                        <Input
-                          value={escopo.mensalidade.dia_vencimento || ""}
-                          onChange={(e) =>
-                            updateMensalidade(idx, { dia_vencimento: e.target.value })
+                      <FormField label="1º vencimento (data)">
+                        <DatePicker
+                          value={escopo.mensalidade.dia_vencimento_data}
+                          onChange={(v) =>
+                            updateMensalidade(idx, { dia_vencimento_data: v })
                           }
-                          placeholder="5 ou 05/06/2026"
                         />
                       </FormField>
 
@@ -452,6 +588,23 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           />
                         </FormField>
                       )}
+
+                      <div className="md:col-span-2 pt-2 border-t border-purple-200">
+                        <p className="text-xs font-medium text-purple-900 mb-2 uppercase tracking-wide">
+                          Período da mensalidade
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.mensalidade.data_inicio}
+                          dataFim={escopo.mensalidade.data_fim}
+                          onChange={(di, df, dur) =>
+                            updateMensalidade(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -518,18 +671,31 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </FormField>
 
-                      <FormField
-                        label="Vencimento do êxito"
-                        hint="Informe uma data, prazo ou condição de vencimento."
-                      >
-                        <Input
-                          value={escopo.exito.vencimento || ""}
-                          onChange={(e) =>
-                            updateExito(idx, { vencimento: e.target.value })
+                      <FormField label="Vencimento (data)">
+                        <DatePicker
+                          value={escopo.exito.vencimento_data}
+                          onChange={(v) =>
+                            updateExito(idx, { vencimento_data: v })
                           }
-                          placeholder="Ex: em até 5 dias após o benefício"
                         />
                       </FormField>
+
+                      <div className="md:col-span-2 pt-2 border-t border-amber-200">
+                        <p className="text-xs font-medium text-amber-900 mb-2 uppercase tracking-wide">
+                          Período do êxito
+                        </p>
+                        <DateRangePicker
+                          dataInicio={escopo.exito.data_inicio}
+                          dataFim={escopo.exito.data_fim}
+                          onChange={(di, df, dur) =>
+                            updateExito(idx, {
+                              data_inicio: di,
+                              data_fim: df,
+                              duracao_meses: dur,
+                            })
+                          }
+                        />
+                      </div>
 
                       <Toggle
                         label="Benefício prospectivo?"
@@ -537,16 +703,19 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         onChange={(v) => updateExito(idx, { tem_beneficio_prospectivo: v })}
                       />
                       {escopo.exito.tem_beneficio_prospectivo && (
-                        <FormField label="Meses do benefício prospectivo">
-                          <Input
-                            type="number"
-                            value={escopo.exito.periodo_prospectivo_meses || ""}
-                            onChange={(e) =>
-                              updateExito(idx, { periodo_prospectivo_meses: parseInt(e.target.value) || 0 })
+                        <div className="md:col-span-2">
+                          <DateRangePicker
+                            dataInicio={escopo.exito.prospectivo_data_inicio}
+                            dataFim={escopo.exito.prospectivo_data_fim}
+                            onChange={(di, df, dur) =>
+                              updateExito(idx, {
+                                prospectivo_data_inicio: di,
+                                prospectivo_data_fim: df,
+                                prospectivo_duracao_meses: dur,
+                              })
                             }
-                            placeholder="Ex: 12"
                           />
-                        </FormField>
+                        </div>
                       )}
 
                       <Toggle

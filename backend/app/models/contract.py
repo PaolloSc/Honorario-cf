@@ -116,7 +116,11 @@ class HoraTrabalhada(BaseModel):
     tem_pacote_horas: bool = False
     quantidade_horas_pacote: Optional[int] = None
     valor_pacote: Optional[float] = None
-    periodo_banco_horas_meses: Optional[int] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
+    horas_contratadas: Optional[float] = None
+    horas_trabalhadas: Optional[float] = None
     tem_hora_urgencia: bool = True
     tem_hora_fora_expediente: bool = True
  
@@ -127,15 +131,27 @@ class ProLabore(BaseModel):
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
     vencimento: Optional[str] = None
+    vencimento_data: Optional[str] = None
+    vencimento_obs: Optional[str] = None
     vencimento_parcelas: Optional[str] = None
+    vencimento_parcelas_data: Optional[str] = None
+    vencimento_parcelas_obs: Optional[str] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
  
  
 class Mensalidade(BaseModel):
     valor: float
     subtipo: SubtipoMensalidade
     dia_vencimento: str
+    dia_vencimento_data: Optional[str] = None
+    dia_vencimento_obs: Optional[str] = None
     variacao_preco: VariacaoPrecoMensalidade = VariacaoPrecoMensalidade.SEM_VARIACAO
     limitacao_temporal_anos: Optional[int] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
     faixas_preco: Optional[list[dict[str, str]]] = None
     fases_processuais: Optional[list[dict[str, str]]] = None
  
@@ -151,11 +167,18 @@ class Exito(BaseModel):
     incidencia: str = ""
     base_calculo: str = ""
     vencimento: str = ""
+    vencimento_data: Optional[str] = None
+    vencimento_obs: Optional[str] = None
     forma_pagamento: str = ""
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
     tem_beneficio_prospectivo: bool = False
-    periodo_prospectivo_meses: Optional[int] = None
+    prospectivo_data_inicio: Optional[str] = None
+    prospectivo_data_fim: Optional[str] = None
+    prospectivo_duracao_meses: Optional[int] = None
     faixas_percentual: Optional[list[dict[str, str]]] = None
     deduz_outro_honorario: bool = False
     honorario_deduzido: Optional[str] = None

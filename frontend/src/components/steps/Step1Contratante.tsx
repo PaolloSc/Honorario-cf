@@ -76,6 +76,7 @@ export default function Step1Contratante({
   onChange,
 }: Step1Props) {
   const [loadingCNPJ, setLoadingCNPJ] = useState<number | null>(null);
+  const [cnpjLoaded, setCnpjLoaded] = useState<Set<number>>(new Set());
   const [cnpjError, setCNPJError] = useState<string | null>(null);
 
   const updateContratante = useCallback(
@@ -94,6 +95,14 @@ export default function Step1Contratante({
   const removeContratante = useCallback(
     (index: number) => {
       if (contratantes.length <= 1) return;
+      setCnpjLoaded((prev) => {
+        const next = new Set<number>();
+        prev.forEach((i) => {
+          if (i < index) next.add(i);
+          else if (i > index) next.add(i - 1);
+        });
+        return next;
+      });
       onChange(contratantes.filter((_, i) => i !== index));
     },
     [contratantes, onChange]
@@ -101,6 +110,12 @@ export default function Step1Contratante({
 
   const switchTipo = useCallback(
     (index: number, tipo: TipoPessoa) => {
+      setCnpjLoaded((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+      setCNPJError(null);
       const updated = [...contratantes];
       updated[index] = tipo === "PF" ? emptyPF() : emptyPJ();
       onChange(updated);
@@ -125,6 +140,7 @@ export default function Step1Contratante({
           razao_social: data.razao_social,
           endereco: data.endereco,
         });
+        setCnpjLoaded((prev) => new Set(prev).add(index));
       } catch (err) {
         console.error("[CNPJ Lookup] Error:", err);
         const msg = err instanceof Error ? err.message : "erro desconhecido";
@@ -194,8 +210,8 @@ export default function Step1Contratante({
           {c.tipo === "PJ" ? (
             <PJForm
               data={c}
-              index={idx}
               loadingCNPJ={loadingCNPJ === idx}
+              loaded={cnpjLoaded.has(idx) || (c.tipo === "PJ" && !!c.razao_social)}
               onUpdate={(partial) => updateContratante(idx, partial)}
               onCNPJLookup={(cnpj) => handleCNPJLookup(idx, cnpj)}
             />
@@ -225,14 +241,14 @@ export default function Step1Contratante({
 
 function PJForm({
   data,
-  index,
   loadingCNPJ,
+  loaded,
   onUpdate,
   onCNPJLookup,
 }: {
   data: ContratantePJ;
-  index: number;
   loadingCNPJ: boolean;
+  loaded: boolean;
   onUpdate: (partial: Partial<ContratantePJ>) => void;
   onCNPJLookup: (cnpj: string) => void;
 }) {
@@ -271,21 +287,27 @@ function PJForm({
         />
       </FormField>
 
-      <FormField label="Razão Social">
-        <Input
-          value={data.razao_social}
-          onChange={(e) => onUpdate({ razao_social: e.target.value })}
-          placeholder="Preenchido automaticamente pelo CNPJ"
-        />
-      </FormField>
+      {loaded && (
+        <FormField label="Razão Social">
+          <Input
+            value={data.razao_social}
+            readOnly
+            placeholder="Preenchido automaticamente pelo CNPJ"
+            className="bg-gray-50 cursor-not-allowed"
+          />
+        </FormField>
+      )}
 
-      <FormField label="Endereço">
-        <Input
-          value={data.endereco}
-          onChange={(e) => onUpdate({ endereco: e.target.value })}
-          placeholder="Preenchido automaticamente pelo CNPJ"
-        />
-      </FormField>
+      {loaded && (
+        <FormField label="Endereço">
+          <Input
+            value={data.endereco}
+            readOnly
+            placeholder="Preenchido automaticamente pelo CNPJ"
+            className="bg-gray-50 cursor-not-allowed"
+          />
+        </FormField>
+      )}
 
       <div className="md:col-span-2">
         <Checkbox
@@ -425,6 +447,8 @@ function PFForm({
     buildEndereco(cepData, numero, value);
   };
 
+  const enderecoRevelado = cepData != null || (data.endereco?.trim().length ?? 0) > 0;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="Nome completo" required>
@@ -496,32 +520,37 @@ function PFForm({
         {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
       </FormField>
 
-      <FormField label="Número">
-        <Input
-          value={numero}
-          onChange={(e) => handleNumeroChange(e.target.value)}
-          placeholder="Ex: 271"
-          disabled={!cepData}
-        />
-      </FormField>
+      {cepData && (
+        <FormField label="Número">
+          <Input
+            value={numero}
+            onChange={(e) => handleNumeroChange(e.target.value)}
+            placeholder="Ex: 271"
+          />
+        </FormField>
+      )}
 
-      <FormField label="Complemento">
-        <Input
-          value={complemento}
-          onChange={(e) => handleComplementoChange(e.target.value)}
-          placeholder="Apto, sala, bloco..."
-          disabled={!cepData}
-        />
-      </FormField>
+      {cepData && (
+        <FormField label="Complemento">
+          <Input
+            value={complemento}
+            onChange={(e) => handleComplementoChange(e.target.value)}
+            placeholder="Apto, sala, bloco..."
+          />
+        </FormField>
+      )}
 
-      <FormField label="Endereço completo" required>
-        <Input
-          value={data.endereco}
-          onChange={(e) => onUpdate({ endereco: e.target.value })}
-          placeholder="Rua, número, bairro, cidade/UF, CEP"
-          required
-        />
-      </FormField>
+      {enderecoRevelado && (
+        <FormField label="Endereço completo" required>
+          <Input
+            value={data.endereco}
+            readOnly
+            placeholder="Preenchido automaticamente pelo CEP"
+            className="bg-gray-50 cursor-not-allowed"
+            required
+          />
+        </FormField>
+      )}
     </div>
   );
 }
