@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import FormField, { Checkbox, Input, Select, Toggle } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
-import type { EscopoItem, Participacao, ParticipacaoValorTipo } from "@/types/contract";
-import { ESCOPO_LABELS } from "@/types/contract";
+import type { EscopoItem, Participacao, ParticipacaoValorTipo, TipoHonorario } from "@/types/contract";
+import { ESCOPO_LABELS, HONORARIO_LABELS } from "@/types/contract";
 import { listColaboradores } from "@/app/lib/api";
 
 function buildObjetoLines(escopos: EscopoItem[]): string[] {
@@ -69,6 +69,31 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
 
   const set = (partial: Partial<Participacao>) => onChange({ ...participacao, ...partial });
 
+  const escopoLabel = (e: EscopoItem) =>
+    (ESCOPO_LABELS[e.tipo] || e.tipo) + (e.descricao_custom ? ` - ${e.descricao_custom}` : "");
+
+  const setBaseTipo = (tipo: "escopo" | "honorario") =>
+    set({ base_tipo: tipo, base_escopo_index: undefined, base_honorario: undefined, base_label: "" });
+
+  const selecionarEscopo = (idx: number) =>
+    set({ base_escopo_index: idx, base_honorario: undefined, base_label: escopoLabel(escopos[idx]) });
+
+  const selecionarHonorario = (idx: number, hon: TipoHonorario) =>
+    set({
+      base_escopo_index: idx,
+      base_honorario: hon,
+      base_label: `${escopoLabel(escopos[idx])} · ${HONORARIO_LABELS[hon]}`,
+    });
+
+  const paresHonorario: Array<{ idx: number; hon: TipoHonorario; label: string }> = [];
+  escopos.forEach((e, idx) => {
+    (e.honorarios ?? []).forEach((hon) => {
+      paresHonorario.push({ idx, hon, label: `${escopoLabel(e)} — ${HONORARIO_LABELS[hon]}` });
+    });
+  });
+
+  const baseSelecionada = Boolean(participacao.base_label);
+
   const setValorTipo = (tipo: ParticipacaoValorTipo) =>
     set({ valor_tipo: tipo, valor_percentual: "", valor_monetario: undefined, valor_outro: "" });
 
@@ -119,6 +144,70 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
 
         {participacao.tem_participacao && (
           <div className="space-y-6 mt-4">
+            {/* Base da participação */}
+            <div>
+              <p className="text-sm font-semibold text-foreground mb-2">Base da participação</p>
+              {escopos.length === 0 ? (
+                <p className="text-xs text-muted">Defina escopos na etapa 2 primeiro.</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-4 mb-3">
+                    {(["escopo", "honorario"] as const).map((t) => (
+                      <label key={t} className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="radio"
+                          name="base_tipo"
+                          checked={participacao.base_tipo === t}
+                          onChange={() => setBaseTipo(t)}
+                          className="h-4 w-4 text-primary focus:ring-primary-light"
+                        />
+                        {t === "escopo" ? "Escopo" : "Honorário"}
+                      </label>
+                    ))}
+                  </div>
+
+                  {participacao.base_tipo === "escopo" && (
+                    <div className="space-y-2">
+                      {escopos.map((e, idx) => (
+                        <label key={idx} className="flex items-start gap-2 cursor-pointer text-sm">
+                          <input
+                            type="radio"
+                            name="base_escopo"
+                            checked={participacao.base_escopo_index === idx && !participacao.base_honorario}
+                            onChange={() => selecionarEscopo(idx)}
+                            className="h-4 w-4 mt-0.5 text-primary focus:ring-primary-light"
+                          />
+                          {escopoLabel(e)}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {participacao.base_tipo === "honorario" && (
+                    <div className="space-y-2">
+                      {paresHonorario.length === 0 && (
+                        <p className="text-xs text-muted">Nenhum honorário definido nos escopos.</p>
+                      )}
+                      {paresHonorario.map((p) => (
+                        <label key={`${p.idx}-${p.hon}`} className="flex items-start gap-2 cursor-pointer text-sm">
+                          <input
+                            type="radio"
+                            name="base_honorario"
+                            checked={participacao.base_escopo_index === p.idx && participacao.base_honorario === p.hon}
+                            onChange={() => selecionarHonorario(p.idx, p.hon)}
+                            className="h-4 w-4 mt-0.5 text-primary focus:ring-primary-light"
+                          />
+                          {p.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {baseSelecionada && (
+              <>
             {/* Valor da participação */}
             <div>
               <p className="text-sm font-semibold text-foreground mb-2">Valor da participação</p>
@@ -258,6 +347,8 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                 </FormField>
               </div>
             </div>
+              </>
+            )}
           </div>
         )}
       </div>
