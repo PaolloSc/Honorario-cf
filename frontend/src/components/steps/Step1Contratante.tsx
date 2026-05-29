@@ -425,6 +425,8 @@ function PFForm({
     buildEndereco(cepData, numero, value);
   };
 
+  const enderecoRevelado = cepData != null || (data.endereco?.trim().length ?? 0) > 0;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="Nome completo" required>
@@ -496,32 +498,37 @@ function PFForm({
         {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
       </FormField>
 
-      <FormField label="Número">
-        <Input
-          value={numero}
-          onChange={(e) => handleNumeroChange(e.target.value)}
-          placeholder="Ex: 271"
-          disabled={!cepData}
-        />
-      </FormField>
+      {cepData && (
+        <FormField label="Número">
+          <Input
+            value={numero}
+            onChange={(e) => handleNumeroChange(e.target.value)}
+            placeholder="Ex: 271"
+          />
+        </FormField>
+      )}
 
-      <FormField label="Complemento">
-        <Input
-          value={complemento}
-          onChange={(e) => handleComplementoChange(e.target.value)}
-          placeholder="Apto, sala, bloco..."
-          disabled={!cepData}
-        />
-      </FormField>
+      {cepData && (
+        <FormField label="Complemento">
+          <Input
+            value={complemento}
+            onChange={(e) => handleComplementoChange(e.target.value)}
+            placeholder="Apto, sala, bloco..."
+          />
+        </FormField>
+      )}
 
-      <FormField label="Endereço completo" required>
-        <Input
-          value={data.endereco}
-          onChange={(e) => onUpdate({ endereco: e.target.value })}
-          placeholder="Rua, número, bairro, cidade/UF, CEP"
-          required
-        />
-      </FormField>
+      {enderecoRevelado && (
+        <FormField label="Endereço completo" required>
+          <Input
+            value={data.endereco}
+            readOnly
+            placeholder="Preenchido automaticamente pelo CEP"
+            className="bg-gray-50 cursor-not-allowed"
+            required
+          />
+        </FormField>
+      )}
     </div>
   );
 }
