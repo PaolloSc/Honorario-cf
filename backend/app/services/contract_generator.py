@@ -759,42 +759,55 @@ class ContractGenerator:
         )
         com_parte_relacionada = data.incluir_partes_relacionadas and (has_hora or has_mensalidade_processo)
 
-        if com_parte_relacionada:
-            solidariedade = (
-                "Caso qualificada mais de uma pessoa ou entidade no campo CONTRATANTE, "
-                "haverá solidariedade entre elas, assim como no caso de prestação de "
-                "serviço a Partes Relacionadas. Na hipótese de obrigações devidas ao "
-                "C&F, as Partes reconhecem a possibilidade de encontro de contas, "
-                "deduções e compensações ainda que multilaterais entre as partes "
-                "signatárias e/ou Partes Relacionadas, de modo a adimplir tais "
-                "obrigações em ordem preferencial."
-            )
-        else:
-            solidariedade = (
-                "Caso qualificada mais de uma pessoa ou entidade no campo CONTRATANTE, "
-                "haverá solidariedade entre elas. Na hipótese de obrigações devidas ao "
-                "C&F, as Partes reconhecem a possibilidade de encontro de contas, "
-                "deduções e compensações ainda que multilaterais entre as partes "
-                "signatárias, de modo a adimplir tais obrigações em ordem preferencial."
-            )
-
         clauses = [
             "Todos os valores previstos nesta contratação serão reajustados anualmente "
             "pela variação positiva e acumulada do IPCA, ou outro índice que vier a "
-            "substitui-lo, sempre desde a data da assinatura do Contrato.",
+            "substituí-lo, sempre desde a data da assinatura do Contrato.",
             "Todo e qualquer pagamento devido ao C&F será feito por meio de boleto bancário "
             f"ou transferência bancária para a conta de sua titularidade: {settings.bank_account_info}.",
             "A CONTRATANTE se declara ciente das notórias tentativas gerais de fraude e "
-            "golpes simulando contatos de advogados e escritórios de advocacia.",
+            "golpes simulando contatos de advogados e escritórios de advocacia, estando, "
+            "contudo, igualmente ciente dos canais oficiais de contato do C&F e obrigando-se "
+            "a realizar pagamentos somente em conta de titularidade do C&F ou mediante "
+            "apresentação de boleto ou outro título em que este seja o beneficiário.",
             "A CONTRATANTE reconhece que qualquer pagamento realizado em inobservância ao "
             "previsto neste Contrato será considerado inválido e ineficaz.",
-            "As obrigações de pagamento previstas neste Contrato serão devidas, independentemente "
+            "As obrigações de pagamento previstas neste Contrato serão devidas, independente "
             "de notificação, tão logo se dê o seu vencimento.",
-            "O atraso no pagamento implicará na incidência do seguinte: juros de 1% a.m.; "
+            "O atraso no pagamento implicará na incidência do seguinte: juros de 1% a.m; "
             "multa de 10% (dez por cento) sobre o valor em atraso e atualização monetária "
-            "pelo IPCA, sem prejuízo de suspensão do serviço.",
-            solidariedade,
+            "pelo IPCA, sem prejuízo de suspensão do serviço ou rescisão contratual a "
+            "critério do C&F.",
+            "Em caso de mudanças legislativas/regulatórias relevantes (incluindo reforma "
+            "tributária) que alterem substancialmente a carga tributária, os custos de "
+            "conformidade, ou a forma de incidência/retenção de tributos aplicáveis aos "
+            "serviços, as Partes renegociarão, de boa-fé, os valores e/ou a estrutura de "
+            "faturamento para preservação do equilíbrio econômico-financeiro.",
+            "A CONTRATANTE reconhece que o C&F poderá, dentro da legalidade e das normas "
+            "aplicáveis, definir a forma de faturamento mais eficiente do ponto de vista "
+            "fiscal (inclusive em eventual migração de regime tributário), sem alteração do "
+            "escopo ou do valor líquido pactuado.",
         ]
+
+        if com_parte_relacionada:
+            clauses.append(
+                "Caso qualificada mais de uma pessoa ou entidade no campo CONTRATANTE, "
+                "haverá solidariedade entre elas, assim como no caso de prestação de "
+                "serviço a Partes Relacionadas. Na hipótese de obrigações devidas ao C&F, "
+                "as Partes reconhecem a possibilidade de encontro de contas, deduções e "
+                "compensações ainda que multilaterais entre as partes signatárias e/ou "
+                "Partes Relacionadas, de modo a adimplir tais obrigações em ordem "
+                "preferencial."
+            )
+        else:
+            clauses.append(
+                "Caso qualificada mais de uma pessoa ou entidade no campo CONTRATANTE, "
+                "haverá solidariedade entre elas. Na hipótese de obrigações devidas ao "
+                "C&F, as Partes reconhecem a possibilidade de encontro de contas, deduções "
+                "e compensações ainda que multilaterais entre as partes signatárias, de "
+                "modo a adimplir tais obrigações em ordem preferencial."
+            )
+
         for i, clause in enumerate(clauses, 1):
             doc.add_paragraph(f"4.{i}. {clause}")
  
