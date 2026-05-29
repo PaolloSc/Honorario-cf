@@ -813,22 +813,43 @@ class ContractGenerator:
  
     def _add_accessories(self, doc: Document, ac: Acessorios) -> None:
         doc.add_heading("5. REEMBOLSOS, DESPESAS E OUTRAS VERBAS", level=2)
+        counter = 1
         if ac.tem_reembolso:
             doc.add_paragraph(
-                "5.1. Valores adiantados pelo C&F serão reembolsados pela CONTRATANTE, "
-                "mediante comprovação, no prazo de até 05 dias após a apresentação do(s) "
-                "comprovante(s)."
+                f"5.{counter}. Valores adiantados pelo C&F serão reembolsados pela "
+                "CONTRATANTE, mediante comprovação, no prazo de até 05 dias após a "
+                "apresentação do(s) comprovante(s)."
             )
             if ac.reembolso_limitado and ac.descricao_limitacao_reembolso:
-                doc.add_paragraph(
-                    f"Limitação: {ac.descricao_limitacao_reembolso}"
-                )
-        doc.add_paragraph(
-            "5.2. Custas, despesas, taxas, emolumentos, cópias xerográficas, diligências, "
-            "correspondentes, peritos, assistentes técnicos, tradutores, serviços de entrega "
-            "e correio, deslocamentos, transporte, alimentação e hospedagem serão suportados "
-            "pela CONTRATANTE."
-        )
+                doc.add_paragraph(f"Limitação: {ac.descricao_limitacao_reembolso}")
+            counter += 1
+
+        clauses = [
+            "Custas, despesas, taxas, emolumentos, cópias xerográficas, diligências, "
+            "correspondentes, peritos, assistentes técnicos, tradutores, serviços de "
+            "entrega e correio, deslocamentos, transporte, alimentação, hospedagem, demais "
+            "despesas necessárias à execução do serviço e eventuais multas processuais e/ou "
+            "honorários de sucumbência devidos ao advogado da parte contrária são de "
+            "responsabilidade da CONTRATANTE.",
+            "A CONTRATANTE reconhece que o C&F poderá utilizar ferramentas e/ou sistemas de "
+            "busca de ativos, endereços e outras informações como CredLocaliza ou "
+            "equivalentes, cujo custo será reembolsado pela CONTRATANTE nos exatos valores "
+            "faturados pela ferramenta ou sistema.",
+            "A prestação de serviço presencial fora da sede do C&F implicará em despesas de "
+            "deslocamento, as quais serão cobradas à razão de R$ 1,70 (um real e setenta "
+            "centavos) por quilômetro rodado.",
+            "O custo de cada cópia xerox a ser reembolsado pela CONTRATANTE é de R$ 0,40 "
+            "(quarenta centavos de reais).",
+            "As Partes pactuam ainda que: (i) em caso de êxito, ainda que parcial, os "
+            "honorários sucumbenciais fixados pertencem exclusivamente ao C&F; (ii) em caso "
+            "de acordo que inclua renúncia a sucumbências, o C&F deverá ser previamente "
+            "consultado; e (iii) se a CONTRATANTE concordar com a redução ou renúncia de "
+            "sucumbências sem anuência do C&F, o valor correspondente será descontado do "
+            "benefício econômico para fins de cálculo do êxito ou devido diretamente ao C&F.",
+        ]
+        for clause in clauses:
+            doc.add_paragraph(f"5.{counter}. {clause}")
+            counter += 1
  
     def _add_obligations(self, doc: Document) -> None:
         doc.add_heading("6. OBRIGAÇÕES DAS PARTES", level=2)
