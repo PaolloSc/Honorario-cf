@@ -76,6 +76,7 @@ export default function Step1Contratante({
   onChange,
 }: Step1Props) {
   const [loadingCNPJ, setLoadingCNPJ] = useState<number | null>(null);
+  const [cnpjLoaded, setCnpjLoaded] = useState<Set<number>>(new Set());
   const [cnpjError, setCNPJError] = useState<string | null>(null);
 
   const updateContratante = useCallback(
@@ -125,6 +126,7 @@ export default function Step1Contratante({
           razao_social: data.razao_social,
           endereco: data.endereco,
         });
+        setCnpjLoaded((prev) => new Set(prev).add(index));
       } catch (err) {
         console.error("[CNPJ Lookup] Error:", err);
         const msg = err instanceof Error ? err.message : "erro desconhecido";
@@ -196,6 +198,7 @@ export default function Step1Contratante({
               data={c}
               index={idx}
               loadingCNPJ={loadingCNPJ === idx}
+              loaded={cnpjLoaded.has(idx) || (c.tipo === "PJ" && !!c.razao_social)}
               onUpdate={(partial) => updateContratante(idx, partial)}
               onCNPJLookup={(cnpj) => handleCNPJLookup(idx, cnpj)}
             />
@@ -227,12 +230,14 @@ function PJForm({
   data,
   index,
   loadingCNPJ,
+  loaded,
   onUpdate,
   onCNPJLookup,
 }: {
   data: ContratantePJ;
   index: number;
   loadingCNPJ: boolean;
+  loaded: boolean;
   onUpdate: (partial: Partial<ContratantePJ>) => void;
   onCNPJLookup: (cnpj: string) => void;
 }) {
@@ -271,21 +276,27 @@ function PJForm({
         />
       </FormField>
 
-      <FormField label="Razão Social">
-        <Input
-          value={data.razao_social}
-          onChange={(e) => onUpdate({ razao_social: e.target.value })}
-          placeholder="Preenchido automaticamente pelo CNPJ"
-        />
-      </FormField>
+      {loaded && (
+        <FormField label="Razão Social">
+          <Input
+            value={data.razao_social}
+            readOnly
+            placeholder="Preenchido automaticamente pelo CNPJ"
+            className="bg-gray-50 cursor-not-allowed"
+          />
+        </FormField>
+      )}
 
-      <FormField label="Endereço">
-        <Input
-          value={data.endereco}
-          onChange={(e) => onUpdate({ endereco: e.target.value })}
-          placeholder="Preenchido automaticamente pelo CNPJ"
-        />
-      </FormField>
+      {loaded && (
+        <FormField label="Endereço">
+          <Input
+            value={data.endereco}
+            readOnly
+            placeholder="Preenchido automaticamente pelo CNPJ"
+            className="bg-gray-50 cursor-not-allowed"
+          />
+        </FormField>
+      )}
 
       <div className="md:col-span-2">
         <Checkbox
