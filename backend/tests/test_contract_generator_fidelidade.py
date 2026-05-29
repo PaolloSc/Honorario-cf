@@ -47,6 +47,124 @@ def _has(paras: list[str], needle: str) -> bool:
     return any(needle in p for p in paras)
 
 
+def _escopo(hon: str, *, mensalidade_subtipo="por_processo", mensalidade_variacao="sem_variacao",
+            tipo="consultoria_lgpd") -> dict:
+    """Escopo válido para um dado tipo de honorário, com o objeto de detalhe exigido."""
+    e: dict = {"tipo": tipo, "honorarios": [hon]}
+    if hon == "hora_trabalhada":
+        e["hora_trabalhada"] = {
+            "valor_hora": 300, "tem_teto_mensal": False, "tem_pacote_horas": False,
+            "tem_hora_urgencia": False, "tem_hora_fora_expediente": False,
+        }
+    elif hon == "pro_labore":
+        e["pro_labore"] = {"valor_total": 10000, "tem_parcelamento": False}
+    elif hon == "mensalidade":
+        m = {"valor": 2000, "subtipo": mensalidade_subtipo, "dia_vencimento": "10",
+             "variacao_preco": mensalidade_variacao}
+        if mensalidade_variacao == "reducao_volume":
+            m["faixas_preco"] = [{"faixa": "1-10", "valor": "2000"}, {"faixa": "11+", "valor": "1500"}]
+        e["mensalidade"] = m
+    elif hon == "exito":
+        e["exito"] = {
+            "subtipo": "percentual_fixo", "percentual": 20, "incidencia": "beneficio_economico",
+            "base_calculo": "x", "vencimento": "a_vista", "forma_pagamento": "x",
+            "tem_beneficio_prospectivo": False, "deduz_outro_honorario": False,
+        }
+    elif hon == "permuta":
+        e["permuta"] = {"objeto_permuta": "imovel", "descricao": "x", "tem_torna": False}
+    return e
+
+
+def _req_escopos(escopos: list[dict], *, partes_rel=True) -> dict:
+    return {
+        "contratantes": [{
+            "tipo": "PF", "nome": "Fulano", "nacionalidade": "brasileiro",
+            "cpf": "00000000000", "profissao": "x", "estado_civil": "Solteiro(a)",
+            "endereco": "rua x", "email": "a@a.com",
+        }],
+        "incluir_partes_relacionadas": partes_rel,
+        "escopos": escopos,
+        "acessorios": {"tem_reembolso": True, "reembolso_limitado": False,
+                       "tem_penalidade_inadimplemento": False},
+        "participacao": {"tem_participacao": False},
+    }
+
+
+def _xml_for(req: dict) -> str:
+    data = ContratoRequest(**req)
+    gen = ContractGenerator()
+    _, path = gen.generate(data, contract_id="FIDELIDADE_XML")
+    return zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+
+
+# Casos: cada tipo de honorário, variantes de mensalidade, e combinações.
+import pytest
+import xml.dom.minidom as _minidom
+
+_CASOS = {
+    "hora": [_escopo("hora_trabalhada")],
+    "pro_labore": [_escopo("pro_labore")],
+    "mensalidade_processo": [_escopo("mensalidade", mensalidade_subtipo="por_processo")],
+    "mensalidade_pasta": [_escopo("mensalidade", mensalidade_subtipo="por_pasta")],
+    "mensalidade_partido": [_escopo("mensalidade", mensalidade_subtipo="advocacia_partido")],
+    "mensalidade_faixas": [_escopo("mensalidade", mensalidade_subtipo="advocacia_partido",
+                                   mensalidade_variacao="reducao_volume")],
+    "exito": [_escopo("exito")],
+    "permuta": [_escopo("permuta")],
+    "multi_hora_exito": [_escopo("hora_trabalhada"), _escopo("exito", tipo="consultoria_contratual")],
+    "multi_todos": [
+        _escopo("hora_trabalhada"),
+        _escopo("pro_labore", tipo="consultoria_contratual"),
+        _escopo("mensalidade", tipo="consultoria_compliance_trabalhista"),
+        _escopo("exito", tipo="contencioso_representacao"),
+        _escopo("permuta", tipo="consultoria_opiniao_legal"),
+    ],
+}
+
+
+@pytest.mark.parametrize("nome", list(_CASOS.keys()))
+def test_secoes_4a11_presentes_para_cada_caso(nome):
+    """Cada combinação de honorário/escopo gera todas as seções 4-11 e termina certo."""
+    paras = _paras_for(_req_escopos(_CASOS[nome]))
+    # Seções comuns sempre presentes (independem do honorário)
+    assert _has(paras, "reforma tributária")                 # 4.7
+    assert _has(paras, "CredLocaliza")                       # 5.3
+    assert _has(paras, "obrigação de meio")                  # 6.3
+    assert _has(paras, "inteligência artificial")            # 7.3
+    assert _has(paras, "art. 112, §1º, do Código de Processo Civil")  # 8.2.1
+    assert _has(paras, "utilizar seu nome, marca e logotipo")  # 9.4
+    assert _has(paras, "título executivo extrajudicial")     # 10.7
+    assert _has(paras, "por mais privilegiado que seja")     # 11.1
+    assert _has(paras, "TESTEMUNHAS:")                       # termina nas assinaturas
+
+
+@pytest.mark.parametrize("nome", list(_CASOS.keys()))
+def test_xml_bem_formado_para_cada_caso(nome):
+    """O .docx gerado é XML bem-formado para toda combinação."""
+    xml = _xml_for(_req_escopos(_CASOS[nome]))
+    _minidom.parseString(xml)  # levanta se malformado
+
+
+@pytest.mark.parametrize("nome", ["exito", "multi_hora_exito", "multi_todos"])
+def test_tabela_exito_presente_quando_ha_exito(nome):
+    paras = _paras_for(_req_escopos(_CASOS[nome]))
+    assert _has(paras, "50% do percentual de êxito pactuado")
+
+
+@pytest.mark.parametrize("nome", ["hora", "pro_labore", "mensalidade_processo", "permuta"])
+def test_tabela_exito_ausente_quando_nao_ha_exito(nome):
+    paras = _paras_for(_req_escopos(_CASOS[nome]))
+    assert not _has(paras, "50% do percentual de êxito pactuado")
+
+
+@pytest.mark.parametrize("partes_rel", [True, False])
+def test_solidariedade_condicional_multi_escopo(partes_rel):
+    # hora trabalhada presente => com_parte_relacionada segue incluir_partes_relacionadas
+    paras = _paras_for(_req_escopos(_CASOS["multi_todos"], partes_rel=partes_rel))
+    tem = _has(paras, "assim como no caso de prestação de serviço a Partes Relacionadas")
+    assert tem == partes_rel
+
+
 def test_secao4_reforma_tributaria_e_fraude_completa():
     paras = _paras_for(_base_req())
     assert _has(paras, "canais oficiais de contato do C&F")
