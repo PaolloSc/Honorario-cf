@@ -68,7 +68,10 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [message, setMessage] = useState("");
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
   const [participacaoWarning, setParticipacaoWarning] = useState("");
-  const [recipientEmail, setRecipientEmail] = useState(data.email_destinatario || data.contratantes[0]?.email || "");
+  const [emailWarning, setEmailWarning] = useState("");
+  const [recipients, setRecipients] = useState<Array<{ email: string; nome: string }>>(
+    () => data.contratantes.map((c) => ({ email: c.email || "", nome: getContratanteNome(c) }))
+  );
   const [signatureSent, setSignatureSent] = useState(false);
   const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
   const [newLawyerEmail, setNewLawyerEmail] = useState("");
@@ -84,6 +87,10 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
 
   const handleRemoveLawyer = (index: number) => {
     setAdditionalLawyers((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateRecipient = (index: number, email: string) => {
+    setRecipients((prev) => prev.map((r, i) => (i === index ? { ...r, email } : r)));
   };
 
   const handleSubmit = async () => {
@@ -108,15 +115,35 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       setStatus("sending");
       setMessage("Enviando e-mail...");
 
-      const emailResult = await sendEmail({
-        contract_id: resultContractId,
-        destinatario_email: recipientEmail,
-        destinatario_nome: getContratanteNome(data.contratantes[0]),
-        assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
-      });
+      const destinatarios = recipients.filter((r) => r.email.trim());
+      if (destinatarios.length === 0) {
+        throw new Error("Nenhum e-mail de destinatário informado.");
+      }
 
-      if (!emailResult.success) {
-        throw new Error(emailResult.message || "Erro ao enviar e-mail");
+      const falhas: string[] = [];
+      for (const dest of destinatarios) {
+        const email = dest.email.trim();
+        try {
+          const emailResult = await sendEmail({
+            contract_id: resultContractId,
+            destinatario_email: email,
+            destinatario_nome: dest.nome || email,
+            assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
+          });
+          if (!emailResult.success) {
+            falhas.push(`${email}: ${emailResult.message || "erro"}`);
+          }
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : "erro desconhecido";
+          falhas.push(`${email}: ${detail}`);
+        }
+      }
+
+      if (falhas.length === destinatarios.length) {
+        throw new Error(`Erro ao enviar e-mail: ${falhas.join("; ")}`);
+      }
+      if (falhas.length > 0) {
+        setEmailWarning(`Alguns e-mails não foram enviados: ${falhas.join("; ")}`);
       }
 
       // Send participação sheet to financeiro if applicable
@@ -277,16 +304,25 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             <strong>Escopo(s):</strong> {data.escopos.length}
           </p>
           <p>
-            <strong>E-mail para envio:</strong>
+            <strong>E-mail(s) para envio:</strong>
           </p>
-          <input
-            type="email"
-            value={recipientEmail}
-            onChange={(e) => setRecipientEmail(e.target.value)}
-            disabled={status === "sent_email" || status === "success"}
-            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:bg-gray-100"
-            placeholder="email@exemplo.com"
-          />
+          <div className="space-y-2 mt-1">
+            {recipients.map((r, i) => (
+              <div key={i}>
+                <label className="block text-xs text-blue-700 mb-0.5">
+                  {r.nome || `Contratante ${i + 1}`}
+                </label>
+                <input
+                  type="email"
+                  value={r.email}
+                  onChange={(e) => updateRecipient(i, e.target.value)}
+                  disabled={status === "sent_email" || status === "success"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:bg-gray-100"
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -323,6 +359,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           }`}
         >
           {message}
+        </div>
+      )}
+
+      {emailWarning && (
+        <div className="p-4 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+          {emailWarning}
         </div>
       )}
 
