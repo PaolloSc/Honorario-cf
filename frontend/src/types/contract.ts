@@ -114,7 +114,11 @@ export interface HoraTrabalhada {
   tem_pacote_horas: boolean;
   quantidade_horas_pacote?: number;
   valor_pacote?: number;
-  periodo_banco_horas_meses?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
+  horas_contratadas?: number;
+  horas_trabalhadas?: number;
   tem_hora_urgencia: boolean;
   tem_hora_fora_expediente: boolean;
 }
@@ -125,15 +129,27 @@ export interface ProLabore {
   numero_parcelas?: number;
   valor_parcela?: number;
   vencimento?: string;
+  vencimento_data?: string;
+  vencimento_obs?: string;
   vencimento_parcelas?: string;
+  vencimento_parcelas_data?: string;
+  vencimento_parcelas_obs?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
 }
  
 export interface Mensalidade {
   valor: number;
   subtipo: SubtipoMensalidade;
   dia_vencimento: string;
+  dia_vencimento_data?: string;
+  dia_vencimento_obs?: string;
   variacao_preco: VariacaoPrecoMensalidade;
   limitacao_temporal_anos?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
   faixas_preco?: Array<{ faixa: string; valor: string }>;
   fases_processuais?: Array<{ fase: string; valor: string }>;
 }
@@ -144,11 +160,18 @@ export interface Exito {
   incidencia: string;
   base_calculo: string;
   vencimento: string;
+  vencimento_data?: string;
+  vencimento_obs?: string;
   forma_pagamento: string;
   numero_parcelas?: number;
   valor_parcela?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
   tem_beneficio_prospectivo: boolean;
-  periodo_prospectivo_meses?: number;
+  prospectivo_data_inicio?: string;
+  prospectivo_data_fim?: string;
+  prospectivo_duracao_meses?: number;
   faixas_percentual?: Array<{ faixa: string; percentual: string }>;
   deduz_outro_honorario: boolean;
   honorario_deduzido?: string;
