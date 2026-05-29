@@ -105,7 +105,7 @@ class ContractGenerator:
         self._add_accessories(doc, data.acessorios)
         self._add_obligations(doc)
         self._add_integrity(doc)
-        self._add_term_and_termination(doc)
+        self._add_term_and_termination(doc, data)
         self._add_ip(doc)
         self._add_general(doc)
         self._add_signatures(doc, data, signatario_roles=signatario_roles)
@@ -889,16 +889,71 @@ class ContractGenerator:
             "apoio à prestação do serviço."
         )
  
-    def _add_term_and_termination(self, doc: Document) -> None:
+    def _add_term_and_termination(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("8. PRAZO, RESCISÃO E OUTROS EFEITOS", level=2)
         doc.add_paragraph(
             "8.1. Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
-            "presente Contrato é celebrado por tempo indeterminado, até que seja "
-            "esgotado o objeto contratado."
+            "presente Contrato é celebrado por tempo indeterminado, até que seja esgotado o "
+            "objeto contratado."
         )
         doc.add_paragraph(
             "8.2. Qualquer Parte poderá rescindir este Contrato imotivadamente mediante "
             "notificação por escrito com antecedência mínima de 30 (trinta) dias."
+        )
+        doc.add_paragraph(
+            "8.2.1. Este prazo de antecedência não substitui nem prejudica o disposto nos "
+            "art. 112, §1º, do Código de Processo Civil e 5º, §3º, do Estatuto da OAB, de "
+            "modo que, no caso de demandas judiciais, arbitrais ou administrativos, o C&F e "
+            "seus advogados permanecerão representando a CONTRATANTE durante os dez dias "
+            "seguintes à notificação, salvo se forem substituídos antes do término desse "
+            "prazo."
+        )
+        doc.add_paragraph(
+            "8.3. Em caso de extinção contratual, aplica-se o seguinte: (i) honorários "
+            "vencidos serão devidos integralmente; (ii) honorários vincendos pactuados por "
+            "hora trabalhada serão devidos em relação aos serviços executados até a efetiva "
+            "extinção; (iii) honorários vincendos pactuados por mensalidade serão devidos "
+            "observando-se o prazo de antecedência de 30 dias previstos nesta cláusula; "
+            "(iv) honorários vincendos pactuados por pró-labore serão devidos, "
+            "proporcionalmente, observando-se os serviços executados e ainda não "
+            "remunerados; (v) honorários de êxito vincendos ao momento da resilição "
+            "continuarão devidos ao C&F observando-se a seguinte proporção não cumulativa:"
+        )
+
+        has_exito = any(TipoHonorario.EXITO in e.honorarios for e in data.escopos)
+        next_clause = 4
+        if has_exito:
+            linhas = [
+                ("Antes da primeira decisão de mérito", "50% do percentual de êxito pactuado"),
+                ("Depois da primeira decisão de mérito e antes da primeira decisão recursal",
+                 "70% do percentual de êxito pactuado"),
+                ("Depois da primeira decisão recursal e antes do cumprimento ou liquidação "
+                 "definitiva da decisão", "85% do percentual de êxito pactuado"),
+                ("Durante cumprimento ou liquidação definitiva da decisão e antes do efetivo "
+                 "proveito econômico", "95% do percentual de êxito pactuado"),
+                ("Depois do efetivo proveito econômico", "100% do percentual de êxito pactuado"),
+            ]
+            table = doc.add_table(rows=1, cols=2)
+            self._apply_table_grid(table)
+            hdr = table.rows[0].cells
+            hdr[0].text = "Fase processual em que for resilido o Contrato"
+            hdr[1].text = "Honorário devido ao C&F"
+            for fase, valor in linhas:
+                row = table.add_row().cells
+                row[0].text = fase
+                row[1].text = valor
+            doc.add_paragraph(
+                "8.4. A eventual inocorrência de determinada fase processual não afeta o "
+                "recebimento dos honorários de êxito nos termos previstos nesta cláusula, "
+                "aplicando-se o percentual correspondente à fase processual ao tempo da "
+                "resilição, independentemente da ocorrência das fases anteriores."
+            )
+            next_clause = 5
+
+        doc.add_paragraph(
+            f"8.{next_clause}. Exceto se expressa e diversamente pactuado, todas as "
+            "disposições contratuais possuem validade e eficácia para os serviços já em "
+            "curso."
         )
  
     def _add_ip(self, doc: Document) -> None:

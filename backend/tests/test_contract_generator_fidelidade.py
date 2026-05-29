@@ -96,3 +96,30 @@ def test_secao7_integridade_lgpd_e_ia():
     assert _has(paras, "cadastros internos")
     assert _has(paras, "inteligência artificial")
     assert _has(paras, "diretrizes de Governança")
+
+
+def _req_com_exito() -> dict:
+    return _base_req(honorario="exito", extra_escopo={"exito": {
+        "subtipo": "percentual_fixo", "percentual": 20, "incidencia": "beneficio_economico",
+        "base_calculo": "x", "vencimento": "a_vista", "forma_pagamento": "x",
+        "tem_beneficio_prospectivo": False, "deduz_outro_honorario": False,
+    }})
+
+
+def test_secao8_rescisao_cpc_e_extincao():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "art. 112, §1º, do Código de Processo Civil")
+    assert _has(paras, "honorários vencidos serão devidos integralmente")
+
+
+def test_secao8_tabela_exito_presente_com_exito():
+    paras = _paras_for(_req_com_exito())
+    assert _has(paras, "50% do percentual de êxito pactuado")
+    assert _has(paras, "100% do percentual de êxito pactuado")
+    assert _has(paras, "Antes da primeira decisão de mérito")
+    assert _has(paras, "inocorrência de determinada fase processual")
+
+
+def test_secao8_tabela_exito_ausente_sem_exito():
+    paras = _paras_for(_base_req(honorario="hora_trabalhada"))
+    assert not _has(paras, "50% do percentual de êxito pactuado")
