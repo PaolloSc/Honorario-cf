@@ -74,6 +74,22 @@ class UserDB(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
 
+# ── Testemunhas (roster) ──────────────────────────────────────────
+
+class TestemunhaDB(Base):
+    """Cadastro de testemunhas recorrentes do escritorio (roster)."""
+
+    __tablename__ = "testemunhas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(String(256), nullable=False)
+    email = Column(String(256), nullable=False, index=True)
+    ativo = Column(Boolean, nullable=False, default=True)
+    created_by = Column(String(256), nullable=True)  # user email
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
 # ── Contracts ─────────────────────────────────────────────────────
 
 class ContractDB(Base):
