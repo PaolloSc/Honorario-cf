@@ -132,17 +132,28 @@ export async function sendParticipacao(data: {
   contract_id: string;
   cliente_nome: string;
   objeto_contrato?: string;
-  percentual_ou_valor?: string;
-  para_quem?: string;
+  valor_tipo?: string;
+  valor_percentual?: string;
+  valor_monetario?: number;
+  valor_outro?: string;
+  para_quem?: string[];
   natureza?: string;
   responsavel_captacao?: string;
   responsavel_gestao?: string;
-  contato_financeiro_cliente?: string;
+  contato_financeiro_nome?: string;
+  contato_financeiro_email?: string;
+  contato_financeiro_telefone?: string;
 }) {
   return request<{ success: boolean; message: string }>("/api/email/send-participacao", {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export async function listColaboradores() {
+  return request<{ colaboradores: Array<{ name: string; email: string; role: string }> }>(
+    "/api/users/colaboradores"
+  );
 }
 
 export async function sendForSignature(data: {
