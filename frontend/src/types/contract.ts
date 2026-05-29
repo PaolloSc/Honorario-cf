@@ -211,13 +211,23 @@ export interface Acessorios {
   valor_diligencia?: number;
 }
  
+export type ParticipacaoValorTipo = "percentual" | "valor" | "outro";
+
 export interface Participacao {
   tem_participacao: boolean;
-  percentual_ou_valor?: string;
-  para_quem?: string;
+  valor_tipo?: ParticipacaoValorTipo;
+  valor_percentual?: string;
+  valor_monetario?: number;
+  valor_outro?: string;
+  para_quem?: string[];
   natureza?: string;
   responsavel_captacao?: string;
   responsavel_gestao?: string;
+  contato_financeiro_nome?: string;
+  contato_financeiro_email?: string;
+  contato_financeiro_telefone?: string;
+  // legados (compat edição)
+  percentual_ou_valor?: string;
   contato_financeiro_cliente?: string;
 }
  

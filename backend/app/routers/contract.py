@@ -182,17 +182,15 @@ def generate_contract(
             pct_captacao = pct if eh_cap else 0.0
             pct_performance = pct if eh_perf else 0.0
 
-            # Beneficiário: prioriza email extraído do contato_financeiro_cliente,
-            # fallback user.email. Nome: para_quem da wizard, fallback user.name.
-            email_wizard = _parse_email(
+            # Email: prioriza campo estruturado novo, fallback parse do legado, fallback user.
+            email_novo = (participacao_data.contato_financeiro_email or "").strip() if participacao_data else ""
+            email_wizard = email_novo or _parse_email(
                 participacao_data.contato_financeiro_cliente if participacao_data else None
             )
             beneficiario_email = email_wizard or user.email
-            beneficiario_nome = (
-                participacao_data.para_quem
-                if participacao_data and participacao_data.para_quem
-                else user.name
-            )
+            # Nome: para_quem agora e' lista; junta nomes. Fallback user.name.
+            para_quem_nomes = (participacao_data.para_quem if participacao_data else None) or []
+            beneficiario_nome = ", ".join(para_quem_nomes) if para_quem_nomes else user.name
 
             # Backend natureza = contratual/societario (campo legal, nao wizard)
             natureza_val = "contratual"
@@ -211,11 +209,19 @@ def generate_contract(
 
             obs_extra = ""
             if participacao_data:
+                if participacao_data.valor_tipo == "percentual" and participacao_data.valor_percentual:
+                    valor_str = f"{participacao_data.valor_percentual}%"
+                elif participacao_data.valor_tipo == "valor" and participacao_data.valor_monetario is not None:
+                    valor_str = f"R$ {participacao_data.valor_monetario:.2f}"
+                elif participacao_data.valor_tipo == "outro" and participacao_data.valor_outro:
+                    valor_str = participacao_data.valor_outro
+                else:
+                    valor_str = participacao_data.percentual_ou_valor or "-"
                 obs_extra = (
                     f"Rascunho automatico do wizard. "
                     f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
                     f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
-                    f"Valor wizard: {participacao_data.percentual_ou_valor or '-'} · "
+                    f"Valor wizard: {valor_str} · "
                     f"Natureza wizard: {participacao_data.natureza or '-'}"
                 )
             else:
