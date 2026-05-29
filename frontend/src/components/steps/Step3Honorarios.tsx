@@ -472,18 +472,6 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                               }
                             />
                           </FormField>
-                          <FormField
-                            label="Observação"
-                            hint="Opcional: regra ou condição de vencimento."
-                          >
-                            <Input
-                              value={escopo.pro_labore.vencimento_obs || ""}
-                              onChange={(e) =>
-                                updateProLabore(idx, { vencimento_obs: e.target.value })
-                              }
-                              placeholder="Ex: após assinatura"
-                            />
-                          </FormField>
                         </>
                       )}
 
@@ -519,18 +507,6 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                               onChange={(v) =>
                                 updateProLabore(idx, { vencimento_parcelas_data: v })
                               }
-                            />
-                          </FormField>
-                          <FormField
-                            label="Observação parcelas"
-                            hint="Opcional: dia mensal ou regra (ex: 'todo dia 5')."
-                          >
-                            <Input
-                              value={escopo.pro_labore.vencimento_parcelas_obs || ""}
-                              onChange={(e) =>
-                                updateProLabore(idx, { vencimento_parcelas_obs: e.target.value })
-                              }
-                              placeholder="Ex: todo dia 5"
                             />
                           </FormField>
                         </>
@@ -579,19 +555,6 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           onChange={(v) =>
                             updateMensalidade(idx, { dia_vencimento_data: v })
                           }
-                        />
-                      </FormField>
-
-                      <FormField
-                        label="Observação"
-                        hint="Opcional: dia mensal recorrente (ex.: 5) ou regra."
-                      >
-                        <Input
-                          value={escopo.mensalidade.dia_vencimento_obs || ""}
-                          onChange={(e) =>
-                            updateMensalidade(idx, { dia_vencimento_obs: e.target.value })
-                          }
-                          placeholder="Ex: todo dia 5"
                         />
                       </FormField>
 
@@ -716,19 +679,6 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           onChange={(v) =>
                             updateExito(idx, { vencimento_data: v })
                           }
-                        />
-                      </FormField>
-
-                      <FormField
-                        label="Observação"
-                        hint="Opcional: prazo ou condição (ex: 'em até 5 dias após o benefício')."
-                      >
-                        <Input
-                          value={escopo.exito.vencimento_obs || ""}
-                          onChange={(e) =>
-                            updateExito(idx, { vencimento_obs: e.target.value })
-                          }
-                          placeholder="Ex: em até 5 dias após o benefício"
                         />
                       </FormField>
 
