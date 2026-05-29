@@ -234,6 +234,11 @@ class Participacao(BaseModel):
     contato_financeiro_nome: Optional[str] = None
     contato_financeiro_email: Optional[str] = None
     contato_financeiro_telefone: Optional[str] = None
+    # Base da participacao (escopo ou honorario)
+    base_tipo: Optional[str] = None  # "escopo" | "honorario"
+    base_escopo_index: Optional[int] = None
+    base_honorario: Optional[str] = None
+    base_label: Optional[str] = None
     # Legados (compat com contratos salvos antes desta mudanca)
     percentual_ou_valor: Optional[str] = None
     contato_financeiro_cliente: Optional[str] = None
