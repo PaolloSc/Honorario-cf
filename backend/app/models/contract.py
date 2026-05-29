@@ -220,23 +220,44 @@ class Acessorios(BaseModel):
  
 class Participacao(BaseModel):
     tem_participacao: bool = False
-    percentual_ou_valor: Optional[str] = None
-    para_quem: Optional[str] = None
+    # Valor (tipo + campo do tipo escolhido)
+    valor_tipo: Optional[str] = None  # "percentual" | "valor" | "outro"
+    valor_percentual: Optional[str] = None
+    valor_monetario: Optional[float] = None
+    valor_outro: Optional[str] = None
+    # Advogados
+    para_quem: list[str] = []
     natureza: Optional[str] = None
     responsavel_captacao: Optional[str] = None
     responsavel_gestao: Optional[str] = None
+    # Contato financeiro do cliente (3 campos)
+    contato_financeiro_nome: Optional[str] = None
+    contato_financeiro_email: Optional[str] = None
+    contato_financeiro_telefone: Optional[str] = None
+    # Legados (compat com contratos salvos antes desta mudanca)
+    percentual_ou_valor: Optional[str] = None
     contato_financeiro_cliente: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_nulls(cls, data):
-        """Convert null/None values to empty strings for optional text fields."""
-        if isinstance(data, dict):
-            for field in ("percentual_ou_valor", "para_quem", "natureza",
-                          "responsavel_captacao", "responsavel_gestao",
-                          "contato_financeiro_cliente"):
-                if data.get(field) is None:
-                    data[field] = ""
+    def _coerce_and_migrate(cls, data):
+        if not isinstance(data, dict):
+            return data
+        for field in ("natureza", "responsavel_captacao", "responsavel_gestao",
+                      "valor_percentual", "valor_outro", "percentual_ou_valor",
+                      "contato_financeiro_nome", "contato_financeiro_email",
+                      "contato_financeiro_telefone", "contato_financeiro_cliente"):
+            if data.get(field) is None:
+                data[field] = ""
+        pq = data.get("para_quem")
+        if isinstance(pq, str):
+            data["para_quem"] = [pq] if pq.strip() else []
+        elif pq is None:
+            data["para_quem"] = []
+        if not data.get("valor_tipo") and data.get("percentual_ou_valor"):
+            data["valor_tipo"] = "outro"
+            if not data.get("valor_outro"):
+                data["valor_outro"] = data["percentual_ou_valor"]
         return data
  
  
