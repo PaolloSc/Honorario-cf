@@ -87,6 +87,14 @@ export type TipoHonorario =
   | "exito"
   | "permuta";
  
+export const HONORARIO_LABELS: Record<TipoHonorario, string> = {
+  hora_trabalhada: "Hora Trabalhada",
+  pro_labore: "Pró-labore",
+  mensalidade: "Mensalidade",
+  exito: "Êxito",
+  permuta: "Permuta",
+};
+
 export type SubtipoMensalidade =
   | "advocacia_partido"
   | "por_processo"
@@ -226,6 +234,10 @@ export interface Participacao {
   contato_financeiro_nome?: string;
   contato_financeiro_email?: string;
   contato_financeiro_telefone?: string;
+  base_tipo?: "escopo" | "honorario";
+  base_escopo_index?: number;
+  base_honorario?: TipoHonorario;
+  base_label?: string;
   // legados (compat edição)
   percentual_ou_valor?: string;
   contato_financeiro_cliente?: string;

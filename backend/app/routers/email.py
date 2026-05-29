@@ -46,6 +46,11 @@ class ParticipacaoEmailRequest(BaseModel):
     contato_financeiro_nome: str = ""
     contato_financeiro_email: str = ""
     contato_financeiro_telefone: str = ""
+    # Base da participacao
+    base_tipo: str = ""
+    base_escopo_index: int | None = None
+    base_honorario: str = ""
+    base_label: str = ""
     # Legados
     percentual_ou_valor: str = ""
     contato_financeiro_cliente: str = ""
@@ -310,6 +315,10 @@ async def send_participacao_email(
         # Replace newlines with <br> for HTML rendering
         if objeto_contrato:
             rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
+        # Base da participacao (escopo ou honorario)
+        if data.base_tipo and data.base_label:
+            base_prefixo = "Escopo" if data.base_tipo == "escopo" else "Honorário"
+            rows.append(("Base", f"{base_prefixo} — {data.base_label}"))
         # Valor (estruturado, com fallback legado)
         if data.valor_tipo == "percentual" and data.valor_percentual:
             rows.append(("Percentual", f"{data.valor_percentual}%"))
