@@ -959,25 +959,70 @@ class ContractGenerator:
     def _add_ip(self, doc: Document) -> None:
         doc.add_heading("9. PROPRIEDADE INTELECTUAL", level=2)
         doc.add_paragraph(
-            "9.1. A produção intelectual (teses, estratégias, modelos, documentos, "
-            "minutas e know-how) desenvolvida pelo C&F permanece de sua titularidade."
+            "9.1. A produção intelectual (teses, estratégias, modelos, documentos, minutas "
+            "e know-how) desenvolvida pelo C&F permanece de sua titularidade."
+        )
+        doc.add_paragraph(
+            "9.2. Sem expressa autorização do C&F, é vedada a disponibilização a terceiros "
+            "do conteúdo dessa produção intelectual (ainda que parcial), ressalvadas "
+            "obrigações legais ou ordem de autoridade competente."
+        )
+        doc.add_paragraph(
+            "9.3. É facultado ao C&F e aos advogados que o integram valerem-se dessa "
+            "produção intelectual em livros, publicações e outras atuações profissionais, "
+            "sempre com a ressalva de respeito ao sigilo das questões relacionadas a este "
+            "Contrato."
+        )
+        doc.add_paragraph(
+            "9.4. A CONTRATANTE autoriza o C&F a utilizar seu nome, marca e logotipo, de "
+            "forma não exclusiva, para fins institucionais, inclusive em apresentações, "
+            "portfólios e materiais correlatos, sem divulgação de informações confidenciais "
+            "do serviço."
         )
  
     def _add_general(self, doc: Document) -> None:
         doc.add_heading("10. DISPOSIÇÕES GERAIS", level=2)
-        doc.add_paragraph(
-            "10.1. Será considerada entregue a notificação e/ou comunicação encaminhada ao "
-            "endereço declinado no preâmbulo deste Contrato."
-        )
-        doc.add_paragraph(
-            "10.2. O presente contrato é título executivo extrajudicial, podendo ser utilizado "
-            "para a execução judicial de quaisquer obrigações nele constantes."
-        )
+        gerais = [
+            "Será considerada entregue a notificação e/ou comunicação encaminhada ao "
+            "endereço declinado no preâmbulo deste Contrato, caso eventual alteração de "
+            "contato ou endereço – inclusive eletrônico – não tenha sido devidamente "
+            "comunicada ao C&F.",
+            "Qualquer termo grafado com letra maiúscula neste Contrato deverá ter o "
+            "significado nele previsto.",
+            "As Partes se obrigam em caráter irrevogável e irretratável também por seus "
+            "sucessores a qualquer título.",
+            "Os direitos e obrigações decorrentes deste Contrato não poderão ser cedidos, "
+            "salvo com expressa autorização das Partes signatárias.",
+            "O não exercício, pelas Partes, de quaisquer dos direitos ou prerrogativas "
+            "previstas neste Contrato, ou mesmo na legislação aplicável, será tido como ato "
+            "de mera liberalidade, não constituindo alteração ou novação das obrigações ora "
+            "estabelecidas, cujo cumprimento poderá ser exigido a qualquer tempo, "
+            "independentemente de comunicação prévia à Parte.",
+            "As Partes se comprometem a consultar uma à outra sempre que o não-exercício "
+            "reiterado de eventual direito trouxer dúvida sobre eventual renúncia tácita, "
+            "preferindo a manifestação expressa para a compreensão do comportamento alheio "
+            "e formação de legítima confiança.",
+            "O presente contrato é título executivo extrajudicial, podendo ser utilizado "
+            "para a execução judicial de quaisquer obrigações nele constantes.",
+            "Nos termos do artigo 10, § 2º da MP 2200-2/2001, § 4º do artigo 784 do Código "
+            "de Processo Civil e legislação correlata, as Partes e as testemunhas aqui "
+            "envolvidas reconhecem a validade de assinaturas eletrônicas ainda que não "
+            "utilizem de certificado digital emitido pelo padrão ICP-Brasil.",
+            "O Contrato terá efeito a partir da data indicada como aquela da sua "
+            "formalização, independentemente de as assinaturas, eletrônicas ou não, serem "
+            "eventualmente realizadas em data distinta.",
+            "Eventual Proposta, feita pelo C&F e aceita pela CONTRATANTE, integra este "
+            "Contrato, o qual, no entanto, deverá prevalecer em caso de dúvida, divergência "
+            "ou conflito.",
+        ]
+        for i, clause in enumerate(gerais, 1):
+            doc.add_paragraph(f"10.{i}. {clause}")
  
         doc.add_heading("11. FORO", level=2)
         doc.add_paragraph(
             "11.1. Fica eleito o foro da Comarca de Belo Horizonte/MG para dirimir "
-            "quaisquer dúvidas ou controvérsias decorrentes deste Contrato."
+            "quaisquer dúvidas ou controvérsias decorrentes deste Contrato, com renúncia de "
+            "qualquer outro, por mais privilegiado que seja."
         )
  
     def _add_signatures(self, doc: Document, data: ContratoRequest, signatario_roles: list[dict] | None = None) -> None:
