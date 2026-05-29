@@ -124,6 +124,11 @@ export default function Step6Revisao({ data }: Step6Props) {
       {data.participacao.tem_participacao && (
         <Section title="Participações (Interno)">
           <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
+            {data.participacao.base_label && (
+              <li>
+                Base: {data.participacao.base_tipo === "escopo" ? "Escopo" : "Honorário"} — {data.participacao.base_label}
+              </li>
+            )}
             <li>
               Valor/Percentual: {data.participacao.percentual_ou_valor}
             </li>
