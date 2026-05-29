@@ -115,6 +115,7 @@ export default function Step1Contratante({
         next.delete(index);
         return next;
       });
+      setCNPJError(null);
       const updated = [...contratantes];
       updated[index] = tipo === "PF" ? emptyPF() : emptyPJ();
       onChange(updated);

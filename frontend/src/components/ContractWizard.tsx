@@ -133,6 +133,8 @@ function validateContratantes(data: ContratoFormData): string[] {
 
     if (digits(contratante.cnpj).length !== 14) errors.push(`${label}: informe um CNPJ com 14 dígitos.`);
     if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
+    if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ para preencher a Razão Social.`);
+    if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ para preencher o endereço.`);
   });
 
   return errors;
