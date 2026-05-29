@@ -32,23 +32,40 @@ class ParticipacaoEmailRequest(BaseModel):
     contract_id: str
     cliente_nome: str
     objeto_contrato: str = ""
-    percentual_ou_valor: str = ""
-    para_quem: str = ""
+    # Valor estruturado
+    valor_tipo: str = ""           # "percentual" | "valor" | "outro"
+    valor_percentual: str = ""
+    valor_monetario: float | None = None
+    valor_outro: str = ""
+    # Advogados
+    para_quem: list[str] = []
     natureza: str = ""
     responsavel_captacao: str = ""
     responsavel_gestao: str = ""
+    # Contato financeiro (3 campos)
+    contato_financeiro_nome: str = ""
+    contato_financeiro_email: str = ""
+    contato_financeiro_telefone: str = ""
+    # Legados
+    percentual_ou_valor: str = ""
     contato_financeiro_cliente: str = ""
 
     @model_validator(mode="before")
     @classmethod
     def _coerce_nulls(cls, data):
-        """Convert null/None values to empty strings for optional text fields."""
         if isinstance(data, dict):
-            for field in ("objeto_contrato", "percentual_ou_valor", "para_quem", "natureza",
-                          "responsavel_captacao", "responsavel_gestao",
-                          "contato_financeiro_cliente"):
+            for field in ("objeto_contrato", "valor_tipo", "valor_percentual",
+                          "valor_outro", "natureza", "responsavel_captacao",
+                          "responsavel_gestao", "contato_financeiro_nome",
+                          "contato_financeiro_email", "contato_financeiro_telefone",
+                          "percentual_ou_valor", "contato_financeiro_cliente"):
                 if data.get(field) is None:
                     data[field] = ""
+            pq = data.get("para_quem")
+            if isinstance(pq, str):
+                data["para_quem"] = [pq] if pq.strip() else []
+            elif pq is None:
+                data["para_quem"] = []
         return data
 
 
@@ -293,17 +310,33 @@ async def send_participacao_email(
         # Replace newlines with <br> for HTML rendering
         if objeto_contrato:
             rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
-        if data.percentual_ou_valor:
+        # Valor (estruturado, com fallback legado)
+        if data.valor_tipo == "percentual" and data.valor_percentual:
+            rows.append(("Percentual", f"{data.valor_percentual}%"))
+        elif data.valor_tipo == "valor" and data.valor_monetario is not None:
+            rows.append(("Valor", f"R$ {data.valor_monetario:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")))
+        elif data.valor_tipo == "outro" and data.valor_outro:
+            rows.append(("Critério", data.valor_outro))
+        elif data.percentual_ou_valor:
             rows.append(("Percentual/Valor", data.percentual_ou_valor))
+        # Para quem (lista)
         if data.para_quem:
-            rows.append(("Para quem", data.para_quem))
+            rows.append(("Para quem", ", ".join(data.para_quem)))
         if data.natureza:
             rows.append(("Natureza", data.natureza))
         if data.responsavel_captacao:
             rows.append(("Resp. Captação", data.responsavel_captacao))
         if data.responsavel_gestao:
             rows.append(("Resp. Gestão", data.responsavel_gestao))
-        if data.contato_financeiro_cliente:
+        # Contato financeiro (3 campos, com fallback legado)
+        if data.contato_financeiro_nome or data.contato_financeiro_email or data.contato_financeiro_telefone:
+            if data.contato_financeiro_nome:
+                rows.append(("Contato — Nome", data.contato_financeiro_nome))
+            if data.contato_financeiro_email:
+                rows.append(("Contato — E-mail", data.contato_financeiro_email))
+            if data.contato_financeiro_telefone:
+                rows.append(("Contato — Telefone", data.contato_financeiro_telefone))
+        elif data.contato_financeiro_cliente:
             rows.append(("Contato Financeiro Cliente", data.contato_financeiro_cliente))
 
         table_rows = "".join(
