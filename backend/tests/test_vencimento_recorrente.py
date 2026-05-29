@@ -21,7 +21,6 @@ def test_recorrente_com_data_e_obs_concatena():
 
 
 def test_recorrente_sem_data_sem_obs_cai_no_legacy():
+    # Legacy path (sem data de calendário) deve retornar exatamente esta string.
     g = ContractGenerator()
-    out = g._vencimento_combined(None, None, "5", recorrente=True)
-    assert out != "todo dia 05"  # caminho legacy não muda; só garante que não quebrou
-    assert out  # retorna algo não-vazio
+    assert g._vencimento_combined(None, None, "5", recorrente=True) == "no dia 5 de cada mês"
