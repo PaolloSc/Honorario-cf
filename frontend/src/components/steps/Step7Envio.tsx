@@ -164,6 +164,10 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             contato_financeiro_nome: data.participacao.contato_financeiro_nome,
             contato_financeiro_email: data.participacao.contato_financeiro_email,
             contato_financeiro_telefone: data.participacao.contato_financeiro_telefone,
+            base_tipo: data.participacao.base_tipo,
+            base_escopo_index: data.participacao.base_escopo_index,
+            base_honorario: data.participacao.base_honorario,
+            base_label: data.participacao.base_label,
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
@@ -223,6 +227,10 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             contato_financeiro_nome: data.participacao.contato_financeiro_nome,
             contato_financeiro_email: data.participacao.contato_financeiro_email,
             contato_financeiro_telefone: data.participacao.contato_financeiro_telefone,
+            base_tipo: data.participacao.base_tipo,
+            base_escopo_index: data.participacao.base_escopo_index,
+            base_honorario: data.participacao.base_honorario,
+            base_label: data.participacao.base_label,
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";

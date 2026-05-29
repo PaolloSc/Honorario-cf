@@ -143,6 +143,10 @@ export async function sendParticipacao(data: {
   contato_financeiro_nome?: string;
   contato_financeiro_email?: string;
   contato_financeiro_telefone?: string;
+  base_tipo?: string;
+  base_escopo_index?: number;
+  base_honorario?: string;
+  base_label?: string;
 }) {
   return request<{ success: boolean; message: string }>("/api/email/send-participacao", {
     method: "POST",
