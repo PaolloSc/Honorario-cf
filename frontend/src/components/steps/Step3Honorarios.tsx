@@ -463,16 +463,14 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       </FormField>
 
                       {!escopo.pro_labore.tem_parcelamento && (
-                        <>
-                          <FormField label="Vencimento (data)">
-                            <DatePicker
-                              value={escopo.pro_labore.vencimento_data}
-                              onChange={(v) =>
-                                updateProLabore(idx, { vencimento_data: v })
-                              }
-                            />
-                          </FormField>
-                        </>
+                        <FormField label="Vencimento (data)">
+                          <DatePicker
+                            value={escopo.pro_labore.vencimento_data}
+                            onChange={(v) =>
+                              updateProLabore(idx, { vencimento_data: v })
+                            }
+                          />
+                        </FormField>
                       )}
 
                       <Toggle
