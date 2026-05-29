@@ -311,7 +311,10 @@ class ContractGenerator:
             try:
                 from datetime import datetime as _dt
                 dt = _dt.fromisoformat(data)
-                base = f"em {dt.day:02d}/{dt.month:02d}/{dt.year}"
+                if recorrente:
+                    base = f"todo dia {dt.day:02d}"
+                else:
+                    base = f"em {dt.day:02d}/{dt.month:02d}/{dt.year}"
             except Exception:
                 base = self._format_vencimento(data, recorrente=recorrente)
             obs_clean = (obs or "").strip()
