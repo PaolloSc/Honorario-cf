@@ -64,3 +64,20 @@ def test_secao4_solidariedade_sem_parte_relacionada():
     paras = _paras_for(_base_req(partes_rel=False))
     assert _has(paras, "haverá solidariedade entre elas.")
     assert not _has(paras, "assim como no caso de prestação de serviço a Partes Relacionadas")
+
+
+def test_secao5_reembolsos_completos():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "CredLocaliza")
+    assert _has(paras, "R$ 1,70")
+    assert _has(paras, "R$ 0,40")
+    assert _has(paras, "honorários sucumbenciais fixados pertencem exclusivamente ao C&F")
+    assert _has(paras, "multas processuais e/ou honorários de sucumbência")
+
+
+def test_secao5_sem_reembolso_omite_51():
+    req = _base_req()
+    req["acessorios"]["tem_reembolso"] = False
+    paras = _paras_for(req)
+    assert not _has(paras, "no prazo de até 05 dias")
+    assert _has(paras, "CredLocaliza")
