@@ -855,28 +855,33 @@ class ContractGenerator:
         doc.add_heading("6. OBRIGAÇÕES DAS PARTES", level=2)
         doc.add_paragraph(
             "6.1. Obrigações da CONTRATANTE: (i) fornecer informações/documentos de forma "
-            "completa e em tempo hábil; (ii) manter dados cadastrais atualizados; "
-            "(iii) efetuar pagamentos dentro dos respectivos prazos."
+            "completa e em tempo hábil; (ii) manter dados cadastrais atualizados; (iii) "
+            "efetuar pagamentos dentro dos respectivos prazos; (iv) autorizar despesas "
+            "quando exigido; (v) cooperar com o C&F na estratégia definida."
         )
         doc.add_paragraph(
             "6.2. Obrigações do C&F: (i) executar o serviço com diligência, técnica e zelo; "
-            "(ii) manter confidencialidade e sigilo profissional; (iii) fornecer informações/"
-            "documentos relativas à prestação de serviço."
+            "(ii) manter confidencialidade e sigilo profissional; (iii) fornecer "
+            "informações/documentos relativas à prestação de serviços, quando solicitado."
         )
         doc.add_paragraph(
-            "6.3. A prestação de serviço advocatício constitui obrigação de meio, inexistindo "
-            "obrigação de êxito e/ou resultado."
+            "6.3. A prestação de serviço advocatício constitui obrigação de meio, "
+            "inexistindo obrigação de êxito e/ou resultado."
         )
  
     def _add_integrity(self, doc: Document) -> None:
         doc.add_heading("7. INTEGRIDADE E OUTROS", level=2)
         doc.add_paragraph(
             "7.1. As Partes comprometem-se a observar a legislação aplicável, incluindo Lei "
-            "Anticorrupção e outras normas similares."
+            "Anticorrupção e outras normas similares, bem como a cooperar com diretrizes de "
+            "Governança, quando existentes e conhecidas, no que for pertinente à execução "
+            "deste Contrato."
         )
         doc.add_paragraph(
             "7.2. As Partes comprometem-se a tratar dados pessoais estritamente para as "
-            "finalidades deste Contrato, observando medidas razoáveis de segurança."
+            "finalidades deste Contrato, observando medidas razoáveis de segurança e "
+            "confidencialidade, sendo autorizado desde já a criação de cadastros internos "
+            "para fins de comunicação em geral."
         )
         doc.add_paragraph(
             "7.3. A CONTRATANTE declara estar ciente de que o C&F, sob supervisão humana, "

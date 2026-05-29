@@ -81,3 +81,18 @@ def test_secao5_sem_reembolso_omite_51():
     paras = _paras_for(req)
     assert not _has(paras, "no prazo de até 05 dias")
     assert _has(paras, "CredLocaliza")
+
+
+def test_secao6_obrigacoes_incisos_completos():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "autorizar despesas quando exigido")
+    assert _has(paras, "cooperar com o C&F na estratégia definida")
+    assert _has(paras, "obrigação de meio")
+
+
+def test_secao7_integridade_lgpd_e_ia():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "tratar dados pessoais")
+    assert _has(paras, "cadastros internos")
+    assert _has(paras, "inteligência artificial")
+    assert _has(paras, "diretrizes de Governança")
