@@ -32,6 +32,16 @@ class UpdateUserRoleRequest(BaseModel):
     role: str
 
 
+class ColaboradorOut(BaseModel):
+    name: str
+    email: str
+    role: str
+
+
+class ColaboradoresResponse(BaseModel):
+    colaboradores: list[ColaboradorOut]
+
+
 # ── Endpoints ─────────────────────────────────────────────────────
 
 @router.get("/me", response_model=UserResponse)
@@ -46,6 +56,20 @@ def get_me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(
         name=db_user.name,
         role=db_user.role,
         created_at=db_user.created_at.isoformat(),
+    )
+
+
+@router.get("/colaboradores", response_model=ColaboradoresResponse)
+def list_colaboradores(
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lista todos os usuarios (nome/email/role) para seleção no wizard. Qualquer usuario logado."""
+    users = db.query(UserDB).order_by(UserDB.name).all()
+    return ColaboradoresResponse(
+        colaboradores=[
+            ColaboradorOut(name=u.name, email=u.email, role=u.role) for u in users
+        ]
     )
 
 
