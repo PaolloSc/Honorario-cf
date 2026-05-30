@@ -187,7 +187,7 @@ def _patch_docx_with_signatures(
     missing_sigs = []
     for sig in signatarios:
         role = sig.get("role", "")
-        if f"|signature|{role}" not in full_text:
+        if f";type=signature;role={role}" not in full_text:
             missing_sigs.append(sig)
 
     if missing_sigs:
@@ -205,21 +205,21 @@ def _patch_docx_with_signatures(
         for sig in contratado_sigs:
             role = sig["role"]
             name = sig.get("name", "Contratado")
-            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATADO: {name.upper()}")
             doc.add_paragraph()
 
         for sig in advogado_sigs:
             role = sig["role"]
             name = sig.get("name", "Advogado")
-            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"ADVOGADO: {name.upper()}")
             doc.add_paragraph()
 
         for sig in contratante_sigs:
             role = sig["role"]
             name = sig.get("name", "Contratante")
-            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATANTE: {name.upper()}")
             doc.add_paragraph()
 

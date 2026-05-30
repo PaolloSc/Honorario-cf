@@ -1043,21 +1043,21 @@ class ContractGenerator:
             for sig in contratado_sigs:
                 role = sig["role"]
                 name = sig.get("name", "Contratado")
-                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
                 doc.add_paragraph(f"CONTRATADO: {name.upper()}")
                 doc.add_paragraph()
 
             for sig in advogado_sigs:
                 role = sig["role"]
                 name = sig.get("name", "Advogado")
-                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
                 doc.add_paragraph(f"ADVOGADO: {name.upper()}")
                 doc.add_paragraph()
 
             for sig in contratante_sigs:
                 role = sig["role"]
                 name = sig.get("name", "Contratante")
-                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
                 doc.add_paragraph(f"CONTRATANTE: {name.upper()}")
                 doc.add_paragraph()
 
@@ -1069,16 +1069,16 @@ class ContractGenerator:
                 for sig in testemunha_sigs:
                     role = sig["role"]
                     name = sig.get("name", "Testemunha")
-                    doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                    doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
                     doc.add_paragraph(f"{role.upper()}: {name.upper()}")
                     doc.add_paragraph()
         else:
             # Default: single fields per role (for initial generation without specific signatarios)
-            doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
+            doc.add_paragraph("{{Assinatura Contratado;type=signature;role=Contratado}}")
             doc.add_paragraph("CONTRATADO: CARVALHO & FURTADO ADVOGADOS")
             doc.add_paragraph()
 
-            doc.add_paragraph("{{Assinatura Advogado|signature|Advogado}}")
+            doc.add_paragraph("{{Assinatura Advogado;type=signature;role=Advogado}}")
             doc.add_paragraph("ADVOGADO RESPONSAVEL")
             doc.add_paragraph()
 
@@ -1092,7 +1092,7 @@ class ContractGenerator:
 
                 # Each contratante gets a unique role
                 role = "Contratante" if len(data.contratantes) == 1 else f"Contratante {i}"
-                doc.add_paragraph(f"{{{{Assinatura {nome}|signature|{role}}}}}")
+                doc.add_paragraph(f"{{{{Assinatura {nome};type=signature;role={role}}}}}")
                 doc.add_paragraph(f"CONTRATANTE {i}: {nome}")
                 doc.add_paragraph()
 

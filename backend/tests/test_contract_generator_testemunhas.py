@@ -41,8 +41,8 @@ def test_digital_testemunha_fields_rendered():
     _, path = gen.generate(data, contract_id="TESTEM_DIGITAL", signatario_roles=roles)
     text = _text_of(path)
 
-    assert "|signature|Testemunha 1" in text
-    assert "|signature|Testemunha 2" in text
+    assert "type=signature;role=Testemunha 1" in text
+    assert "type=signature;role=Testemunha 2" in text
     # Sem bloco fisico em branco (sem linhas de CPF de testemunha)
     assert "CPF:" not in text
 
@@ -56,4 +56,4 @@ def test_initial_generation_keeps_physical_block():
 
     assert "TESTEMUNHAS:" in text
     assert "CPF:" in text
-    assert "|signature|Testemunha" not in text
+    assert "role=Testemunha" not in text
