@@ -780,6 +780,42 @@ class TestSendForSignatureEndpoint:
         if temp_file.exists():
             temp_file.unlink()
 
+    def test_send_for_signature_does_not_email_financeiro(self, client):
+        """No envio p/ assinatura nada e' enviado ao financeiro (ficha so no completed)."""
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        contract_id = "sig-nofin-012"
+        temp_file = output_dir / f"contrato_{contract_id}.docx"
+        temp_file.write_bytes(b"content with {{field|signature|req}} tags")
+
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(db, contract_id, file_path=str(temp_file))
+        finally:
+            db.close()
+
+        mock_service = self._mock_docuseal_success()
+
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock) as m_copy, \
+             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock) as m_ficha:
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={
+                    "contract_id": contract_id,
+                    "signatarios": [
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                    ],
+                },
+            )
+
+        assert response.status_code == 200
+        m_copy.assert_not_called()
+        m_ficha.assert_not_called()
+
+        if temp_file.exists():
+            temp_file.unlink()
+
     def test_send_for_signature_injects_lilian_as_testemunha1(self, client):
         """Lilian (financeiro) e injetada como Testemunha 1; testemunha do payload vira Testemunha 2."""
         from app.config import settings as _settings
