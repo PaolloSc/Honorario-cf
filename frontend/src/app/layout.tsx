@@ -48,6 +48,9 @@ export default async function RootLayout({
                     <Link href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
                       Contratos
                     </Link>
+                    <Link href="/testemunhas" className="text-brand-verde-claro/80 hover:text-white transition">
+                      Testemunhas
+                    </Link>
                   </nav>
                 )}
                 <UserMenu />
