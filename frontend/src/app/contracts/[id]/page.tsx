@@ -10,9 +10,11 @@ import {
   sendForSignature,
   sendEmail,
   rollbackContract,
+  listTestemunhas,
   type ContractDetail,
   type AuditEntry,
   type VersionSummary,
+  type Testemunha,
 } from "@/app/lib/api";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -30,6 +32,7 @@ const ACTION_LABELS: Record<string, string> = {
   envio_assinatura: "Enviado p/ assinatura",
   envio_copia_financeiro: "Copia enviada ao financeiro",
   envio_participacao_assinatura: "Ficha de participacao enviada",
+  envio_participacao_final: "Ficha enviada ao financeiro (assinado)",
   envio_ficha_participacao: "Ficha de participacao enviada",
   mudanca_status: "Status alterado",
   webhook_assinado: "Assinatura concluida",
@@ -43,6 +46,7 @@ const ACTION_ICONS: Record<string, string> = {
   envio_assinatura: "bg-purple-100 border-purple-300",
   envio_copia_financeiro: "bg-teal-100 border-teal-300",
   envio_participacao_assinatura: "bg-teal-100 border-teal-300",
+  envio_participacao_final: "bg-teal-100 border-teal-300",
   envio_ficha_participacao: "bg-teal-100 border-teal-300",
   mudanca_status: "bg-gray-100 border-gray-300",
   webhook_assinado: "bg-green-100 border-green-300",
@@ -75,6 +79,12 @@ export default function ContractDetailPage() {
   const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
   const [newLawyerEmail, setNewLawyerEmail] = useState("");
   const [newLawyerName, setNewLawyerName] = useState("");
+  // Testemunhas: roster + selecionadas (do roster) + avulsas
+  const [roster, setRoster] = useState<Testemunha[]>([]);
+  const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
+  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
+  const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
+  const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -93,6 +103,13 @@ export default function ContractDetailPage() {
       fetchContract();
     }
   }, [fetchContract, sessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !showSignaturePanel) return;
+    listTestemunhas()
+      .then((r) => setRoster(r.testemunhas))
+      .catch(() => setRoster([]));
+  }, [sessionStatus, showSignaturePanel]);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -144,6 +161,14 @@ export default function ContractDetailPage() {
       // Add additional lawyers
       for (const lawyer of additionalLawyers) {
         signatarios.push({ email: lawyer.email, name: lawyer.name, role: "Advogado" });
+      }
+
+      // Testemunhas: do roster (selecionadas) + avulsas. Lilian (Testemunha 1) e injetada no backend.
+      for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
+        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
+      }
+      for (const t of extraTestemunhas) {
+        signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
       }
 
       const result = await sendForSignature({
@@ -367,6 +392,78 @@ export default function ContractDetailPage() {
             >
               Adicionar
             </button>
+          </div>
+
+          {/* Testemunhas */}
+          <div className="mb-4 pt-3 border-t border-purple-200">
+            <p className="text-xs font-semibold text-purple-900 mb-1">Testemunhas</p>
+            <p className="text-xs text-purple-700 mb-2">
+              <strong>Testemunha 1 (financeiro)</strong> e incluida automaticamente. Selecione outras do cadastro ou adicione avulsas.
+            </p>
+
+            {roster.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {roster.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedTestemunhaIds.includes(t.id)}
+                      onChange={(e) =>
+                        setSelectedTestemunhaIds((prev) =>
+                          e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                        )
+                      }
+                    />
+                    <span className="flex-1">{t.nome} ({t.email})</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {extraTestemunhas.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {extraTestemunhas.map((t, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+                    <span className="flex-1">{t.name} ({t.email}) <em className="text-purple-500">avulsa</em></span>
+                    <button
+                      onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-red-500 hover:text-red-700 text-xs font-medium"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTestemunhaNome}
+                onChange={(e) => setNewTestemunhaNome(e.target.value)}
+                placeholder="Nome da testemunha"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+              />
+              <input
+                type="email"
+                value={newTestemunhaEmail}
+                onChange={(e) => setNewTestemunhaEmail(e.target.value)}
+                placeholder="email@exemplo.com"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+              />
+              <button
+                onClick={() => {
+                  if (!newTestemunhaEmail.trim()) return;
+                  setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
+                  setNewTestemunhaEmail("");
+                  setNewTestemunhaNome("");
+                }}
+                disabled={!newTestemunhaEmail.trim()}
+                className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+              >
+                Adicionar
+              </button>
+            </div>
           </div>
 
           {/* Send button */}

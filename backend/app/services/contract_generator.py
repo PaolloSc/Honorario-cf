@@ -1038,37 +1038,48 @@ class ContractGenerator:
             contratado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratado")]
             advogado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Advogado")]
             contratante_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratante")]
+            testemunha_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Testemunha")]
 
+            # Partes: dispostas lado a lado (2 por linha)
+            partes_entries: list[tuple[str, str]] = []
             for sig in contratado_sigs:
-                role = sig["role"]
                 name = sig.get("name", "Contratado")
-                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
-                doc.add_paragraph(f"CONTRATADO: {name.upper()}")
-                doc.add_paragraph()
-
+                partes_entries.append((
+                    f"{{{{Assinatura {name};type=signature;role={sig['role']}}}}}",
+                    f"CONTRATADO: {name.upper()}",
+                ))
             for sig in advogado_sigs:
-                role = sig["role"]
                 name = sig.get("name", "Advogado")
-                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
-                doc.add_paragraph(f"ADVOGADO: {name.upper()}")
-                doc.add_paragraph()
-
+                partes_entries.append((
+                    f"{{{{Assinatura {name};type=signature;role={sig['role']}}}}}",
+                    f"ADVOGADO: {name.upper()}",
+                ))
             for sig in contratante_sigs:
-                role = sig["role"]
                 name = sig.get("name", "Contratante")
-                doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
-                doc.add_paragraph(f"CONTRATANTE: {name.upper()}")
+                partes_entries.append((
+                    f"{{{{Assinatura {name};type=signature;role={sig['role']}}}}}",
+                    f"CONTRATANTE: {name.upper()}",
+                ))
+            self._render_signature_grid(doc, partes_entries)
+
+            # Testemunhas digitais (assinatura via DocuSeal), tambem lado a lado
+            if testemunha_sigs:
                 doc.add_paragraph()
+                doc.add_paragraph("TESTEMUNHAS:")
+                test_entries = [
+                    (
+                        f"{{{{Assinatura {sig.get('name', 'Testemunha')};type=signature;role={sig['role']}}}}}",
+                        f"{sig['role'].upper()}: {sig.get('name', 'Testemunha').upper()}",
+                    )
+                    for sig in testemunha_sigs
+                ]
+                self._render_signature_grid(doc, test_entries)
         else:
             # Default: single fields per role (for initial generation without specific signatarios)
-            doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
-            doc.add_paragraph("CONTRATADO: CARVALHO & FURTADO ADVOGADOS")
-            doc.add_paragraph()
-
-            doc.add_paragraph("{{Assinatura Advogado|signature|Advogado}}")
-            doc.add_paragraph("ADVOGADO RESPONSAVEL")
-            doc.add_paragraph()
-
+            entries: list[tuple[str, str]] = [
+                ("{{Assinatura Contratado;type=signature;role=Contratado}}", "CONTRATADO: CARVALHO & FURTADO ADVOGADOS"),
+                ("{{Assinatura Advogado;type=signature;role=Advogado}}", "ADVOGADO RESPONSAVEL"),
+            ]
             for i, contratante in enumerate(data.contratantes, 1):
                 if isinstance(contratante, ContratantePJ):
                     nome = contratante.razao_social
@@ -1079,22 +1090,52 @@ class ContractGenerator:
 
                 # Each contratante gets a unique role
                 role = "Contratante" if len(data.contratantes) == 1 else f"Contratante {i}"
-                doc.add_paragraph(f"{{{{Assinatura {nome}|signature|{role}}}}}")
-                doc.add_paragraph(f"CONTRATANTE {i}: {nome}")
-                doc.add_paragraph()
+                entries.append((
+                    f"{{{{Assinatura {nome};type=signature;role={role}}}}}",
+                    f"CONTRATANTE {i}: {nome}",
+                ))
+            self._render_signature_grid(doc, entries)
 
-        # Testemunhas - assinatura fisica (sem DocuSeal)
-        doc.add_paragraph()
-        doc.add_paragraph("TESTEMUNHAS:")
-        doc.add_paragraph()
-        doc.add_paragraph("_" * 50)
-        doc.add_paragraph("Nome:")
-        doc.add_paragraph("CPF:")
-        doc.add_paragraph()
-        doc.add_paragraph("_" * 50)
-        doc.add_paragraph("Nome:")
-        doc.add_paragraph("CPF:")
+        # Testemunhas - bloco fisico em branco (somente quando NAO ha testemunhas digitais).
+        # Quando signatario_roles inclui papeis "Testemunha", os campos digitais ja foram
+        # gerados acima e este bloco e' omitido p/ evitar duplicidade.
+        has_digital_testemunhas = bool(
+            signatario_roles
+            and any(s.get("role", "").startswith("Testemunha") for s in signatario_roles)
+        )
+        if not has_digital_testemunhas:
+            doc.add_paragraph()
+            doc.add_paragraph("TESTEMUNHAS:")
+            doc.add_paragraph()
+            doc.add_paragraph("_" * 50)
+            doc.add_paragraph("Nome:")
+            doc.add_paragraph("CPF:")
+            doc.add_paragraph()
+            doc.add_paragraph("_" * 50)
+            doc.add_paragraph("Nome:")
+            doc.add_paragraph("CPF:")
  
+    def _render_signature_grid(self, doc: Document, entries: list[tuple[str, str]]) -> None:
+        """Dispoe campos de assinatura lado a lado, 2 por linha, em tabela sem borda.
+
+        Cada `entry` = (tag_assinatura, rotulo). Layout:
+            1.    2.
+            3.    4.
+        """
+        if not entries:
+            return
+
+        n_rows = (len(entries) + 1) // 2
+        table = doc.add_table(rows=n_rows, cols=2)
+        table.autofit = True
+
+        for idx, (tag, label) in enumerate(entries):
+            cell = table.cell(idx // 2, idx % 2)
+            # 1a paragrafo da celula recebe o campo de assinatura (tag DocuSeal)
+            cell.paragraphs[0].text = tag
+            cell.add_paragraph(label)
+            cell.add_paragraph()  # espacamento entre linhas
+
     def _escopo_description(self, escopo: EscopoItem) -> str:
         if escopo.tipo == TipoEscopo.OUTRO and escopo.descricao_custom:
             return escopo.descricao_custom
