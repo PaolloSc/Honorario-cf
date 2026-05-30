@@ -1038,6 +1038,7 @@ class ContractGenerator:
             contratado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratado")]
             advogado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Advogado")]
             contratante_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratante")]
+            testemunha_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Testemunha")]
 
             for sig in contratado_sigs:
                 role = sig["role"]
@@ -1059,6 +1060,18 @@ class ContractGenerator:
                 doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
                 doc.add_paragraph(f"CONTRATANTE: {name.upper()}")
                 doc.add_paragraph()
+
+            # Testemunhas digitais (assinatura via DocuSeal)
+            if testemunha_sigs:
+                doc.add_paragraph()
+                doc.add_paragraph("TESTEMUNHAS:")
+                doc.add_paragraph()
+                for sig in testemunha_sigs:
+                    role = sig["role"]
+                    name = sig.get("name", "Testemunha")
+                    doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+                    doc.add_paragraph(f"{role.upper()}: {name.upper()}")
+                    doc.add_paragraph()
         else:
             # Default: single fields per role (for initial generation without specific signatarios)
             doc.add_paragraph("{{Assinatura Contratado|signature|Contratado}}")
@@ -1083,17 +1096,24 @@ class ContractGenerator:
                 doc.add_paragraph(f"CONTRATANTE {i}: {nome}")
                 doc.add_paragraph()
 
-        # Testemunhas - assinatura fisica (sem DocuSeal)
-        doc.add_paragraph()
-        doc.add_paragraph("TESTEMUNHAS:")
-        doc.add_paragraph()
-        doc.add_paragraph("_" * 50)
-        doc.add_paragraph("Nome:")
-        doc.add_paragraph("CPF:")
-        doc.add_paragraph()
-        doc.add_paragraph("_" * 50)
-        doc.add_paragraph("Nome:")
-        doc.add_paragraph("CPF:")
+        # Testemunhas - bloco fisico em branco (somente quando NAO ha testemunhas digitais).
+        # Quando signatario_roles inclui papeis "Testemunha", os campos digitais ja foram
+        # gerados acima e este bloco e' omitido p/ evitar duplicidade.
+        has_digital_testemunhas = bool(
+            signatario_roles
+            and any(s.get("role", "").startswith("Testemunha") for s in signatario_roles)
+        )
+        if not has_digital_testemunhas:
+            doc.add_paragraph()
+            doc.add_paragraph("TESTEMUNHAS:")
+            doc.add_paragraph()
+            doc.add_paragraph("_" * 50)
+            doc.add_paragraph("Nome:")
+            doc.add_paragraph("CPF:")
+            doc.add_paragraph()
+            doc.add_paragraph("_" * 50)
+            doc.add_paragraph("Nome:")
+            doc.add_paragraph("CPF:")
  
     def _escopo_description(self, escopo: EscopoItem) -> str:
         if escopo.tipo == TipoEscopo.OUTRO and escopo.descricao_custom:

@@ -266,6 +266,24 @@ async def send_for_signature(
                     "role": "Advogado",
                 })
 
+        # Testemunha 1 fixa (financeiro): injetada em toda submissao.
+        # Inserida ANTES de eventuais testemunhas do payload p/ que a dedup a nomeie "Testemunha 1".
+        lilian_present = any(
+            s.get("email", "").lower() == settings.testemunha1_email.lower()
+            and s.get("role", "").startswith("Testemunha")
+            for s in all_signatarios
+        )
+        if not lilian_present:
+            first_testemunha_idx = next(
+                (i for i, s in enumerate(all_signatarios) if s.get("role", "").startswith("Testemunha")),
+                len(all_signatarios),
+            )
+            all_signatarios.insert(first_testemunha_idx, {
+                "email": settings.testemunha1_email,
+                "name": settings.testemunha1_nome,
+                "role": "Testemunha",
+            })
+
         # Deduplicate roles: DocuSeal requires unique role per submitter
         # and each role must match a signature field in the template
         from collections import Counter
@@ -278,8 +296,8 @@ async def send_for_signature(
                 sig["role"] = f"{role} {role_indices[role]}"
 
         # Assign order for sequential signing:
-        # Contratante(s) sign first, Advogado second, Contratado (C&F) last
-        _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3}
+        # Contratante(s) -> Advogado -> Contratado (C&F) -> Testemunha(s) por ultimo
+        _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3, "Testemunha": 4}
         for sig in all_signatarios:
             # Extract base role (without number suffix) for order lookup
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")

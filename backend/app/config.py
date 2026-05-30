@@ -31,6 +31,11 @@ class Settings(BaseSettings):
 
     cf_signer_email: str = os.getenv("CF_SIGNER_EMAIL", "contrato@carvalhofurtadoadv.com.br")
 
+    # Testemunha 1 fixa (financeiro) injetada em toda submissao p/ assinatura.
+    # Email unico (financeiro_email pode ser lista, nao serve p/ submitter DocuSeal).
+    testemunha1_nome: str = os.getenv("TESTEMUNHA1_NOME", "Lilian Siqueira")
+    testemunha1_email: str = os.getenv("TESTEMUNHA1_EMAIL", "financeiro@carvalhofurtadoadv.com.br")
+
     bank_account_info: str = os.getenv("BANK_ACCOUNT_INFO", "Banco Inter - Ag. 0001 c/c 17841983-4 ou Pix 25463159000173")
 
     template_path: str = "templates/timbrado_peticao_1.dotx"
