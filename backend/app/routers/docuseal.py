@@ -378,11 +378,10 @@ async def send_for_signature(
                 ))
                 db.commit()
 
-            # Send copy of contract to financeiro
-            await _send_contract_to_financeiro(data.contract_id, str(filepath), contract, db, user)
-
-            # Send participacao sheet to financeiro if available
-            await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user, contract_filepath=str(filepath))
+            # Nada e' enviado ao financeiro neste momento. A ficha de participacao
+            # so vai ao financeiro quando TODAS as partes assinarem (webhook
+            # submission.completed). Lilian (financeiro) recebe o contrato como
+            # Testemunha 1 via DocuSeal.
 
             return DocuSealResponse(
                 success=True,
@@ -443,10 +442,17 @@ async def _send_participacao_to_financeiro(
     contract: ContractDB | None,
     latest_ver: ContractVersionDB | None,
     db: Session,
-    user: CurrentUser,
+    user_email: str,
     contract_filepath: str | None = None,
+    momento_label: str = "Assinatura concluída por todas as partes",
+    subject_prefix: str = "Ficha de Participação (Assinado)",
+    audit_action: str = "envio_participacao_final",
 ) -> None:
-    """Send participação sheet to financeiro based on stored form data."""
+    """Send participação sheet to financeiro based on stored form data.
+
+    Disparada quando TODAS as partes assinaram (webhook submission.completed).
+    `user_email` identifica quem originou o contrato (sem CurrentUser no webhook).
+    """
     try:
         if not latest_ver or not latest_ver.form_data_json:
             return
@@ -577,8 +583,8 @@ async def _send_participacao_to_financeiro(
             '<div style="padding: 24px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
             f'<p><strong>Cliente:</strong> {client_name}</p>'
             f'<p><strong>Contrato:</strong> {contract_id}</p>'
-            f'<p><strong>Registrado por:</strong> {user.email}</p>'
-            f'<p><strong>Momento:</strong> Envio para assinatura digital</p>'
+            f'<p><strong>Registrado por:</strong> {user_email}</p>'
+            f'<p><strong>Momento:</strong> {momento_label}</p>'
             '<table style="width:100%;border-collapse:collapse;margin-top:16px;">'
             f'{table_rows}'
             '</table>'
@@ -592,7 +598,7 @@ async def _send_participacao_to_financeiro(
             result = await email_service.send_html_email_with_attachment(
                 to_email=settings.financeiro_email,
                 to_name="Financeiro C&F",
-                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                subject=f"{subject_prefix} — {client_name}",
                 html_content=html,
                 attachment_path=contract_filepath,
                 attachment_name=f"contrato_honorarios_{contract_id}.docx",
@@ -601,7 +607,7 @@ async def _send_participacao_to_financeiro(
             result = await email_service.send_html_email(
                 to_email=settings.financeiro_email,
                 to_name="Financeiro C&F",
-                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                subject=f"{subject_prefix} — {client_name}",
                 html_content=html,
             )
 
@@ -610,10 +616,10 @@ async def _send_participacao_to_financeiro(
             if contract:
                 db.add(AuditLogDB(
                     contract_id=contract_id,
-                    action="envio_participacao_assinatura",
-                    detail=f"Ficha de participação enviada para {settings.financeiro_email} (assinatura)",
+                    action=audit_action,
+                    detail=f"Ficha de participação enviada para {settings.financeiro_email}",
                     version_number=contract.current_version,
-                    user_email=user.email,
+                    user_email=user_email,
                     created_at=utcnow(),
                 ))
                 db.commit()
@@ -676,6 +682,26 @@ async def docuseal_webhook(
         ))
         db.commit()
         logger.info("Contract %s updated to status '%s'", contract.contract_id, new_status)
+
+        # Todas as partes assinaram -> enviar ficha de participacao ao financeiro.
+        # Idempotente: webhook pode ser reentregue pelo DocuSeal.
+        if event_type == "submission.completed":
+            ja_enviada = (
+                db.query(AuditLogDB)
+                .filter(
+                    AuditLogDB.contract_id == contract.contract_id,
+                    AuditLogDB.action == "envio_participacao_final",
+                )
+                .first()
+            )
+            if not ja_enviada:
+                await _send_participacao_to_financeiro(
+                    contract.contract_id,
+                    contract,
+                    version,
+                    db,
+                    user_email=contract.created_by or "sistema",
+                )
 
     return {"status": "ok", "new_status": new_status}
 
