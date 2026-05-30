@@ -90,6 +90,46 @@ class TestemunhaDB(Base):
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
+# ── Colaboradores (roster interno: advogados/sócios/etc.) ─────────
+
+PAPEIS_VALIDOS = (
+    "socio",
+    "advogado",
+    "estagiario",
+    "recepcionista",
+    "financeiro",
+    "dev",
+)
+# Papéis elegíveis a participação (advogados/sócios) — usados nos
+# campos "Para quem", responsáveis etc. do wizard.
+PAPEIS_PARTICIPAVEIS = ("socio", "advogado")
+
+
+class ColaboradorDB(Base):
+    """Cadastro interno de colaboradores do escritório (roster).
+
+    Fonte da lista suspensa de advogados/sócios no wizard. Diferente de
+    ``UserDB`` (contas de login Azure): aqui ficam todas as pessoas do
+    escritório, tenham logado ou não.
+    """
+
+    __tablename__ = "colaboradores"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(String(256), nullable=False)
+    email = Column(String(256), nullable=True)
+    papel = Column(String(32), nullable=False, default="advogado")  # ver PAPEIS_VALIDOS
+    ativo = Column(Boolean, nullable=False, default=True)
+    ordem = Column(Integer, nullable=False, default=0)
+    created_by = Column(String(256), nullable=True)  # user email
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    @property
+    def participavel(self) -> bool:
+        return self.papel in PAPEIS_PARTICIPAVEIS
+
+
 # ── Contracts ─────────────────────────────────────────────────────
 
 class ContractDB(Base):
