@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, type Testemunha } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -76,7 +76,19 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
   const [newLawyerEmail, setNewLawyerEmail] = useState("");
   const [newLawyerName, setNewLawyerName] = useState("");
+  // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
+  const [roster, setRoster] = useState<Testemunha[]>([]);
+  const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
+  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
+  const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
+  const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   const isEdit = !!editContractId;
+
+  useEffect(() => {
+    listTestemunhas()
+      .then((r) => setRoster(r.testemunhas))
+      .catch(() => setRoster([]));
+  }, []);
 
   const handleAddLawyer = () => {
     if (!newLawyerEmail.trim()) return;
@@ -275,6 +287,14 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         });
       }
 
+      // Testemunhas: do roster + avulsas (Testemunha 1 = financeiro e' injetada no backend)
+      for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
+        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
+      }
+      for (const t of extraTestemunhas) {
+        signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
+      }
+
       const result = await sendForSignature({
         contract_id: contractId,
         signatarios,
@@ -465,6 +485,78 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
                 <button
                   onClick={handleAddLawyer}
                   disabled={!newLawyerEmail.trim()}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+
+            {/* Testemunhas section */}
+            <div className="w-full mb-2 p-4 rounded-lg bg-purple-50 border border-purple-200">
+              <h4 className="text-sm font-medium text-purple-900 mb-2">Testemunhas</h4>
+              <p className="text-xs text-purple-700 mb-3">
+                <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
+              </p>
+
+              {roster.length > 0 && (
+                <div className="space-y-1 mb-3">
+                  {roster.map((t) => (
+                    <label key={t.id} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedTestemunhaIds.includes(t.id)}
+                        onChange={(e) =>
+                          setSelectedTestemunhaIds((prev) =>
+                            e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                          )
+                        }
+                      />
+                      <span className="flex-1">{t.nome} ({t.email})</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {extraTestemunhas.length > 0 && (
+                <div className="space-y-1 mb-3">
+                  {extraTestemunhas.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+                      <span className="flex-1">{t.name} ({t.email}) <em className="text-purple-500">avulsa</em></span>
+                      <button
+                        onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTestemunhaNome}
+                  onChange={(e) => setNewTestemunhaNome(e.target.value)}
+                  placeholder="Nome da testemunha"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <input
+                  type="email"
+                  value={newTestemunhaEmail}
+                  onChange={(e) => setNewTestemunhaEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <button
+                  onClick={() => {
+                    if (!newTestemunhaEmail.trim()) return;
+                    setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
+                    setNewTestemunhaEmail("");
+                    setNewTestemunhaNome("");
+                  }}
+                  disabled={!newTestemunhaEmail.trim()}
                   className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
                 >
                   Adicionar

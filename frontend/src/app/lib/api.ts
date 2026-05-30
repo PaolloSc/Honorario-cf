@@ -173,6 +173,38 @@ export async function sendForSignature(data: {
   );
 }
 
+// ── Testemunhas (roster) ─────────────────────────────────────────
+
+export interface Testemunha {
+  id: number;
+  nome: string;
+  email: string;
+  ativo: boolean;
+  created_at: string;
+}
+
+export async function listTestemunhas(includeInactive = false) {
+  const qs = includeInactive ? "?include_inactive=true" : "";
+  return request<{ testemunhas: Testemunha[] }>(`/api/testemunhas${qs}`);
+}
+
+export async function createTestemunha(body: { nome: string; email: string }) {
+  return request<Testemunha>("/api/testemunhas", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateTestemunha(
+  id: number,
+  body: { nome?: string; email?: string; ativo?: boolean }
+) {
+  return request<Testemunha>(`/api/testemunhas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function lookupCNPJ(cnpj: string) {
   const cnpjClean = cnpj.replace(/\D/g, "");
   return request<{
