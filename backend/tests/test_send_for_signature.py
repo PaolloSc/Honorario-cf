@@ -780,6 +780,65 @@ class TestSendForSignatureEndpoint:
         if temp_file.exists():
             temp_file.unlink()
 
+    def test_send_for_signature_injects_lilian_as_testemunha1(self, client):
+        """Lilian (financeiro) e injetada como Testemunha 1; testemunha do payload vira Testemunha 2."""
+        from app.config import settings as _settings
+
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        contract_id = "sig-testem-011"
+        temp_file = output_dir / f"contrato_{contract_id}.docx"
+        temp_file.write_bytes(b"content with {{field|signature|req}} tags")
+
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(db, contract_id, file_path=str(temp_file))
+        finally:
+            db.close()
+
+        mock_service = MagicMock()
+        mock_service.create_template_from_docx = AsyncMock(
+            return_value={"id": 123, "name": "Template"}
+        )
+        captured = []
+
+        async def capture_send(template_id, signatarios, send_email=True):
+            captured.extend(signatarios)
+            return {"success": True, "submission": {"id": 901, "submitters": []}, "message": "ok"}
+
+        mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
+
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
+             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={
+                    "contract_id": contract_id,
+                    "signatarios": [
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"},
+                        {"email": "outra@example.com", "name": "Outra Testemunha", "role": "Testemunha"},
+                    ],
+                },
+            )
+
+        assert response.status_code == 200
+
+        testemunhas = [s for s in captured if s.get("role", "").startswith("Testemunha")]
+        # Lilian (Testemunha 1) + payload (Testemunha 2)
+        roles = sorted(s["role"] for s in testemunhas)
+        assert roles == ["Testemunha 1", "Testemunha 2"]
+
+        lilian = next(s for s in testemunhas if s["role"] == "Testemunha 1")
+        assert lilian["email"] == _settings.testemunha1_email
+        assert lilian["name"] == _settings.testemunha1_nome
+        # Testemunhas assinam por ultimo
+        for s in testemunhas:
+            assert s["order"] == 4
+
+        if temp_file.exists():
+            temp_file.unlink()
+
     def test_send_for_signature_assigns_correct_order(self, client):
         """Order: Contratante=1, Advogado=2, Contratado=3."""
         output_dir = _get_output_dir()
