@@ -60,7 +60,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
 
   useEffect(() => {
     let active = true;
-    listColaboradores()
+    listColaboradores({ participavel: true })
       .then((res) => { if (active) setColaboradores(res.colaboradores); })
       .catch(() => { if (active) setColabError("Não foi possível carregar a lista de advogados."); })
       .finally(() => { if (active) setLoadingColab(false); });

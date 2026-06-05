@@ -154,9 +154,10 @@ export async function sendParticipacao(data: {
   });
 }
 
-export async function listColaboradores() {
+export async function listColaboradores(opts?: { participavel?: boolean }) {
+  const qs = opts?.participavel ? "?participavel=true" : "";
   return request<{ colaboradores: Array<{ name: string; email: string; role: string }> }>(
-    "/api/users/colaboradores"
+    `/api/users/colaboradores${qs}`
   );
 }
 
@@ -203,6 +204,62 @@ export async function updateTestemunha(
     method: "PATCH",
     body: JSON.stringify(body),
   });
+}
+
+// ── Colaboradores (roster) ───────────────────────────────────────
+
+export interface Colaborador {
+  id: number;
+  nome: string;
+  email: string | null;
+  papel: string;
+  ativo: boolean;
+  ordem: number;
+  participavel: boolean;
+  created_at: string;
+}
+
+export const PAPEIS_COLABORADOR: Array<{ value: string; label: string }> = [
+  { value: "socio", label: "Sócio(a)" },
+  { value: "advogado", label: "Advogado(a)" },
+  { value: "estagiario", label: "Estagiário(a)" },
+  { value: "recepcionista", label: "Recepcionista" },
+  { value: "financeiro", label: "Financeiro" },
+  { value: "dev", label: "Desenvolvedor(a)" },
+];
+
+export async function listColaboradoresAdmin(includeInactive = true) {
+  const qs = includeInactive ? "?include_inactive=true" : "?include_inactive=false";
+  return request<{ colaboradores: Colaborador[] }>(`/api/colaboradores${qs}`);
+}
+
+export async function createColaborador(body: {
+  nome: string;
+  email?: string | null;
+  papel: string;
+  ordem?: number;
+}) {
+  return request<Colaborador>("/api/colaboradores", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateColaborador(
+  id: number,
+  body: { nome?: string; email?: string | null; papel?: string; ativo?: boolean; ordem?: number }
+) {
+  return request<Colaborador>(`/api/colaboradores/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteColaborador(id: number) {
+  return request<{ success: boolean; id: number; ativo: boolean }>(
+    `/api/colaboradores/${id}`,
+    { method: "DELETE" }
+  );
 }
 
 export async function lookupCNPJ(cnpj: string) {
