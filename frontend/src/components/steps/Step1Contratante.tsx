@@ -34,6 +34,15 @@ function formatCEP(digits: string): string {
   return digits;
 }
 
+function formatCPF(value: string): string {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 11)
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3}\.\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3}\.\d{3}\.\d{3})(\d)/, "$1-$2");
+}
+
 const ESTADOS_CIVIS: Array<{ value: EstadoCivil; label: string }> = [
   { value: "Solteiro(a)", label: "Solteiro(a)" },
   { value: "Casado(a)", label: "Casado(a)" },
@@ -47,7 +56,7 @@ function emptyPF(): ContratantePF {
   return {
     tipo: "PF",
     nome: "",
-    nacionalidade: "Brasileira",
+    nacionalidade: "Brasileira (o)",
     cpf: "",
     profissao: "",
     estado_civil: "Solteiro(a)",
@@ -341,8 +350,9 @@ function PJForm({
             <Input
               value={data.representante_cpf || ""}
               onChange={(e) =>
-                onUpdate({ representante_cpf: e.target.value })
+                onUpdate({ representante_cpf: formatCPF(e.target.value) })
               }
+              placeholder="000.000.000-00"
             />
           </FormField>
           <FormField label="E-mail do Representante">
@@ -404,11 +414,11 @@ function PFForm({
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
 
-  const buildEndereco = (cData: typeof cepData, num: string, comp: string) => {
+  const buildEndereco = (cData: typeof cepData, num: string, comp: string, cepValue: string = cep) => {
     if (!cData) return;
     const numPart = num ? `, n. ${num}` : "";
     const compPart = comp ? `, ${comp}` : "";
-    const cepFormatado = cep.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
+    const cepFormatado = cepValue.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
     const endereco = `${cData.logradouro}${numPart}${compPart}, ${cData.bairro}, ${cData.localidade}/${cData.uf}, CEP ${cepFormatado}`;
     onUpdate({ endereco });
   };
@@ -429,7 +439,7 @@ function PFForm({
       }
       const cData = { logradouro: result.logradouro, bairro: result.bairro, localidade: result.localidade, uf: result.uf };
       setCepData(cData);
-      buildEndereco(cData, numero, complemento);
+      buildEndereco(cData, numero, complemento, formatCEP(digits));
     } catch {
       setCepError("Erro ao buscar CEP.");
     } finally {
@@ -463,7 +473,7 @@ function PFForm({
       <FormField label="CPF" required>
         <Input
           value={data.cpf}
-          onChange={(e) => onUpdate({ cpf: e.target.value })}
+          onChange={(e) => onUpdate({ cpf: formatCPF(e.target.value) })}
           placeholder="000.000.000-00"
           required
         />
@@ -473,7 +483,7 @@ function PFForm({
         <Input
           value={data.nacionalidade}
           onChange={(e) => onUpdate({ nacionalidade: e.target.value })}
-          placeholder="Brasileira"
+          placeholder="Brasileira (o)"
         />
       </FormField>
 
