@@ -32,7 +32,7 @@ const INITIAL_DATA: ContratoFormData = {
     {
       tipo: "PF",
       nome: "",
-      nacionalidade: "Brasileira",
+      nacionalidade: "Brasileira (o)",
       cpf: "",
       profissao: "",
       estado_civil: "Solteiro(a)",
