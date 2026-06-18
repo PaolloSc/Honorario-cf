@@ -87,6 +87,14 @@ export type TipoHonorario =
   | "exito"
   | "permuta";
  
+export const HONORARIO_LABELS: Record<TipoHonorario, string> = {
+  hora_trabalhada: "Hora Trabalhada",
+  pro_labore: "Pró-labore",
+  mensalidade: "Mensalidade",
+  exito: "Êxito",
+  permuta: "Permuta",
+};
+
 export type SubtipoMensalidade =
   | "advocacia_partido"
   | "por_processo"
@@ -114,7 +122,11 @@ export interface HoraTrabalhada {
   tem_pacote_horas: boolean;
   quantidade_horas_pacote?: number;
   valor_pacote?: number;
-  periodo_banco_horas_meses?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
+  horas_contratadas?: number;
+  horas_trabalhadas?: number;
   tem_hora_urgencia: boolean;
   tem_hora_fora_expediente: boolean;
 }
@@ -125,15 +137,27 @@ export interface ProLabore {
   numero_parcelas?: number;
   valor_parcela?: number;
   vencimento?: string;
+  vencimento_data?: string;
+  vencimento_obs?: string;
   vencimento_parcelas?: string;
+  vencimento_parcelas_data?: string;
+  vencimento_parcelas_obs?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
 }
  
 export interface Mensalidade {
   valor: number;
   subtipo: SubtipoMensalidade;
   dia_vencimento: string;
+  dia_vencimento_data?: string;
+  dia_vencimento_obs?: string;
   variacao_preco: VariacaoPrecoMensalidade;
   limitacao_temporal_anos?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
   faixas_preco?: Array<{ faixa: string; valor: string }>;
   fases_processuais?: Array<{ fase: string; valor: string }>;
 }
@@ -144,11 +168,18 @@ export interface Exito {
   incidencia: string;
   base_calculo: string;
   vencimento: string;
+  vencimento_data?: string;
+  vencimento_obs?: string;
   forma_pagamento: string;
   numero_parcelas?: number;
   valor_parcela?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  duracao_meses?: number;
   tem_beneficio_prospectivo: boolean;
-  periodo_prospectivo_meses?: number;
+  prospectivo_data_inicio?: string;
+  prospectivo_data_fim?: string;
+  prospectivo_duracao_meses?: number;
   faixas_percentual?: Array<{ faixa: string; percentual: string }>;
   deduz_outro_honorario: boolean;
   honorario_deduzido?: string;
@@ -188,13 +219,27 @@ export interface Acessorios {
   valor_diligencia?: number;
 }
  
+export type ParticipacaoValorTipo = "percentual" | "valor" | "outro";
+
 export interface Participacao {
   tem_participacao: boolean;
-  percentual_ou_valor?: string;
-  para_quem?: string;
+  valor_tipo?: ParticipacaoValorTipo;
+  valor_percentual?: string;
+  valor_monetario?: number;
+  valor_outro?: string;
+  para_quem?: string[];
   natureza?: string;
   responsavel_captacao?: string;
   responsavel_gestao?: string;
+  contato_financeiro_nome?: string;
+  contato_financeiro_email?: string;
+  contato_financeiro_telefone?: string;
+  base_tipo?: "escopo" | "honorario";
+  base_escopo_index?: number;
+  base_honorario?: TipoHonorario;
+  base_label?: string;
+  // legados (compat edição)
+  percentual_ou_valor?: string;
   contato_financeiro_cliente?: string;
 }
  

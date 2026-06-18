@@ -124,6 +124,11 @@ export default function Step6Revisao({ data }: Step6Props) {
       {data.participacao.tem_participacao && (
         <Section title="Participações (Interno)">
           <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
+            {data.participacao.base_label && (
+              <li>
+                Base: {data.participacao.base_tipo === "escopo" ? "Escopo" : "Honorário"} — {data.participacao.base_label}
+              </li>
+            )}
             <li>
               Valor/Percentual: {data.participacao.percentual_ou_valor}
             </li>
@@ -160,19 +165,29 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
  
   for (const tipo of escopo.honorarios) {
     if (tipo === "hora_trabalhada" && escopo.hora_trabalhada) {
-      parts.push(
-        `${formatCurrency(escopo.hora_trabalhada.valor_hora)}/hora`
-      );
+      const ht = escopo.hora_trabalhada;
+      let s = `${formatCurrency(ht.valor_hora)}/hora`;
+      if (ht.duracao_meses) s += ` · ${ht.duracao_meses} meses`;
+      if (ht.horas_contratadas) {
+        const horas = new Intl.NumberFormat("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(ht.horas_contratadas);
+        s += ` · ${horas}h contratadas`;
+      }
+      parts.push(s);
     } else if (tipo === "pro_labore" && escopo.pro_labore) {
-      parts.push(
-        `${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`
-      );
+      let s = `${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`;
+      if (escopo.pro_labore.duracao_meses) s += ` · ${escopo.pro_labore.duracao_meses} meses`;
+      parts.push(s);
     } else if (tipo === "mensalidade" && escopo.mensalidade) {
-      parts.push(
-        `${formatCurrency(escopo.mensalidade.valor)}/mês`
-      );
+      let s = `${formatCurrency(escopo.mensalidade.valor)}/mês`;
+      if (escopo.mensalidade.duracao_meses) s += ` · ${escopo.mensalidade.duracao_meses} meses`;
+      parts.push(s);
     } else if (tipo === "exito" && escopo.exito?.percentual) {
-      parts.push(`${escopo.exito.percentual}% êxito`);
+      let s = `${escopo.exito.percentual}% êxito`;
+      if (escopo.exito.duracao_meses) s += ` · ${escopo.exito.duracao_meses} meses`;
+      parts.push(s);
     } else if (tipo === "permuta" && escopo.permuta) {
       parts.push(`Permuta: ${escopo.permuta.objeto_permuta}`);
     } else {

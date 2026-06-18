@@ -130,6 +130,22 @@ export default function Step2Escopo({
         <p className="text-xs text-muted ml-14">
           Aplicável quando a contratação envolver hora trabalhada ou honorário mensal por processo.
         </p>
+        {incluirPartesRelacionadas && (
+          <div className="mt-3 ml-14 rounded-lg bg-muted/30 border border-border p-3 space-y-2">
+            <p className="text-xs text-foreground">
+              <strong>2.4.</strong> Para fins deste Contrato, são Partes Relacionadas: (i)
+              cônjuge, companheiro(a) ou parente de primeiro ou segundo grau da CONTRATANTE;
+              (ii) entidade(s) ou pessoa(s) jurídica(s) cujo controle fático ou jurídico seja
+              da CONTRATANTE.
+            </p>
+            <p className="text-xs text-foreground">
+              <strong>2.4.1.</strong> Caso a CONTRATANTE solicite atendimento a Partes
+              Relacionadas, salvo ajuste expresso em contrário, serão aplicados os mesmos
+              critérios de honorários previstos no Contrato, constituindo nova contratação
+              para todos os fins.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

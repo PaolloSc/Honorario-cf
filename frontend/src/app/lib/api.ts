@@ -132,17 +132,33 @@ export async function sendParticipacao(data: {
   contract_id: string;
   cliente_nome: string;
   objeto_contrato?: string;
-  percentual_ou_valor?: string;
-  para_quem?: string;
+  valor_tipo?: string;
+  valor_percentual?: string;
+  valor_monetario?: number;
+  valor_outro?: string;
+  para_quem?: string[];
   natureza?: string;
   responsavel_captacao?: string;
   responsavel_gestao?: string;
-  contato_financeiro_cliente?: string;
+  contato_financeiro_nome?: string;
+  contato_financeiro_email?: string;
+  contato_financeiro_telefone?: string;
+  base_tipo?: string;
+  base_escopo_index?: number;
+  base_honorario?: string;
+  base_label?: string;
 }) {
   return request<{ success: boolean; message: string }>("/api/email/send-participacao", {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export async function listColaboradores(opts?: { participavel?: boolean }) {
+  const qs = opts?.participavel ? "?participavel=true" : "";
+  return request<{ colaboradores: Array<{ name: string; email: string; role: string }> }>(
+    `/api/users/colaboradores${qs}`
+  );
 }
 
 export async function sendForSignature(data: {
@@ -155,6 +171,94 @@ export async function sendForSignature(data: {
       method: "POST",
       body: JSON.stringify(data),
     }
+  );
+}
+
+// ── Testemunhas (roster) ─────────────────────────────────────────
+
+export interface Testemunha {
+  id: number;
+  nome: string;
+  email: string;
+  ativo: boolean;
+  created_at: string;
+}
+
+export async function listTestemunhas(includeInactive = false) {
+  const qs = includeInactive ? "?include_inactive=true" : "";
+  return request<{ testemunhas: Testemunha[] }>(`/api/testemunhas${qs}`);
+}
+
+export async function createTestemunha(body: { nome: string; email: string }) {
+  return request<Testemunha>("/api/testemunhas", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateTestemunha(
+  id: number,
+  body: { nome?: string; email?: string; ativo?: boolean }
+) {
+  return request<Testemunha>(`/api/testemunhas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+// ── Colaboradores (roster) ───────────────────────────────────────
+
+export interface Colaborador {
+  id: number;
+  nome: string;
+  email: string | null;
+  papel: string;
+  ativo: boolean;
+  ordem: number;
+  participavel: boolean;
+  created_at: string;
+}
+
+export const PAPEIS_COLABORADOR: Array<{ value: string; label: string }> = [
+  { value: "socio", label: "Sócio(a)" },
+  { value: "advogado", label: "Advogado(a)" },
+  { value: "estagiario", label: "Estagiário(a)" },
+  { value: "recepcionista", label: "Recepcionista" },
+  { value: "financeiro", label: "Financeiro" },
+  { value: "dev", label: "Desenvolvedor(a)" },
+];
+
+export async function listColaboradoresAdmin(includeInactive = true) {
+  const qs = includeInactive ? "?include_inactive=true" : "?include_inactive=false";
+  return request<{ colaboradores: Colaborador[] }>(`/api/colaboradores${qs}`);
+}
+
+export async function createColaborador(body: {
+  nome: string;
+  email?: string | null;
+  papel: string;
+  ordem?: number;
+}) {
+  return request<Colaborador>("/api/colaboradores", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateColaborador(
+  id: number,
+  body: { nome?: string; email?: string | null; papel?: string; ativo?: boolean; ordem?: number }
+) {
+  return request<Colaborador>(`/api/colaboradores/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteColaborador(id: number) {
+  return request<{ success: boolean; id: number; ativo: boolean }>(
+    `/api/colaboradores/${id}`,
+    { method: "DELETE" }
   );
 }
 

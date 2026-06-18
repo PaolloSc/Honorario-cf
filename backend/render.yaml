@@ -3,6 +3,8 @@ services:
     name: honorario-backend
     env: python
     rootDir: backend
+    autoDeploy: true
+    branch: master
     buildCommand: pip install -r requirements.txt
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /docs

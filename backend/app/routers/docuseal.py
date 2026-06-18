@@ -187,7 +187,7 @@ def _patch_docx_with_signatures(
     missing_sigs = []
     for sig in signatarios:
         role = sig.get("role", "")
-        if f"|signature|{role}" not in full_text:
+        if f";type=signature;role={role}" not in full_text:
             missing_sigs.append(sig)
 
     if missing_sigs:
@@ -205,21 +205,21 @@ def _patch_docx_with_signatures(
         for sig in contratado_sigs:
             role = sig["role"]
             name = sig.get("name", "Contratado")
-            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATADO: {name.upper()}")
             doc.add_paragraph()
 
         for sig in advogado_sigs:
             role = sig["role"]
             name = sig.get("name", "Advogado")
-            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"ADVOGADO: {name.upper()}")
             doc.add_paragraph()
 
         for sig in contratante_sigs:
             role = sig["role"]
             name = sig.get("name", "Contratante")
-            doc.add_paragraph(f"{{{{Assinatura {name}|signature|{role}}}}}")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATANTE: {name.upper()}")
             doc.add_paragraph()
 
@@ -266,6 +266,24 @@ async def send_for_signature(
                     "role": "Advogado",
                 })
 
+        # Testemunha 1 fixa (financeiro): injetada em toda submissao.
+        # Inserida ANTES de eventuais testemunhas do payload p/ que a dedup a nomeie "Testemunha 1".
+        lilian_present = any(
+            s.get("email", "").lower() == settings.testemunha1_email.lower()
+            and s.get("role", "").startswith("Testemunha")
+            for s in all_signatarios
+        )
+        if not lilian_present:
+            first_testemunha_idx = next(
+                (i for i, s in enumerate(all_signatarios) if s.get("role", "").startswith("Testemunha")),
+                len(all_signatarios),
+            )
+            all_signatarios.insert(first_testemunha_idx, {
+                "email": settings.testemunha1_email,
+                "name": settings.testemunha1_nome,
+                "role": "Testemunha",
+            })
+
         # Deduplicate roles: DocuSeal requires unique role per submitter
         # and each role must match a signature field in the template
         from collections import Counter
@@ -278,8 +296,8 @@ async def send_for_signature(
                 sig["role"] = f"{role} {role_indices[role]}"
 
         # Assign order for sequential signing:
-        # Contratante(s) sign first, Advogado second, Contratado (C&F) last
-        _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3}
+        # Contratante(s) -> Advogado -> Contratado (C&F) -> Testemunha(s) por ultimo
+        _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3, "Testemunha": 4}
         for sig in all_signatarios:
             # Extract base role (without number suffix) for order lookup
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
@@ -360,11 +378,10 @@ async def send_for_signature(
                 ))
                 db.commit()
 
-            # Send copy of contract to financeiro
-            await _send_contract_to_financeiro(data.contract_id, str(filepath), contract, db, user)
-
-            # Send participacao sheet to financeiro if available
-            await _send_participacao_to_financeiro(data.contract_id, contract, latest_ver, db, user, contract_filepath=str(filepath))
+            # Nada e' enviado ao financeiro neste momento. A ficha de participacao
+            # so vai ao financeiro quando TODAS as partes assinarem (webhook
+            # submission.completed). Lilian (financeiro) recebe o contrato como
+            # Testemunha 1 via DocuSeal.
 
             return DocuSealResponse(
                 success=True,
@@ -425,10 +442,17 @@ async def _send_participacao_to_financeiro(
     contract: ContractDB | None,
     latest_ver: ContractVersionDB | None,
     db: Session,
-    user: CurrentUser,
+    user_email: str,
     contract_filepath: str | None = None,
+    momento_label: str = "Assinatura concluída por todas as partes",
+    subject_prefix: str = "Ficha de Participação (Assinado)",
+    audit_action: str = "envio_participacao_final",
 ) -> None:
-    """Send participação sheet to financeiro based on stored form data."""
+    """Send participação sheet to financeiro based on stored form data.
+
+    Disparada quando TODAS as partes assinaram (webhook submission.completed).
+    `user_email` identifica quem originou o contrato (sem CurrentUser no webhook).
+    """
     try:
         if not latest_ver or not latest_ver.form_data_json:
             return
@@ -559,8 +583,8 @@ async def _send_participacao_to_financeiro(
             '<div style="padding: 24px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
             f'<p><strong>Cliente:</strong> {client_name}</p>'
             f'<p><strong>Contrato:</strong> {contract_id}</p>'
-            f'<p><strong>Registrado por:</strong> {user.email}</p>'
-            f'<p><strong>Momento:</strong> Envio para assinatura digital</p>'
+            f'<p><strong>Registrado por:</strong> {user_email}</p>'
+            f'<p><strong>Momento:</strong> {momento_label}</p>'
             '<table style="width:100%;border-collapse:collapse;margin-top:16px;">'
             f'{table_rows}'
             '</table>'
@@ -574,7 +598,7 @@ async def _send_participacao_to_financeiro(
             result = await email_service.send_html_email_with_attachment(
                 to_email=settings.financeiro_email,
                 to_name="Financeiro C&F",
-                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                subject=f"{subject_prefix} — {client_name}",
                 html_content=html,
                 attachment_path=contract_filepath,
                 attachment_name=f"contrato_honorarios_{contract_id}.docx",
@@ -583,7 +607,7 @@ async def _send_participacao_to_financeiro(
             result = await email_service.send_html_email(
                 to_email=settings.financeiro_email,
                 to_name="Financeiro C&F",
-                subject=f"Ficha de Participação (Assinatura) — {client_name}",
+                subject=f"{subject_prefix} — {client_name}",
                 html_content=html,
             )
 
@@ -592,10 +616,10 @@ async def _send_participacao_to_financeiro(
             if contract:
                 db.add(AuditLogDB(
                     contract_id=contract_id,
-                    action="envio_participacao_assinatura",
-                    detail=f"Ficha de participação enviada para {settings.financeiro_email} (assinatura)",
+                    action=audit_action,
+                    detail=f"Ficha de participação enviada para {settings.financeiro_email}",
                     version_number=contract.current_version,
-                    user_email=user.email,
+                    user_email=user_email,
                     created_at=utcnow(),
                 ))
                 db.commit()
@@ -658,6 +682,26 @@ async def docuseal_webhook(
         ))
         db.commit()
         logger.info("Contract %s updated to status '%s'", contract.contract_id, new_status)
+
+        # Todas as partes assinaram -> enviar ficha de participacao ao financeiro.
+        # Idempotente: webhook pode ser reentregue pelo DocuSeal.
+        if event_type == "submission.completed":
+            ja_enviada = (
+                db.query(AuditLogDB)
+                .filter(
+                    AuditLogDB.contract_id == contract.contract_id,
+                    AuditLogDB.action == "envio_participacao_final",
+                )
+                .first()
+            )
+            if not ja_enviada:
+                await _send_participacao_to_financeiro(
+                    contract.contract_id,
+                    contract,
+                    version,
+                    db,
+                    user_email=contract.created_by or "sistema",
+                )
 
     return {"status": "ok", "new_status": new_status}
 
