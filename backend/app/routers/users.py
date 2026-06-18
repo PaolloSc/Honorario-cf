@@ -8,7 +8,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user, require_admin
-from app.database import UserDB, get_db, utcnow
+from app.database import (
+    ColaboradorDB,
+    PAPEIS_PARTICIPAVEIS,
+    UserDB,
+    get_db,
+    utcnow,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["Users"])
@@ -32,6 +38,16 @@ class UpdateUserRoleRequest(BaseModel):
     role: str
 
 
+class ColaboradorOut(BaseModel):
+    name: str
+    email: str
+    role: str
+
+
+class ColaboradoresResponse(BaseModel):
+    colaboradores: list[ColaboradorOut]
+
+
 # ── Endpoints ─────────────────────────────────────────────────────
 
 @router.get("/me", response_model=UserResponse)
@@ -46,6 +62,31 @@ def get_me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(
         name=db_user.name,
         role=db_user.role,
         created_at=db_user.created_at.isoformat(),
+    )
+
+
+@router.get("/colaboradores", response_model=ColaboradoresResponse)
+def list_colaboradores(
+    participavel: bool = Query(False, description="Apenas advogados/sócios"),
+    include_inactive: bool = Query(False),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lista colaboradores do roster (nome/email/role) para seleção no wizard.
+
+    Fonte: tabela ``colaboradores`` (não ``users``). Qualquer usuário logado.
+    ``participavel=true`` retorna apenas advogados/sócios (campos "Para quem" etc.).
+    """
+    q = db.query(ColaboradorDB)
+    if not include_inactive:
+        q = q.filter(ColaboradorDB.ativo.is_(True))
+    if participavel:
+        q = q.filter(ColaboradorDB.papel.in_(PAPEIS_PARTICIPAVEIS))
+    rows = q.order_by(ColaboradorDB.ordem, ColaboradorDB.nome).all()
+    return ColaboradoresResponse(
+        colaboradores=[
+            ColaboradorOut(name=c.nome, email=c.email or "", role=c.papel) for c in rows
+        ]
     )
 
 

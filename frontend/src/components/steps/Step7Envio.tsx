@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, type Testemunha } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -68,12 +68,27 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [message, setMessage] = useState("");
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
   const [participacaoWarning, setParticipacaoWarning] = useState("");
-  const [recipientEmail, setRecipientEmail] = useState(data.email_destinatario || data.contratantes[0]?.email || "");
+  const [emailWarning, setEmailWarning] = useState("");
+  const [recipients, setRecipients] = useState<Array<{ email: string; nome: string }>>(
+    () => data.contratantes.map((c) => ({ email: c.email || "", nome: getContratanteNome(c) }))
+  );
   const [signatureSent, setSignatureSent] = useState(false);
   const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
   const [newLawyerEmail, setNewLawyerEmail] = useState("");
   const [newLawyerName, setNewLawyerName] = useState("");
+  // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
+  const [roster, setRoster] = useState<Testemunha[]>([]);
+  const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
+  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
+  const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
+  const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   const isEdit = !!editContractId;
+
+  useEffect(() => {
+    listTestemunhas()
+      .then((r) => setRoster(r.testemunhas))
+      .catch(() => setRoster([]));
+  }, []);
 
   const handleAddLawyer = () => {
     if (!newLawyerEmail.trim()) return;
@@ -84,6 +99,10 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
 
   const handleRemoveLawyer = (index: number) => {
     setAdditionalLawyers((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateRecipient = (index: number, email: string) => {
+    setRecipients((prev) => prev.map((r, i) => (i === index ? { ...r, email } : r)));
   };
 
   const handleSubmit = async () => {
@@ -108,15 +127,35 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       setStatus("sending");
       setMessage("Enviando e-mail...");
 
-      const emailResult = await sendEmail({
-        contract_id: resultContractId,
-        destinatario_email: recipientEmail,
-        destinatario_nome: getContratanteNome(data.contratantes[0]),
-        assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
-      });
+      const destinatarios = recipients.filter((r) => r.email.trim());
+      if (destinatarios.length === 0) {
+        throw new Error("Nenhum e-mail de destinatário informado.");
+      }
 
-      if (!emailResult.success) {
-        throw new Error(emailResult.message || "Erro ao enviar e-mail");
+      const falhas: string[] = [];
+      for (const dest of destinatarios) {
+        const email = dest.email.trim();
+        try {
+          const emailResult = await sendEmail({
+            contract_id: resultContractId,
+            destinatario_email: email,
+            destinatario_nome: dest.nome || email,
+            assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
+          });
+          if (!emailResult.success) {
+            falhas.push(`${email}: ${emailResult.message || "erro"}`);
+          }
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : "erro desconhecido";
+          falhas.push(`${email}: ${detail}`);
+        }
+      }
+
+      if (falhas.length === destinatarios.length) {
+        throw new Error(`Erro ao enviar e-mail: ${falhas.join("; ")}`);
+      }
+      if (falhas.length > 0) {
+        setEmailWarning(`Alguns e-mails não foram enviados: ${falhas.join("; ")}`);
       }
 
       // Send participação sheet to financeiro if applicable
@@ -126,12 +165,21 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
             objeto_contrato: buildObjetoContrato(data.escopos),
-            percentual_ou_valor: data.participacao.percentual_ou_valor || "",
-            para_quem: data.participacao.para_quem || "",
-            natureza: data.participacao.natureza || "",
-            responsavel_captacao: data.participacao.responsavel_captacao || "",
-            responsavel_gestao: data.participacao.responsavel_gestao || "",
-            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente || "",
+            valor_tipo: data.participacao.valor_tipo,
+            valor_percentual: data.participacao.valor_percentual,
+            valor_monetario: data.participacao.valor_monetario,
+            valor_outro: data.participacao.valor_outro,
+            para_quem: data.participacao.para_quem ?? [],
+            natureza: data.participacao.natureza,
+            responsavel_captacao: data.participacao.responsavel_captacao,
+            responsavel_gestao: data.participacao.responsavel_gestao,
+            contato_financeiro_nome: data.participacao.contato_financeiro_nome,
+            contato_financeiro_email: data.participacao.contato_financeiro_email,
+            contato_financeiro_telefone: data.participacao.contato_financeiro_telefone,
+            base_tipo: data.participacao.base_tipo,
+            base_escopo_index: data.participacao.base_escopo_index,
+            base_honorario: data.participacao.base_honorario,
+            base_label: data.participacao.base_label,
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
@@ -180,12 +228,21 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             contract_id: resultContractId,
             cliente_nome: getContratanteNome(data.contratantes[0]),
             objeto_contrato: buildObjetoContrato(data.escopos),
-            percentual_ou_valor: data.participacao.percentual_ou_valor || "",
-            para_quem: data.participacao.para_quem || "",
-            natureza: data.participacao.natureza || "",
-            responsavel_captacao: data.participacao.responsavel_captacao || "",
-            responsavel_gestao: data.participacao.responsavel_gestao || "",
-            contato_financeiro_cliente: data.participacao.contato_financeiro_cliente || "",
+            valor_tipo: data.participacao.valor_tipo,
+            valor_percentual: data.participacao.valor_percentual,
+            valor_monetario: data.participacao.valor_monetario,
+            valor_outro: data.participacao.valor_outro,
+            para_quem: data.participacao.para_quem ?? [],
+            natureza: data.participacao.natureza,
+            responsavel_captacao: data.participacao.responsavel_captacao,
+            responsavel_gestao: data.participacao.responsavel_gestao,
+            contato_financeiro_nome: data.participacao.contato_financeiro_nome,
+            contato_financeiro_email: data.participacao.contato_financeiro_email,
+            contato_financeiro_telefone: data.participacao.contato_financeiro_telefone,
+            base_tipo: data.participacao.base_tipo,
+            base_escopo_index: data.participacao.base_escopo_index,
+            base_honorario: data.participacao.base_honorario,
+            base_label: data.participacao.base_label,
           });
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
@@ -228,6 +285,14 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           name: lawyer.name,
           role: "Advogado",
         });
+      }
+
+      // Testemunhas: do roster + avulsas (Testemunha 1 = financeiro e' injetada no backend)
+      for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
+        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
+      }
+      for (const t of extraTestemunhas) {
+        signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
       }
 
       const result = await sendForSignature({
@@ -277,16 +342,25 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             <strong>Escopo(s):</strong> {data.escopos.length}
           </p>
           <p>
-            <strong>E-mail para envio:</strong>
+            <strong>E-mail(s) para envio:</strong>
           </p>
-          <input
-            type="email"
-            value={recipientEmail}
-            onChange={(e) => setRecipientEmail(e.target.value)}
-            disabled={status === "sent_email" || status === "success"}
-            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:bg-gray-100"
-            placeholder="email@exemplo.com"
-          />
+          <div className="space-y-2 mt-1">
+            {recipients.map((r, i) => (
+              <div key={i}>
+                <label className="block text-xs text-blue-700 mb-0.5">
+                  {r.nome || `Contratante ${i + 1}`}
+                </label>
+                <input
+                  type="email"
+                  value={r.email}
+                  onChange={(e) => updateRecipient(i, e.target.value)}
+                  disabled={status === "sent_email" || status === "success"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:bg-gray-100"
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -323,6 +397,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           }`}
         >
           {message}
+        </div>
+      )}
+
+      {emailWarning && (
+        <div className="p-4 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+          {emailWarning}
         </div>
       )}
 
@@ -405,6 +485,78 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
                 <button
                   onClick={handleAddLawyer}
                   disabled={!newLawyerEmail.trim()}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+
+            {/* Testemunhas section */}
+            <div className="w-full mb-2 p-4 rounded-lg bg-purple-50 border border-purple-200">
+              <h4 className="text-sm font-medium text-purple-900 mb-2">Testemunhas</h4>
+              <p className="text-xs text-purple-700 mb-3">
+                <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
+              </p>
+
+              {roster.length > 0 && (
+                <div className="space-y-1 mb-3">
+                  {roster.map((t) => (
+                    <label key={t.id} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedTestemunhaIds.includes(t.id)}
+                        onChange={(e) =>
+                          setSelectedTestemunhaIds((prev) =>
+                            e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                          )
+                        }
+                      />
+                      <span className="flex-1">{t.nome} ({t.email})</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {extraTestemunhas.length > 0 && (
+                <div className="space-y-1 mb-3">
+                  {extraTestemunhas.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+                      <span className="flex-1">{t.name} ({t.email}) <em className="text-purple-500">avulsa</em></span>
+                      <button
+                        onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTestemunhaNome}
+                  onChange={(e) => setNewTestemunhaNome(e.target.value)}
+                  placeholder="Nome da testemunha"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <input
+                  type="email"
+                  value={newTestemunhaEmail}
+                  onChange={(e) => setNewTestemunhaEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+                <button
+                  onClick={() => {
+                    if (!newTestemunhaEmail.trim()) return;
+                    setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
+                    setNewTestemunhaEmail("");
+                    setNewTestemunhaNome("");
+                  }}
+                  disabled={!newTestemunhaEmail.trim()}
                   className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
                 >
                   Adicionar

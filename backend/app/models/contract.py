@@ -116,7 +116,11 @@ class HoraTrabalhada(BaseModel):
     tem_pacote_horas: bool = False
     quantidade_horas_pacote: Optional[int] = None
     valor_pacote: Optional[float] = None
-    periodo_banco_horas_meses: Optional[int] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
+    horas_contratadas: Optional[float] = None
+    horas_trabalhadas: Optional[float] = None
     tem_hora_urgencia: bool = True
     tem_hora_fora_expediente: bool = True
  
@@ -127,15 +131,27 @@ class ProLabore(BaseModel):
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
     vencimento: Optional[str] = None
+    vencimento_data: Optional[str] = None
+    vencimento_obs: Optional[str] = None
     vencimento_parcelas: Optional[str] = None
+    vencimento_parcelas_data: Optional[str] = None
+    vencimento_parcelas_obs: Optional[str] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
  
  
 class Mensalidade(BaseModel):
     valor: float
     subtipo: SubtipoMensalidade
     dia_vencimento: str
+    dia_vencimento_data: Optional[str] = None
+    dia_vencimento_obs: Optional[str] = None
     variacao_preco: VariacaoPrecoMensalidade = VariacaoPrecoMensalidade.SEM_VARIACAO
     limitacao_temporal_anos: Optional[int] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
     faixas_preco: Optional[list[dict[str, str]]] = None
     fases_processuais: Optional[list[dict[str, str]]] = None
  
@@ -151,11 +167,18 @@ class Exito(BaseModel):
     incidencia: str = ""
     base_calculo: str = ""
     vencimento: str = ""
+    vencimento_data: Optional[str] = None
+    vencimento_obs: Optional[str] = None
     forma_pagamento: str = ""
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_meses: Optional[int] = None
     tem_beneficio_prospectivo: bool = False
-    periodo_prospectivo_meses: Optional[int] = None
+    prospectivo_data_inicio: Optional[str] = None
+    prospectivo_data_fim: Optional[str] = None
+    prospectivo_duracao_meses: Optional[int] = None
     faixas_percentual: Optional[list[dict[str, str]]] = None
     deduz_outro_honorario: bool = False
     honorario_deduzido: Optional[str] = None
@@ -197,23 +220,49 @@ class Acessorios(BaseModel):
  
 class Participacao(BaseModel):
     tem_participacao: bool = False
-    percentual_ou_valor: Optional[str] = None
-    para_quem: Optional[str] = None
+    # Valor (tipo + campo do tipo escolhido)
+    valor_tipo: Optional[str] = None  # "percentual" | "valor" | "outro"
+    valor_percentual: Optional[str] = None
+    valor_monetario: Optional[float] = None
+    valor_outro: Optional[str] = None
+    # Advogados
+    para_quem: list[str] = []
     natureza: Optional[str] = None
     responsavel_captacao: Optional[str] = None
     responsavel_gestao: Optional[str] = None
+    # Contato financeiro do cliente (3 campos)
+    contato_financeiro_nome: Optional[str] = None
+    contato_financeiro_email: Optional[str] = None
+    contato_financeiro_telefone: Optional[str] = None
+    # Base da participacao (escopo ou honorario)
+    base_tipo: Optional[str] = None  # "escopo" | "honorario"
+    base_escopo_index: Optional[int] = None
+    base_honorario: Optional[str] = None
+    base_label: Optional[str] = None
+    # Legados (compat com contratos salvos antes desta mudanca)
+    percentual_ou_valor: Optional[str] = None
     contato_financeiro_cliente: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_nulls(cls, data):
-        """Convert null/None values to empty strings for optional text fields."""
-        if isinstance(data, dict):
-            for field in ("percentual_ou_valor", "para_quem", "natureza",
-                          "responsavel_captacao", "responsavel_gestao",
-                          "contato_financeiro_cliente"):
-                if data.get(field) is None:
-                    data[field] = ""
+    def _coerce_and_migrate(cls, data):
+        if not isinstance(data, dict):
+            return data
+        for field in ("natureza", "responsavel_captacao", "responsavel_gestao",
+                      "valor_percentual", "valor_outro", "percentual_ou_valor",
+                      "contato_financeiro_nome", "contato_financeiro_email",
+                      "contato_financeiro_telefone", "contato_financeiro_cliente"):
+            if data.get(field) is None:
+                data[field] = ""
+        pq = data.get("para_quem")
+        if isinstance(pq, str):
+            data["para_quem"] = [pq] if pq.strip() else []
+        elif pq is None:
+            data["para_quem"] = []
+        if not data.get("valor_tipo") and data.get("percentual_ou_valor"):
+            data["valor_tipo"] = "outro"
+            if not data.get("valor_outro"):
+                data["valor_outro"] = data["percentual_ou_valor"]
         return data
  
  

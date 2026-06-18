@@ -32,7 +32,7 @@ const INITIAL_DATA: ContratoFormData = {
     {
       tipo: "PF",
       nome: "",
-      nacionalidade: "Brasileira",
+      nacionalidade: "Brasileira (o)",
       cpf: "",
       profissao: "",
       estado_civil: "Solteiro(a)",
@@ -66,15 +66,34 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       tem_penalidade_inadimplemento: data.acessorios?.tem_penalidade_inadimplemento ?? true,
       valor_diligencia: data.acessorios?.valor_diligencia,
     },
-    participacao: {
-      tem_participacao: data.participacao?.tem_participacao ?? false,
-      percentual_ou_valor: data.participacao?.percentual_ou_valor || "",
-      para_quem: data.participacao?.para_quem || "",
-      natureza: data.participacao?.natureza || "",
-      responsavel_captacao: data.participacao?.responsavel_captacao || "",
-      responsavel_gestao: data.participacao?.responsavel_gestao || "",
-      contato_financeiro_cliente: data.participacao?.contato_financeiro_cliente || "",
-    },
+    participacao: (() => {
+      const p = (data.participacao ?? {}) as any;
+      const paraQuem = Array.isArray(p.para_quem)
+        ? p.para_quem
+        : typeof p.para_quem === "string" && p.para_quem.trim()
+          ? [p.para_quem]
+          : [];
+      let valorTipo = p.valor_tipo;
+      let valorOutro = p.valor_outro ?? "";
+      if (!valorTipo && p.percentual_ou_valor) {
+        valorTipo = "outro";
+        valorOutro = p.percentual_ou_valor;
+      }
+      return {
+        tem_participacao: p.tem_participacao ?? false,
+        valor_tipo: valorTipo,
+        valor_percentual: p.valor_percentual ?? "",
+        valor_monetario: p.valor_monetario,
+        valor_outro: valorOutro,
+        para_quem: paraQuem,
+        natureza: p.natureza ?? "",
+        responsavel_captacao: p.responsavel_captacao ?? "",
+        responsavel_gestao: p.responsavel_gestao ?? "",
+        contato_financeiro_nome: p.contato_financeiro_nome ?? "",
+        contato_financeiro_email: p.contato_financeiro_email ?? "",
+        contato_financeiro_telefone: p.contato_financeiro_telefone ?? "",
+      };
+    })(),
     email_destinatario: data.email_destinatario,
   };
 }
@@ -133,6 +152,8 @@ function validateContratantes(data: ContratoFormData): string[] {
 
     if (digits(contratante.cnpj).length !== 14) errors.push(`${label}: informe um CNPJ com 14 dígitos.`);
     if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
+    if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ para preencher a Razão Social.`);
+    if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ para preencher o endereço.`);
   });
 
   return errors;
