@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+*.db
+generated_contracts/
+__pycache__/
+.claude/
+_tmp_planilha.xlsx
