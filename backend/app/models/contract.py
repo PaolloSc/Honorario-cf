@@ -266,6 +266,11 @@ class Participacao(BaseModel):
         return data
  
  
+class TestemunhaContrato(BaseModel):
+    nome: str = ""
+    email: str = ""
+
+
 class ContratoRequest(BaseModel):
     contratantes: list[ContratantePF | ContratantePJ]
     incluir_partes_relacionadas: bool = False
@@ -273,6 +278,7 @@ class ContratoRequest(BaseModel):
     acessorios: Acessorios
     participacao: Participacao
     email_destinatario: Optional[str] = None
+    testemunhas: list[TestemunhaContrato] = []
  
  
 class ContratoResponse(BaseModel):
