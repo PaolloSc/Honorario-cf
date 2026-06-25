@@ -84,6 +84,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   const isEdit = !!editContractId;
 
+  // Testemunhas selecionadas (cadastro + avulsas) — entram no .docx e na assinatura
+  const buildTestemunhas = () => [
+    ...roster.filter((r) => selectedTestemunhaIds.includes(r.id)).map((t) => ({ nome: t.nome, email: t.email })),
+    ...extraTestemunhas.map((t) => ({ nome: t.name, email: t.email })),
+  ];
+
   useEffect(() => {
     listTestemunhas()
       .then((r) => setRoster(r.testemunhas))
@@ -113,12 +119,13 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
     try {
       let resultContractId: string;
 
+      const payload = { ...data, testemunhas: buildTestemunhas() };
       if (isEdit) {
-        const result = await updateContract(editContractId, data as unknown as Record<string, unknown>);
+        const result = await updateContract(editContractId, payload as unknown as Record<string, unknown>);
         if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
         resultContractId = result.contract_id;
       } else {
-        const result = await generateContract(data);
+        const result = await generateContract(payload);
         if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
         resultContractId = result.contract_id!;
       }
@@ -209,12 +216,13 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
     try {
       let resultContractId: string;
 
+      const payload = { ...data, testemunhas: buildTestemunhas() };
       if (isEdit) {
-        const result = await updateContract(editContractId, data as unknown as Record<string, unknown>);
+        const result = await updateContract(editContractId, payload as unknown as Record<string, unknown>);
         if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
         resultContractId = result.contract_id;
       } else {
-        const result = await generateContract(data);
+        const result = await generateContract(payload);
         if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
         resultContractId = result.contract_id!;
       }
@@ -326,6 +334,80 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
     }
   };
 
+  // Seletor de testemunhas — usado antes de gerar (entram no .docx) e depois (assinatura)
+  const testemunhasSelector = (
+    <div className="w-full mb-2 p-4 rounded-lg bg-purple-50 border border-purple-200">
+      <h4 className="text-sm font-medium text-purple-900 mb-2">Testemunhas</h4>
+      <p className="text-xs text-purple-700 mb-3">
+        <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas. As selecionadas entram no contrato e na assinatura.
+      </p>
+
+      {roster.length > 0 && (
+        <div className="space-y-1 mb-3">
+          {roster.map((t) => (
+            <label key={t.id} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedTestemunhaIds.includes(t.id)}
+                onChange={(e) =>
+                  setSelectedTestemunhaIds((prev) =>
+                    e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                  )
+                }
+              />
+              <span className="flex-1">{t.nome} ({t.email})</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {extraTestemunhas.length > 0 && (
+        <div className="space-y-1 mb-3">
+          {extraTestemunhas.map((t, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+              <span className="flex-1">{t.name} ({t.email}) <em className="text-purple-500">avulsa</em></span>
+              <button
+                onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
+                className="text-red-500 hover:text-red-700 text-xs font-medium"
+              >
+                Remover
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newTestemunhaNome}
+          onChange={(e) => setNewTestemunhaNome(e.target.value)}
+          placeholder="Nome da testemunha"
+          className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+        />
+        <input
+          type="email"
+          value={newTestemunhaEmail}
+          onChange={(e) => setNewTestemunhaEmail(e.target.value)}
+          placeholder="email@exemplo.com"
+          className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+        />
+        <button
+          onClick={() => {
+            if (!newTestemunhaEmail.trim()) return;
+            setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
+            setNewTestemunhaEmail("");
+            setNewTestemunhaNome("");
+          }}
+          disabled={!newTestemunhaEmail.trim()}
+          className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+        >
+          Adicionar
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">
@@ -416,6 +498,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         {/* Initial actions - before save */}
         {status === "idle" && (
           <>
+            {testemunhasSelector}
             <button
               onClick={handleSaveOnly}
               disabled={isSubmitting}
@@ -492,77 +575,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
               </div>
             </div>
 
-            {/* Testemunhas section */}
-            <div className="w-full mb-2 p-4 rounded-lg bg-purple-50 border border-purple-200">
-              <h4 className="text-sm font-medium text-purple-900 mb-2">Testemunhas</h4>
-              <p className="text-xs text-purple-700 mb-3">
-                <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
-              </p>
-
-              {roster.length > 0 && (
-                <div className="space-y-1 mb-3">
-                  {roster.map((t) => (
-                    <label key={t.id} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedTestemunhaIds.includes(t.id)}
-                        onChange={(e) =>
-                          setSelectedTestemunhaIds((prev) =>
-                            e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
-                          )
-                        }
-                      />
-                      <span className="flex-1">{t.nome} ({t.email})</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {extraTestemunhas.length > 0 && (
-                <div className="space-y-1 mb-3">
-                  {extraTestemunhas.map((t, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
-                      <span className="flex-1">{t.name} ({t.email}) <em className="text-purple-500">avulsa</em></span>
-                      <button
-                        onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
-                        className="text-red-500 hover:text-red-700 text-xs font-medium"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newTestemunhaNome}
-                  onChange={(e) => setNewTestemunhaNome(e.target.value)}
-                  placeholder="Nome da testemunha"
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-                />
-                <input
-                  type="email"
-                  value={newTestemunhaEmail}
-                  onChange={(e) => setNewTestemunhaEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-                />
-                <button
-                  onClick={() => {
-                    if (!newTestemunhaEmail.trim()) return;
-                    setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
-                    setNewTestemunhaEmail("");
-                    setNewTestemunhaNome("");
-                  }}
-                  disabled={!newTestemunhaEmail.trim()}
-                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
-                >
-                  Adicionar
-                </button>
-              </div>
-            </div>
+            {testemunhasSelector}
 
             <button
               onClick={handleSendForSignature}

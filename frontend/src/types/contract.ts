@@ -250,6 +250,7 @@ export interface ContratoFormData {
   acessorios: Acessorios;
   participacao: Participacao;
   email_destinatario?: string;
+  testemunhas?: { nome: string; email: string }[];
 }
  
 export interface ContratoResponse {

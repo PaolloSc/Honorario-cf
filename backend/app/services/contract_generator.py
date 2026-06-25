@@ -1106,14 +1106,14 @@ class ContractGenerator:
         if not has_digital_testemunhas:
             doc.add_paragraph()
             doc.add_paragraph("TESTEMUNHAS:")
-            doc.add_paragraph()
-            doc.add_paragraph("_" * 50)
-            doc.add_paragraph("Nome:")
-            doc.add_paragraph("CPF:")
-            doc.add_paragraph()
-            doc.add_paragraph("_" * 50)
-            doc.add_paragraph("Nome:")
-            doc.add_paragraph("CPF:")
+            # ponytail: usa testemunhas selecionadas (nome preenchido); senao 2 slots em branco
+            testemunhas = getattr(data, "testemunhas", None) or []
+            slots = [t.nome for t in testemunhas] if testemunhas else ["", ""]
+            for nome in slots:
+                doc.add_paragraph()
+                doc.add_paragraph("_" * 50)
+                doc.add_paragraph(f"Nome: {nome}".rstrip())
+                doc.add_paragraph("CPF:")
  
     def _render_signature_grid(self, doc: Document, entries: list[tuple[str, str]]) -> None:
         """Dispoe campos de assinatura lado a lado, 2 por linha, em tabela sem borda.
