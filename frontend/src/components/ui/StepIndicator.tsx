@@ -27,6 +27,8 @@ export default function StepIndicator({
               <button
                 type="button"
                 onClick={() => onStepClick?.(step.id)}
+                aria-current={isActive ? "step" : undefined}
+                aria-label={`Etapa ${step.id}: ${step.title}${isCompleted ? " (concluída)" : isActive ? " (atual)" : ""}`}
                 className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition"
               >
                 <span
@@ -47,8 +49,8 @@ export default function StepIndicator({
                   )}
                 </span>
                 <span
-                  className={`text-xs font-medium hidden sm:inline ${
-                    isActive ? "text-primary" : isCompleted ? "text-success" : "text-muted"
+                  className={`text-sm hidden sm:inline ${
+                    isActive ? "text-primary font-bold" : isCompleted ? "text-success font-medium" : "text-muted font-medium"
                   }`}
                 >
                   {step.title}

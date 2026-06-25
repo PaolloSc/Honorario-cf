@@ -108,8 +108,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
             valor_hora: 0,
             tem_teto_mensal: false,
             tem_pacote_horas: false,
-            tem_hora_urgencia: true,
-            tem_hora_fora_expediente: true,
+            tem_hora_urgencia: false,
+            tem_hora_fora_expediente: false,
           };
         } else if (tipo === "pro_labore" && !escopo.pro_labore) {
           updated.pro_labore = {
@@ -344,12 +344,12 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                       <Toggle
                         label="Urgência (+50%)?"
-                        value={escopo.hora_trabalhada.tem_hora_urgencia ?? true}
+                        value={escopo.hora_trabalhada.tem_hora_urgencia ?? false}
                         onChange={(v) => updateHoraTrabalhada(idx, { tem_hora_urgencia: v })}
                       />
                       <Toggle
                         label="Fora do Expediente (+100%)?"
-                        value={escopo.hora_trabalhada.tem_hora_fora_expediente ?? true}
+                        value={escopo.hora_trabalhada.tem_hora_fora_expediente ?? false}
                         onChange={(v) => updateHoraTrabalhada(idx, { tem_hora_fora_expediente: v })}
                       />
 
@@ -631,9 +631,12 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           <Input
                             type="number"
                             step="0.1"
+                            min="0"
+                            max="100"
                             value={escopo.exito.percentual || ""}
                             onChange={(e) =>
-                              updateExito(idx, { percentual: parseFloat(e.target.value) || 0 })
+                              // ponytail: clampa 0-100 (type=number nao impede 150/-50)
+                              updateExito(idx, { percentual: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })
                             }
                             placeholder="0"
                           />
