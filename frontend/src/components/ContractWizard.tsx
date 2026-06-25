@@ -188,12 +188,38 @@ function validateEscopos(data: ContratoFormData): string[] {
 
 function validateHonorarios(data: ContratoFormData): string[] {
   const errors: string[] = [];
+  const positivo = (v: unknown) => typeof v === "number" && v > 0;
 
   data.escopos.forEach((escopo, index) => {
     const label = `Escopo ${index + 1}`;
 
     if (escopo.honorarios.length === 0) {
       errors.push(`${label}: selecione pelo menos um tipo de honorário.`);
+      return;
+    }
+
+    if (escopo.honorarios.includes("hora_trabalhada") && !positivo(escopo.hora_trabalhada?.valor_hora)) {
+      errors.push(`${label}: informe o valor da hora (maior que zero).`);
+    }
+    if (escopo.honorarios.includes("pro_labore") && !positivo(escopo.pro_labore?.valor_total)) {
+      errors.push(`${label}: informe o valor do pró-labore (maior que zero).`);
+    }
+    if (escopo.honorarios.includes("mensalidade") && !positivo(escopo.mensalidade?.valor)) {
+      errors.push(`${label}: informe o valor da mensalidade (maior que zero).`);
+    }
+    if (escopo.honorarios.includes("exito") && escopo.exito) {
+      const ex = escopo.exito;
+      if (ex.subtipo === "percentual_fixo") {
+        const p = ex.percentual;
+        if (typeof p !== "number" || p <= 0 || p > 100) {
+          errors.push(`${label}: percentual de êxito deve estar entre 0 e 100.`);
+        }
+      }
+      if (!text(ex.incidencia)) errors.push(`${label}: selecione a incidência do êxito.`);
+      if (!text(ex.forma_pagamento)) errors.push(`${label}: selecione a forma de pagamento do êxito.`);
+    }
+    if (escopo.honorarios.includes("permuta") && !text(escopo.permuta?.objeto_permuta)) {
+      errors.push(`${label}: informe o objeto da permuta.`);
     }
   });
 
@@ -263,6 +289,20 @@ export default function ContractWizard({
     setValidationErrors(invalidStep.errors);
     setCurrentStep(invalidStep.step);
   }, [currentStep, formData]);
+
+  // ponytail: sem persistência de rascunho; avisa antes de F5/fechar perder o preenchimento
+  useEffect(() => {
+    const dirty =
+      formData.contratantes.some((c) => text((c as any).nome) || text(c.email) || text((c as any).cnpj)) ||
+      formData.escopos.length > 0;
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [formData]);
  
   const updateContratantes = useCallback(
     (contratantes: Contratante[]) => {

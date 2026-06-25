@@ -234,7 +234,13 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                     max="100"
                     step="0.01"
                     value={participacao.valor_percentual ?? ""}
-                    onChange={(e) => set({ valor_percentual: e.target.value })}
+                    onChange={(e) => {
+                      // ponytail: type=number ainda aceita e/+/-; sanitiza p/ digito+ponto e clampa 0-100
+                      const v = e.target.value.replace(/[^0-9.]/g, "");
+                      if (v === "") return set({ valor_percentual: "" });
+                      const n = Math.min(100, Math.max(0, parseFloat(v) || 0));
+                      set({ valor_percentual: String(n) });
+                    }}
                     placeholder="Ex: 10"
                   />
                 </FormField>

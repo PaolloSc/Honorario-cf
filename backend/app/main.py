@@ -27,7 +27,20 @@ app = FastAPI(
     description="API para automacao de contratos de honorarios advocaticios - C&F Advogados",
     version="2.0.0",
     lifespan=lifespan,
+    # Esconde Swagger/OpenAPI em produção (recon). Habilita só em dev_mode.
+    docs_url="/docs" if settings.dev_mode else None,
+    redoc_url="/redoc" if settings.dev_mode else None,
+    openapi_url="/openapi.json" if settings.dev_mode else None,
 )
+
+
+@app.middleware("http")
+async def _no_store_api(request, call_next):
+    response = await call_next(request)
+    # Respostas autenticadas com PII não devem ser cacheadas por proxies
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

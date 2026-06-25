@@ -38,14 +38,21 @@ export default function TestemunhasPage() {
 
   const handleCreate = async () => {
     if (!nome.trim() || !email.trim()) return;
+    const emailLimpo = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpo)) {
+      setError("E-mail inválido. Use o formato nome@dominio.com.");
+      return;
+    }
     setSaving(true);
     try {
-      await createTestemunha({ nome: nome.trim(), email: email.trim() });
+      await createTestemunha({ nome: nome.trim(), email: emailLimpo });
       setNome("");
       setEmail("");
+      setError("");
       fetchRows();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao criar testemunha");
+      // ponytail: nao vaza JSON cru da API; mensagem amigavel
+      setError(e instanceof Error ? "Não foi possível salvar a testemunha. Verifique os dados e tente novamente." : "Erro ao criar testemunha");
     } finally {
       setSaving(false);
     }

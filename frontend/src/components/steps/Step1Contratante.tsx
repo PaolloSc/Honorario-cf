@@ -455,6 +455,7 @@ function PFForm({
         <Input
           value={data.nome}
           onChange={(e) => onUpdate({ nome: e.target.value })}
+          onBlur={(e) => onUpdate({ nome: toTitleCase(e.target.value.trim().replace(/\s+/g, " ")) })}
           placeholder="Nome completo"
           required
         />
@@ -502,6 +503,7 @@ function PFForm({
           type="email"
           value={data.email}
           onChange={(e) => onUpdate({ email: e.target.value })}
+          onBlur={(e) => onUpdate({ email: e.target.value.trim().toLowerCase() })}
           placeholder="email@exemplo.com"
           required
         />
