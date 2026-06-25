@@ -17,3 +17,4 @@ backend/generated_contracts/
 
 *.log
 backend/_tmp_planilha.xlsx
+.vercel
