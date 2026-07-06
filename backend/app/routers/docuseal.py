@@ -339,9 +339,15 @@ async def send_for_signature(
                 except Exception as patch_err:
                     logger.error("Failed to patch DOCX with signatures: %s", patch_err)
 
+        contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
+        template_name = (
+            f"Contrato Honorários — {contract.client_name}"
+            if contract and contract.client_name
+            else f"Contrato Honorarios {data.contract_id}"
+        )
         result = await service.create_template_from_docx(
             filepath=str(filepath),
-            name=f"Contrato Honorarios {data.contract_id}",
+            name=template_name,
         )
 
         template_id = result.get("id")
@@ -362,7 +368,6 @@ async def send_for_signature(
             submission_id = submission.get("id")
 
             # Update DB: status + audit log
-            contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
             if contract:
                 contract.status = "enviado"
                 contract.updated_at = utcnow()

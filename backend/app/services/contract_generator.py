@@ -39,7 +39,7 @@ INCIDENCIA_EXITO_LABELS = {
     "beneficio_economico": "benefício econômico",
     "beneficio_financeiro": "benefício financeiro",
     "beneficio_tributario": "benefício tributário",
-    "todos": "todos os benefícios",
+    "todos": "benefício econômico, financeiro e/ou tributário",
 }
 
 FORMA_PAGAMENTO_LABELS = {
@@ -107,7 +107,7 @@ class ContractGenerator:
         self._add_integrity(doc)
         self._add_term_and_termination(doc, data)
         self._add_ip(doc)
-        self._add_general(doc)
+        self._add_general(doc, data)
         self._add_signatures(doc, data, signatario_roles=signatario_roles)
         self._apply_document_standard(doc)
  
@@ -206,6 +206,9 @@ class ContractGenerator:
 
         for table in doc.tables:
             for row in table.rows:
+                trPr = row._tr.get_or_add_trPr()
+                if trPr.find(qn("w:cantSplit")) is None:
+                    trPr.append(OxmlElement("w:cantSplit"))
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
                         self._format_paragraph(paragraph)
@@ -236,6 +239,9 @@ class ContractGenerator:
 
         paragraph.paragraph_format.line_spacing = 1.15
         paragraph.paragraph_format.space_after = Pt(0 if is_signature else 6)
+        paragraph.paragraph_format.keep_together = True
+        if is_heading:
+            paragraph.paragraph_format.keep_with_next = True
 
         for run in paragraph.runs:
             if is_heading and not is_tag:
@@ -691,22 +697,21 @@ class ContractGenerator:
                 row[0].text = faixa.get("faixa", "")
                 row[1].text = faixa.get("percentual", "")
  
+        incidencia = (
+            self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)
+            or "benefício econômico e/ou financeiro e/ou fiscal e/ou tributário"
+        )
         doc.add_paragraph(
-            f"3.{counter}. Incidência: {self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)}.",
+            f"3.{counter}. O percentual incidirá sobre o {incidencia}, corrigido "
+            "monetariamente, aproveitável à CONTRATANTE (Benefício), ainda que parcial.",
         )
         counter += 1
- 
-        doc.add_paragraph(
-            f"3.{counter}. O percentual incidirá sobre o benefício econômico e/ou financeiro e/ou fiscal "
-            "e/ou tributário, corrigido monetariamente, aproveitável à CONTRATANTE (Benefício), "
-            "ainda que parcial.",
-        )
-        counter += 1
- 
-        doc.add_paragraph(
-            f"3.{counter}. Forma de pagamento: {self._label_from_map(ex.forma_pagamento, FORMA_PAGAMENTO_LABELS)}.",
-        )
-        counter += 1
+
+        if (ex.forma_pagamento or "").strip():
+            doc.add_paragraph(
+                f"3.{counter}. Forma de pagamento: {self._label_from_map(ex.forma_pagamento, FORMA_PAGAMENTO_LABELS)}.",
+            )
+            counter += 1
 
         if ex.vencimento or ex.vencimento_data or ex.vencimento_obs:
             doc.add_paragraph(
@@ -836,8 +841,8 @@ class ContractGenerator:
             "equivalentes, cujo custo será reembolsado pela CONTRATANTE nos exatos valores "
             "faturados pela ferramenta ou sistema.",
             "A prestação de serviço presencial fora da sede do C&F implicará em despesas de "
-            "deslocamento, as quais serão cobradas à razão de R$ 1,70 (um real e setenta "
-            "centavos) por quilômetro rodado.",
+            f"deslocamento, as quais serão cobradas à razão de {valor_com_extenso(ac.valor_km or 1.70)} "
+            "por quilômetro rodado.",
             "O custo de cada cópia xerox a ser reembolsado pela CONTRATANTE é de R$ 0,40 "
             "(quarenta centavos de reais).",
             "As Partes pactuam ainda que: (i) em caso de êxito, ainda que parcial, os "
@@ -908,7 +913,7 @@ class ContractGenerator:
             "seguintes à notificação, salvo se forem substituídos antes do término desse "
             "prazo."
         )
-        doc.add_paragraph(
+        base_83 = (
             "8.3. Em caso de extinção contratual, aplica-se o seguinte: (i) honorários "
             "vencidos serão devidos integralmente; (ii) honorários vincendos pactuados por "
             "hora trabalhada serão devidos em relação aos serviços executados até a efetiva "
@@ -916,13 +921,22 @@ class ContractGenerator:
             "observando-se o prazo de antecedência de 30 dias previstos nesta cláusula; "
             "(iv) honorários vincendos pactuados por pró-labore serão devidos, "
             "proporcionalmente, observando-se os serviços executados e ainda não "
-            "remunerados; (v) honorários de êxito vincendos ao momento da resilição "
-            "continuarão devidos ao C&F observando-se a seguinte proporção não cumulativa:"
+            "remunerados"
         )
 
         has_exito = any(TipoHonorario.EXITO in e.honorarios for e in data.escopos)
+        criterio_exito = (data.acessorios.criterio_extincao_exito or "").strip()
         next_clause = 4
-        if has_exito:
+        if has_exito and criterio_exito:
+            doc.add_paragraph(
+                f"{base_83}; (v) honorários de êxito vincendos ao momento da resilição "
+                f"continuarão devidos ao C&F observando-se o seguinte critério: {criterio_exito}."
+            )
+        elif has_exito:
+            doc.add_paragraph(
+                f"{base_83}; (v) honorários de êxito vincendos ao momento da resilição "
+                "continuarão devidos ao C&F observando-se a seguinte proporção não cumulativa:"
+            )
             linhas = [
                 ("Antes da primeira decisão de mérito", "50% do percentual de êxito pactuado"),
                 ("Depois da primeira decisão de mérito e antes da primeira decisão recursal",
@@ -949,6 +963,8 @@ class ContractGenerator:
                 "resilição, independentemente da ocorrência das fases anteriores."
             )
             next_clause = 5
+        else:
+            doc.add_paragraph(f"{base_83}.")
 
         doc.add_paragraph(
             f"8.{next_clause}. Exceto se expressa e diversamente pactuado, todas as "
@@ -980,7 +996,7 @@ class ContractGenerator:
             "do serviço."
         )
  
-    def _add_general(self, doc: Document) -> None:
+    def _add_general(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("10. DISPOSIÇÕES GERAIS", level=2)
         gerais = [
             "Será considerada entregue a notificação e/ou comunicação encaminhada ao "
@@ -1017,10 +1033,22 @@ class ContractGenerator:
         ]
         for i, clause in enumerate(gerais, 1):
             doc.add_paragraph(f"10.{i}. {clause}")
- 
-        doc.add_heading("11. FORO", level=2)
+
+        foro_num = 11
+        adicionais = [
+            c.strip()
+            for c in (data.acessorios.clausulas_adicionais or "").splitlines()
+            if c.strip()
+        ]
+        if adicionais:
+            doc.add_heading("11. DISPOSIÇÕES ADICIONAIS", level=2)
+            for i, clause in enumerate(adicionais, 1):
+                doc.add_paragraph(f"11.{i}. {clause}")
+            foro_num = 12
+
+        doc.add_heading(f"{foro_num}. FORO", level=2)
         doc.add_paragraph(
-            "11.1. Fica eleito o foro da Comarca de Belo Horizonte/MG para dirimir "
+            f"{foro_num}.1. Fica eleito o foro da Comarca de Belo Horizonte/MG para dirimir "
             "quaisquer dúvidas ou controvérsias decorrentes deste Contrato, com renúncia de "
             "qualquer outro, por mais privilegiado que seja."
         )

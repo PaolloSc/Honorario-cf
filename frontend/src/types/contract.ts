@@ -217,6 +217,9 @@ export interface Acessorios {
   descricao_limitacao_reembolso?: string;
   tem_penalidade_inadimplemento: boolean;
   valor_diligencia?: number;
+  valor_km?: number;
+  criterio_extincao_exito?: string;
+  clausulas_adicionais?: string;
 }
  
 export type ParticipacaoValorTipo = "percentual" | "valor" | "outro";
