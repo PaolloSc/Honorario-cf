@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import {
   getContract,
   downloadContract,
+  previewContract,
   updateContractStatus,
   sendForSignature,
   sendEmail,
@@ -73,6 +74,9 @@ export default function ContractDetailPage() {
   const [error, setError] = useState("");
   const [notification, setNotification] = useState<{type: "success" | "error"; message: string} | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [sendingSignature, setSendingSignature] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [showSignaturePanel, setShowSignaturePanel] = useState(false);
@@ -110,6 +114,22 @@ export default function ContractDetailPage() {
       .then((r) => setRoster(r.testemunhas))
       .catch(() => setRoster([]));
   }, [sessionStatus, showSignaturePanel]);
+
+  const handlePreview = async () => {
+    if (showPreview) {
+      setShowPreview(false);
+      return;
+    }
+    setLoadingPreview(true);
+    try {
+      setPreviewHtml(await previewContract(contractId));
+      setShowPreview(true);
+    } catch {
+      setNotification({type: "error", message: "Erro ao carregar visualização do contrato"});
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -296,6 +316,13 @@ export default function ContractDetailPage() {
           Editar Contrato
         </a>
         <button
+          onClick={handlePreview}
+          disabled={loadingPreview}
+          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loadingPreview ? "Carregando..." : showPreview ? "Ocultar Visualização" : "Visualizar"}
+        </button>
+        <button
           onClick={handleDownload}
           disabled={downloading}
           className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -335,6 +362,18 @@ export default function ContractDetailPage() {
           </button>
         )}
       </div>
+
+      {/* Inline contract preview */}
+      {showPreview && previewHtml && (
+        <div className="mb-8 border border-border rounded-xl overflow-hidden bg-white">
+          <iframe
+            srcDoc={previewHtml}
+            title="Pré-visualização do contrato"
+            className="w-full"
+            style={{ height: "70vh" }}
+          />
+        </div>
+      )}
 
       {/* Signature Panel - Additional Lawyers */}
       {showSignaturePanel && canSendForSignature && (

@@ -8,18 +8,21 @@ def valor_por_extenso(valor: float) -> str:
     """
     inteiro = int(valor)
     centavos = round((valor - inteiro) * 100)
- 
+
+    moeda = "real" if inteiro == 1 else "reais"
+    sufixo_centavos = "centavo" if centavos == 1 else "centavos"
+
     if centavos == 0:
         extenso = num2words(inteiro, lang="pt_BR")
-        return f"{extenso} reais"
- 
+        return f"{extenso} {moeda}"
+
     extenso_inteiro = num2words(inteiro, lang="pt_BR")
     extenso_centavos = num2words(centavos, lang="pt_BR")
- 
+
     if inteiro == 0:
-        return f"{extenso_centavos} centavos"
- 
-    return f"{extenso_inteiro} reais e {extenso_centavos} centavos"
+        return f"{extenso_centavos} {sufixo_centavos}"
+
+    return f"{extenso_inteiro} {moeda} e {extenso_centavos} {sufixo_centavos}"
  
  
 def formatar_valor(valor: float) -> str:
