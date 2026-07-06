@@ -264,3 +264,71 @@ def test_secao11_foro_com_renuncia():
 def test_documento_termina_em_assinaturas():
     paras = _paras_for(_base_req())
     assert _has(paras, "TESTEMUNHAS:")
+
+
+# ── Feedback 06/07: campos configuráveis e cláusulas ajustadas ──────────────
+
+
+def test_acessorios_valor_km_configuravel():
+    req = _base_req()
+    req["acessorios"]["valor_km"] = 2.40
+    paras = _paras_for(req)
+    assert _has(paras, "R$ 2,40 (dois reais e quarenta centavos)")
+    assert not _has(paras, "R$ 1,70")
+
+
+def test_valor_km_padrao_singular_correto():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "R$ 1,70 (um real e setenta centavos)")
+
+
+def test_criterio_extincao_exito_substitui_tabela_de_fases():
+    req = _req_com_exito()
+    req["acessorios"]["criterio_extincao_exito"] = "assinatura do acordo"
+    paras = _paras_for(req)
+    assert _has(paras, "observando-se o seguinte critério: assinatura do acordo.")
+    assert not _has(paras, "50% do percentual de êxito pactuado")
+    assert not _has(paras, "inocorrência de determinada fase processual")
+    assert _has(paras, "8.4. Exceto se expressa")
+
+
+def test_clausulas_adicionais_numeradas_antes_do_foro():
+    req = _base_req()
+    req["acessorios"]["clausulas_adicionais"] = "Primeira extra.\nSegunda extra."
+    paras = _paras_for(req)
+    assert _has(paras, "DISPOSIÇÕES ADICIONAIS")
+    assert _has(paras, "11.1. Primeira extra.")
+    assert _has(paras, "11.2. Segunda extra.")
+    assert _has(paras, "12.1. Fica eleito o foro")
+
+
+def test_exito_incidencia_fundida_com_beneficio():
+    paras = _paras_for(_req_com_exito())
+    assert _has(paras, "incidirá sobre o benefício econômico, corrigido")
+    # As antigas 3.5 ("Incidência:") e 3.6 não existem mais separadas
+    assert not _has(paras, "Incidência: benefício econômico.")
+
+
+def test_exito_forma_pagamento_texto_livre():
+    req = _req_com_exito()
+    req["escopos"][0]["exito"]["forma_pagamento"] = "quando da formalização do acordo"
+    paras = _paras_for(req)
+    assert _has(paras, "Forma de pagamento: quando da formalização do acordo.")
+
+
+def test_exito_sem_forma_pagamento_omite_clausula():
+    req = _req_com_exito()
+    req["escopos"][0]["exito"]["forma_pagamento"] = ""
+    paras = _paras_for(req)
+    assert not _has(paras, "Forma de pagamento:")
+
+
+def test_sem_exito_omite_item_v_da_extincao():
+    paras = _paras_for(_base_req())
+    assert not _has(paras, "(v) honorários de êxito")
+
+
+def test_linhas_de_tabela_nao_quebram_entre_paginas():
+    xml = _xml_for(_req_escopos(_CASOS["exito"]))
+    assert "cantSplit" in xml
+    assert "keepNext" in xml

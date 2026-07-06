@@ -1,6 +1,6 @@
 "use client";
 
-import FormField, { TextArea, Toggle } from "@/components/ui/FormField";
+import FormField, { Input, TextArea, Toggle } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { Acessorios } from "@/types/contract";
  
@@ -73,6 +73,44 @@ export default function Step4Acessorios({ acessorios, onChange }: Step4Props) {
               })
             }
             placeholder="0,00"
+          />
+        </FormField>
+
+        <FormField
+          label="Custo de deslocamento por km (R$)"
+          hint="Cobrado em serviço presencial fora da sede. Deixe vazio para usar o padrão de R$ 1,70/km."
+        >
+          <CurrencyInput
+            value={acessorios.valor_km}
+            onChange={(v) => onChange({ ...acessorios, valor_km: v })}
+            placeholder="1,70"
+          />
+        </FormField>
+
+        <FormField
+          label="Critério de êxito em caso de extinção do contrato"
+          hint='Substitui a tabela de fases processuais da cláusula de extinção — use quando não houver processo judicial (ex.: "assinatura do acordo"). Deixe vazio para manter a tabela padrão.'
+        >
+          <Input
+            value={acessorios.criterio_extincao_exito || ""}
+            onChange={(e) =>
+              onChange({ ...acessorios, criterio_extincao_exito: e.target.value })
+            }
+            placeholder="Ex.: assinatura do acordo"
+          />
+        </FormField>
+
+        <FormField
+          label="Cláusulas adicionais"
+          hint="Uma cláusula por linha. Serão incluídas numeradas em seção própria, antes do Foro."
+        >
+          <TextArea
+            value={acessorios.clausulas_adicionais || ""}
+            onChange={(e) =>
+              onChange({ ...acessorios, clausulas_adicionais: e.target.value })
+            }
+            placeholder="Digite cada cláusula adicional em uma linha..."
+            rows={4}
           />
         </FormField>
       </div>

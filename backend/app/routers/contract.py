@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
@@ -368,3 +368,75 @@ def download_contract(
         filename=f"contrato_{contract_id}.docx",
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+
+
+def _docx_to_html(filepath: Path) -> str:
+    """Render the generated DOCX as simple HTML for inline preview (no external deps)."""
+    from html import escape
+
+    from docx import Document
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    doc = Document(str(filepath))
+    parts: list[str] = []
+    for child in doc.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            p = Paragraph(child, doc)
+            text = escape(p.text)
+            if not text.strip():
+                continue
+            style = p.style.name if p.style else ""
+            if style == "Heading 1":
+                parts.append(f"<h1>{text}</h1>")
+            elif style.startswith("Heading"):
+                parts.append(f"<h3>{text}</h3>")
+            else:
+                parts.append(f"<p>{text}</p>")
+        elif child.tag == qn("w:tbl"):
+            t = Table(child, doc)
+            has_borders = t._tbl.tblPr.first_child_found_in("w:tblBorders") is not None
+            rows_html = "".join(
+                "<tr>" + "".join(f"<td>{escape(c.text)}</td>" for c in row.cells) + "</tr>"
+                for row in t.rows
+            )
+            css = "" if has_borders else ' class="noborder"'
+            parts.append(f"<table{css}>{rows_html}</table>")
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<style>"
+        "body{font-family:'Segoe UI',sans-serif;max-width:800px;margin:2rem auto;"
+        "line-height:1.5;color:#000;background:#fff;padding:0 1rem}"
+        "h1{text-align:center;font-size:1.1rem}"
+        "h3{font-size:1rem;margin-top:1.2rem}"
+        "table{border-collapse:collapse;width:100%;margin:.5rem 0}"
+        "td{border:1px solid #000;padding:6px;font-size:.9rem}"
+        "table.noborder td{border:none}"
+        "</style></head>"
+        f"<body>{''.join(parts)}</body></html>"
+    )
+
+
+@router.get("/{contract_id}/preview", response_class=HTMLResponse)
+def preview_contract(
+    contract_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Inline HTML preview of the latest contract version."""
+    try:
+        uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(400, "ID de contrato inválido")
+
+    contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
+    if not contract:
+        raise HTTPException(404, "Contrato nao encontrado")
+    if user.role != "admin" and contract.created_by != user.email:
+        raise HTTPException(403, "Sem permissao")
+
+    from app.routers.docuseal import _resolve_contract_filepath
+
+    filepath = _resolve_contract_filepath(contract_id, db)
+    return HTMLResponse(_docx_to_html(Path(filepath)))

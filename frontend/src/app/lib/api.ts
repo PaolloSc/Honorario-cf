@@ -116,6 +116,16 @@ export async function downloadContract(contractId: string) {
   return res.blob();
 }
 
+export async function previewContract(contractId: string) {
+  const res = await fetch(`${API_BASE}/api/contract/${contractId}/preview`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Erro ao carregar visualização: ${res.status}`);
+  }
+  return res.text();
+}
+
 export async function sendEmail(data: {
   contract_id: string;
   destinatario_email: string;
