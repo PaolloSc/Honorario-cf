@@ -65,6 +65,9 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       descricao_limitacao_reembolso: data.acessorios?.descricao_limitacao_reembolso,
       tem_penalidade_inadimplemento: data.acessorios?.tem_penalidade_inadimplemento ?? true,
       valor_diligencia: data.acessorios?.valor_diligencia,
+      valor_km: data.acessorios?.valor_km,
+      criterio_extincao_exito: data.acessorios?.criterio_extincao_exito,
+      clausulas_adicionais: data.acessorios?.clausulas_adicionais,
     },
     participacao: (() => {
       const p = (data.participacao ?? {}) as any;

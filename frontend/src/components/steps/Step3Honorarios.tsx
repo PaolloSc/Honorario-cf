@@ -657,18 +657,41 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       </FormField>
 
                       <FormField label="Forma de pagamento">
-                        <Select
-                          value={escopo.exito.forma_pagamento || ""}
-                          onChange={(e) =>
-                            updateExito(idx, { forma_pagamento: e.target.value })
-                          }
-                          options={[
-                            { value: "a_vista", label: "À vista" },
-                            { value: "parcelado", label: "Parcelado" },
-                            { value: "conforme_cumprimento", label: "Conforme cumprimento" },
-                          ]}
-                          placeholder="Selecione..."
-                        />
+                        {(() => {
+                          const fp = escopo.exito.forma_pagamento || "";
+                          const presets = ["a_vista", "parcelado", "conforme_cumprimento"];
+                          const isCustom = fp !== "" && !presets.includes(fp);
+                          return (
+                            <>
+                              <Select
+                                value={isCustom ? "outro" : fp}
+                                onChange={(e) =>
+                                  updateExito(idx, {
+                                    forma_pagamento:
+                                      e.target.value === "outro" ? "a definir" : e.target.value,
+                                  })
+                                }
+                                options={[
+                                  { value: "a_vista", label: "À vista" },
+                                  { value: "parcelado", label: "Parcelado" },
+                                  { value: "conforme_cumprimento", label: "Conforme cumprimento" },
+                                  { value: "outro", label: "Outro (descrever)" },
+                                ]}
+                                placeholder="Selecione..."
+                              />
+                              {isCustom && (
+                                <Input
+                                  className="mt-2"
+                                  value={fp}
+                                  onChange={(e) =>
+                                    updateExito(idx, { forma_pagamento: e.target.value })
+                                  }
+                                  placeholder="Ex.: quando da formalização do acordo"
+                                />
+                              )}
+                            </>
+                          );
+                        })()}
                       </FormField>
 
                       <FormField label="Vencimento (data)">

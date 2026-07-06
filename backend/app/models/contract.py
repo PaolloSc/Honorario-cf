@@ -216,6 +216,9 @@ class Acessorios(BaseModel):
     descricao_limitacao_reembolso: Optional[str] = None
     tem_penalidade_inadimplemento: bool = True
     valor_diligencia: Optional[float] = None
+    valor_km: Optional[float] = None
+    criterio_extincao_exito: Optional[str] = None
+    clausulas_adicionais: Optional[str] = None
  
  
 class Participacao(BaseModel):

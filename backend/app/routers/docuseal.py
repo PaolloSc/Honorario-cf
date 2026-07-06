@@ -296,12 +296,21 @@ async def send_for_signature(
                 sig["role"] = f"{role} {role_indices[role]}"
 
         # Assign order for sequential signing:
-        # Contratante(s) -> Advogado -> Contratado (C&F) -> Testemunha(s) por ultimo
+        # Contratante(s) -> Advogado -> Contratado (C&F) -> Testemunha(s) -> Lilian por ultimo
         _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3, "Testemunha": 4}
         for sig in all_signatarios:
             # Extract base role (without number suffix) for order lookup
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
             sig["order"] = _ROLE_ORDER.get(base_role, 1)
+            # Lilian (financeiro) so recebe o documento quando todos ja assinaram
+            if (
+                base_role == "Testemunha"
+                and sig.get("email", "").lower() == settings.testemunha1_email.lower()
+            ):
+                sig["order"] = 5
+        # DocuSeal ("order": "preserved") sequencia pela POSICAO no array, nao pelo
+        # campo "order" — sem este sort a Lilian receberia o documento antes da hora.
+        all_signatarios.sort(key=lambda s: s["order"])
 
         # Regenerate DOCX with signature fields matching the unique signatario roles
         latest_ver = (
@@ -339,9 +348,15 @@ async def send_for_signature(
                 except Exception as patch_err:
                     logger.error("Failed to patch DOCX with signatures: %s", patch_err)
 
+        contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
+        template_name = (
+            f"Contrato Honorários — {contract.client_name}"
+            if contract and contract.client_name
+            else f"Contrato Honorarios {data.contract_id}"
+        )
         result = await service.create_template_from_docx(
             filepath=str(filepath),
-            name=f"Contrato Honorarios {data.contract_id}",
+            name=template_name,
         )
 
         template_id = result.get("id")
@@ -362,7 +377,6 @@ async def send_for_signature(
             submission_id = submission.get("id")
 
             # Update DB: status + audit log
-            contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
             if contract:
                 contract.status = "enviado"
                 contract.updated_at = utcnow()

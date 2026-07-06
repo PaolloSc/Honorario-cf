@@ -868,9 +868,12 @@ class TestSendForSignatureEndpoint:
         lilian = next(s for s in testemunhas if s["role"] == "Testemunha 1")
         assert lilian["email"] == _settings.testemunha1_email
         assert lilian["name"] == _settings.testemunha1_nome
-        # Testemunhas assinam por ultimo
+        # Demais testemunhas assinam depois das partes; Lilian somente apos todos
         for s in testemunhas:
-            assert s["order"] == 4
+            assert s["order"] == (5 if s is lilian else 4)
+        # DocuSeal sequencia pela posicao no array: Lilian deve ser a ultima
+        assert captured[-1] is lilian
+        assert [s["order"] for s in captured] == sorted(s["order"] for s in captured)
 
         if temp_file.exists():
             temp_file.unlink()
