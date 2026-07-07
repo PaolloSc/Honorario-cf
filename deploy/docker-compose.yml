@@ -1,0 +1,100 @@
+# Stack de produção — backend (FastAPI) + DocuSeal, na mesma VM.
+# Runbook: docs/runbooks/docuseal-producao.md
+#
+# Uso:
+#   cp .env.example .env               # domínios, senhas e SMTP do DocuSeal
+#   cp backend.env.example backend.env # segredos do backend (Azure, DocuSeal API key...)
+#   docker compose up -d --build
+#
+# O Caddy emite HTTPS automaticamente (Let's Encrypt) para os dois domínios —
+# aponte o DNS de $API_HOST e $DOCUSEAL_HOST para esta VM antes de subir.
+services:
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    env_file: backend.env
+    environment:
+      - DATABASE_URL=postgresql://honorario:${POSTGRES_PASSWORD}@postgres-backend:5432/honorario
+      # Rede interna do compose: evita hairpin-NAT e TLS na chamada backend -> DocuSeal
+      - DOCUSEAL_BASE_URL=http://docuseal:3000/api
+    volumes:
+      - contratos_data:/app/generated_contracts
+    depends_on:
+      postgres-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  postgres-backend:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=honorario
+      - POSTGRES_USER=honorario
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_backend_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U honorario"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  docuseal:
+    image: docuseal/docuseal:latest
+    restart: unless-stopped
+    depends_on:
+      postgres-docuseal:
+        condition: service_healthy
+    environment:
+      - HOST=${DOCUSEAL_HOST}
+      - FORCE_SSL=true
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+      - DATABASE_URL=postgresql://docuseal:${POSTGRES_PASSWORD}@postgres-docuseal:5432/docuseal
+      - SMTP_ADDRESS=${SMTP_ADDRESS}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_DOMAIN=${SMTP_DOMAIN}
+      - SMTP_AUTHENTICATION=plain
+    volumes:
+      - docuseal_data:/data
+
+  postgres-docuseal:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=docuseal
+      - POSTGRES_USER=docuseal
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_docuseal_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docuseal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - API_HOST=${API_HOST}
+      - DOCUSEAL_HOST=${DOCUSEAL_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  contratos_data:
+  postgres_backend_data:
+  docuseal_data:
+  postgres_docuseal_data:
+  caddy_data:
