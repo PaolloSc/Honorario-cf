@@ -1,0 +1,7 @@
+.env
+test.db
+generated_contracts/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+tests/

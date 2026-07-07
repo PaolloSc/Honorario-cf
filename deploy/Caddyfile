@@ -1,0 +1,7 @@
+{$API_HOST} {
+	reverse_proxy backend:8000
+}
+
+{$DOCUSEAL_HOST} {
+	reverse_proxy docuseal:3000
+}
