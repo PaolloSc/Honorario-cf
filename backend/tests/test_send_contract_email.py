@@ -91,3 +91,14 @@ def test_nome_do_anexo_usa_nome_do_cliente_nao_uuid(client):
 
     assert "Fulano de Tal" in captured["attachment_name"]
     assert contract_id not in captured["attachment_name"]
+
+
+def test_nome_do_anexo_sanitiza_caracteres_perigosos(client):
+    # Qodo: client_name vem do usuario e pode ter controle/reservados de filesystem.
+    contract_id = _seed_contract("Fulano/..\\Evil:\n\t Ltda*?")
+    captured = _send(client, contract_id)
+
+    name = captured["attachment_name"]
+    assert name.endswith(".docx")
+    for bad in '\r\n\t/\\:*?"<>|':
+        assert bad not in name
