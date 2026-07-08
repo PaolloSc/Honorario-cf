@@ -332,3 +332,19 @@ def test_linhas_de_tabela_nao_quebram_entre_paginas():
     xml = _xml_for(_req_escopos(_CASOS["exito"]))
     assert "cantSplit" in xml
     assert "keepNext" in xml
+
+
+def test_preview_nao_vaza_tags_de_assinatura():
+    """Feedback: as merge-tags do DocuSeal nao devem aparecer no preview HTML."""
+    from pathlib import Path
+
+    from app.routers.contract import _docx_to_html
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(data, contract_id="FIDELIDADE_PREVIEW")
+    html = _docx_to_html(Path(path))
+    assert "type=signature" not in html
+    assert "{{" not in html
+    # a linha de assinatura e o rotulo do papel continuam visiveis
+    assert "____" in html
+    assert "CONTRATANTE 1: Fulano" in html
