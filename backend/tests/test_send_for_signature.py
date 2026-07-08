@@ -945,3 +945,42 @@ class TestSendForSignatureEndpoint:
         # Cleanup
         if temp_file.exists():
             temp_file.unlink()
+
+    def test_docuseal_template_name_uses_client_name_not_uuid(self, client):
+        """Feedback 06/07: template/submission usa nome do cliente, nao o UUID cru."""
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        contract_id = "sig-name-777"
+        temp_file = output_dir / f"contrato_{contract_id}.docx"
+        temp_file.write_bytes(b"content with {{field|signature|req}} tags")
+
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(db, contract_id, file_path=str(temp_file),
+                                   client_name="Fulano de Tal")
+        finally:
+            db.close()
+
+        mock_service = self._mock_docuseal_success()
+
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
+             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={
+                    "contract_id": contract_id,
+                    "signatarios": [
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                    ],
+                },
+            )
+
+        assert response.status_code == 200
+        name_arg = mock_service.create_template_from_docx.call_args.kwargs["name"]
+        assert "Fulano de Tal" in name_arg
+        assert contract_id not in name_arg
+
+        if temp_file.exists():
+            temp_file.unlink()
