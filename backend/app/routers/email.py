@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -183,17 +185,28 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
     raise HTTPException(status_code=404, detail="Contract file not found")
 
 
+# Caracteres proibidos/perigosos em nome de arquivo (controle + reservados no Windows).
+_FILENAME_BAD = re.compile(r'[\r\n\t/\\:*?"<>|]+')
+
+
+def _safe_filename_part(name: str) -> str:
+    """Sanitiza um trecho vindo do usuário para uso em nome de arquivo/anexo."""
+    cleaned = " ".join(_FILENAME_BAD.sub(" ", name).split())
+    return cleaned[:120].strip()
+
+
 def _docx_review_copy(src: Path) -> Path:
     """Cópia de conferência do DOCX para o cliente: troca as merge-tags do DocuSeal
     ({{...;type=signature;...}}) por linhas de assinatura. Não altera o arquivo
-    original, que segue com as tags para o fluxo do DocuSeal. Se o arquivo não for
-    um DOCX válido, devolve o próprio `src` (o chamador não deve apagá-lo)."""
+    original, que segue com as tags para o fluxo do DocuSeal. Em qualquer falha
+    (arquivo não é DOCX válido, erro ao salvar) devolve o próprio `src` — o chamador
+    só apaga o resultado quando ele difere de `src`."""
     from docx import Document
 
     try:
         doc = Document(str(src))
     except Exception as exc:  # arquivo nao e um DOCX valido (ex.: placeholder)
-        logger.warning("Nao foi possivel gerar copia de conferencia de %s: %s", src, exc)
+        logger.warning("Nao foi possivel abrir DOCX %s para conferencia: %s", src, exc)
         return src
 
     def _fix(paras) -> None:
@@ -213,9 +226,17 @@ def _docx_review_copy(src: Path) -> Path:
             for cell in row.cells:
                 _fix(cell.paragraphs)
 
-    tmp = Path(tempfile.gettempdir()) / f"review_{src.stem}.docx"
-    doc.save(str(tmp))
-    return tmp
+    # Caminho único por requisição: evita corrida entre chamadas concorrentes
+    # para o mesmo contrato (que compartilhariam review_{stem}.docx).
+    fd, tmp_name = tempfile.mkstemp(prefix="review_", suffix=src.suffix or ".docx")
+    os.close(fd)
+    try:
+        doc.save(tmp_name)
+    except (OSError, ValueError) as exc:
+        logger.warning("Falha ao salvar copia de conferencia de %s: %s", src, exc)
+        Path(tmp_name).unlink(missing_ok=True)
+        return src
+    return Path(tmp_name)
 
 
 @router.post("/send", response_model=EmailResponse)
@@ -230,7 +251,7 @@ async def send_contract_email(
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
 
         review_path = _docx_review_copy(filepath)
-        nome_cliente = contract.client_name if contract and contract.client_name else None
+        nome_cliente = _safe_filename_part(contract.client_name) if contract and contract.client_name else ""
         attachment_name = (
             f"Contrato Honorários — {nome_cliente}.docx"
             if nome_cliente
