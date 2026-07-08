@@ -370,6 +370,17 @@ def download_contract(
     )
 
 
+import re as _re
+
+# DocuSeal merge-tag (ex.: "{{Assinatura Fulano;type=signature;role=Contratante}}").
+# No preview trocamos por uma linha de assinatura para nao vazar a sintaxe crua.
+_SIG_TAG = _re.compile(r"\{\{[^}]*?type=signature[^}]*?\}\}")
+
+
+def _clean_preview_text(text: str) -> str:
+    return _SIG_TAG.sub("_" * 40, text)
+
+
 def _docx_to_html(filepath: Path) -> str:
     """Render the generated DOCX as simple HTML for inline preview (no external deps)."""
     from html import escape
@@ -384,7 +395,7 @@ def _docx_to_html(filepath: Path) -> str:
     for child in doc.element.body.iterchildren():
         if child.tag == qn("w:p"):
             p = Paragraph(child, doc)
-            text = escape(p.text)
+            text = escape(_clean_preview_text(p.text))
             if not text.strip():
                 continue
             style = p.style.name if p.style else ""
@@ -398,7 +409,7 @@ def _docx_to_html(filepath: Path) -> str:
             t = Table(child, doc)
             has_borders = t._tbl.tblPr.first_child_found_in("w:tblBorders") is not None
             rows_html = "".join(
-                "<tr>" + "".join(f"<td>{escape(c.text)}</td>" for c in row.cells) + "</tr>"
+                "<tr>" + "".join(f"<td>{escape(_clean_preview_text(c.text))}</td>" for c in row.cells) + "</tr>"
                 for row in t.rows
             )
             css = "" if has_borders else ' class="noborder"'
