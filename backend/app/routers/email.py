@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
+from app.routers.contract import _SIG_TAG
 from app.services.azure_email import AzureEmailService
 
 logger = logging.getLogger(__name__)
@@ -181,6 +183,41 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
     raise HTTPException(status_code=404, detail="Contract file not found")
 
 
+def _docx_review_copy(src: Path) -> Path:
+    """Cópia de conferência do DOCX para o cliente: troca as merge-tags do DocuSeal
+    ({{...;type=signature;...}}) por linhas de assinatura. Não altera o arquivo
+    original, que segue com as tags para o fluxo do DocuSeal. Se o arquivo não for
+    um DOCX válido, devolve o próprio `src` (o chamador não deve apagá-lo)."""
+    from docx import Document
+
+    try:
+        doc = Document(str(src))
+    except Exception as exc:  # arquivo nao e um DOCX valido (ex.: placeholder)
+        logger.warning("Nao foi possivel gerar copia de conferencia de %s: %s", src, exc)
+        return src
+
+    def _fix(paras) -> None:
+        for p in paras:
+            if _SIG_TAG.search(p.text):
+                novo = _SIG_TAG.sub("_" * 40, p.text)
+                for r in p.runs:
+                    r.text = ""
+                if p.runs:
+                    p.runs[0].text = novo
+                else:
+                    p.add_run(novo)
+
+    _fix(doc.paragraphs)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                _fix(cell.paragraphs)
+
+    tmp = Path(tempfile.gettempdir()) / f"review_{src.stem}.docx"
+    doc.save(str(tmp))
+    return tmp
+
+
 @router.post("/send", response_model=EmailResponse)
 async def send_contract_email(
     data: EmailRequest,
@@ -190,18 +227,30 @@ async def send_contract_email(
     """Send contract via email using Azure Communication Services."""
     try:
         filepath = _resolve_contract_filepath(data.contract_id, db)
+        contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
 
-        service = get_email_service()
-        result = await service.send_email_with_attachment(
-            to_email=data.destinatario_email,
-            to_name=data.destinatario_nome,
-            subject=data.assunto,
-            attachment_path=str(filepath),
-            attachment_name=f"contrato_honorarios_{data.contract_id}.docx",
+        review_path = _docx_review_copy(filepath)
+        nome_cliente = contract.client_name if contract and contract.client_name else None
+        attachment_name = (
+            f"Contrato Honorários — {nome_cliente}.docx"
+            if nome_cliente
+            else f"contrato_honorarios_{data.contract_id}.docx"
         )
 
+        service = get_email_service()
+        try:
+            result = await service.send_email_with_attachment(
+                to_email=data.destinatario_email,
+                to_name=data.destinatario_nome,
+                subject=data.assunto,
+                attachment_path=str(review_path),
+                attachment_name=attachment_name,
+            )
+        finally:
+            if review_path != filepath:
+                review_path.unlink(missing_ok=True)
+
         if result["success"]:
-            contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
             if contract:
                 db.add(AuditLogDB(
                     contract_id=data.contract_id,
