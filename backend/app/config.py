@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     azure_tenant_id: str = ""
     azure_client_id: str = ""
     azure_client_secret: str = ""
+    # App registration do LOGIN (audience dos tokens do frontend).
+    # azure_client_id/secret ficam pro e-mail via Graph; sem esse split,
+    # trocar as credenciais de e-mail derruba a validacao de JWT (401).
+    azure_auth_client_id: str = ""
     azure_sender_email: str = ""
     graph_user_email: str = ""
 
