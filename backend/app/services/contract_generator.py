@@ -361,6 +361,12 @@ class ContractGenerator:
             element.set(qn("w:space"), "0")
             element.set(qn("w:color"), "000000")
  
+    def _set_table_header(self, table, *titles: str) -> None:
+        """Preenche a linha de titulo da tabela com texto centralizado."""
+        for cell, title in zip(table.rows[0].cells, titles):
+            cell.text = title
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
     def _add_title(self, doc: Document) -> None:
         title = doc.add_heading("CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS", level=1)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -378,19 +384,26 @@ class ContractGenerator:
                     f"com sede em {c.endereco}, e-mail: {c.email}."
                 )
                 if c.representante_nome:
-                    text += (
-                        f" Representada por {c.representante_nome}, "
-                        f"{c.representante_nacionalidade or ''}, "
-                        f"{c.representante_profissao or ''}, "
-                        f"{c.representante_estado_civil.value if c.representante_estado_civil else ''}, "
-                        f"CPF {c.representante_cpf or ''}, "
-                        f"e-mail: {c.representante_email or ''}."
-                    )
+                    # Campos opcionais vazios nao podem virar ", ," na qualificacao.
+                    partes = [
+                        c.representante_nome,
+                        c.representante_nacionalidade,
+                        c.representante_profissao,
+                        c.representante_estado_civil.value if c.representante_estado_civil else None,
+                        f"CPF {c.representante_cpf}" if c.representante_cpf else None,
+                        f"e-mail: {c.representante_email}" if c.representante_email else None,
+                    ]
+                    text += " Representada por " + ", ".join(filter(None, partes)) + "."
             else:
                 c = contratante if isinstance(contratante, ContratantePF) else ContratantePF(**contratante)
+                qualif = ", ".join(filter(None, [
+                    c.nome,
+                    c.nacionalidade,
+                    c.profissao,
+                    c.estado_civil.value if c.estado_civil else None,
+                ]))
                 text = (
-                    f"CONTRATANTE {i}: {c.nome}, {c.nacionalidade}, "
-                    f"{c.profissao}, {c.estado_civil.value}, "
+                    f"CONTRATANTE {i}: {qualif}, "
                     f"CPF {c.cpf}, residente em {c.endereco}, "
                     f"e-mail: {c.email}."
                 )
@@ -414,9 +427,7 @@ class ContractGenerator:
         # Summary table
         table = doc.add_table(rows=1, cols=2)
         self._apply_table_grid(table)
-        hdr = table.rows[0].cells
-        hdr[0].text = "Escopo"
-        hdr[1].text = "Preço"
+        self._set_table_header(table, "Escopo", "Preço")
  
         for escopo in data.escopos:
             row = table.add_row().cells
@@ -654,9 +665,7 @@ class ContractGenerator:
             if m.faixas_preco:
                 table = doc.add_table(rows=1, cols=2)
                 self._apply_table_grid(table)
-                hdr = table.rows[0].cells
-                hdr[0].text = "Faixa"
-                hdr[1].text = "Valor"
+                self._set_table_header(table, "Faixa", "Valor")
                 for faixa in m.faixas_preco:
                     row = table.add_row().cells
                     row[0].text = faixa.get("faixa", "")
@@ -689,9 +698,7 @@ class ContractGenerator:
             counter += 1
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
-            hdr = table.rows[0].cells
-            hdr[0].text = "Faixa de Valor"
-            hdr[1].text = "Percentual"
+            self._set_table_header(table, "Faixa de Valor", "Percentual")
             for faixa in ex.faixas_percentual:
                 row = table.add_row().cells
                 row[0].text = faixa.get("faixa", "")
@@ -949,9 +956,9 @@ class ContractGenerator:
             ]
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
-            hdr = table.rows[0].cells
-            hdr[0].text = "Fase processual em que for resilido o Contrato"
-            hdr[1].text = "Honorário devido ao C&F"
+            self._set_table_header(
+                table, "Fase processual em que for resilido o Contrato", "Honorário devido ao C&F"
+            )
             for fase, valor in linhas:
                 row = table.add_row().cells
                 row[0].text = fase
