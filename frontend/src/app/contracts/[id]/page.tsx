@@ -369,6 +369,7 @@ export default function ContractDetailPage() {
           <iframe
             srcDoc={previewHtml}
             title="Pré-visualização do contrato"
+            sandbox=""
             className="w-full"
             style={{ height: "70vh" }}
           />
