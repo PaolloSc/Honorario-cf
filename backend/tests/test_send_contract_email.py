@@ -102,3 +102,12 @@ def test_nome_do_anexo_sanitiza_caracteres_perigosos(client):
     assert name.endswith(".docx")
     for bad in '\r\n\t/\\:*?"<>|':
         assert bad not in name
+
+
+def test_download_usa_nome_do_cliente(client):
+    contract_id = _seed_contract("Fulano de Tal")
+    resp = client.get(f"/api/contract/{contract_id}/download")
+    assert resp.status_code == 200, resp.text
+    cd = resp.headers["content-disposition"]
+    assert "Fulano de Tal" in cd or "Fulano%20de%20Tal" in cd
+    assert contract_id not in cd
