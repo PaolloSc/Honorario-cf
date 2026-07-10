@@ -365,7 +365,7 @@ def download_contract(
 
     return FileResponse(
         path=str(filepath),
-        filename=f"contrato_{contract_id}.docx",
+        filename=_contract_filename(contract.client_name, contract_id),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
 
@@ -375,6 +375,19 @@ import re as _re
 # DocuSeal merge-tag (ex.: "{{Assinatura Fulano;type=signature;role=Contratante}}").
 # No preview trocamos por uma linha de assinatura para nao vazar a sintaxe crua.
 _SIG_TAG = _re.compile(r"\{\{[^}]*?type=signature[^}]*?\}\}")
+
+_FILENAME_BAD = _re.compile(r'[\r\n\t/\\:*?"<>|]+')
+
+
+def _safe_filename_part(name: str) -> str:
+    """Sanitiza um trecho vindo do usuário para uso em nome de arquivo/anexo."""
+    cleaned = " ".join(_FILENAME_BAD.sub(" ", name).split())
+    return cleaned[:120].strip()
+
+
+def _contract_filename(client_name: str | None, contract_id: str) -> str:
+    nome = _safe_filename_part(client_name) if client_name else ""
+    return f"Contrato Honorários — {nome}.docx" if nome else f"contrato_honorarios_{contract_id}.docx"
 
 
 def _clean_preview_text(text: str) -> str:
