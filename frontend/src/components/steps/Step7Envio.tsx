@@ -380,6 +380,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
             <iframe
               srcDoc={previewHtml}
               title="Prévia do contrato"
+              sandbox=""
               className="w-full"
               style={{ height: "60vh" }}
             />
