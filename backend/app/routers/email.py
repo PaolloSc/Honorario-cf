@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
-from app.routers.contract import _SIG_TAG
+from app.routers.contract import _SIG_TAG, _contract_filename
 from app.services.azure_email import AzureEmailService
 
 logger = logging.getLogger(__name__)
@@ -185,16 +185,6 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
     raise HTTPException(status_code=404, detail="Contract file not found")
 
 
-# Caracteres proibidos/perigosos em nome de arquivo (controle + reservados no Windows).
-_FILENAME_BAD = re.compile(r'[\r\n\t/\\:*?"<>|]+')
-
-
-def _safe_filename_part(name: str) -> str:
-    """Sanitiza um trecho vindo do usuário para uso em nome de arquivo/anexo."""
-    cleaned = " ".join(_FILENAME_BAD.sub(" ", name).split())
-    return cleaned[:120].strip()
-
-
 def _docx_review_copy(src: Path) -> Path:
     """Cópia de conferência do DOCX para o cliente: troca as merge-tags do DocuSeal
     ({{...;type=signature;...}}) por linhas de assinatura. Não altera o arquivo
@@ -251,12 +241,7 @@ async def send_contract_email(
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
 
         review_path = _docx_review_copy(filepath)
-        nome_cliente = _safe_filename_part(contract.client_name) if contract and contract.client_name else ""
-        attachment_name = (
-            f"Contrato Honorários — {nome_cliente}.docx"
-            if nome_cliente
-            else f"contrato_honorarios_{data.contract_id}.docx"
-        )
+        attachment_name = _contract_filename(contract.client_name if contract else None, data.contract_id)
 
         service = get_email_service()
         try:
@@ -467,7 +452,7 @@ async def send_participacao_email(
                 subject=f"Ficha de Participação — {data.cliente_nome}",
                 html_content=html,
                 attachment_path=contract_filepath,
-                attachment_name=f"contrato_honorarios_{data.contract_id}.docx",
+                attachment_name=_contract_filename(data.cliente_nome, data.contract_id),
             )
         else:
             result = await service.send_html_email(
