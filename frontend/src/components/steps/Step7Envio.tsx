@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, type Testemunha } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, previewContract, type Testemunha } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -83,12 +83,21 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   const isEdit = !!editContractId;
+  // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
 
   useEffect(() => {
     listTestemunhas()
       .then((r) => setRoster(r.testemunhas))
       .catch(() => setRoster([]));
   }, []);
+
+  useEffect(() => {
+    // Edit: contrato ja existe -> preview imediato. Criacao: carrega apos gerar.
+    // ponytail: refetch em cada mudanca de status cobre "nova versao salva".
+    if (!contractId || status === "generating" || status === "sending") return;
+    previewContract(contractId).then(setPreviewHtml).catch(() => setPreviewHtml(null));
+  }, [contractId, status]);
 
   const handleAddLawyer = () => {
     if (!newLawyerEmail.trim()) return;
@@ -363,6 +372,20 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
           </div>
         </div>
       </div>
+
+      {previewHtml && (
+        <div>
+          <h3 className="font-medium mb-2">Prévia do contrato (como ficará no Word/PDF)</h3>
+          <div className="border border-border rounded-xl overflow-hidden bg-white">
+            <iframe
+              srcDoc={previewHtml}
+              title="Prévia do contrato"
+              className="w-full"
+              style={{ height: "60vh" }}
+            />
+          </div>
+        </div>
+      )}
 
       {isEdit && status === "idle" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
