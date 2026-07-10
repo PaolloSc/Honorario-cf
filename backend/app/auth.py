@@ -89,7 +89,7 @@ def _decode_token(token: str) -> dict:
             token,
             rsa_key,
             algorithms=["RS256"],
-            audience=settings.azure_client_id,
+            audience=settings.azure_auth_client_id or settings.azure_client_id,
             issuer=f"https://login.microsoftonline.com/{tenant_id}/v2.0",
         )
         return payload
