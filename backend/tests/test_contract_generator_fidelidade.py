@@ -348,3 +348,26 @@ def test_preview_nao_vaza_tags_de_assinatura():
     # a linha de assinatura e o rotulo do papel continuam visiveis
     assert "____" in html
     assert "CONTRATANTE 1: Fulano" in html
+
+
+def test_titulos_de_tabela_centralizados():
+    from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(data, contract_id="FIDELIDADE_HEADER")
+    doc = Document(path)
+    assert doc.tables, "contrato deveria ter ao menos a tabela Escopo/Preço"
+    hdr = doc.tables[0].rows[0].cells
+    assert [c.text for c in hdr] == ["Escopo", "Preço"]
+    for cell in hdr:
+        assert cell.paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+
+def test_qualificacao_sem_virgula_dupla_com_campo_vazio():
+    req = _base_req()
+    req["contratantes"][0]["profissao"] = ""  # usuario deixou profissao em branco
+    paras = _paras_for(req)
+    contratante = next(p for p in paras if p.startswith("CONTRATANTE 1:"))
+    assert ", ," not in contratante
+    assert "Fulano, brasileiro, Solteiro(a), CPF" in contratante
