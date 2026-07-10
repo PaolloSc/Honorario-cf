@@ -371,3 +371,15 @@ def test_qualificacao_sem_virgula_dupla_com_campo_vazio():
     contratante = next(p for p in paras if p.startswith("CONTRATANTE 1:"))
     assert ", ," not in contratante
     assert "Fulano, brasileiro, Solteiro(a), CPF" in contratante
+
+
+def test_preview_titulo_de_tabela_como_th_centralizado():
+    from pathlib import Path
+
+    from app.routers.contract import _docx_to_html
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(data, contract_id="FIDELIDADE_TH")
+    html = _docx_to_html(Path(path))
+    assert "<th>Escopo</th><th>Preço</th>" in html
+    assert "th{text-align:center}" in html

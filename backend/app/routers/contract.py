@@ -408,9 +408,14 @@ def _docx_to_html(filepath: Path) -> str:
         elif child.tag == qn("w:tbl"):
             t = Table(child, doc)
             has_borders = t._tbl.tblPr.first_child_found_in("w:tblBorders") is not None
+            # Tabelas com borda tem linha de titulo (Escopo/Preco etc.) -> th centralizado.
             rows_html = "".join(
-                "<tr>" + "".join(f"<td>{escape(_clean_preview_text(c.text))}</td>" for c in row.cells) + "</tr>"
-                for row in t.rows
+                "<tr>" + "".join(
+                    f"<{'th' if has_borders and i == 0 else 'td'}>{escape(_clean_preview_text(c.text))}"
+                    f"</{'th' if has_borders and i == 0 else 'td'}>"
+                    for c in row.cells
+                ) + "</tr>"
+                for i, row in enumerate(t.rows)
             )
             css = "" if has_borders else ' class="noborder"'
             parts.append(f"<table{css}>{rows_html}</table>")
@@ -422,7 +427,8 @@ def _docx_to_html(filepath: Path) -> str:
         "h1{text-align:center;font-size:1.1rem}"
         "h3{font-size:1rem;margin-top:1.2rem}"
         "table{border-collapse:collapse;width:100%;margin:.5rem 0}"
-        "td{border:1px solid #000;padding:6px;font-size:.9rem}"
+        "td,th{border:1px solid #000;padding:6px;font-size:.9rem}"
+        "th{text-align:center}"
         "table.noborder td{border:none}"
         "</style></head>"
         f"<body>{''.join(parts)}</body></html>"
