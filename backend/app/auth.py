@@ -22,7 +22,19 @@ class CurrentUser:
     azure_id: str
     email: str
     name: str
-    role: str  # "advogado" | "admin"
+    role: str  # "advogado" | "admin" | "financeiro" | "leitor"
+
+
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _enforce_readonly(request: Request, user: CurrentUser) -> CurrentUser:
+    # ponytail: 'leitor' = somente leitura. Bloqueia toda escrita num ponto unico
+    # (todas as rotas autenticadas passam por get_current_user), em vez de blindar
+    # rota a rota e arriscar esquecer uma.
+    if user.role == "leitor" and request.method in _WRITE_METHODS:
+        raise HTTPException(403, "Conta somente leitura: ação de escrita não permitida")
+    return user
 
 
 async def _get_jwks() -> dict:
@@ -146,12 +158,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
             if user.role != dev_role:
                 user.role = dev_role
                 db.commit()
-            return CurrentUser(
+            return _enforce_readonly(request, CurrentUser(
                 azure_id=user.azure_id,
                 email=user.email,
                 name=user.name,
                 role=user.role,
-            )
+            ))
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -169,12 +181,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
 
     user = _get_or_create_user(db, azure_id, email, name)
 
-    return CurrentUser(
+    return _enforce_readonly(request, CurrentUser(
         azure_id=user.azure_id,
         email=user.email,
         name=user.name,
         role=user.role,
-    )
+    ))
 
 
 def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
