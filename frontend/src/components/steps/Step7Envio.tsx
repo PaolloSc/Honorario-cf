@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, previewContract, type Testemunha } from "@/app/lib/api";
@@ -63,6 +64,7 @@ function buildObjetoContrato(escopos: EscopoItem[]): string {
 }
 
 export default function Step7Envio({ data, editContractId, onSaveComplete }: Step7EnvioProps) {
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "generating" | "sending" | "sent_email" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -330,9 +332,10 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   };
 
   const handleGoToContract = () => {
-    if (contractId && onSaveComplete) {
-      onSaveComplete(contractId);
-    }
+    if (!contractId) return;
+    // Fluxo de criacao (page.tsx) nao passa onSaveComplete; navega direto.
+    if (onSaveComplete) onSaveComplete(contractId);
+    else router.push(`/contracts/${contractId}`);
   };
 
   return (
