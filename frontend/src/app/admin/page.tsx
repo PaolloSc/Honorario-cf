@@ -126,6 +126,8 @@ export default function AdminPage() {
                           ? "bg-purple-100 text-purple-800"
                           : u.role === "financeiro"
                           ? "bg-emerald-100 text-emerald-800"
+                          : u.role === "leitor"
+                          ? "bg-gray-100 text-gray-700"
                           : "bg-blue-100 text-blue-800"
                       }`}
                     >
@@ -133,6 +135,8 @@ export default function AdminPage() {
                         ? "Administrador"
                         : u.role === "financeiro"
                         ? "Financeiro"
+                        : u.role === "leitor"
+                        ? "Leitor (somente leitura)"
                         : "Advogado"}
                     </span>
                   </td>
@@ -145,6 +149,7 @@ export default function AdminPage() {
                       <option value="advogado">Advogado</option>
                       <option value="financeiro">Financeiro</option>
                       <option value="admin">Admin</option>
+                      <option value="leitor">Leitor (somente leitura)</option>
                     </select>
                   </td>
                 </tr>
