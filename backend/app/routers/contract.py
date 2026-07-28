@@ -391,7 +391,9 @@ def _contract_filename(client_name: str | None, contract_id: str) -> str:
 
 
 def _clean_preview_text(text: str) -> str:
-    return _SIG_TAG.sub("_" * 40, text)
+    # A tag do DocuSeal e' invisivel no Word (texto branco) e o documento ja traz
+    # a linha de assinatura; deixa-la virar underscores duplicava a linha na previa.
+    return _SIG_TAG.sub("", text)
 
 
 def _clause_level(paragraph_el) -> int | None:
@@ -440,9 +442,18 @@ def _docx_to_html(filepath: Path) -> str:
             t = Table(child, doc)
             has_borders = t._tbl.tblPr.first_child_found_in("w:tblBorders") is not None
             # Tabelas com borda tem linha de titulo (Escopo/Preco etc.) -> th centralizado.
+            def celula_html(cell) -> str:
+                # Cada paragrafo da celula e' uma linha. `cell.text` junta tudo num
+                # texto so e o HTML colapsa a quebra: o rotulo da assinatura acabava
+                # na mesma linha dos underscores.
+                linhas = [
+                    escape(_clean_preview_text(p.text)).strip() for p in cell.paragraphs
+                ]
+                return "<br>".join(linha for linha in linhas if linha)
+
             rows_html = "".join(
                 "<tr>" + "".join(
-                    f"<{'th' if has_borders and i == 0 else 'td'}>{escape(_clean_preview_text(c.text))}"
+                    f"<{'th' if has_borders and i == 0 else 'td'}>{celula_html(c)}"
                     f"</{'th' if has_borders and i == 0 else 'td'}>"
                     for c in row.cells
                 ) + "</tr>"

@@ -1,7 +1,15 @@
 "use client";
  
-import type { ContratoFormData, EscopoItem } from "@/types/contract";
+import type { ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
+
+/** Critério da participação: campos estruturados, com fallback p/ o formato antigo. */
+function criterioParticipacao(p: Participacao): string {
+  if (p.valor_tipo === "percentual" && p.valor_percentual) return `${p.valor_percentual}%`;
+  if (p.valor_tipo === "valor" && p.valor_monetario != null) return formatCurrency(p.valor_monetario);
+  if (p.valor_tipo === "outro" && p.valor_outro) return p.valor_outro;
+  return p.percentual_ou_valor || "—";
+}
  
 const HONORARIO_LABELS: Record<string, string> = {
   hora_trabalhada: "Hora Trabalhada",
@@ -129,10 +137,8 @@ export default function Step6Revisao({ data }: Step6Props) {
                 Base: {data.participacao.base_tipo === "escopo" ? "Escopo" : "Honorário"} — {data.participacao.base_label}
               </li>
             )}
-            <li>
-              Valor/Percentual: {data.participacao.percentual_ou_valor}
-            </li>
-            <li>Para: {data.participacao.para_quem}</li>
+            <li>Critério: {criterioParticipacao(data.participacao)}</li>
+            <li>Para: {(data.participacao.para_quem ?? []).join(", ")}</li>
             <li>Natureza: {data.participacao.natureza}</li>
             <li>
               Captação: {data.participacao.responsavel_captacao}
