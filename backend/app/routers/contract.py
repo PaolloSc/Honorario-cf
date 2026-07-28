@@ -394,6 +394,17 @@ def _clean_preview_text(text: str) -> str:
     return _SIG_TAG.sub("_" * 40, text)
 
 
+def _clause_level(paragraph_el) -> int | None:
+    """Nível do parágrafo na lista de cláusulas, ou None se não for numerado."""
+    from docx.oxml.ns import qn
+
+    num_pr = paragraph_el.find(qn("w:pPr") + "/" + qn("w:numPr"))
+    if num_pr is None:
+        return None
+    ilvl = num_pr.find(qn("w:ilvl"))
+    return int(ilvl.get(qn("w:val"))) if ilvl is not None else 0
+
+
 def _docx_to_html(filepath: Path) -> str:
     """Render the generated DOCX as simple HTML for inline preview (no external deps)."""
     from html import escape
@@ -405,12 +416,19 @@ def _docx_to_html(filepath: Path) -> str:
 
     doc = Document(str(filepath))
     parts: list[str] = []
+    contadores = [0, 0, 0]  # niveis da lista de clausulas (o Word numera no .docx)
     for child in doc.element.body.iterchildren():
         if child.tag == qn("w:p"):
             p = Paragraph(child, doc)
             text = escape(_clean_preview_text(p.text))
             if not text.strip():
                 continue
+            ilvl = _clause_level(child)
+            if ilvl is not None:
+                contadores[ilvl] += 1
+                for abaixo in range(ilvl + 1, len(contadores)):
+                    contadores[abaixo] = 0
+                text = ".".join(str(n) for n in contadores[: ilvl + 1]) + ". " + text
             style = p.style.name if p.style else ""
             if style == "Heading 1":
                 parts.append(f"<h1>{text}</h1>")
