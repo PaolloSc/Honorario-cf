@@ -73,9 +73,9 @@ MUTACOES = [
     (
         "assinatura justificada pelo padrao do modelo",
         "backend/app/services/contract_generator.py",
-        "            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT",
+        "            paragraph.alignment = (\n                WD_ALIGN_PARAGRAPH.CENTER if assinatura else WD_ALIGN_PARAGRAPH.LEFT\n            )",
         "            pass  # BUG: herda o w:jc=both do modelo",
-        "tests/test_contract_generator_fidelidade.py::test_assinaturas_alinhadas_a_esquerda_sem_espaco_sobrando",
+        "tests/test_contract_generator_fidelidade.py::test_assinatura_centralizada_na_grade_e_testemunhas_a_esquerda",
     ),
     (
         "5.6 (sucumbencia) saindo sem exito",

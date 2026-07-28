@@ -497,11 +497,14 @@ def _assinatura_pPr(path: str) -> list[tuple[str, str, str, str]]:
     return out
 
 
-def test_assinaturas_alinhadas_a_esquerda_sem_espaco_sobrando():
-    """O modelo justifica tudo (w:jc=both), o que espalhava o nome na celula.
+def test_assinatura_centralizada_na_grade_e_testemunhas_a_esquerda():
+    """Dois alinhamentos distintos, confirmados no .docx que o escritorio ajustou.
 
-    O escritorio usa assinatura alinhada a esquerda — o conserto e' fixar o
-    alinhamento, nao centralizar.
+    O modelo justifica tudo (w:jc=both) e espalhava "CONTRATANTE: MARINA ALVES
+    RIBEIRO" na largura da celula, entao o alinhamento precisa ser fixado. Na
+    grade e' centralizado dentro da celula; o bloco de testemunhas, que corre
+    solto no corpo, fica a esquerda como o resto do contrato. Centralizar os
+    dois foi recusado pelo escritorio.
     """
     from app.services.contract_generator import ESPACO_ASSINATURA
 
@@ -514,11 +517,41 @@ def test_assinaturas_alinhadas_a_esquerda_sem_espaco_sobrando():
             {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
         ],
     )
-    props = _assinatura_pPr(path)
-    assert props, "grade de assinaturas vazia"
-    for texto, jc, antes, depois in props:
-        assert jc == "left", f"assinatura deveria ser alinhada a esquerda, veio {jc}"
+    folga = str(int(ESPACO_ASSINATURA.pt * 20))
+
+    grade = _assinatura_pPr(path)
+    assert grade, "grade de assinaturas vazia"
+    for texto, jc, antes, depois in grade:
+        assert jc == "center", f"grade deveria ser centralizada, veio {jc} em {texto[:30]!r}"
         assert depois == "0", f"espaco sobrando depois de {texto[:30]!r}: {depois}"
         # A folga fica so acima da linha de assinatura; o nome cola nela.
-        esperado = str(int(ESPACO_ASSINATURA.pt * 20)) if set(texto) == {"_"} else "0"
-        assert antes == esperado, f"antes de {texto[:30]!r}: {antes} (esperado {esperado})"
+        assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
+
+    testemunhas = _testemunhas_pPr(path)
+    assert testemunhas, "bloco de testemunhas vazio"
+    for texto, jc, antes, _depois in testemunhas:
+        assert jc == "left", f"testemunhas deveriam ficar a esquerda, veio {jc}"
+        assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
+
+
+def _testemunhas_pPr(path: str) -> list[tuple[str, str, str, str]]:
+    """Mesma leitura de _assinatura_pPr, para o bloco solto no corpo."""
+    import zipfile
+
+    xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+    corpo = xml.split("</w:tbl>")[-1]
+    out = []
+    for p in re.split(r"</w:p>", corpo):
+        texto = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip()
+        if not texto:
+            continue
+        jc = re.search(r'<w:jc w:val="(\w+)"/>', p)
+        antes = re.search(r'w:before="(\d+)"', p)
+        depois = re.search(r'w:after="(\d+)"', p)
+        out.append((
+            texto,
+            jc.group(1) if jc else "herdado",
+            antes.group(1) if antes else "herdado",
+            depois.group(1) if depois else "herdado",
+        ))
+    return out
