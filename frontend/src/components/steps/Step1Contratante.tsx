@@ -11,6 +11,7 @@ import type {
   ContratantePF,
   ContratantePJ,
   EstadoCivil,
+  RepresentantePJ,
   TipoPessoa,
 } from "@/types/contract";
 import { useCallback, useState } from "react";
@@ -56,7 +57,7 @@ function emptyPF(): ContratantePF {
   return {
     tipo: "PF",
     nome: "",
-    nacionalidade: "Brasileira (o)",
+    nacionalidade: "Brasileira",
     cpf: "",
     profissao: "",
     estado_civil: "Solteiro(a)",
@@ -261,6 +262,20 @@ function PJForm({
   onUpdate: (partial: Partial<ContratantePJ>) => void;
   onCNPJLookup: (cnpj: string) => void;
 }) {
+  // Contratos salvos antes da lista guardavam um unico representante em campos soltos.
+  const reps: RepresentantePJ[] =
+    data.representantes ??
+    (data.representante_nome
+      ? [{
+          nome: data.representante_nome,
+          nacionalidade: data.representante_nacionalidade,
+          cpf: data.representante_cpf,
+          profissao: data.representante_profissao,
+          estado_civil: data.representante_estado_civil,
+          email: data.representante_email,
+        }]
+      : []);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="CNPJ" required hint="Digite o CNPJ para buscar dados automaticamente">
@@ -319,84 +334,105 @@ function PJForm({
       )}
 
       <div className="md:col-span-2">
-        <Checkbox
-          label="Adicionar dados do representante legal"
-          checked={data.representante_nome !== undefined}
-          onChange={(checked) => {
-            if (!checked) {
-              onUpdate({
-                representante_nome: undefined,
-                representante_cpf: undefined,
-                representante_email: undefined,
-              });
-            } else {
-              onUpdate({ representante_nome: "" });
-            }
-          }}
+        <RepresentantesForm
+          representantes={reps}
+          onChange={(representantes) => onUpdate({ representantes })}
         />
       </div>
-
-      {data.representante_nome !== undefined && (
-        <>
-          <FormField label="Nome do Representante">
-            <Input
-              value={data.representante_nome || ""}
-              onChange={(e) =>
-                onUpdate({ representante_nome: e.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="CPF do Representante">
-            <Input
-              value={data.representante_cpf || ""}
-              onChange={(e) =>
-                onUpdate({ representante_cpf: formatCPF(e.target.value) })
-              }
-              placeholder="000.000.000-00"
-            />
-          </FormField>
-          <FormField label="E-mail do Representante">
-            <Input
-              type="email"
-              value={data.representante_email || ""}
-              onChange={(e) =>
-                onUpdate({ representante_email: e.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="Nacionalidade">
-            <Input
-              value={data.representante_nacionalidade || ""}
-              onChange={(e) =>
-                onUpdate({
-                  representante_nacionalidade: e.target.value,
-                })
-              }
-            />
-          </FormField>
-          <FormField label="Profissão">
-            <Input
-              value={data.representante_profissao || ""}
-              onChange={(e) =>
-                onUpdate({ representante_profissao: e.target.value })
-              }
-            />
-          </FormField>
-          <FormField label="Estado Civil">
-            <Select
-              value={data.representante_estado_civil || ""}
-              onChange={(e) =>
-                onUpdate({
-                  representante_estado_civil: e.target.value as EstadoCivil,
-                })
-              }
-              options={ESTADOS_CIVIS}
-              placeholder="Selecione..."
-            />
-          </FormField>
-        </>
-      )}
     </div>
+  );
+}
+
+function emptyRepresentante(): RepresentantePJ {
+  return { nome: "", nacionalidade: "Brasileira", profissao: "Empresário" };
+}
+
+function RepresentantesForm({
+  representantes,
+  onChange,
+}: {
+  representantes: RepresentantePJ[];
+  onChange: (reps: RepresentantePJ[]) => void;
+}) {
+  const update = (i: number, partial: Partial<RepresentantePJ>) =>
+    onChange(representantes.map((r, idx) => (idx === i ? { ...r, ...partial } : r)));
+
+  return (
+    <>
+      <Checkbox
+        label="Adicionar dados do(s) representante(s) legal(is)"
+        checked={representantes.length > 0}
+        onChange={(checked) => onChange(checked ? [emptyRepresentante()] : [])}
+      />
+
+      {representantes.map((rep, i) => (
+        <div key={i} className="mt-4 border-l-2 border-primary-light pl-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-foreground">
+              Representante {i + 1}
+            </p>
+            {representantes.length > 1 && (
+              <button
+                type="button"
+                onClick={() => onChange(representantes.filter((_, idx) => idx !== i))}
+                className="text-danger text-sm hover:underline"
+              >
+                Remover
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Nome do Representante">
+              <Input value={rep.nome} onChange={(e) => update(i, { nome: e.target.value })} />
+            </FormField>
+            <FormField label="CPF do Representante">
+              <Input
+                value={rep.cpf || ""}
+                onChange={(e) => update(i, { cpf: formatCPF(e.target.value) })}
+                placeholder="000.000.000-00"
+              />
+            </FormField>
+            <FormField label="E-mail do Representante">
+              <Input
+                type="email"
+                value={rep.email || ""}
+                onChange={(e) => update(i, { email: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Nacionalidade">
+              <Input
+                value={rep.nacionalidade || ""}
+                onChange={(e) => update(i, { nacionalidade: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Profissão">
+              <Input
+                value={rep.profissao || ""}
+                onChange={(e) => update(i, { profissao: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Estado Civil">
+              <Select
+                value={rep.estado_civil || ""}
+                onChange={(e) => update(i, { estado_civil: e.target.value as EstadoCivil })}
+                options={ESTADOS_CIVIS}
+                placeholder="Selecione..."
+              />
+            </FormField>
+          </div>
+        </div>
+      ))}
+
+      {representantes.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([...representantes, emptyRepresentante()])}
+          className="mt-3 px-3 py-1.5 border border-dashed border-primary-light text-primary rounded-lg text-sm font-medium hover:bg-primary-light/20 transition"
+        >
+          + Adicionar representante
+        </button>
+      )}
+    </>
   );
 }
 
@@ -483,7 +519,7 @@ function PFForm({
         <Input
           value={data.nacionalidade}
           onChange={(e) => onUpdate({ nacionalidade: e.target.value })}
-          placeholder="Brasileira (o)"
+          placeholder="Brasileira"
         />
       </FormField>
 

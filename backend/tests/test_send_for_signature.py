@@ -532,7 +532,7 @@ class TestSendForSignatureEndpoint:
         assert "404" in data["detail"] or "Contract file not found" in data["detail"]
 
     def test_send_for_signature_includes_logged_in_lawyer(self, client):
-        """The logged-in user is added as 'Advogado' role in signatarios."""
+        """O advogado que preenche o formulario NAO e' injetado como signatario."""
         output_dir = _get_output_dir()
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -579,11 +579,10 @@ class TestSendForSignatureEndpoint:
 
         assert response.status_code == 200
 
-        # Verify the lawyer (logged-in user) was added
-        lawyer_entries = [s for s in captured_signatarios if s.get("role") == "Advogado"]
-        assert len(lawyer_entries) == 1
-        assert lawyer_entries[0]["email"] == "lawyer@test.com"
-        assert lawyer_entries[0]["name"] == "Test Lawyer"
+        # Quem assina pelo escritorio e' o C&F + os advogados escolhidos no envio.
+        lawyer_entries = [s for s in captured_signatarios if s.get("role", "").startswith("Advogado")]
+        assert lawyer_entries == []
+        assert not any(s.get("email") == "lawyer@test.com" for s in captured_signatarios)
 
         # Cleanup
         if temp_file.exists():
@@ -705,9 +704,9 @@ class TestSendForSignatureEndpoint:
         contratante_roles = sorted(r for r in roles if r.startswith("Contratante"))
         assert contratante_roles == ["Contratante 1", "Contratante 2"]
 
-        # Advogados should be "Advogado 1" and "Advogado 2" (extra + logged-in user)
+        # So o advogado enviado no payload assina (sem o usuario logado)
         advogado_roles = sorted(r for r in roles if r.startswith("Advogado"))
-        assert advogado_roles == ["Advogado 1", "Advogado 2"]
+        assert advogado_roles == ["Advogado"]
 
         # Contratado stays as-is (single)
         assert "Contratado" in roles
@@ -766,9 +765,8 @@ class TestSendForSignatureEndpoint:
         # Collect all roles
         roles = [s["role"] for s in captured_signatarios]
 
-        # Should be exactly: Contratante, Advogado, Contratado (no numbers)
+        # Should be exactly: Contratante, Contratado (no numbers, sem advogado auto)
         assert "Contratante" in roles
-        assert "Advogado" in roles
         assert "Contratado" in roles
 
         # No numbered suffixes
@@ -931,7 +929,7 @@ class TestSendForSignatureEndpoint:
         contratado = [s for s in captured_signatarios if s.get("role") == "Contratado"]
 
         assert len(contratante) >= 1
-        assert len(advogado) == 1
+        assert advogado == []
         assert len(contratado) == 1
 
         # Verify order values

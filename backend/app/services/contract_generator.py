@@ -25,6 +25,7 @@ from app.models.contract import (
     ESCOPO_LABELS,
     EscopoItem,
     Participacao,
+    RepresentantePJ,
     SubtipoExito,
     SubtipoMensalidade,
     TipoEscopo,
@@ -53,6 +54,25 @@ HONORARIO_LABELS = {
     "mensalidade": "mensalidade",
     "hora_trabalhada": "hora trabalhada",
 }
+
+class _Numerador:
+    """Numera as clausulas de um bloco de honorario.
+
+    Bloco unico (sub=False, base="3"): 3.1., 3.2., 3.3. ...
+    Varios blocos (sub=True, base="3.2"): 3.2. (chapeu do bloco), 3.2.1., 3.2.2. ...
+    """
+
+    def __init__(self, base: str, sub: bool) -> None:
+        self.base = base
+        self.sub = sub
+        self.i = 0
+
+    def __call__(self) -> str:
+        self.i += 1
+        if self.sub:
+            return f"{self.base}." if self.i == 1 else f"{self.base}.{self.i - 1}."
+        return f"{self.base}.{self.i}."
+
 
 MESES_PT_BR = [
     "janeiro",
@@ -102,7 +122,11 @@ class ContractGenerator:
         self._add_scope_and_fees(doc, data)
         self._add_fee_details(doc, data)
         self._add_common_clauses(doc, data)
-        self._add_accessories(doc, data.acessorios)
+        self._add_accessories(
+            doc,
+            data.acessorios,
+            has_exito=any(TipoHonorario.EXITO in e.honorarios for e in data.escopos),
+        )
         self._add_obligations(doc)
         self._add_integrity(doc)
         self._add_term_and_termination(doc, data)
@@ -249,7 +273,8 @@ class ContractGenerator:
             run.font.name = "Segoe UI"
             run._element.rPr.rFonts.set(qn("w:eastAsia"), "Segoe UI")
             run.font.size = Pt(12)
-            run.font.color.rgb = RGBColor(0, 0, 0)
+            # Tags DocuSeal ({{...}}) ficam brancas: invisiveis no Word, legiveis p/ o DocuSeal.
+            run.font.color.rgb = RGBColor(255, 255, 255) if is_tag else RGBColor(0, 0, 0)
             if is_heading:
                 run.bold = True
 
@@ -373,47 +398,61 @@ class ContractGenerator:
  
     def _add_parties(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("1. DAS PARTES", level=2)
- 
+
+        unico = len(data.contratantes) == 1
         for i, contratante in enumerate(data.contratantes, 1):
+            rotulo = "CONTRATANTE" if unico else f"CONTRATANTE {i}"
             if isinstance(contratante, ContratantePJ) or (
                 isinstance(contratante, dict) and contratante.get("tipo") == "PJ"
             ):
                 c = contratante if isinstance(contratante, ContratantePJ) else ContratantePJ(**contratante)
                 text = (
-                    f"CONTRATANTE {i}: {c.razao_social}, inscrita no CNPJ n. {c.cnpj}, "
-                    f"com sede em {c.endereco}, e-mail: {c.email}."
+                    f"{rotulo}: {c.razao_social.upper()}, inscrita no CNPJ n. {self._format_cnpj(c.cnpj)}, "
+                    f"com sede em {c.endereco}, e-mail: {c.email}"
                 )
-                if c.representante_nome:
-                    # Campos opcionais vazios nao podem virar ", ," na qualificacao.
-                    partes = [
-                        c.representante_nome,
-                        c.representante_nacionalidade,
-                        c.representante_profissao,
-                        c.representante_estado_civil.value if c.representante_estado_civil else None,
-                        f"CPF {c.representante_cpf}" if c.representante_cpf else None,
-                        f"e-mail: {c.representante_email}" if c.representante_email else None,
-                    ]
-                    text += " Representada por " + ", ".join(filter(None, partes)) + "."
+                # Qualificacao de cada representante precedida por virgula (nao por ponto).
+                quals = [self._qualificar_representante(r) for r in c.representantes if r.nome]
+                if quals:
+                    text += ", representada por " + "; e por ".join(quals)
+                text += "."
             else:
                 c = contratante if isinstance(contratante, ContratantePF) else ContratantePF(**contratante)
                 qualif = ", ".join(filter(None, [
-                    c.nome,
+                    c.nome.upper(),
                     c.nacionalidade,
                     c.profissao,
                     c.estado_civil.value if c.estado_civil else None,
                 ]))
                 text = (
-                    f"CONTRATANTE {i}: {qualif}, "
+                    f"{rotulo}: {qualif}, "
                     f"CPF {c.cpf}, residente em {c.endereco}, "
                     f"e-mail: {c.email}."
                 )
             doc.add_paragraph(text)
- 
+
         doc.add_paragraph(
             "CONTRATADO: CARVALHO & FURTADO ADVOGADOS, sociedade simples de advocacia, "
                 "inscrita no CNPJ n. 25.463.159/0001-73, com sede na Rua Antônio de Albuquerque, "
-                "n. 271, 5º andar, Savassi, Belo Horizonte/MG, doravante denominado C&F."
+                "n. 271, 5º andar, Savassi, Belo Horizonte/MG, a seguir denominado C&F."
         )
+
+    def _qualificar_representante(self, r: "RepresentantePJ") -> str:
+        """Qualificacao do representante legal, omitindo campos vazios (sem ', ,')."""
+        return ", ".join(filter(None, [
+            r.nome.upper(),
+            r.nacionalidade,
+            r.profissao,
+            r.estado_civil.value if r.estado_civil else None,
+            f"CPF {r.cpf}" if r.cpf else None,
+            f"e-mail: {r.email}" if r.email else None,
+        ]))
+
+    def _format_cnpj(self, value: str) -> str:
+        """00000000000000 -> 00.000.000/0000-00 (mantem o valor se ja vier formatado)."""
+        d = "".join(ch for ch in (value or "") if ch.isdigit())
+        if len(d) != 14:
+            return value or ""
+        return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
  
  
     def _add_scope_and_fees(self, doc: Document, data: ContratoRequest) -> None:
@@ -496,148 +535,137 @@ class ContractGenerator:
 
     def _add_fee_details(self, doc: Document, data: ContratoRequest) -> None:
         doc.add_heading("3. OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS", level=2)
- 
-        clause_counter = 1
+
+        # (metodo, objeto) de cada honorario efetivamente preenchido
+        blocos: list[tuple] = []
         for escopo in data.escopos:
             for tipo_hon in escopo.honorarios:
                 if tipo_hon == TipoHonorario.HORA_TRABALHADA and escopo.hora_trabalhada:
-                    clause_counter = self._add_hora_trabalhada(doc, escopo.hora_trabalhada, clause_counter)
+                    blocos.append((self._add_hora_trabalhada, escopo.hora_trabalhada))
                 elif tipo_hon == TipoHonorario.PRO_LABORE and escopo.pro_labore:
-                    clause_counter = self._add_pro_labore(doc, escopo.pro_labore, clause_counter)
+                    blocos.append((self._add_pro_labore, escopo.pro_labore))
                 elif tipo_hon == TipoHonorario.MENSALIDADE and escopo.mensalidade:
-                    clause_counter = self._add_mensalidade(doc, escopo.mensalidade, clause_counter)
+                    blocos.append((self._add_mensalidade, escopo.mensalidade))
                 elif tipo_hon == TipoHonorario.EXITO and escopo.exito:
-                    clause_counter = self._add_exito(doc, escopo.exito, clause_counter)
+                    blocos.append((self._add_exito, escopo.exito))
                 elif tipo_hon == TipoHonorario.PERMUTA and escopo.permuta:
-                    clause_counter = self._add_permuta(doc, escopo.permuta, clause_counter)
+                    blocos.append((self._add_permuta, escopo.permuta))
+
+        # Honorario unico: numeracao corrida (3.1, 3.2...) e sem subtitulo.
+        # Varios: cada bloco vira 3.n com subclausulas 3.n.1, 3.n.2...
+        varios = len(blocos) > 1
+        for n, (add, obj) in enumerate(blocos, 1):
+            add(doc, obj, _Numerador(f"3.{n}" if varios else "3", varios), com_subtitulo=varios)
  
-    def _add_hora_trabalhada(self, doc: Document, ht: "HoraTrabalhada", counter: int) -> int:
-        doc.add_heading("HORA TRABALHADA", level=3)
+    def _add_hora_trabalhada(self, doc: Document, ht: "HoraTrabalhada", num: "_Numerador", com_subtitulo: bool = False) -> None:
+        if com_subtitulo:
+            doc.add_heading("HORA TRABALHADA", level=3)
         doc.add_paragraph(
-            f"3.{counter}. Em relação ao honorário por hora trabalhada, será observado o seguinte:"
+            f"{num()} Em relação ao honorário por hora trabalhada, será observado o seguinte:"
         )
-        counter += 1
  
         doc.add_paragraph(
-            f"3.{counter}. O valor da hora trabalhada será de {valor_com_extenso(ht.valor_hora)}.",
+            f"{num()} O valor da hora trabalhada será de {valor_com_extenso(ht.valor_hora)}.",
         )
-        counter += 1
 
         doc.add_paragraph(
-            f"3.{counter}. As horas trabalhadas serão apuradas ao final de cada mês e faturadas em "
+            f"{num()} As horas trabalhadas serão apuradas ao final de cada mês e faturadas em "
             "parcela única no mês imediatamente subsequente.",
         )
-        counter += 1
  
         if ht.tem_hora_urgencia:
             doc.add_paragraph(
-                f"3.{counter}. As horas trabalhadas serão acrescidas de percentual de 50% (cinquenta por cento) "
+                f"{num()} As horas trabalhadas serão acrescidas de percentual de 50% (cinquenta por cento) "
                 "quando, por solicitação da CONTRATANTE, os serviços forem prestados em regime "
                 "de urgência.",
             )
-            counter += 1
  
         if ht.tem_hora_fora_expediente:
             doc.add_paragraph(
-                f"3.{counter}. Caso a CONTRATANTE demande a prestação dos serviços após as 19:00 horas ou "
+                f"{num()} Caso a CONTRATANTE demande a prestação dos serviços após as 19:00 horas ou "
                 "durante finais de semana ou feriados, as horas trabalhadas serão acrescidas "
                 "do percentual de 100% (cem por cento).",
             )
-            counter += 1
  
         if ht.tem_hora_urgencia and ht.tem_hora_fora_expediente:
             doc.add_paragraph(
-                f"3.{counter}. Caso as horas sejam de urgência e prestadas fora do expediente, serão cobradas "
+                f"{num()} Caso as horas sejam de urgência e prestadas fora do expediente, serão cobradas "
                 "com acréscimo de 150%.",
             )
-            counter += 1
  
         if ht.tem_teto_mensal and ht.valor_teto_mensal:
             doc.add_paragraph(
-                f"3.{counter}. A fatura mensal das horas trabalhadas respeitará o teto de "
+                f"{num()} A fatura mensal das horas trabalhadas respeitará o teto de "
                 f"{valor_com_extenso(ht.valor_teto_mensal)}, de modo que o valor excedente "
                 f"será cobrado na(s) fatura(s) subsequente(s) respeitando o referido teto.",
             )
-            counter += 1
  
         if ht.tem_pacote_horas and ht.quantidade_horas_pacote and ht.valor_pacote:
             doc.add_paragraph(
-                f"3.{counter}. Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
+                f"{num()} Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
                 f"{ht.quantidade_horas_pacote} horas, no valor de "
                 f"{valor_com_extenso(ht.valor_pacote)}.",
             )
-            counter += 1
             doc.add_paragraph(
-                f"3.{counter}. As horas não utilizadas em determinado mês serão acumuladas e poderão ser "
+                f"{num()} As horas não utilizadas em determinado mês serão acumuladas e poderão ser "
                 f"aproveitadas no mês imediatamente subsequente.",
             )
-            counter += 1
             if ht.duracao_meses:
                 doc.add_paragraph(
-                    f"3.{counter}. O saldo acumulado será zerado a cada {ht.duracao_meses} meses.",
+                    f"{num()} O saldo acumulado será zerado a cada {ht.duracao_meses} meses.",
                 )
-                counter += 1
-
-        return counter
  
-    def _add_pro_labore(self, doc: Document, pl: "ProLabore", counter: int) -> int:
-        doc.add_heading("PRO-LABORE", level=3)
+    def _add_pro_labore(self, doc: Document, pl: "ProLabore", num: "_Numerador", com_subtitulo: bool = False) -> None:
+        if com_subtitulo:
+            doc.add_heading("PRO-LABORE", level=3)
         doc.add_paragraph(
-            f"3.{counter}. Em relação ao honorário pró-labore, será observada a seguinte forma de pagamento:"
+            f"{num()} Em relação ao honorário pró-labore, será observada a seguinte forma de pagamento:"
         )
-        counter += 1
  
         if pl.tem_parcelamento and pl.numero_parcelas and pl.valor_parcela:
             doc.add_paragraph(
-                f"3.{counter}. O valor total de {valor_com_extenso(pl.valor_total)} será pago em "
+                f"{num()} O valor total de {valor_com_extenso(pl.valor_total)} será pago em "
                 f"{pl.numero_parcelas} parcelas de {valor_com_extenso(pl.valor_parcela)}, "
                 f"com vencimento {self._vencimento_combined(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}."
             )
-            counter += 1
         else:
             doc.add_paragraph(
-                f"3.{counter}. O valor de {valor_com_extenso(pl.valor_total)} será pago em parcela única, "
+                f"{num()} O valor de {valor_com_extenso(pl.valor_total)} será pago em parcela única, "
                 f"com vencimento {self._vencimento_combined(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}."
             )
-            counter += 1
-
-        return counter
  
-    def _add_mensalidade(self, doc: Document, m: "Mensalidade", counter: int) -> int:
+    def _add_mensalidade(self, doc: Document, m: "Mensalidade", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if m.subtipo == SubtipoMensalidade.ADVOCACIA_PARTIDO:
-            doc.add_heading("MENSALIDADE DE ADVOCACIA DE PARTIDO", level=3)
+            if com_subtitulo:
+                doc.add_heading("MENSALIDADE DE ADVOCACIA DE PARTIDO", level=3)
             doc.add_paragraph(
-                f"3.{counter}. Em relação ao honorário por mensalidade de advocacia de partido, "
+                f"{num()} Em relação ao honorário por mensalidade de advocacia de partido, "
                 "será observado o seguinte:"
             )
-            counter += 1
 
             doc.add_paragraph(
-                f"3.{counter}. O honorário abrange a prestação de serviços advocatícios de consultoria "
+                f"{num()} O honorário abrange a prestação de serviços advocatícios de consultoria "
                 "e contencioso de rotina nas áreas oferecidas pelo C&F.",
             )
-            counter += 1
 
             doc.add_paragraph(
-                f"3.{counter}. A precificação possui como referência o fluxo atual de demanda da "
+                f"{num()} A precificação possui como referência o fluxo atual de demanda da "
                 "CONTRATANTE, sendo que o honorário deverá ser renegociado caso esse "
                 "fluxo aumente.",
             )
-            counter += 1
 
             doc.add_paragraph(
-                f"3.{counter}. O valor da mensalidade será de {valor_com_extenso(m.valor)}.",
+                f"{num()} O valor da mensalidade será de {valor_com_extenso(m.valor)}.",
             )
-            counter += 1
 
             doc.add_paragraph(
-                f"3.{counter}. O vencimento da fatura mensal será {self._vencimento_combined(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)}.",
+                f"{num()} O vencimento da fatura mensal será {self._vencimento_combined(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)}.",
             )
-            counter += 1
  
         elif m.subtipo in (SubtipoMensalidade.POR_PROCESSO, SubtipoMensalidade.POR_PASTA):
             tipo_label = "processo" if m.subtipo == SubtipoMensalidade.POR_PROCESSO else "pasta"
-            doc.add_heading(f"MENSALIDADE POR {tipo_label.upper()}", level=3)
+            if com_subtitulo:
+                doc.add_heading(f"MENSALIDADE POR {tipo_label.upper()}", level=3)
  
             var_label = ""
             if m.variacao_preco == VariacaoPrecoMensalidade.LIMITACAO_TEMPORAL:
@@ -648,19 +676,17 @@ class ContractGenerator:
                 var_label = " com variação por fase processual"
  
             doc.add_paragraph(
-                f"3.{counter}. Em relação ao honorário por mensalidade{var_label}, o vencimento "
+                f"{num()} Em relação ao honorário por mensalidade{var_label}, o vencimento "
                 f"da fatura será {self._vencimento_combined(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)} "
                 f"e o valor de {valor_com_extenso(m.valor)} será devido por {tipo_label} enquanto este "
                 f"estiver ativo."
             )
-            counter += 1
  
             if m.variacao_preco == VariacaoPrecoMensalidade.LIMITACAO_TEMPORAL and m.limitacao_temporal_anos:
                 doc.add_paragraph(
-                    f"3.{counter}. O valor será devido até {m.limitacao_temporal_anos} anos de tramitação "
+                    f"{num()} O valor será devido até {m.limitacao_temporal_anos} anos de tramitação "
                     f"sob o patrocínio do C&F."
                 )
-                counter += 1
  
             if m.faixas_preco:
                 table = doc.add_table(rows=1, cols=2)
@@ -672,30 +698,25 @@ class ContractGenerator:
                     row[1].text = faixa.get("valor", "")
  
             doc.add_paragraph(
-                f"3.{counter}. Entende-se por ativo aquele {tipo_label} que não foi definitivamente "
+                f"{num()} Entende-se por ativo aquele {tipo_label} que não foi definitivamente "
                 f"extinto, baixado e arquivado no sistema do Tribunal ou respectivo órgão.",
             )
-            counter += 1
-
-        return counter
  
-    def _add_exito(self, doc: Document, ex: "Exito", counter: int) -> int:
-        doc.add_heading("ÊXITO", level=3)
+    def _add_exito(self, doc: Document, ex: "Exito", num: "_Numerador", com_subtitulo: bool = False) -> None:
+        if com_subtitulo:
+            doc.add_heading("ÊXITO", level=3)
         doc.add_paragraph(
-            f"3.{counter}. Em relação ao honorário de êxito, será observado o seguinte:"
+            f"{num()} Em relação ao honorário de êxito, será observado o seguinte:"
         )
-        counter += 1
  
         if ex.subtipo == SubtipoExito.PERCENTUAL_FIXO and ex.percentual:
             doc.add_paragraph(
-                f"3.{counter}. O percentual de êxito será de {self._format_percentual(ex.percentual)} sobre {ex.base_calculo}."
+                f"{num()} O percentual de êxito será de {self._format_percentual(ex.percentual)} sobre {ex.base_calculo}."
             )
-            counter += 1
         elif ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
             doc.add_paragraph(
-                f"3.{counter}. O percentual será calculado conforme o valor do Benefício:"
+                f"{num()} O percentual será calculado conforme o valor do Benefício:"
             )
-            counter += 1
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
             self._set_table_header(table, "Faixa de Valor", "Percentual")
@@ -709,58 +730,48 @@ class ContractGenerator:
             or "benefício econômico e/ou financeiro e/ou fiscal e/ou tributário"
         )
         doc.add_paragraph(
-            f"3.{counter}. O percentual incidirá sobre o {incidencia}, corrigido "
+            f"{num()} O percentual incidirá sobre o {incidencia}, corrigido "
             "monetariamente, aproveitável à CONTRATANTE (Benefício), ainda que parcial.",
         )
-        counter += 1
 
         if (ex.forma_pagamento or "").strip():
             doc.add_paragraph(
-                f"3.{counter}. Forma de pagamento: {self._label_from_map(ex.forma_pagamento, FORMA_PAGAMENTO_LABELS)}.",
+                f"{num()} Forma de pagamento: {self._label_from_map(ex.forma_pagamento, FORMA_PAGAMENTO_LABELS)}.",
             )
-            counter += 1
 
         if ex.vencimento or ex.vencimento_data or ex.vencimento_obs:
             doc.add_paragraph(
-                f"3.{counter}. Vencimento: {self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)}.",
+                f"{num()} Vencimento: {self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)}.",
             )
-            counter += 1
  
         if ex.tem_beneficio_prospectivo and ex.prospectivo_duracao_meses:
             doc.add_paragraph(
-                f"3.{counter}. Nos casos em que os serviços do C&F também proporcionarem Benefício prospectivo "
+                f"{num()} Nos casos em que os serviços do C&F também proporcionarem Benefício prospectivo "
                 f"à CONTRATANTE, incidirão honorários de êxito calculados sobre o período de "
                 f"{ex.prospectivo_duracao_meses} meses.",
             )
-            counter += 1
  
         if ex.deduz_outro_honorario and ex.honorario_deduzido:
             doc.add_paragraph(
-                f"3.{counter}. O honorário de êxito será pago abatendo-se o valor pago a título de "
+                f"{num()} O honorário de êxito será pago abatendo-se o valor pago a título de "
                 f"{self._label_from_map(ex.honorario_deduzido, HONORARIO_LABELS)}.",
             )
-            counter += 1
-
-        return counter
  
-    def _add_permuta(self, doc: Document, perm: "Permuta", counter: int) -> int:
-        doc.add_heading("PERMUTA", level=3)
+    def _add_permuta(self, doc: Document, perm: "Permuta", num: "_Numerador", com_subtitulo: bool = False) -> None:
+        if com_subtitulo:
+            doc.add_heading("PERMUTA", level=3)
         doc.add_paragraph(
-            f"3.{counter}. O serviço contratado será permutado com o serviço de {perm.objeto_permuta} "
+            f"{num()} O serviço contratado será permutado com o serviço de {perm.objeto_permuta} "
             f"a ser prestado pela CONTRATANTE ao C&F. {perm.descricao}"
         )
-        counter += 1
         if perm.tem_torna and perm.valor_torna:
             doc.add_paragraph(
-                f"3.{counter}. A torna será de {valor_com_extenso(perm.valor_torna)}, "
+                f"{num()} A torna será de {valor_com_extenso(perm.valor_torna)}, "
                 f"paga da seguinte forma: {perm.forma_pagamento_torna or 'a definir'}."
             )
-            counter += 1
-
-        return counter
  
     def _add_common_clauses(self, doc: Document, data: ContratoRequest) -> None:
-        doc.add_heading("4. CLÁUSULAS COMUNS AOS HONORÁRIOS", level=2)
+        doc.add_heading("4. CLÁUSULAS GERAIS", level=2)
 
         has_hora = any(TipoHonorario.HORA_TRABALHADA in e.honorarios for e in data.escopos)
         has_mensalidade_processo = any(
@@ -790,11 +801,11 @@ class ContractGenerator:
             "multa de 10% (dez por cento) sobre o valor em atraso e atualização monetária "
             "pelo IPCA, sem prejuízo de suspensão do serviço ou rescisão contratual a "
             "critério do C&F.",
-            "Em caso de mudanças legislativas/regulatórias relevantes (incluindo reforma "
-            "tributária) que alterem substancialmente a carga tributária, os custos de "
-            "conformidade, ou a forma de incidência/retenção de tributos aplicáveis aos "
-            "serviços, as Partes renegociarão, de boa-fé, os valores e/ou a estrutura de "
-            "faturamento para preservação do equilíbrio econômico-financeiro.",
+            "Em caso de mudanças legislativas/regulatórias relevantes que alterem a carga "
+            "tributária, os custos de conformidade, ou a forma de incidência/retenção de "
+            "tributos aplicáveis aos serviços, as Partes renegociarão, de boa-fé, os valores "
+            "e/ou a estrutura de faturamento para preservação do equilíbrio "
+            "econômico-financeiro.",
             "A CONTRATANTE reconhece que o C&F poderá, dentro da legalidade e das normas "
             "aplicáveis, definir a forma de faturamento mais eficiente do ponto de vista "
             "fiscal (inclusive em eventual migração de regime tributário), sem alteração do "
@@ -823,7 +834,7 @@ class ContractGenerator:
         for i, clause in enumerate(clauses, 1):
             doc.add_paragraph(f"4.{i}. {clause}")
  
-    def _add_accessories(self, doc: Document, ac: Acessorios) -> None:
+    def _add_accessories(self, doc: Document, ac: Acessorios, has_exito: bool = False) -> None:
         doc.add_heading("5. REEMBOLSOS, DESPESAS E OUTRAS VERBAS", level=2)
         counter = 1
         if ac.tem_reembolso:
@@ -843,22 +854,26 @@ class ContractGenerator:
             "despesas necessárias à execução do serviço e eventuais multas processuais e/ou "
             "honorários de sucumbência devidos ao advogado da parte contrária são de "
             "responsabilidade da CONTRATANTE.",
-            "A CONTRATANTE reconhece que o C&F poderá utilizar ferramentas e/ou sistemas de "
-            "busca de ativos, endereços e outras informações como CredLocaliza ou "
-            "equivalentes, cujo custo será reembolsado pela CONTRATANTE nos exatos valores "
-            "faturados pela ferramenta ou sistema.",
+            "A CONTRATANTE reconhece que, para a execução do serviço, o C&F poderá utilizar "
+            "ferramentas e/ou sistemas de busca de ativos, endereços e outras informações "
+            "como CredLocaliza ou equivalentes, cujo custo será reembolsado pela CONTRATANTE "
+            "nos exatos valores faturados pela ferramenta ou sistema.",
             "A prestação de serviço presencial fora da sede do C&F implicará em despesas de "
             f"deslocamento, as quais serão cobradas à razão de {valor_com_extenso(ac.valor_km or 1.70)} "
             "por quilômetro rodado.",
             "O custo de cada cópia xerox a ser reembolsado pela CONTRATANTE é de R$ 0,40 "
             "(quarenta centavos de reais).",
-            "As Partes pactuam ainda que: (i) em caso de êxito, ainda que parcial, os "
-            "honorários sucumbenciais fixados pertencem exclusivamente ao C&F; (ii) em caso "
-            "de acordo que inclua renúncia a sucumbências, o C&F deverá ser previamente "
-            "consultado; e (iii) se a CONTRATANTE concordar com a redução ou renúncia de "
-            "sucumbências sem anuência do C&F, o valor correspondente será descontado do "
-            "benefício econômico para fins de cálculo do êxito ou devido diretamente ao C&F.",
         ]
+        # Sucumbencia/renuncia so faz sentido quando ha honorario de exito pactuado.
+        if has_exito:
+            clauses.append(
+                "As Partes pactuam ainda que: (i) em caso de êxito, ainda que parcial, os "
+                "honorários sucumbenciais fixados pertencem exclusivamente ao C&F; (ii) em caso "
+                "de acordo que inclua renúncia a sucumbências, o C&F deverá ser previamente "
+                "consultado; e (iii) se a CONTRATANTE concordar com a redução ou renúncia de "
+                "sucumbências sem anuência do C&F, o valor correspondente será descontado do "
+                "benefício econômico para fins de cálculo do êxito ou devido diretamente ao C&F."
+            )
         for clause in clauses:
             doc.add_paragraph(f"5.{counter}. {clause}")
             counter += 1
@@ -882,7 +897,7 @@ class ContractGenerator:
         )
  
     def _add_integrity(self, doc: Document) -> None:
-        doc.add_heading("7. INTEGRIDADE E OUTROS", level=2)
+        doc.add_heading("7. COMPLIANCE", level=2)
         doc.add_paragraph(
             "7.1. As Partes comprometem-se a observar a legislação aplicável, incluindo Lei "
             "Anticorrupção e outras normas similares, bem como a cooperar com diretrizes de "
@@ -982,8 +997,9 @@ class ContractGenerator:
     def _add_ip(self, doc: Document) -> None:
         doc.add_heading("9. PROPRIEDADE INTELECTUAL", level=2)
         doc.add_paragraph(
-            "9.1. A produção intelectual (teses, estratégias, modelos, documentos, minutas "
-            "e know-how) desenvolvida pelo C&F permanece de sua titularidade."
+            "9.1. A produção intelectual desenvolvida pelo C&F, como, por exemplo, teses, "
+            "estratégias, modelos, documentos, minutas e know-how, permanece de sua "
+            "titularidade."
         )
         doc.add_paragraph(
             "9.2. Sem expressa autorização do C&F, é vedada a disponibilização a terceiros "
@@ -1113,7 +1129,6 @@ class ContractGenerator:
             # Default: single fields per role (for initial generation without specific signatarios)
             entries: list[tuple[str, str]] = [
                 ("{{Assinatura Contratado;type=signature;role=Contratado}}", "CONTRATADO: CARVALHO & FURTADO ADVOGADOS"),
-                ("{{Assinatura Advogado;type=signature;role=Advogado}}", "ADVOGADO RESPONSAVEL"),
             ]
             for i, contratante in enumerate(data.contratantes, 1):
                 if isinstance(contratante, ContratantePJ):
@@ -1124,10 +1139,12 @@ class ContractGenerator:
                     nome = f"Contratante {i}"
 
                 # Each contratante gets a unique role
-                role = "Contratante" if len(data.contratantes) == 1 else f"Contratante {i}"
+                unico = len(data.contratantes) == 1
+                role = "Contratante" if unico else f"Contratante {i}"
+                rotulo = "CONTRATANTE" if unico else f"CONTRATANTE {i}"
                 entries.append((
                     f"{{{{Assinatura {nome};type=signature;role={role}}}}}",
-                    f"CONTRATANTE {i}: {nome}",
+                    f"{rotulo}: {nome.upper()}",
                 ))
             self._render_signature_grid(doc, entries)
 
@@ -1166,8 +1183,11 @@ class ContractGenerator:
 
         for idx, (tag, label) in enumerate(entries):
             cell = table.cell(idx // 2, idx % 2)
-            # 1a paragrafo da celula recebe o campo de assinatura (tag DocuSeal)
+            # 1o paragrafo da celula recebe o campo de assinatura (tag DocuSeal).
+            # A tag e' escrita em branco: o DocuSeal a le normalmente, mas ela nao
+            # polui o DOCX que o advogado abre no Word (aparecia como texto solto).
             cell.paragraphs[0].text = tag
+            cell.add_paragraph("_" * 32)
             cell.add_paragraph(label)
             cell.add_paragraph()  # espacamento entre linhas
 

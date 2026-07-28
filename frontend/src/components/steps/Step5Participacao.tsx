@@ -56,6 +56,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
   const objetoLines = buildObjetoLines(escopos);
   const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
   const [colabError, setColabError] = useState("");
+  const [novoParticipante, setNovoParticipante] = useState("");
   const [loadingColab, setLoadingColab] = useState(true);
 
   useEffect(() => {
@@ -92,7 +93,9 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
     });
   });
 
-  const baseSelecionada = Boolean(participacao.base_label);
+  // Com um unico escopo nao ha o que escolher: a base e' o proprio escopo.
+  const escolherBase = escopos.length > 1;
+  const baseSelecionada = !escolherBase || Boolean(participacao.base_label);
 
   const setValorTipo = (tipo: ParticipacaoValorTipo) =>
     set({ valor_tipo: tipo, valor_percentual: "", valor_monetario: undefined, valor_outro: "" });
@@ -144,7 +147,8 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
 
         {participacao.tem_participacao && (
           <div className="space-y-6 mt-4">
-            {/* Base da participação */}
+            {/* Base da participação (só faz sentido com mais de um escopo) */}
+            {escolherBase && (
             <div>
               <p className="text-sm font-semibold text-foreground mb-2">Base da participação</p>
               {escopos.length === 0 ? (
@@ -205,12 +209,13 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                 </>
               )}
             </div>
+            )}
 
             {baseSelecionada && (
               <>
-            {/* Valor da participação */}
+            {/* Critério da participação */}
             <div>
-              <p className="text-sm font-semibold text-foreground mb-2">Valor da participação</p>
+              <p className="text-sm font-semibold text-foreground mb-2">Critério da participação</p>
               <div className="flex flex-wrap gap-4 mb-3">
                 {VALOR_TIPOS.map((t) => (
                   <label key={t.value} className="flex items-center gap-2 cursor-pointer text-sm">
@@ -278,6 +283,28 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                     onChange={(checked) => toggleParaQuem(nome, checked)}
                   />
                 ))}
+              </div>
+
+              {/* A participacao pode envolver terceiros que nao estao no cadastro. */}
+              <div className="flex gap-2 mt-3">
+                <Input
+                  value={novoParticipante}
+                  onChange={(e) => setNovoParticipante(e.target.value)}
+                  placeholder="Outro participante (fora do cadastro)"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nome = novoParticipante.trim();
+                    if (!nome || paraQuemSel.includes(nome)) return;
+                    toggleParaQuem(nome, true);
+                    setNovoParticipante("");
+                  }}
+                  disabled={!novoParticipante.trim()}
+                  className="px-3 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark disabled:opacity-50 transition whitespace-nowrap"
+                >
+                  Adicionar
+                </button>
               </div>
             </div>
 
