@@ -439,3 +439,25 @@ def test_clausulas_sao_numeradas_pelo_word_e_nao_no_texto():
             # o texto NAO pode trazer o numero escrito a mao
             assert not re.match(r"^\d+\.\d*\.? ", txt), txt[:60]
     assert numeradas > 20
+
+
+def test_preview_nao_junta_rotulo_com_a_linha_de_assinatura():
+    """Na celula, cada paragrafo e' uma linha: o rotulo nao pode colar nos underscores."""
+    from pathlib import Path
+
+    from app.routers.contract import _docx_to_html
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(
+        data,
+        contract_id="FIDELIDADE_SIG",
+        signatario_roles=[
+            {"email": "a@a.com", "name": "Fulano", "role": "Contratante"},
+            {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        ],
+    )
+    html = _docx_to_html(Path(path))
+    assert "<br>CONTRATANTE: FULANO" in html
+    # uma unica linha de assinatura por celula (a tag do DocuSeal nao vira underscores)
+    assert "________________________________<br>CONTRATANTE" in html
+    assert "____ ____" not in html
