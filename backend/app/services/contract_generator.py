@@ -58,6 +58,9 @@ HONORARIO_LABELS = {
 # numId/abstractNumId da lista multinivel das clausulas (ver _ensure_clause_numbering)
 CLAUSE_NUM_ID = 10
 
+# Folga acima de cada linha de assinatura (espaco para assinar a mao no impresso).
+ESPACO_ASSINATURA = Pt(16)
+
 
 class _Numerador:
     """Adiciona as clausulas de um bloco de honorario no nivel certo da lista.
@@ -341,7 +344,10 @@ class ContractGenerator:
             # vale tanto para a grade (tabela) quanto para o bloco fisico de
             # testemunhas, que fica solto no corpo.
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            paragraph.paragraph_format.space_before = Pt(0)
+            # A folga vai acima da linha, que e' onde se assina a mao; entre a
+            # linha e o nome nao entra espaco, senao o rotulo desgruda dela.
+            e_linha = set(paragraph.text.strip()) == {"_"}
+            paragraph.paragraph_format.space_before = ESPACO_ASSINATURA if e_linha else Pt(0)
 
         for run in paragraph.runs:
             if is_heading and not is_tag:
