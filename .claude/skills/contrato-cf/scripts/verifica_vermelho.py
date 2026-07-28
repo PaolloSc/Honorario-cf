@@ -73,8 +73,8 @@ MUTACOES = [
     (
         "assinatura justificada pelo padrao do modelo",
         "backend/app/services/contract_generator.py",
-        "            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER\n            paragraph.paragraph_format.space_before = Pt(0)",
-        "            pass  # BUG: herda w:jc=both e o espacamento do modelo",
+        "            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER",
+        "            pass  # BUG: herda o w:jc=both do modelo",
         "tests/test_contract_generator_fidelidade.py::test_assinaturas_centralizadas_sem_espaco_sobrando",
     ),
     (
