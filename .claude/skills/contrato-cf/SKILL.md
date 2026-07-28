@@ -168,6 +168,45 @@ e o script acima. Ele **recalcula os números** a partir de `w:numPr/w:ilvl`,
 porque no `.docx` eles não são texto. Ao mexer na numeração, ajuste os dois
 lados ou a prévia passa a divergir do Word.
 
+Duas armadilhas já custaram bug aqui:
+
+- `cell.text` (python-docx) junta **todos os parágrafos da célula** num texto
+  só, e o HTML colapsa a quebra de linha em espaço. Numa célula de assinatura
+  isso cola o rótulo nos underscores. Renderize parágrafo a parágrafo com
+  `<br>`.
+- A prévia limpa as tags do DocuSeal (`_clean_preview_text`). Se o documento
+  também desenha a linha de assinatura, trocar a tag por underscores duplica a
+  linha — só um dos dois pode desenhá-la.
+
+## Os mesmos dados, renderizados em vários lugares
+
+Contrato, ficha de participação e e-mails renderizam o mesmo `ContratoRequest`
+em telas diferentes. Toda vez que um campo mudou, as cópias saíram do ar em
+momentos diferentes — foi assim que a ficha do DocuSeal ficou meses mostrando
+menos informação que a do e-mail. Ao mexer num campo, **procure todos os
+pontos que o exibem** antes de dar por encerrado:
+
+| Onde | Arquivo |
+|---|---|
+| Revisão na tela (etapa 6) | `frontend/src/components/steps/Step6Revisao.tsx` |
+| E-mail da ficha ao financeiro (no envio) | `backend/app/routers/email.py` |
+| E-mail da ficha após todos assinarem | `backend/app/routers/docuseal.py` |
+| Rascunho no financeiro | `backend/app/routers/contract.py` |
+| Formatação compartilhada da ficha | `backend/app/utils/participacao.py` |
+
+Dois modos de falha se repetem, e nenhum quebra teste nem levanta exceção —
+só aparece como texto estranho no print que o advogado manda:
+
+- **Coleção renderizada direto.** `{lista}` no JSX concatena sem separador
+  ("AnaBruno"); em f-string Python vira `['Ana', 'Bruno']`. Sempre `join`.
+- **Campo legado x estruturado.** Vários campos ganharam versão estruturada e
+  o antigo virou fallback: `valor_tipo` + `valor_percentual`/`valor_monetario`/
+  `valor_outro` sobre `percentual_ou_valor`; `representantes` sobre
+  `representante_*`; `para_quem` lista sobre string. Ler só o campo antigo
+  deixa a tela **vazia** para tudo que foi preenchido no wizard atual — que é
+  o caso normal. Confira qual o wizard grava hoje (`Step*.tsx`), não qual o
+  modelo ainda aceita.
+
 ## Verificação
 
 ```bash
