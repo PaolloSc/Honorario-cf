@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, previewContract, type Testemunha } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, type Testemunha } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -84,6 +84,8 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
+  // Colaboradores do escritorio: autopreenchimento de advogados e testemunhas.
+  const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
   const isEdit = !!editContractId;
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -92,6 +94,9 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
     listTestemunhas()
       .then((r) => setRoster(r.testemunhas))
       .catch(() => setRoster([]));
+    listColaboradores()
+      .then((r) => setColaboradores(r.colaboradores))
+      .catch(() => setColaboradores([]));
   }, []);
 
   useEffect(() => {
@@ -283,11 +288,20 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
     setMessage("Enviando para assinatura digital...");
 
     try {
-      const signatarios = data.contratantes.map((c) => ({
-        email: c.email,
-        name: getContratanteNome(c),
-        role: "Contratante",
-      }));
+      // PJ com mais de um representante legal: cada administrador assina
+      // (ha empresas cuja assinatura so vale com dois administradores).
+      const signatarios = data.contratantes.flatMap((c) => {
+        const reps = c.tipo === "PJ" ? (c as ContratantePJ).representantes ?? [] : [];
+        const assinantes = reps.filter((r) => r.nome && r.email);
+        if (assinantes.length === 0) {
+          return [{ email: c.email, name: getContratanteNome(c), role: "Contratante" }];
+        }
+        return assinantes.map((r) => ({
+          email: r.email!,
+          name: `${r.nome} (${getContratanteNome(c)})`,
+          role: "Contratante",
+        }));
+      });
 
       // Add additional lawyers as "Advogado" role
       for (const lawyer of additionalLawyers) {
@@ -471,13 +485,21 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
         {/* After save/email success - show signature button */}
         {status === "sent_email" && contractId && (
           <>
+            <datalist id="colaboradores-nomes">
+              {colaboradores.map((c) => (
+                <option key={c.email || c.name} value={c.name} label={c.email} />
+              ))}
+            </datalist>
+
             {/* Additional lawyers section */}
             <div className="w-full mb-2 p-4 rounded-lg bg-purple-50 border border-purple-200">
               <h4 className="text-sm font-medium text-purple-900 mb-2">
-                Advogados adicionais para assinatura (opcional)
+                Advogado(s) que assinarão pelo escritório (opcional)
               </h4>
               <p className="text-xs text-purple-700 mb-3">
-                O advogado logado já será incluído automaticamente. Adicione outros se necessário.
+                O <strong>C&amp;F</strong> assina como CONTRATADO. Quem preenche este formulário{" "}
+                <strong>não</strong> é incluído automaticamente — selecione abaixo o(s) advogado(s)
+                que devem assinar.
               </p>
               {additionalLawyers.length > 0 && (
                 <div className="space-y-1 mb-3">
@@ -498,7 +520,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
                 <input
                   type="text"
                   value={newLawyerName}
-                  onChange={(e) => setNewLawyerName(e.target.value)}
+                  list="colaboradores-nomes"
+                  onChange={(e) => {
+                    setNewLawyerName(e.target.value);
+                    const c = colaboradores.find((x) => x.name === e.target.value);
+                    if (c?.email) setNewLawyerEmail(c.email);
+                  }}
                   placeholder="Nome do advogado"
                   className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
                 />
@@ -565,7 +592,12 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
                 <input
                   type="text"
                   value={newTestemunhaNome}
-                  onChange={(e) => setNewTestemunhaNome(e.target.value)}
+                  list="colaboradores-nomes"
+                  onChange={(e) => {
+                    setNewTestemunhaNome(e.target.value);
+                    const c = colaboradores.find((x) => x.name === e.target.value);
+                    if (c?.email) setNewTestemunhaEmail(c.email);
+                  }}
                   placeholder="Nome da testemunha"
                   className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
                 />
