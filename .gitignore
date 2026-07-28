@@ -17,3 +17,6 @@ backend/generated_contracts/
 
 *.log
 backend/_tmp_planilha.xlsx
+
+# cache incremental do tsc (regenerado a cada type check)
+tsconfig.tsbuildinfo
