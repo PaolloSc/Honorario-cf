@@ -256,15 +256,8 @@ async def send_for_signature(
                 "role": "Contratado",
             })
 
-        # Always include the logged-in lawyer as "Advogado" role
-        if user.email:
-            user_already_included = any(s.get("email") == user.email for s in all_signatarios)
-            if not user_already_included:
-                all_signatarios.append({
-                    "email": user.email,
-                    "name": user.name or user.email,
-                    "role": "Advogado",
-                })
+        # O advogado que preenche o formulario NAO assina automaticamente: quem assina
+        # pelo escritorio e' o C&F (Contratado) + os advogados escolhidos no envio.
 
         # Testemunha 1 fixa (financeiro): injetada em toda submissao.
         # Inserida ANTES de eventuais testemunhas do payload p/ que a dedup a nomeie "Testemunha 1".
