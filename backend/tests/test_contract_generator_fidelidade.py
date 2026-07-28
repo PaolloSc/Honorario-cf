@@ -497,8 +497,12 @@ def _assinatura_pPr(path: str) -> list[tuple[str, str, str, str]]:
     return out
 
 
-def test_assinaturas_centralizadas_sem_espaco_sobrando():
-    """O modelo justifica tudo (w:jc=both), o que espalhava o nome na celula."""
+def test_assinaturas_alinhadas_a_esquerda_sem_espaco_sobrando():
+    """O modelo justifica tudo (w:jc=both), o que espalhava o nome na celula.
+
+    O escritorio usa assinatura alinhada a esquerda — o conserto e' fixar o
+    alinhamento, nao centralizar.
+    """
     from app.services.contract_generator import ESPACO_ASSINATURA
 
     data = ContratoRequest(**_base_req())
@@ -513,7 +517,7 @@ def test_assinaturas_centralizadas_sem_espaco_sobrando():
     props = _assinatura_pPr(path)
     assert props, "grade de assinaturas vazia"
     for texto, jc, antes, depois in props:
-        assert jc == "center", f"assinatura deveria ser centralizada, veio {jc}"
+        assert jc == "left", f"assinatura deveria ser alinhada a esquerda, veio {jc}"
         assert depois == "0", f"espaco sobrando depois de {texto[:30]!r}: {depois}"
         # A folga fica so acima da linha de assinatura; o nome cola nela.
         esperado = str(int(ESPACO_ASSINATURA.pt * 20)) if set(texto) == {"_"} else "0"

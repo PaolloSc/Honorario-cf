@@ -338,12 +338,11 @@ class ContractGenerator:
         if is_heading:
             paragraph.paragraph_format.keep_with_next = True
         if is_signature:
-            # O padrao do modelo e' texto justificado (w:jc=both), que espalha
-            # "CONTRATANTE: MARINA ALVES" na largura da celula. Assinatura e'
-            # centralizada e sem espacamento extra entre as linhas do bloco —
-            # vale tanto para a grade (tabela) quanto para o bloco fisico de
-            # testemunhas, que fica solto no corpo.
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            # O padrao do modelo e' texto justificado (w:jc=both), que espalhava
+            # "CONTRATANTE: MARINA ALVES" na largura da celula. A correcao e'
+            # alinhar a esquerda (o formato que o escritorio usa), nao centralizar.
+            # Vale para a grade (tabela) e para o bloco fisico de testemunhas.
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
             # A folga vai acima da linha, que e' onde se assina a mao; entre a
             # linha e o nome nao entra espaco, senao o rotulo desgruda dela.
             e_linha = set(paragraph.text.strip()) == {"_"}
