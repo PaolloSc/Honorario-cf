@@ -433,11 +433,13 @@ def test_clausulas_sao_numeradas_pelo_word_e_nao_no_texto():
     xml = z.read("word/document.xml").decode("utf-8")
     numeradas = 0
     for p in re.split(r"</w:p>", xml):
-        txt = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p))
+        txt = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip()
         if f'<w:numId w:val="{CLAUSE_NUM_ID}"' in p:
             numeradas += 1
-            # o texto NAO pode trazer o numero escrito a mao
-            assert not re.match(r"^\d+\.\d*\.? ", txt), txt[:60]
+        # Varre TODO paragrafo, nao so os da lista: uma clausula numerada a mao
+        # fica FORA da lista, e um teste que olhasse so os itens da lista nunca
+        # a veria — foi assim que esta assercao passou com o bug de volta.
+        assert not re.match(r"^\d+\.\d*\.? \S", txt), f"numero escrito a mao: {txt[:60]}"
     assert numeradas > 20
 
 
@@ -458,6 +460,16 @@ def test_preview_nao_junta_rotulo_com_a_linha_de_assinatura():
     )
     html = _docx_to_html(Path(path))
     assert "<br>CONTRATANTE: FULANO" in html
-    # uma unica linha de assinatura por celula (a tag do DocuSeal nao vira underscores)
-    assert "________________________________<br>CONTRATANTE" in html
-    assert "____ ____" not in html
+
+    # Cada celula de assinatura tem UMA linha de underscores. A previa apagava a
+    # tag do DocuSeal trocando-a por underscores, o que somava uma segunda linha;
+    # conferir so o par "underscores<br>rotulo" nao pegava isso, porque a linha
+    # duplicada fica ANTES e o par continuava batendo.
+    celulas = re.findall(r"<td>(.*?)</td>", html, re.S)
+    assinatura = [c for c in celulas if "CONTRATANTE:" in c or "CONTRATADO:" in c]
+    assert assinatura, "nenhuma celula de assinatura no preview"
+    for celula in assinatura:
+        linhas_underscore = [
+            linha for linha in celula.split("<br>") if set(linha.strip()) == {"_"}
+        ]
+        assert len(linhas_underscore) == 1, f"esperava 1 linha de assinatura: {celula[:120]}"

@@ -220,6 +220,24 @@ a mudança pegou, não de que está errada. Testes que dependem do número
 renderizado devem usar o helper `_preview_paras` (que passa pelo preview), não
 `_paras_for` (texto cru, sem número).
 
+### Veja o teste falhar
+
+Aqui o bug chega como print de um advogado, então o teste quase sempre nasce
+**depois** da correção — e um teste escrito assim tende a confirmar o presente
+em vez de pegar o defeito. Vale reintroduzir o bug e conferir que ele fica
+vermelho:
+
+```bash
+python3 .claude/skills/contrato-cf/scripts/verifica_vermelho.py
+```
+
+O script guarda, para cada bug já corrigido, o trecho certo, o trecho com o
+defeito e o teste que deveria acusar. Na primeira execução, **2 dos 8 testes
+passaram com o bug de volta** — um olhava só os parágrafos já dentro da lista
+de numeração (uma cláusula numerada à mão fica fora dela, justamente o caso
+que ele deveria pegar) e o outro casava um trecho que continuava batendo com a
+linha duplicada presente. Ao corrigir um bug novo, acrescente a mutação.
+
 O CI (`.github/workflows/ci.yml`) roda pytest, `tsc --noEmit` e `npm run
 build`. Rode ao menos o pytest e o `tsc` antes de commitar.
 
