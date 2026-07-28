@@ -19,12 +19,22 @@ export interface ContratantePF {
   email: string;
 }
  
+export interface RepresentantePJ {
+  nome: string;
+  nacionalidade?: string;
+  cpf?: string;
+  profissao?: string;
+  estado_civil?: EstadoCivil;
+  email?: string;
+}
+
 export interface ContratantePJ {
   tipo: "PJ";
   cnpj: string;
   razao_social: string;
   endereco: string;
   email: string;
+  representantes?: RepresentantePJ[];
   representante_nome?: string;
   representante_nacionalidade?: string;
   representante_cpf?: string;
@@ -38,6 +48,7 @@ export type Contratante = ContratantePF | ContratantePJ;
  
 export type TipoEscopo =
   | "consultoria_contencioso_geral"
+  | "consultoria_areas_atuacao"
   | "contencioso_representacao"
   | "contencioso_memoriais"
   | "contencioso_tutela_urgencia"
@@ -55,6 +66,7 @@ export type TipoEscopo =
 export const ESCOPO_LABELS: Record<TipoEscopo, string> = {
   consultoria_contencioso_geral:
     "Consultoria e contencioso nas áreas de atuação do C&F",
+  consultoria_areas_atuacao: "Consultoria nas áreas de atuação do C&F",
   contencioso_representacao:
     "Contencioso para representação e atuação em autos / ajuizamento de demandas",
   contencioso_memoriais:
