@@ -71,6 +71,13 @@ MUTACOES = [
         "tests/test_contract_generator_fidelidade.py::test_qualificacao_sem_virgula_dupla_com_campo_vazio",
     ),
     (
+        "assinatura justificada pelo padrao do modelo",
+        "backend/app/services/contract_generator.py",
+        "            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER\n            paragraph.paragraph_format.space_before = Pt(0)",
+        "            pass  # BUG: herda w:jc=both e o espacamento do modelo",
+        "tests/test_contract_generator_fidelidade.py::test_assinaturas_centralizadas_sem_espaco_sobrando",
+    ),
+    (
         "5.6 (sucumbencia) saindo sem exito",
         "backend/app/services/contract_generator.py",
         "        if has_exito:\n            clauses.append(",
