@@ -473,3 +473,42 @@ def test_preview_nao_junta_rotulo_com_a_linha_de_assinatura():
             linha for linha in celula.split("<br>") if set(linha.strip()) == {"_"}
         ]
         assert len(linhas_underscore) == 1, f"esperava 1 linha de assinatura: {celula[:120]}"
+
+
+def _assinatura_pPr(path: str) -> list[tuple[str, str, str]]:
+    """(alinhamento, espaco_antes, espaco_depois) de cada paragrafo da grade."""
+    import zipfile
+
+    xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+    grade = re.findall(r"<w:tbl>.*?</w:tbl>", xml, re.S)[-1]
+    out = []
+    for p in re.split(r"</w:p>", grade):
+        if not "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip():
+            continue
+        jc = re.search(r'<w:jc w:val="(\w+)"/>', p)
+        antes = re.search(r'w:before="(\d+)"', p)
+        depois = re.search(r'w:after="(\d+)"', p)
+        out.append((
+            jc.group(1) if jc else "herdado",
+            antes.group(1) if antes else "herdado",
+            depois.group(1) if depois else "herdado",
+        ))
+    return out
+
+
+def test_assinaturas_centralizadas_sem_espaco_sobrando():
+    """O modelo justifica tudo (w:jc=both), o que espalhava o nome na celula."""
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(
+        data,
+        contract_id="FIDELIDADE_FMT",
+        signatario_roles=[
+            {"email": "a@a.com", "name": "Fulano", "role": "Contratante"},
+            {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        ],
+    )
+    props = _assinatura_pPr(path)
+    assert props, "grade de assinaturas vazia"
+    for jc, antes, depois in props:
+        assert jc == "center", f"assinatura deveria ser centralizada, veio {jc}"
+        assert (antes, depois) == ("0", "0"), f"espaco sobrando: antes={antes} depois={depois}"

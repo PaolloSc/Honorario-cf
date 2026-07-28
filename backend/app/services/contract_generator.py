@@ -294,13 +294,16 @@ class ContractGenerator:
             self._format_paragraph(paragraph)
 
         for table in doc.tables:
+            # A grade de assinaturas e' a unica tabela sem borda; as demais sao
+            # tabelas de conteudo (Escopo/Preco, faixas, fases processuais).
+            assinatura = table._tbl.tblPr.first_child_found_in("w:tblBorders") is None
             for row in table.rows:
                 trPr = row._tr.get_or_add_trPr()
                 if trPr.find(qn("w:cantSplit")) is None:
                     trPr.append(OxmlElement("w:cantSplit"))
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
-                        self._format_paragraph(paragraph)
+                        self._format_paragraph(paragraph, assinatura=assinatura)
 
     def _apply_page_setup(self, doc: DocxDocument) -> None:
         for section in doc.sections:
@@ -321,16 +324,24 @@ class ContractGenerator:
             style.paragraph_format.line_spacing = 1.15
             style.paragraph_format.space_after = Pt(6)
 
-    def _format_paragraph(self, paragraph) -> None:
+    def _format_paragraph(self, paragraph, assinatura: bool = False) -> None:
         is_heading = paragraph.style and paragraph.style.name.startswith("Heading")
-        is_signature = self._is_signature_paragraph(paragraph.text)
+        is_signature = self._is_signature_paragraph(paragraph.text) or assinatura
         is_tag = paragraph.text.strip().startswith("{{")
 
-        paragraph.paragraph_format.line_spacing = 1.15
+        paragraph.paragraph_format.line_spacing = 1.0 if assinatura else 1.15
         paragraph.paragraph_format.space_after = Pt(0 if is_signature else 6)
         paragraph.paragraph_format.keep_together = True
         if is_heading:
             paragraph.paragraph_format.keep_with_next = True
+        if is_signature:
+            # O padrao do modelo e' texto justificado (w:jc=both), que espalha
+            # "CONTRATANTE: MARINA ALVES" na largura da celula. Assinatura e'
+            # centralizada e sem espacamento extra entre as linhas do bloco —
+            # vale tanto para a grade (tabela) quanto para o bloco fisico de
+            # testemunhas, que fica solto no corpo.
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.paragraph_format.space_before = Pt(0)
 
         for run in paragraph.runs:
             if is_heading and not is_tag:
@@ -1271,7 +1282,6 @@ class ContractGenerator:
             cell.paragraphs[0].text = tag
             cell.add_paragraph("_" * 32)
             cell.add_paragraph(label)
-            cell.add_paragraph()  # espacamento entre linhas
 
     def _escopo_description(self, escopo: EscopoItem) -> str:
         if escopo.tipo == TipoEscopo.OUTRO and escopo.descricao_custom:
