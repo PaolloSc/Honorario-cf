@@ -15,6 +15,7 @@ from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
 from app.services.docuseal import DocuSealService
+from app.utils.participacao import linhas_participacao
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/docuseal", tags=["DocuSeal"])
@@ -560,18 +561,7 @@ async def _send_participacao_to_financeiro(
         # Objeto do contrato is the FIRST field (as requested by financeiro)
         # Replace newlines with <br> for HTML rendering
         rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
-        if participacao.get("percentual_ou_valor"):
-            rows.append(("Percentual/Valor", participacao["percentual_ou_valor"]))
-        if participacao.get("para_quem"):
-            rows.append(("Para quem", participacao["para_quem"]))
-        if participacao.get("natureza"):
-            rows.append(("Natureza", participacao["natureza"]))
-        if participacao.get("responsavel_captacao"):
-            rows.append(("Resp. Captação", participacao["responsavel_captacao"]))
-        if participacao.get("responsavel_gestao"):
-            rows.append(("Resp. Gestão", participacao["responsavel_gestao"]))
-        if participacao.get("contato_financeiro_cliente"):
-            rows.append(("Contato Financeiro Cliente", participacao["contato_financeiro_cliente"]))
+        rows.extend(linhas_participacao(participacao))
 
         if not rows:
             return

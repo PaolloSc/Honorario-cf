@@ -433,9 +433,125 @@ def test_clausulas_sao_numeradas_pelo_word_e_nao_no_texto():
     xml = z.read("word/document.xml").decode("utf-8")
     numeradas = 0
     for p in re.split(r"</w:p>", xml):
-        txt = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p))
+        txt = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip()
         if f'<w:numId w:val="{CLAUSE_NUM_ID}"' in p:
             numeradas += 1
-            # o texto NAO pode trazer o numero escrito a mao
-            assert not re.match(r"^\d+\.\d*\.? ", txt), txt[:60]
+        # Varre TODO paragrafo, nao so os da lista: uma clausula numerada a mao
+        # fica FORA da lista, e um teste que olhasse so os itens da lista nunca
+        # a veria — foi assim que esta assercao passou com o bug de volta.
+        assert not re.match(r"^\d+\.\d*\.? \S", txt), f"numero escrito a mao: {txt[:60]}"
     assert numeradas > 20
+
+
+def test_preview_nao_junta_rotulo_com_a_linha_de_assinatura():
+    """Na celula, cada paragrafo e' uma linha: o rotulo nao pode colar nos underscores."""
+    from pathlib import Path
+
+    from app.routers.contract import _docx_to_html
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(
+        data,
+        contract_id="FIDELIDADE_SIG",
+        signatario_roles=[
+            {"email": "a@a.com", "name": "Fulano", "role": "Contratante"},
+            {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        ],
+    )
+    html = _docx_to_html(Path(path))
+    assert "<br>CONTRATANTE: FULANO" in html
+
+    # Cada celula de assinatura tem UMA linha de underscores. A previa apagava a
+    # tag do DocuSeal trocando-a por underscores, o que somava uma segunda linha;
+    # conferir so o par "underscores<br>rotulo" nao pegava isso, porque a linha
+    # duplicada fica ANTES e o par continuava batendo.
+    celulas = re.findall(r"<td>(.*?)</td>", html, re.S)
+    assinatura = [c for c in celulas if "CONTRATANTE:" in c or "CONTRATADO:" in c]
+    assert assinatura, "nenhuma celula de assinatura no preview"
+    for celula in assinatura:
+        linhas_underscore = [
+            linha for linha in celula.split("<br>") if set(linha.strip()) == {"_"}
+        ]
+        assert len(linhas_underscore) == 1, f"esperava 1 linha de assinatura: {celula[:120]}"
+
+
+def _assinatura_pPr(path: str) -> list[tuple[str, str, str, str]]:
+    """(texto, alinhamento, espaco_antes, espaco_depois) de cada paragrafo da grade."""
+    import zipfile
+
+    xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+    grade = re.findall(r"<w:tbl>.*?</w:tbl>", xml, re.S)[-1]
+    out = []
+    for p in re.split(r"</w:p>", grade):
+        if not "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip():
+            continue
+        jc = re.search(r'<w:jc w:val="(\w+)"/>', p)
+        antes = re.search(r'w:before="(\d+)"', p)
+        depois = re.search(r'w:after="(\d+)"', p)
+        out.append((
+            "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip(),
+            jc.group(1) if jc else "herdado",
+            antes.group(1) if antes else "herdado",
+            depois.group(1) if depois else "herdado",
+        ))
+    return out
+
+
+def test_assinatura_centralizada_na_grade_e_testemunhas_a_esquerda():
+    """Dois alinhamentos distintos, confirmados no .docx que o escritorio ajustou.
+
+    O modelo justifica tudo (w:jc=both) e espalhava "CONTRATANTE: MARINA ALVES
+    RIBEIRO" na largura da celula, entao o alinhamento precisa ser fixado. Na
+    grade e' centralizado dentro da celula; o bloco de testemunhas, que corre
+    solto no corpo, fica a esquerda como o resto do contrato. Centralizar os
+    dois foi recusado pelo escritorio.
+    """
+    from app.services.contract_generator import ESPACO_ASSINATURA
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(
+        data,
+        contract_id="FIDELIDADE_FMT",
+        signatario_roles=[
+            {"email": "a@a.com", "name": "Fulano", "role": "Contratante"},
+            {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        ],
+    )
+    folga = str(int(ESPACO_ASSINATURA.pt * 20))
+
+    grade = _assinatura_pPr(path)
+    assert grade, "grade de assinaturas vazia"
+    for texto, jc, antes, depois in grade:
+        assert jc == "center", f"grade deveria ser centralizada, veio {jc} em {texto[:30]!r}"
+        assert depois == "0", f"espaco sobrando depois de {texto[:30]!r}: {depois}"
+        # A folga fica so acima da linha de assinatura; o nome cola nela.
+        assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
+
+    testemunhas = _testemunhas_pPr(path)
+    assert testemunhas, "bloco de testemunhas vazio"
+    for texto, jc, antes, _depois in testemunhas:
+        assert jc == "left", f"testemunhas deveriam ficar a esquerda, veio {jc}"
+        assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
+
+
+def _testemunhas_pPr(path: str) -> list[tuple[str, str, str, str]]:
+    """Mesma leitura de _assinatura_pPr, para o bloco solto no corpo."""
+    import zipfile
+
+    xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+    corpo = xml.split("</w:tbl>")[-1]
+    out = []
+    for p in re.split(r"</w:p>", corpo):
+        texto = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip()
+        if not texto:
+            continue
+        jc = re.search(r'<w:jc w:val="(\w+)"/>', p)
+        antes = re.search(r'w:before="(\d+)"', p)
+        depois = re.search(r'w:after="(\d+)"', p)
+        out.append((
+            texto,
+            jc.group(1) if jc else "herdado",
+            antes.group(1) if antes else "herdado",
+            depois.group(1) if depois else "herdado",
+        ))
+    return out
