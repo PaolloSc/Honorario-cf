@@ -15,6 +15,7 @@ from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.routers.contract import _SIG_TAG, _contract_filename
 from app.services.azure_email import AzureEmailService
+from app.utils.participacao import linhas_participacao
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/email", tags=["Email"])
@@ -370,38 +371,7 @@ async def send_participacao_email(
         # Replace newlines with <br> for HTML rendering
         if objeto_contrato:
             rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
-        # Base da participacao (escopo ou honorario)
-        if data.base_tipo and data.base_label:
-            base_prefixo = "Escopo" if data.base_tipo == "escopo" else "Honorário"
-            rows.append(("Base", f"{base_prefixo} — {data.base_label}"))
-        # Valor (estruturado, com fallback legado)
-        if data.valor_tipo == "percentual" and data.valor_percentual:
-            rows.append(("Percentual", f"{data.valor_percentual}%"))
-        elif data.valor_tipo == "valor" and data.valor_monetario is not None:
-            rows.append(("Valor", f"R$ {data.valor_monetario:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")))
-        elif data.valor_tipo == "outro" and data.valor_outro:
-            rows.append(("Critério", data.valor_outro))
-        elif data.percentual_ou_valor:
-            rows.append(("Percentual/Valor", data.percentual_ou_valor))
-        # Para quem (lista)
-        if data.para_quem:
-            rows.append(("Para quem", ", ".join(data.para_quem)))
-        if data.natureza:
-            rows.append(("Natureza", data.natureza))
-        if data.responsavel_captacao:
-            rows.append(("Resp. Captação", data.responsavel_captacao))
-        if data.responsavel_gestao:
-            rows.append(("Resp. Gestão", data.responsavel_gestao))
-        # Contato financeiro (3 campos, com fallback legado)
-        if data.contato_financeiro_nome or data.contato_financeiro_email or data.contato_financeiro_telefone:
-            if data.contato_financeiro_nome:
-                rows.append(("Contato — Nome", data.contato_financeiro_nome))
-            if data.contato_financeiro_email:
-                rows.append(("Contato — E-mail", data.contato_financeiro_email))
-            if data.contato_financeiro_telefone:
-                rows.append(("Contato — Telefone", data.contato_financeiro_telefone))
-        elif data.contato_financeiro_cliente:
-            rows.append(("Contato Financeiro Cliente", data.contato_financeiro_cliente))
+        rows.extend(linhas_participacao(data.model_dump()))
 
         table_rows = "".join(
             f'<tr><td style="padding:8px;border:1px solid #D7D1CA;font-weight:600;">{k}</td>'
