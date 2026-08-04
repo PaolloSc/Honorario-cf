@@ -570,6 +570,9 @@ h1,h2,h3,.t,.ht,.chook,.hbadge,.ftr,.mk,.ck,.ft1,.mt,.exec-val,
 header .hd img:first-of-type{height:34px;width:auto}
 /* a11y: anel de foco visivel ao navegar por teclado ate o servico */
 .srv:focus-visible,.ahead:focus-visible{outline:3px solid #006451;outline-offset:2px;border-radius:8px}
+/* a11y: nó anunciável do resultado — oculto visualmente, presente na árvore de acessibilidade */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
 </style>
 </head>
 <body>
@@ -829,7 +832,7 @@ header .hd img:first-of-type{height:34px;width:auto}
 
       <div class="resulthero">
         <div class="rhl">Valor de referência · <span id="rhModo">valor fixo</span></div>
-        <div class="rhv" id="valorFinal" aria-live="polite" role="status">R$ 0,00</div>
+        <div class="rhv" id="valorFinal" aria-hidden="true">R$ 0,00</div>
         <div class="rhn" id="valorNota"></div>
         <div class="bd">
           <div class="bdi"><div class="bv" id="bdPiso">—</div><div class="bl">Piso OAB/SC</div></div>
@@ -1040,7 +1043,7 @@ function renderLista(f=''){
   TABELA.forEach(area=>{
     const it=area.itens.filter(x=>!f||x.desc.toLowerCase().includes(f)||area.area.toLowerCase().includes(f)||x.n.includes(f));
     if(!it.length) return;
-    h+=`<div class="agrp ${f?'open':''}"><div class="ahead" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="this.parentElement.classList.toggle('open')"><span>${area.area}</span><span class="cnt">${it.length} ▾</span></div><div class="aitems">`;
+    h+=`<div class="agrp ${f?'open':''}"><div class="ahead" role="button" tabindex="0" aria-expanded="${f?'true':'false'}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="const g=this.parentElement;g.classList.toggle('open');this.setAttribute('aria-expanded',g.classList.contains('open'))"><span>${area.area}</span><span class="cnt">${it.length} ▾</span></div><div class="aitems">`;
     it.forEach(x=>{
       const key=area.area+'|'+x.n, sel=(S.servico&&S.servico.key===key)?'sel':'';
       h+=`<div class="srv ${sel}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick='selServ(${JSON.stringify(JSON.stringify({...x,area:area.area,key}))})'>
@@ -1203,7 +1206,7 @@ function renderChart(c){
   const dados=[
     {l:'Mínimo',sub:'Piso OAB',v:c.piso,cor:'#A99C8D',cor2:'#8A7E70'},
     {l:'Sustentável',sub:'Custo + margem',v:c.sustentavel==null?0:c.sustentavel,na:c.sustentavel==null,cor:'#2F6B5C',cor2:'#1A3C34'},
-    {l:'Valor agregado',sub:'Pelo proveito',v:c.valorAgregado,cor:'#A6D3BA',cor2:'#6FB89B'}
+    {l:'Valor agregado',sub:'Pelo proveito',v:c.valorAgregado,na:!(c.prov>0),cor:'#A6D3BA',cor2:'#6FB89B'}
   ];
   const max=Math.max(...dados.map(d=>d.v),1);
   const W=680,H=280, padL=20,padR=20,padT=30,padB=54, gw=(W-padL-padR)/dados.length, bw=Math.min(150,gw*0.56), plotH=H-padT-padB;
@@ -1232,7 +1235,7 @@ function renderLegend(c){
   $('cenLegend').innerHTML=`
     <div class="cen-item c1"><div class="cil" style="color:#8A7E70">Mínimo</div><div class="civ">${BRL(c.piso)}</div><div class="cid">O piso ético da Tabela. Ponto de partida — não de chegada.</div></div>
     <div class="cen-item c2"><div class="cil" style="color:${c.sustentavel==null?'#5C4A3A':'var(--azul)'}">Sustentável</div><div class="civ${c.sustentavel==null?' na':''}">${c.sustentavel==null?'não informado':BRL(c.sustentavel)}</div><div class="cid">${c.sustentavel==null?'Custos não disponibilizados pelo usuário — a etapa foi pulada. Preencha a Etapa 2 para habilitar este cenário.':'Cobre custo real, margem e a carga tributária estimada. Abaixo daqui, o escritório perde saúde.'}</div></div>
-    <div class="cen-item c3"><div class="cil" style="color:var(--ouro-esc)">Valor agregado</div><div class="civ">${BRL(c.valorAgregado)}</div><div class="cid">Precificação pelo proveito e pela complexidade — ${gap>0?'+'+gap.toFixed(0)+'% sobre o piso.':'o que o trabalho realmente vale.'}</div></div>`;
+    <div class="cen-item c3"><div class="cil" style="color:var(--ouro-esc)">Valor agregado</div><div class="civ${c.prov>0?'':' na'}">${c.prov>0?BRL(c.valorAgregado):'não informado'}</div><div class="cid">${c.prov>0?('Precificação pelo proveito e pela complexidade — '+(gap>0?'+'+gap.toFixed(0)+'% sobre o piso.':'o que o trabalho realmente vale.')):'Proveito da causa não informado — preencha o campo para habilitar este cenário.'}</div></div>`;
 }
 
 /* ----- PDF análise comparativa ----- */
@@ -1245,6 +1248,7 @@ function gerarPDF(){
     const AZUL=[26,60,52], NAVY=[0,26,61], OURO=[201,162,39], CINZA=[82,97,122], TINTA=[14,23,38];
     const c=Object.assign({piso:0,sustentavel:0,valorAgregado:0,prov:0},S.cenarios||{});
     const susNA=(c.sustentavel==null); if(susNA) c.sustentavel=0;
+    const vaNA=!(c.prov>0);
     const serv=S.servico?S.servico.desc:'—';
     let y=M;
     // logo
@@ -1266,12 +1270,12 @@ function gerarPDF(){
     doc.text('SERVIÇO',M+14,y+16); doc.text('PROVEITO DA CAUSA',PW/2,y+16);
     doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...TINTA);
     doc.text(doc.splitTextToSize(serv,PW/2-M-20),M+14,y+32);
-    doc.text(BRL(c.prov),PW/2,y+32); y+=72;
+    doc.text(vaNA?'não informado':BRL(c.prov),PW/2,y+32); y+=72;
     // gráfico de barras
     doc.setFont('times','bold'); doc.setFontSize(13); doc.setTextColor(...NAVY);
     doc.text('Comparativo visual',M,y); y+=16;
     const cx0=M, cW=PW-2*M, cH=150, base=y+cH-24, maxV=Math.max(c.piso,c.sustentavel,c.valorAgregado,1);
-    const cen=[['Mínimo',c.piso,[132,148,172],false],['Sustentável',c.sustentavel,[24,120,168],susNA],['Valor agregado',c.valorAgregado,OURO,false]];
+    const cen=[['Mínimo',c.piso,[132,148,172],false],['Sustentável',c.sustentavel,[24,120,168],susNA],['Valor agregado',c.valorAgregado,OURO,vaNA]];
     const bw=70, gapc=(cW-cen.length*bw)/(cen.length+1);
     cen.forEach((d,i)=>{
       const bh=Math.max(2,(d[1]/maxV)*(cH-40)), bx=cx0+gapc*(i+1)+bw*i, by=base-bh;
@@ -1290,7 +1294,7 @@ function gerarPDF(){
     const cens=[
       ['1 · Mínimo (Piso OAB/SC)',BRL(c.piso),'O piso ético da Tabela de Honorários (Res. nº 03/2026, vigente desde 12/2025). É o ponto de partida da negociação — jamais o teto. Aceitar sistematicamente o mínimo é abrir mão de valor que a sua qualificação e a complexidade do caso justificam.'],
       ['2 · Sustentável (Custo + margem)',susNA?'não informado':BRL(c.sustentavel),susNA?'Custos não disponibilizados pelo usuário — a etapa de estimativa de custos foi pulada. Preencha-a na ferramenta para habilitar este cenário e conhecer o patamar que garante a saúde financeira do escritório.':'Cobre o custo real da sua estrutura (rateado por hora produtiva) e ainda gera margem. É o patamar que garante a saúde financeira do escritório. Abaixo dele, cada cliente atendido representa prejuízo disfarçado.'],
-      ['3 · Valor agregado (Pelo proveito)',BRL(c.valorAgregado),'Precificação orientada ao proveito econômico e à complexidade da causa, na lógica dos percentuais do art. 85 do CPC (faixa de 10% a 20%). Representa o que o trabalho efetivamente vale para o cliente e é a base para contratações de maior valor.']
+      ['3 · Valor agregado (Pelo proveito)',vaNA?'não informado':BRL(c.valorAgregado),vaNA?'Proveito da causa não informado pelo usuário — preencha o campo para habilitar este cenário e conhecer o patamar de precificação pelo valor econômico da causa.':'Precificação orientada ao proveito econômico e à complexidade da causa, na lógica dos percentuais do art. 85 do CPC (faixa de 10% a 20%). Representa o que o trabalho efetivamente vale para o cliente e é a base para contratações de maior valor.']
     ];
     cens.forEach(cc=>{
       if(y>PH-120){doc.addPage();y=M;}
@@ -1802,7 +1806,26 @@ renderLista(); renderCustos(); renderModo(); renderComp(); calcComp(); carregarC
   window.renderLista = function(){
     _rl.apply(this, arguments);
     const sel = document.querySelector('.srv.sel');
-    if (sel) sel.closest('.agrp')?.classList.add('open');
+    if (sel) {
+      const grp = sel.closest('.agrp');
+      grp?.classList.add('open');
+      grp?.querySelector('.ahead')?.setAttribute('aria-expanded', 'true');
+    }
+  };
+})();
+/* anuncia o resultado uma vez, com o valor final, em vez de quadro a quadro */
+(function(){
+  if (typeof countUp !== 'function') return;
+  const sr = document.createElement('div');
+  sr.id = 'valorFinalSR';
+  sr.className = 'sr-only';
+  sr.setAttribute('aria-live', 'polite');
+  sr.setAttribute('role', 'status');
+  document.getElementById('valorFinal')?.after(sr);
+  const _cu = countUp;
+  window.countUp = function(el, to, bump){
+    if (el && el.id === 'valorFinal') sr.textContent = BRL(to);
+    return _cu.apply(this, arguments);
   };
 })();
 /* sem proveito informado, nao inventa valor de exito */
@@ -1821,7 +1844,12 @@ renderLista(); renderCustos(); renderModo(); renderComp(); calcComp(); carregarC
     if (bloqueado) window.countUp = function(el, to, bump){
       if (el && el.id === 'valorFinal') {
         el._gen = (el._gen || 0) + 1;   // supera qualquer tween ainda em voo no elemento
-        el.textContent = '—'; el._v = 0; return;
+        el.textContent = '—'; el._v = 0;
+        // o no anunciavel nao pode ficar com o ultimo valor real depois que a
+        // tela volta ao traco, senao quem navega por ele le uma cifra que nao existe mais
+        const sr = document.getElementById('valorFinalSR');
+        if (sr) sr.textContent = '—';
+        return;
       }
       return _prev.apply(this, arguments);   // qualquer outro elemento anima normalmente
     };
