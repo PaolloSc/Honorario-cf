@@ -1270,7 +1270,7 @@ function gerarPDF(){
     doc.text('SERVIÇO',M+14,y+16); doc.text('PROVEITO DA CAUSA',PW/2,y+16);
     doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...TINTA);
     doc.text(doc.splitTextToSize(serv,PW/2-M-20),M+14,y+32);
-    doc.text(BRL(c.prov),PW/2,y+32); y+=72;
+    doc.text(vaNA?'não informado':BRL(c.prov),PW/2,y+32); y+=72;
     // gráfico de barras
     doc.setFont('times','bold'); doc.setFontSize(13); doc.setTextColor(...NAVY);
     doc.text('Comparativo visual',M,y); y+=16;
