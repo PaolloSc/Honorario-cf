@@ -130,6 +130,28 @@ class ColaboradorDB(Base):
         return self.papel in PAPEIS_PARTICIPAVEIS
 
 
+LEGALONE_TIPOS_VALIDOS = ("categoria_cliente", "etiqueta", "lista_transmissao")
+
+
+class LegalOneOpcaoDB(Base):
+    """Opções das tabelas do Legal One usadas na ficha do financeiro.
+
+    Uma tabela para as três listas (categoria de cliente, etiqueta, lista de
+    transmissão) porque têm forma idêntica. Mantidas pelo admin em /admin/legalone.
+    """
+
+    __tablename__ = "legalone_opcoes"
+    __table_args__ = (
+        UniqueConstraint("tipo", "valor", name="uq_legalone_opcao"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tipo = Column(String(32), nullable=False)  # ver LEGALONE_TIPOS_VALIDOS
+    valor = Column(String(256), nullable=False)
+    ativo = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
 # ── Contracts ─────────────────────────────────────────────────────
 
 class ContractDB(Base):
