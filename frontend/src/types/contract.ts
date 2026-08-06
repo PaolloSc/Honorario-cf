@@ -237,6 +237,10 @@ export interface Participacao {
   contato_financeiro_nome?: string;
   contato_financeiro_email?: string;
   contato_financeiro_telefone?: string;
+  // cadastro no Legal One (independe de haver participação)
+  categoria_cliente?: string;
+  etiquetas?: string[];
+  listas_transmissao?: string[];
   base_tipo?: "escopo" | "honorario";
   base_escopo_index?: number;
   base_honorario?: TipoHonorario;

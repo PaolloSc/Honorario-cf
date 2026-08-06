@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
+import { useRouter } from "next/navigation";
+import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, previewContract, type Testemunha } from "@/app/lib/api";
 
@@ -9,6 +10,52 @@ interface Step7EnvioProps {
   data: ContratoFormData;
   editContractId?: string;
   onSaveComplete?: (contractId: string) => void;
+}
+
+// Os campos de participação só entram no payload quando o toggle está ligado: o
+// wizard preserva o que foi digitado antes de desligá-lo, e mandá-los assim faria o
+// financeiro receber uma participação que o contrato não tem.
+function buildFichaPayload(contractId: string, data: ContratoFormData) {
+  const p = data.participacao;
+  return {
+    contract_id: contractId,
+    cliente_nome: getContratanteNome(data.contratantes[0]),
+    objeto_contrato: buildObjetoContrato(data.escopos),
+    categoria_cliente: p.categoria_cliente,
+    etiquetas: p.etiquetas ?? [],
+    listas_transmissao: p.listas_transmissao ?? [],
+    ...(p.tem_participacao
+      ? {
+          valor_tipo: p.valor_tipo,
+          valor_percentual: p.valor_percentual,
+          valor_monetario: p.valor_monetario,
+          valor_outro: p.valor_outro,
+          para_quem: p.para_quem ?? [],
+          natureza: p.natureza,
+          responsavel_captacao: p.responsavel_captacao,
+          responsavel_gestao: p.responsavel_gestao,
+          contato_financeiro_nome: p.contato_financeiro_nome,
+          contato_financeiro_email: p.contato_financeiro_email,
+          contato_financeiro_telefone: p.contato_financeiro_telefone,
+          base_tipo: p.base_tipo,
+          base_escopo_index: p.base_escopo_index,
+          base_honorario: p.base_honorario,
+          base_label: p.base_label,
+        }
+      : {}),
+  };
+}
+
+// A ficha vai ao financeiro quando há participação ou quando o cadastro do
+// Legal One foi preenchido — contratos sem participação também precisam ser lançados.
+function temFichaParaFinanceiro(p?: Participacao): p is Participacao {
+  if (!p) return false;
+  return Boolean(
+    p.tem_participacao ||
+      p.categoria_cliente ||
+      p.etiquetas?.length ||
+      p.listas_transmissao?.length
+  );
 }
 
 function getContratanteNome(c: Contratante): string {
@@ -63,6 +110,7 @@ function buildObjetoContrato(escopos: EscopoItem[]): string {
 }
 
 export default function Step7Envio({ data, editContractId, onSaveComplete }: Step7EnvioProps) {
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "generating" | "sending" | "sent_email" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -168,28 +216,9 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       }
 
       // Send participação sheet to financeiro if applicable
-      if (data.participacao?.tem_participacao) {
+      if (temFichaParaFinanceiro(data.participacao)) {
         try {
-          await sendParticipacao({
-            contract_id: resultContractId,
-            cliente_nome: getContratanteNome(data.contratantes[0]),
-            objeto_contrato: buildObjetoContrato(data.escopos),
-            valor_tipo: data.participacao.valor_tipo,
-            valor_percentual: data.participacao.valor_percentual,
-            valor_monetario: data.participacao.valor_monetario,
-            valor_outro: data.participacao.valor_outro,
-            para_quem: data.participacao.para_quem ?? [],
-            natureza: data.participacao.natureza,
-            responsavel_captacao: data.participacao.responsavel_captacao,
-            responsavel_gestao: data.participacao.responsavel_gestao,
-            contato_financeiro_nome: data.participacao.contato_financeiro_nome,
-            contato_financeiro_email: data.participacao.contato_financeiro_email,
-            contato_financeiro_telefone: data.participacao.contato_financeiro_telefone,
-            base_tipo: data.participacao.base_tipo,
-            base_escopo_index: data.participacao.base_escopo_index,
-            base_honorario: data.participacao.base_honorario,
-            base_label: data.participacao.base_label,
-          });
+          await sendParticipacao(buildFichaPayload(resultContractId, data));
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
           setParticipacaoWarning(`Ficha de participação não enviada ao financeiro. ${detail}`);
@@ -231,28 +260,9 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
       setContractId(resultContractId);
 
       // Send participação sheet to financeiro if applicable
-      if (data.participacao?.tem_participacao) {
+      if (temFichaParaFinanceiro(data.participacao)) {
         try {
-          await sendParticipacao({
-            contract_id: resultContractId,
-            cliente_nome: getContratanteNome(data.contratantes[0]),
-            objeto_contrato: buildObjetoContrato(data.escopos),
-            valor_tipo: data.participacao.valor_tipo,
-            valor_percentual: data.participacao.valor_percentual,
-            valor_monetario: data.participacao.valor_monetario,
-            valor_outro: data.participacao.valor_outro,
-            para_quem: data.participacao.para_quem ?? [],
-            natureza: data.participacao.natureza,
-            responsavel_captacao: data.participacao.responsavel_captacao,
-            responsavel_gestao: data.participacao.responsavel_gestao,
-            contato_financeiro_nome: data.participacao.contato_financeiro_nome,
-            contato_financeiro_email: data.participacao.contato_financeiro_email,
-            contato_financeiro_telefone: data.participacao.contato_financeiro_telefone,
-            base_tipo: data.participacao.base_tipo,
-            base_escopo_index: data.participacao.base_escopo_index,
-            base_honorario: data.participacao.base_honorario,
-            base_label: data.participacao.base_label,
-          });
+          await sendParticipacao(buildFichaPayload(resultContractId, data));
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
           setParticipacaoWarning(`Ficha de participação não enviada ao financeiro. ${detail}`);
@@ -330,9 +340,10 @@ export default function Step7Envio({ data, editContractId, onSaveComplete }: Ste
   };
 
   const handleGoToContract = () => {
-    if (contractId && onSaveComplete) {
-      onSaveComplete(contractId);
-    }
+    if (!contractId) return;
+    // Fluxo de criacao (page.tsx) nao passa onSaveComplete; navega direto.
+    if (onSaveComplete) onSaveComplete(contractId);
+    else router.push(`/contracts/${contractId}`);
   };
 
   return (
