@@ -116,8 +116,8 @@ def update_user_role(
     admin: CurrentUser = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    if body.role not in ("admin", "advogado", "financeiro"):
-        raise HTTPException(422, "Role invalida. Validos: admin, advogado, financeiro")
+    if body.role not in ("admin", "advogado", "financeiro", "leitor"):
+        raise HTTPException(422, "Role invalida. Validos: admin, advogado, financeiro, leitor")
 
     user = db.query(UserDB).filter(UserDB.id == user_id).first()
     if not user:

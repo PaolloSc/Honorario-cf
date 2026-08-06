@@ -4,10 +4,13 @@ import logging
 import os
 import re
 import tempfile
+from html import escape
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, model_validator
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
@@ -30,6 +33,12 @@ class EmailRequest(BaseModel):
 class EmailResponse(BaseModel):
     success: bool
     message: str
+
+
+LOLista = Annotated[
+    list[Annotated[str, StringConstraints(max_length=256)]],
+    Field(max_length=50),
+]
 
 
 class ParticipacaoEmailRequest(BaseModel):
@@ -55,6 +64,10 @@ class ParticipacaoEmailRequest(BaseModel):
     base_escopo_index: int | None = None
     base_honorario: str = ""
     base_label: str = ""
+    # Cadastro no Legal One (limites alinhados a coluna legalone_opcoes.valor)
+    categoria_cliente: str = Field("", max_length=256)
+    etiquetas: LOLista = []
+    listas_transmissao: LOLista = []
     # Legados
     percentual_ou_valor: str = ""
     contato_financeiro_cliente: str = ""
@@ -67,14 +80,16 @@ class ParticipacaoEmailRequest(BaseModel):
                           "valor_outro", "natureza", "responsavel_captacao",
                           "responsavel_gestao", "contato_financeiro_nome",
                           "contato_financeiro_email", "contato_financeiro_telefone",
-                          "percentual_ou_valor", "contato_financeiro_cliente"):
+                          "percentual_ou_valor", "contato_financeiro_cliente",
+                          "categoria_cliente"):
                 if data.get(field) is None:
                     data[field] = ""
-            pq = data.get("para_quem")
-            if isinstance(pq, str):
-                data["para_quem"] = [pq] if pq.strip() else []
-            elif pq is None:
-                data["para_quem"] = []
+            for field in ("para_quem", "etiquetas", "listas_transmissao"):
+                v = data.get(field)
+                if isinstance(v, str):
+                    data[field] = [v] if v.strip() else []
+                elif v is None:
+                    data[field] = []
         return data
 
 
@@ -367,9 +382,9 @@ async def send_participacao_email(
 
         rows = []
         # Objeto do Contrato first (as requested by financeiro)
-        # Replace newlines with <br> for HTML rendering
+        # A quebra de linha vira <br> no laco que monta a tabela, depois do escape.
         if objeto_contrato:
-            rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
+            rows.append(("Objeto do Contrato", objeto_contrato))
         # Base da participacao (escopo ou honorario)
         if data.base_tipo and data.base_label:
             base_prefixo = "Escopo" if data.base_tipo == "escopo" else "Honorário"
@@ -402,22 +417,50 @@ async def send_participacao_email(
                 rows.append(("Contato — Telefone", data.contato_financeiro_telefone))
         elif data.contato_financeiro_cliente:
             rows.append(("Contato Financeiro Cliente", data.contato_financeiro_cliente))
+        # Cadastro no Legal One (pode vir sem participacao)
+        if data.categoria_cliente:
+            rows.append(("Categoria do cliente", data.categoria_cliente))
+        if data.etiquetas:
+            rows.append(("Etiqueta LO", ", ".join(data.etiquetas)))
+        if data.listas_transmissao:
+            rows.append(("Lista de transmissão", ", ".join(data.listas_transmissao)))
 
+        # ponytail: participacao inferida dos proprios campos em vez de uma flag nova.
+        # O wizard so manda estes campos quando o toggle esta ligado, mas a inferencia
+        # cobre todos eles: uma ficha com apenas o responsavel preenchido ainda e
+        # participacao, e rotula-la "Cadastro Legal One" seria mentira.
+        tem_participacao = any((
+            data.base_label,
+            data.valor_tipo,
+            data.para_quem,
+            data.natureza,
+            data.responsavel_captacao,
+            data.responsavel_gestao,
+            data.contato_financeiro_nome,
+            data.contato_financeiro_email,
+            data.contato_financeiro_telefone,
+            data.contato_financeiro_cliente,
+            data.percentual_ou_valor,
+        ))
+        titulo = "Ficha de Participação" if tem_participacao else "Cadastro Legal One"
+
+        # Escapa tudo que veio do payload; a quebra de linha vira <br> depois do
+        # escape, para o objeto do contrato continuar legivel sem abrir injecao.
         table_rows = "".join(
-            f'<tr><td style="padding:8px;border:1px solid #D7D1CA;font-weight:600;">{k}</td>'
-            f'<td style="padding:8px;border:1px solid #D7D1CA;">{v}</td></tr>'
+            f'<tr><td style="padding:8px;border:1px solid #D7D1CA;font-weight:600;">{escape(k)}</td>'
+            f'<td style="padding:8px;border:1px solid #D7D1CA;">{escape(str(v)).replace(chr(10), "<br>")}</td></tr>'
             for k, v in rows
         )
 
         html = (
             '<div style="font-family: Segoe UI, Tahoma, sans-serif; max-width: 600px;">'
             '<div style="background-color: #1A3C34; padding: 20px 28px; border-radius: 8px 8px 0 0;">'
-            '<span style="color: #FFFFFF; font-size: 16px; font-weight: 500;">Ficha de Participação — Uso Interno</span>'
+            f'<span style="color: #FFFFFF; font-size: 16px; font-weight: 500;">{titulo} — Uso Interno</span>'
             '</div>'
             '<div style="padding: 24px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
-            f'<p><strong>Cliente:</strong> {data.cliente_nome}</p>'
-            f'<p><strong>Contrato:</strong> {data.contract_id}</p>'
-            f'<p><strong>Registrado por:</strong> {user.email}</p>'
+            f'<p><strong>Cliente:</strong> {escape(data.cliente_nome)}</p>'
+            f'<p><strong>Contrato:</strong> {escape(data.contract_id)}</p>'
+            f'<p><strong>Registrado por:</strong> {escape(user.email)}</p>'
             '<table style="width:100%;border-collapse:collapse;margin-top:16px;">'
             f'{table_rows}'
             '</table>'
@@ -449,7 +492,7 @@ async def send_participacao_email(
             result = await service.send_html_email_with_attachment(
                 to_email=settings.financeiro_email,
                 to_name="Financeiro C&F",
-                subject=f"Ficha de Participação — {data.cliente_nome}",
+                subject=f"{titulo} — {data.cliente_nome}",
                 html_content=html,
                 attachment_path=contract_filepath,
                 attachment_name=_contract_filename(data.cliente_nome, data.contract_id),
@@ -458,7 +501,7 @@ async def send_participacao_email(
             result = await service.send_html_email(
                 to_email=settings.financeiro_email,
                 to_name="Financeiro C&F",
-                subject=f"Ficha de Participação — {data.cliente_nome}",
+                subject=f"{titulo} — {data.cliente_nome}",
                 html_content=html,
             )
 
