@@ -12,6 +12,21 @@ interface User {
   created_at: string;
 }
 
+// A descricao e' o que faltava: com "Legal One" sozinho ninguem adivinha que e'
+// ali que se cadastram as etiquetas.
+const CADASTROS = [
+  {
+    href: "/admin/colaboradores",
+    titulo: "Colaboradores",
+    descricao: "Advogados e sócios oferecidos nas listas suspensas do contrato.",
+  },
+  {
+    href: "/admin/legalone",
+    titulo: "Legal One",
+    descricao: "Categorias de cliente, etiquetas e listas de transmissão da ficha do financeiro.",
+  },
+];
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
   (typeof window !== "undefined"
@@ -91,20 +106,43 @@ export default function AdminPage() {
         Gerencie usuarios e permissoes do sistema.
       </p>
 
-      <div className="flex flex-wrap gap-4 mb-8 text-sm">
-        <a href="/admin/colaboradores" className="text-accent hover:underline">
-          Colaboradores
-        </a>
-        <a href="/admin/legalone" className="text-accent hover:underline">
-          Legal One
-        </a>
-      </div>
+      <h2 className="text-sm font-semibold text-foreground mb-3">Cadastros</h2>
+      <nav aria-label="Cadastros" className="grid gap-3 sm:grid-cols-2 mb-8">
+        {CADASTROS.map((c) => (
+          <a
+            key={c.href}
+            href={c.href}
+            className="group flex items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition hover:border-primary hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-foreground group-hover:text-primary">
+                {c.titulo}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted">{c.descricao}</span>
+            </span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              className="mt-0.5 h-4 w-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-primary"
+            >
+              <path
+                d="M7.5 4.5 13 10l-5.5 5.5"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </a>
+        ))}
+      </nav>
 
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-gray-50/50">
-          <h3 className="font-medium text-sm text-foreground">
+          <h2 className="font-medium text-sm text-foreground">
             Usuarios ({users.length})
-          </h3>
+          </h2>
         </div>
         <table className="w-full text-sm">
           <thead>
