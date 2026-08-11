@@ -65,4 +65,16 @@ def linhas_participacao(p: Mapping[str, Any]) -> list[tuple[str, str]]:
     elif p.get("contato_financeiro_cliente"):
         linhas.append(("Contato Financeiro Cliente", p["contato_financeiro_cliente"]))
 
+    # Cadastro no Legal One. Fica aqui, e nao so no e-mail, para as tres copias da
+    # ficha (envio, pos-assinatura e rascunho do financeiro) nascerem iguais.
+    if p.get("categoria_cliente"):
+        linhas.append(("Categoria do cliente", p["categoria_cliente"]))
+    for chave, rotulo in (("etiquetas", "Etiqueta LO"),
+                          ("listas_transmissao", "Lista de transmissão")):
+        valores = p.get(chave) or []
+        if isinstance(valores, str):  # formato antigo: um valor so
+            valores = [valores] if valores.strip() else []
+        if valores:
+            linhas.append((rotulo, ", ".join(valores)))
+
     return linhas

@@ -71,11 +71,10 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
     },
     participacao: (() => {
       const p = (data.participacao ?? {}) as any;
-      const paraQuem = Array.isArray(p.para_quem)
-        ? p.para_quem
-        : typeof p.para_quem === "string" && p.para_quem.trim()
-          ? [p.para_quem]
-          : [];
+      // Aceita lista, string legada ou ausência — contratos antigos gravaram string.
+      const lista = (v: unknown): string[] =>
+        Array.isArray(v) ? v : typeof v === "string" && v.trim() ? [v] : [];
+      const paraQuem = lista(p.para_quem);
       let valorTipo = p.valor_tipo;
       let valorOutro = p.valor_outro ?? "";
       if (!valorTipo && p.percentual_ou_valor) {
@@ -95,6 +94,14 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
         contato_financeiro_nome: p.contato_financeiro_nome ?? "",
         contato_financeiro_email: p.contato_financeiro_email ?? "",
         contato_financeiro_telefone: p.contato_financeiro_telefone ?? "",
+        categoria_cliente: p.categoria_cliente ?? "",
+        etiquetas: lista(p.etiquetas),
+        listas_transmissao: lista(p.listas_transmissao),
+        // Sem estes a base da participação sumia ao reabrir o contrato para edição.
+        base_tipo: p.base_tipo,
+        base_escopo_index: p.base_escopo_index,
+        base_honorario: p.base_honorario,
+        base_label: p.base_label ?? "",
       };
     })(),
     email_destinatario: data.email_destinatario,

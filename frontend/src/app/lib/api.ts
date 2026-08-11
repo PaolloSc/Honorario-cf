@@ -157,6 +157,9 @@ export async function sendParticipacao(data: {
   base_escopo_index?: number;
   base_honorario?: string;
   base_label?: string;
+  categoria_cliente?: string;
+  etiquetas?: string[];
+  listas_transmissao?: string[];
 }) {
   return request<{ success: boolean; message: string }>("/api/email/send-participacao", {
     method: "POST",
@@ -270,6 +273,44 @@ export async function deleteColaborador(id: number) {
     `/api/colaboradores/${id}`,
     { method: "DELETE" }
   );
+}
+
+// ── Opções das tabelas do Legal One ──────────────────────────────
+
+export interface LegalOneOpcao {
+  id: number;
+  tipo: LegalOneTipo;
+  valor: string;
+  ativo: boolean;
+}
+
+export type LegalOneTipo = "categoria_cliente" | "etiqueta" | "lista_transmissao";
+
+export type LegalOneOpcoes = Record<LegalOneTipo, LegalOneOpcao[]>;
+
+export const LEGALONE_TIPOS: Array<{ value: LegalOneTipo; label: string }> = [
+  { value: "categoria_cliente", label: "Categoria do cliente" },
+  { value: "etiqueta", label: "Etiqueta LO" },
+  { value: "lista_transmissao", label: "Lista de transmissão" },
+];
+
+export async function listLegalOneOpcoes(incluirInativos = false) {
+  const qs = incluirInativos ? "?incluir_inativos=true" : "";
+  return request<LegalOneOpcoes>(`/api/legalone-opcoes${qs}`);
+}
+
+export async function createLegalOneOpcao(body: { tipo: LegalOneTipo; valor: string }) {
+  return request<LegalOneOpcao>("/api/legalone-opcoes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateLegalOneOpcao(id: number, ativo: boolean) {
+  return request<LegalOneOpcao>(`/api/legalone-opcoes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ ativo }),
+  });
 }
 
 export async function lookupCNPJ(cnpj: string) {
