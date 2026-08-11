@@ -5,7 +5,8 @@ import FormField, { Checkbox, Input, Select, Toggle } from "@/components/ui/Form
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { EscopoItem, Participacao, ParticipacaoValorTipo, TipoHonorario } from "@/types/contract";
 import { ESCOPO_LABELS, HONORARIO_LABELS } from "@/types/contract";
-import { listColaboradores } from "@/app/lib/api";
+import { listColaboradores, listLegalOneOpcoes } from "@/app/lib/api";
+import type { LegalOneOpcoes } from "@/app/lib/api";
 
 function buildObjetoLines(escopos: EscopoItem[]): string[] {
   const lines: string[] = [];
@@ -58,6 +59,8 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
   const [colabError, setColabError] = useState("");
   const [novoParticipante, setNovoParticipante] = useState("");
   const [loadingColab, setLoadingColab] = useState(true);
+  const [loOpcoes, setLoOpcoes] = useState<LegalOneOpcoes | null>(null);
+  const [loError, setLoError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -65,6 +68,14 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
       .then((res) => { if (active) setColaboradores(res.colaboradores); })
       .catch(() => { if (active) setColabError("Não foi possível carregar a lista de advogados."); })
       .finally(() => { if (active) setLoadingColab(false); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    listLegalOneOpcoes()
+      .then((res) => { if (active) setLoOpcoes(res); })
+      .catch(() => { if (active) setLoError("Não foi possível carregar as tabelas do Legal One."); });
     return () => { active = false; };
   }, []);
 
@@ -111,6 +122,24 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
       ? [...baseNomeOptions, { value: saved, label: saved }]
       : baseNomeOptions;
 
+  // Legal One: um valor já salvo que saiu da tabela continua aparecendo, para não
+  // sumir silenciosamente de contratos antigos.
+  const etiquetasSel = participacao.etiquetas ?? [];
+  const listasSel = participacao.listas_transmissao ?? [];
+  const valoresLO = (tipo: keyof LegalOneOpcoes, salvos: string[]) =>
+    Array.from(new Set([...(loOpcoes?.[tipo] ?? []).map((o) => o.valor), ...salvos])).sort(
+      (a, b) => a.localeCompare(b, "pt-BR"),
+    );
+
+  const toggleLO = (
+    campo: "etiquetas" | "listas_transmissao",
+    valor: string,
+    checked: boolean,
+  ) => {
+    const atual = participacao[campo] ?? [];
+    set({ [campo]: checked ? [...atual, valor] : atual.filter((v) => v !== valor) });
+  };
+
   const nomesColab = colaboradores.map((c) => c.name);
   const paraQuemSel = participacao.para_quem ?? [];
   const nomesParaExibir = Array.from(new Set([...nomesColab, ...paraQuemSel]));
@@ -137,6 +166,62 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
           </ul>
         </div>
       )}
+
+      {/* Cadastro no Legal One — vai ao financeiro mesmo sem participação */}
+      <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6">
+        <p className="text-sm font-semibold text-foreground mb-1">Cadastro no Legal One</p>
+        <p className="text-xs text-muted mb-4">
+          Informado ao financeiro para o lançamento do cliente no Legal One.
+        </p>
+        {loError && <p className="text-xs text-red-500 mb-2">{loError}</p>}
+
+        <FormField label="Categoria do cliente">
+          <Select
+            value={participacao.categoria_cliente || ""}
+            onChange={(e) => set({ categoria_cliente: e.target.value })}
+            placeholder="Selecione a categoria"
+            options={[
+              // O placeholder do Select é disabled; sem isto o campo, que é
+              // opcional, ficaria impossível de desmarcar depois de escolhido.
+              ...(participacao.categoria_cliente ? [{ value: "", label: "— nenhuma —" }] : []),
+              ...valoresLO(
+                "categoria_cliente",
+                participacao.categoria_cliente ? [participacao.categoria_cliente] : [],
+              ).map((v) => ({ value: v, label: v })),
+            ]}
+          />
+        </FormField>
+
+        {(["etiqueta", "lista_transmissao"] as const).map((tipo) => {
+          const campo = tipo === "etiqueta" ? "etiquetas" : "listas_transmissao";
+          const sel = tipo === "etiqueta" ? etiquetasSel : listasSel;
+          const valores = valoresLO(tipo, sel);
+          return (
+            <div key={tipo} className="mt-4">
+              <p className="text-sm font-medium text-foreground mb-2">
+                {tipo === "etiqueta" ? "Etiqueta LO" : "Lista de transmissão"}
+              </p>
+              {valores.length === 0 ? (
+                <p className="text-xs text-muted">
+                  Nenhuma opção cadastrada. Um administrador pode incluí-las em
+                  Administração &rsaquo; Legal One.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {valores.map((v) => (
+                    <Checkbox
+                      key={v}
+                      label={v}
+                      checked={sel.includes(v)}
+                      onChange={(checked) => toggleLO(campo, v, checked)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
         <Toggle

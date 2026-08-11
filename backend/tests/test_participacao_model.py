@@ -37,3 +37,48 @@ def test_para_quem_vazio_vira_lista_vazia():
 def test_valor_monetario_float():
     p = Participacao(tem_participacao=True, valor_tipo="valor", valor_monetario=5000.0)
     assert p.valor_monetario == 5000.0
+
+
+def test_campos_legalone_aceitos():
+    p = Participacao(
+        tem_participacao=False,
+        categoria_cliente="Corporativo",
+        etiquetas=["Trabalhista", "Consultivo"],
+        listas_transmissao=["Newsletter"],
+    )
+    assert p.categoria_cliente == "Corporativo"
+    assert p.etiquetas == ["Trabalhista", "Consultivo"]
+    assert p.listas_transmissao == ["Newsletter"]
+
+
+def test_campos_legalone_ausentes_em_contrato_antigo():
+    p = Participacao(tem_participacao=True)
+    assert p.categoria_cliente == ""
+    assert p.etiquetas == []
+    assert p.listas_transmissao == []
+
+
+def test_campos_legalone_none_viram_vazios():
+    p = Participacao(
+        tem_participacao=True,
+        categoria_cliente=None,
+        etiquetas=None,
+        listas_transmissao=None,
+    )
+    assert p.categoria_cliente == ""
+    assert p.etiquetas == []
+    assert p.listas_transmissao == []
+
+
+def test_listas_legalone_migram_string_para_lista():
+    p = Participacao(
+        tem_participacao=True, etiquetas="Trabalhista", listas_transmissao="Newsletter"
+    )
+    assert p.etiquetas == ["Trabalhista"]
+    assert p.listas_transmissao == ["Newsletter"]
+
+
+def test_listas_legalone_string_vazia_vira_lista_vazia():
+    p = Participacao(tem_participacao=True, etiquetas="", listas_transmissao="  ")
+    assert p.etiquetas == []
+    assert p.listas_transmissao == []

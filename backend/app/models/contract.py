@@ -266,6 +266,10 @@ class Participacao(BaseModel):
     contato_financeiro_nome: Optional[str] = None
     contato_financeiro_email: Optional[str] = None
     contato_financeiro_telefone: Optional[str] = None
+    # Cadastro no Legal One (independe de haver participacao)
+    categoria_cliente: Optional[str] = None
+    etiquetas: list[str] = []
+    listas_transmissao: list[str] = []
     # Base da participacao (escopo ou honorario)
     base_tipo: Optional[str] = None  # "escopo" | "honorario"
     base_escopo_index: Optional[int] = None
@@ -283,14 +287,16 @@ class Participacao(BaseModel):
         for field in ("natureza", "responsavel_captacao", "responsavel_gestao",
                       "valor_percentual", "valor_outro", "percentual_ou_valor",
                       "contato_financeiro_nome", "contato_financeiro_email",
-                      "contato_financeiro_telefone", "contato_financeiro_cliente"):
+                      "contato_financeiro_telefone", "contato_financeiro_cliente",
+                      "categoria_cliente"):
             if data.get(field) is None:
                 data[field] = ""
-        pq = data.get("para_quem")
-        if isinstance(pq, str):
-            data["para_quem"] = [pq] if pq.strip() else []
-        elif pq is None:
-            data["para_quem"] = []
+        for field in ("para_quem", "etiquetas", "listas_transmissao"):
+            v = data.get(field)
+            if isinstance(v, str):
+                data[field] = [v] if v.strip() else []
+            elif v is None:
+                data[field] = []
         if not data.get("valor_tipo") and data.get("percentual_ou_valor"):
             data["valor_tipo"] = "outro"
             if not data.get("valor_outro"):
