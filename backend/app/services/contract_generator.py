@@ -367,6 +367,13 @@ class ContractGenerator:
             cell.text = title
             cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+        # Marca a linha como cabecalho de verdade (repete a cada pagina no Word).
+        # A previa em HTML usa esta marca para decidir <th> — sem ela, uma tabela
+        # sem titulo teria a 1a linha de dados exibida como cabecalho.
+        trPr = table.rows[0]._tr.get_or_add_trPr()
+        if trPr.find(qn("w:tblHeader")) is None:
+            trPr.append(OxmlElement("w:tblHeader"))
+
     def _add_title(self, doc: Document) -> None:
         title = doc.add_heading("CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS", level=1)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER

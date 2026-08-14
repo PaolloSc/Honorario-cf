@@ -261,6 +261,9 @@ function PJForm({
   onUpdate: (partial: Partial<ContratantePJ>) => void;
   onCNPJLookup: (cnpj: string) => void;
 }) {
+  // Backend devolve null (nao undefined) quando nao ha representante — `!= null` cobre os dois.
+  const temRepresentante = data.representante_nome != null;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="CNPJ" required hint="Digite o CNPJ para buscar dados automaticamente">
@@ -321,13 +324,16 @@ function PJForm({
       <div className="md:col-span-2">
         <Checkbox
           label="Adicionar dados do representante legal"
-          checked={data.representante_nome !== undefined}
+          checked={temRepresentante}
           onChange={(checked) => {
             if (!checked) {
               onUpdate({
                 representante_nome: undefined,
                 representante_cpf: undefined,
                 representante_email: undefined,
+                representante_nacionalidade: undefined,
+                representante_profissao: undefined,
+                representante_estado_civil: undefined,
               });
             } else {
               onUpdate({ representante_nome: "" });
@@ -336,7 +342,7 @@ function PJForm({
         />
       </div>
 
-      {data.representante_nome !== undefined && (
+      {temRepresentante && (
         <>
           <FormField label="Nome do Representante">
             <Input
@@ -400,6 +406,22 @@ function PJForm({
   );
 }
 
+// Desmonta o endereco montado por buildEndereco para reidratar CEP/numero/complemento na edicao.
+// Formato: "<logradouro>[, n. X][, <comp>], <bairro>, <cidade>/<UF>, CEP 00000-000"
+function parseEndereco(endereco: string | undefined) {
+  const vazio = { cep: "", numero: "", complemento: "" };
+  const partes = (endereco || "").split(", ");
+  const ultima = partes[partes.length - 1] || "";
+  if (partes.length < 4 || !ultima.startsWith("CEP ")) return vazio;
+
+  const meio = partes.slice(1, -3); // entre logradouro e bairro: numero e/ou complemento
+  return {
+    cep: formatCEP(ultima.replace(/\D/g, "").slice(0, 8)),
+    numero: (meio.find((p) => p.startsWith("n. ")) || "").replace("n. ", ""),
+    complemento: meio.filter((p) => !p.startsWith("n. ")).join(", "),
+  };
+}
+
 function PFForm({
   data,
   onUpdate,
@@ -407,9 +429,10 @@ function PFForm({
   data: ContratantePF;
   onUpdate: (partial: Partial<ContratantePF>) => void;
 }) {
-  const [cep, setCep] = useState("");
-  const [numero, setNumero] = useState("");
-  const [complemento, setComplemento] = useState("");
+  const inicial = parseEndereco(data.endereco);
+  const [cep, setCep] = useState(inicial.cep);
+  const [numero, setNumero] = useState(inicial.numero);
+  const [complemento, setComplemento] = useState(inicial.complemento);
   const [cepData, setCepData] = useState<{ logradouro: string; bairro: string; localidade: string; uf: string } | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);

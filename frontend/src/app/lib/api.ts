@@ -100,6 +100,38 @@ export async function generateContract(data: unknown) {
   });
 }
 
+// Contrato de consumidor/aereo: endpoint proprio, o de honorarios segue intacto.
+export async function generateContratoConsumidor(data: unknown) {
+  return request<{
+    success: boolean;
+    message: string;
+    contract_id?: string;
+    download_url?: string;
+  }>("/api/contract/generate-consumidor", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// Contrato de Ação de Consumo e' restrito a uma equipe (CONSUMIDOR_EMAILS no backend).
+export async function podeUsarConsumidor() {
+  return request<{ permitido: boolean }>("/api/contract/consumidor/acesso");
+}
+
+// Previa do contrato de consumidor antes de gravar: nada e' persistido.
+export async function previewContratoConsumidor(data: unknown, signal?: AbortSignal) {
+  const res = await fetch(`${API_BASE}/api/contract/preview-consumidor`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(data),
+    signal,
+  });
+  if (!res.ok) {
+    throw new Error(`Erro ao gerar prévia: ${res.status}`);
+  }
+  return res.text();
+}
+
 export async function downloadContract(contractId: string) {
   const headers: Record<string, string> = {};
   if (_accessToken) {

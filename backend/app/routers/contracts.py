@@ -16,21 +16,10 @@ from app.database import (
     get_db,
     utcnow,
 )
-from app.models.contract import ContratoRequest
-from app.services.contract_generator import ContractGenerator
+from app.services.contract_dispatch import parse_form_data
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/contracts", tags=["Contracts Management"])
-
-_generator: ContractGenerator | None = None
-
-
-def _gen() -> ContractGenerator:
-    global _generator
-    if _generator is None:
-        _generator = ContractGenerator()
-    return _generator
-
 
 # ── Response schemas ──────────────────────────────────────────────
 
@@ -274,11 +263,10 @@ def update_contract(
     _check_access(contract, user)
 
     try:
-        contrato_data = ContratoRequest(**body.form_data)
+        contrato_data, gen = parse_form_data(body.form_data)
     except Exception as e:
         raise HTTPException(422, f"Dados invalidos: {e}")
 
-    gen = _gen()
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
 
     new_version = contract.current_version + 1
@@ -372,11 +360,10 @@ def rollback_contract(
     # Regenerate the DOCX from stored form data
     try:
         form_data = json.loads(target_ver.form_data_json)
-        contrato_data = ContratoRequest(**form_data)
+        contrato_data, gen = parse_form_data(form_data)
     except Exception as e:
         raise HTTPException(422, f"Dados da versao {version} invalidos: {e}")
 
-    gen = _gen()
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
 
     # Create a new version based on the old data
