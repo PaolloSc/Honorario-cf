@@ -244,6 +244,26 @@ def _docx_review_copy(src: Path) -> Path:
     return Path(tmp_name)
 
 
+def _tipo_do_contrato(contract_id: str, db: Session) -> str:
+    """Define o rotulo do anexo: honorarios ou prestacao de servicos."""
+    import json as _json
+
+    from app.services.contract_dispatch import TIPO_HONORARIOS, tipo_contrato
+
+    ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id)
+        .order_by(ContractVersionDB.version_number.desc())
+        .first()
+    )
+    if not ver or not ver.form_data_json:
+        return TIPO_HONORARIOS
+    try:
+        return tipo_contrato(_json.loads(ver.form_data_json))
+    except (ValueError, TypeError):
+        return TIPO_HONORARIOS
+
+
 @router.post("/send", response_model=EmailResponse)
 async def send_contract_email(
     data: EmailRequest,
@@ -256,7 +276,11 @@ async def send_contract_email(
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
 
         review_path = _docx_review_copy(filepath)
-        attachment_name = _contract_filename(contract.client_name if contract else None, data.contract_id)
+        attachment_name = _contract_filename(
+            contract.client_name if contract else None,
+            data.contract_id,
+            _tipo_do_contrato(data.contract_id, db),
+        )
 
         service = get_email_service()
         try:

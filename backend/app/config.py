@@ -31,6 +31,10 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
 
+    # Quem pode usar o contrato de Acao de Consumo (aerea). Lista de e-mails
+    # separados por virgula; admin sempre pode. Vazio = so' admin.
+    consumidor_emails: str = os.getenv("CONSUMIDOR_EMAILS", "")
+
     financeiro_email: str = os.getenv("FINANCEIRO_EMAIL", "financeiro@carvalhofurtadoadv.com.br,gabriel@carvalhofurtadoadv.com.br")
 
     cf_signer_email: str = os.getenv("CF_SIGNER_EMAIL", "contrato@carvalhofurtadoadv.com.br")
