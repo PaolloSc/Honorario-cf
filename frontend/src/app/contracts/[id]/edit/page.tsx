@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { getContract, getContractFormData, type ContractFormDataResponse, type ContractDetail } from "@/app/lib/api";
 import ContractWizard from "@/components/ContractWizard";
+import ConsumidorWizard from "@/components/ConsumidorWizard";
 import type { ContratoFormData } from "@/types/contract";
+import { TIPO_CONSUMIDOR_AEREO, type ConsumidorFormData } from "@/types/consumidor";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", {
@@ -138,12 +140,22 @@ export default function EditContractPage() {
           Editando contrato existente. Ao gerar, uma nova versao sera criada mantendo o historico anterior.
         </div>
       </div>
-      <ContractWizard
-        key={`${selectedVersion || "latest"}-${formData ? "loaded" : "empty"}`}
-        initialData={formData}
-        editContractId={contractId}
-        onSaveComplete={(contractId) => router.push(`/contracts/${contractId}`)}
-      />
+      {/* Cada tipo de contrato abre no seu proprio wizard. */}
+      {(formData as { tipo_contrato?: string }).tipo_contrato === TIPO_CONSUMIDOR_AEREO ? (
+        <ConsumidorWizard
+          key={`${selectedVersion || "latest"}-consumidor`}
+          initialData={formData as unknown as ConsumidorFormData}
+          editContractId={contractId}
+          onSaveComplete={(contractId) => router.push(`/contracts/${contractId}`)}
+        />
+      ) : (
+        <ContractWizard
+          key={`${selectedVersion || "latest"}-${formData ? "loaded" : "empty"}`}
+          initialData={formData}
+          editContractId={contractId}
+          onSaveComplete={(contractId) => router.push(`/contracts/${contractId}`)}
+        />
+      )}
     </div>
   );
 }

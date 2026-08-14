@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { Lexend_Zetta } from "next/font/google";
 import Logo from "@/components/ui/Logo";
+import NavConsumidor from "@/components/NavConsumidor";
 import Providers from "@/components/Providers";
 import UserMenu from "@/components/UserMenu";
 import { auth } from "@/auth";
@@ -26,7 +28,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await auth();
-  const isAuthenticated = !!session?.user;
+  // Login de desenvolvimento usa o cookie dev_session (sem sessao next-auth).
+  // O middleware ja o aceita; sem isto o menu some e as telas ficam sem acesso.
+  const devSession =
+    process.env.NEXT_PUBLIC_DEV_MODE === "true" &&
+    !!(await cookies()).get("dev_session");
+  const isAuthenticated = !!session?.user || devSession;
   return (
     <html
       lang="pt-BR"
@@ -43,8 +50,10 @@ export default async function RootLayout({
                 {isAuthenticated && (
                   <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
                     <Link href="/" className="text-brand-verde-claro/80 hover:text-white transition">
-                      Novo Contrato
+                      Honorários
                     </Link>
+                    {/* Restrito: o link so' aparece para a equipe autorizada. */}
+                    <NavConsumidor />
                     <Link href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
                       Contratos
                     </Link>
