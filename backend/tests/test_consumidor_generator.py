@@ -259,7 +259,20 @@ def test_formatacao_igual_ao_modelo_do_escritorio(tmp_path):
     assert corpo.runs[0].font.size.pt == 11
 
     partes = next(p for p in doc.paragraphs if p.text.startswith("CONTRATANTES:"))
-    assert partes.runs[0].bold is True
+    negrito = "".join(r.text for r in partes.runs if r.bold)
+    normal = "".join(r.text for r in partes.runs if not r.bold)
+    assert "DANIELA ELIAS ARAUJO MARQUES" in negrito
+    assert "HENRIQUE DE OLIVEIRA MARQUES" in negrito
+    assert "CONTRATANTES" in negrito
+    assert "inscrita no CPF" in normal
+    assert "residentes e domiciliados" in normal
+
+    contratada = next(p for p in doc.paragraphs if "MÔNICA FURTADO" in p.text)
+    negrito_c = "".join(r.text for r in contratada.runs if r.bold)
+    normal_c = "".join(r.text for r in contratada.runs if not r.bold)
+    assert "MÔNICA FURTADO PINHEIRO CHAGAS" in negrito_c
+    assert "CONTRATADA" in negrito_c
+    assert "com escritório na" in normal_c
 
 
 def test_regeneracao_a_partir_do_json_salvo(tmp_path):
@@ -277,6 +290,26 @@ def test_regeneracao_a_partir_do_json_salvo(tmp_path):
     gen.output_dir = tmp_path
     _, path = gen.generate(request, contract_id="reg-1")
     assert "Os CONTRATANTES estão cientes" in _texto(path)
+
+
+def test_assinatura_docuseal_mantem_monica_como_contratada(tmp_path):
+    """Ao regenerar para o DocuSeal, o papel Contratado nao vira C&F (honorarios)."""
+    gen = ConsumidorGenerator()
+    gen.output_dir = tmp_path
+    roles = [
+        {"email": "maria@x.com", "name": "Maria de Fátima Soares Pereira", "role": "Contratante"},
+        {"email": "contrato@x.com", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        {"email": "lawyer@x.com", "name": "Test Lawyer", "role": "Advogado"},
+    ]
+    texto = _texto(
+        gen.generate(ContratoConsumidorRequest(**UM), signatario_roles=roles)[1]
+    )
+
+    assert "MÔNICA FURTADO PINHEIRO CHAGAS" in texto
+    assert "Carvalho & Furtado Advogados" not in texto
+    assert "TEST LAWYER" in texto
+    assert "CLÁUSULA I" in texto
+    assert "DAS PARTES" not in texto  # titulo do contrato de honorarios
 
 
 def test_contrato_de_honorarios_nao_muda(tmp_path):

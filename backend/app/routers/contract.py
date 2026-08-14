@@ -496,6 +496,21 @@ def _clean_preview_text(text: str) -> str:
     return _SIG_TAG.sub("_" * 40, text)
 
 
+def _inline_html(paragraph) -> str:
+    """Preserva negrito dos runs (nomes e CONTRATANTE/CONTRATADA na qualificacao)."""
+    from html import escape
+
+    if not paragraph.runs:
+        return escape(_clean_preview_text(paragraph.text))
+    bits: list[str] = []
+    for run in paragraph.runs:
+        piece = escape(_clean_preview_text(run.text or ""))
+        if not piece:
+            continue
+        bits.append(f"<strong>{piece}</strong>" if run.bold else piece)
+    return "".join(bits) or escape(_clean_preview_text(paragraph.text))
+
+
 def _docx_to_html(filepath: Path) -> str:
     """Render the generated DOCX as simple HTML for inline preview (no external deps)."""
     from html import escape
@@ -510,7 +525,7 @@ def _docx_to_html(filepath: Path) -> str:
     for child in doc.element.body.iterchildren():
         if child.tag == qn("w:p"):
             p = Paragraph(child, doc)
-            text = escape(_clean_preview_text(p.text))
+            text = _inline_html(p)
             if not text.strip():
                 continue
             style = p.style.name if p.style else ""

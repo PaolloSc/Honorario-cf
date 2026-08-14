@@ -12,6 +12,7 @@ dados bancarios, canais oficiais e os valores do milheiro.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 
 from docx import Document
@@ -107,8 +108,11 @@ class ConsumidorGenerator(ContractGenerator):
         paragraph.paragraph_format.keep_together = True
         if is_heading:
             paragraph.paragraph_format.keep_with_next = True
-        # Corpo justificado; titulo e assinaturas mantem o alinhamento proprio.
-        if paragraph.alignment is None and not is_signature:
+        # Corpo justificado; titulo, assinaturas e celulas da grade nao.
+        # Justificar texto curto na tabela de assinatura deforma o DocuSeal.
+        parent = paragraph._element.getparent()
+        in_table = parent is not None and parent.tag == qn("w:tc")
+        if paragraph.alignment is None and not is_signature and not in_table:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
         for run in paragraph.runs:
@@ -123,11 +127,27 @@ class ConsumidorGenerator(ContractGenerator):
         paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         return paragraph
 
-    @staticmethod
-    def _negrito(paragraph):
-        for run in paragraph.runs:
-            run.bold = True
-        return paragraph
+    _PAPEL_NEGRITO = re.compile(r"(CONTRATANTES|CONTRATANTE|CONTRATADA)")
+
+    def _paragrafo_com_destaques(self, doc: Document, texto: str, nomes: list[str]):
+        """Qualificacao: negrito so nos nomes das partes e em CONTRATANTE/CONTRATADA."""
+        p = doc.add_paragraph()
+        nomes_ok = sorted({n for n in nomes if n}, key=len, reverse=True)
+        if nomes_ok:
+            padrao = "(" + "|".join(re.escape(n) for n in nomes_ok) + r"|CONTRATANTES|CONTRATANTE|CONTRATADA)"
+            splitter = re.compile(padrao)
+        else:
+            splitter = self._PAPEL_NEGRITO
+
+        pos = 0
+        for m in splitter.finditer(texto):
+            if m.start() > pos:
+                p.add_run(texto[pos:m.start()]).bold = False
+            p.add_run(m.group(0)).bold = True
+            pos = m.end()
+        if pos < len(texto):
+            p.add_run(texto[pos:]).bold = False
+        return p
 
     def _grid_assinaturas(self, doc: Document, entries: list[tuple[str, list[str]]]) -> None:
         """Assinaturas 2 por linha. Rotulo e' uma lista de linhas (nome / CPF / papel).
@@ -251,14 +271,21 @@ class ConsumidorGenerator(ContractGenerator):
             g = "a" if self._genero_de(data.contratantes[0]) == "F" else "o"
             texto += f", doravante denominad{g} apenas CONTRATANTE;"
 
-        # No original a qualificacao das partes vem em negrito.
-        self._negrito(doc.add_paragraph(f"CONTRATANTES: {texto}"))
+        nomes_contratante: list[str] = []
+        for c in data.contratantes:
+            if isinstance(c, ContratanteConsumidorPJ):
+                nomes_contratante.append(c.razao_social.upper())
+                nomes_contratante.append(c.representante_nome.upper())
+            else:
+                nomes_contratante.append(c.nome.upper())
+
+        self._paragrafo_com_destaques(doc, f"CONTRATANTES: {texto}", nomes_contratante)
         doc.add_paragraph("E")
-        self._negrito(
-            doc.add_paragraph(
-                f"{CONTRATADA_NOME}, {CONTRATADA_OAB}, CPF n° {CONTRATADA_CPF}, "
-                f"com escritório na {CONTRATADA_ENDERECO}, doravante denominada apenas CONTRATADA."
-            )
+        self._paragrafo_com_destaques(
+            doc,
+            f"{CONTRATADA_NOME}, {CONTRATADA_OAB}, CPF n° {CONTRATADA_CPF}, "
+            f"com escritório na {CONTRATADA_ENDERECO}, doravante denominada apenas CONTRATADA.",
+            [CONTRATADA_NOME],
         )
         doc.add_paragraph(
             "As partes acima qualificadas têm entre si contratado o seguinte a Contrato "
@@ -623,11 +650,19 @@ class ConsumidorGenerator(ContractGenerator):
                     f"{{{{Assinatura {nome};type=signature;role={sig['role']}}}}}",
                     [nome.upper(), "Contratante"],
                 ))
-            for sig in contratado_sigs + advogado_sigs:
-                nome = sig.get("name", CONTRATADA_NOME)
+            # Contratado neste modelo e' sempre a Monica — o fluxo do DocuSeal
+            # reaproveita o papel "Contratado" do contrato de honorarios, mas o
+            # rotulo no documento nao pode virar "Carvalho & Furtado Advogados".
+            for sig in contratado_sigs:
+                entries.append((
+                    f"{{{{Assinatura {CONTRATADA_NOME};type=signature;role={sig['role']}}}}}",
+                    [CONTRATADA_NOME, f"CPF: {CONTRATADA_CPF} - {CONTRATADA_OAB}", "Contratada"],
+                ))
+            for sig in advogado_sigs:
+                nome = sig.get("name", "Advogado")
                 entries.append((
                     f"{{{{Assinatura {nome};type=signature;role={sig['role']}}}}}",
-                    [nome.upper(), f"CPF: {CONTRATADA_CPF} - {CONTRATADA_OAB}", "Contratada"],
+                    [nome.upper(), "Advogado"],
                 ))
             self._grid_assinaturas(doc, entries)
 

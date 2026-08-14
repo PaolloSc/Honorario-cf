@@ -156,12 +156,10 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
         )
         try:
             import json as _json
-            from app.models.contract import ContratoRequest as _CR
-            from app.services.contract_generator import ContractGenerator as _CG
+            from app.services.contract_dispatch import parse_form_data
 
             form_data = _json.loads(latest_ver.form_data_json)
-            contrato_data = _CR(**form_data)
-            gen = _CG()
+            contrato_data, gen = parse_form_data(form_data)
             _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
             regenerated = Path(new_filepath)
 

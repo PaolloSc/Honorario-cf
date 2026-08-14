@@ -3,10 +3,31 @@
 import { useEffect, useState } from "react";
 import Logo from "@/components/ui/Logo";
 
+function callbackUrlSeguro(): string {
+  if (typeof window === "undefined") return "/";
+  const raw = new URLSearchParams(window.location.search).get("callbackUrl");
+  if (!raw) return "/";
+  // So caminhos relativos da propria aplicacao — evita open redirect.
+  if (raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\")) {
+    return raw;
+  }
+  try {
+    const u = new URL(raw);
+    if (u.origin === window.location.origin) {
+      return `${u.pathname}${u.search}${u.hash}` || "/";
+    }
+  } catch {
+    /* ignore */
+  }
+  return "/";
+}
+
 export default function LoginPage() {
   const [csrfToken, setCsrfToken] = useState("");
+  const [callbackUrl, setCallbackUrl] = useState("/");
 
   useEffect(() => {
+    setCallbackUrl(callbackUrlSeguro());
     fetch("/api/auth/csrf")
       .then((r) => r.json())
       .then((d) => setCsrfToken(d.csrfToken));
@@ -29,7 +50,7 @@ export default function LoginPage() {
 
         <form action="/api/auth/signin/microsoft-entra-id" method="POST">
           <input type="hidden" name="csrfToken" value={csrfToken} />
-          <input type="hidden" name="callbackUrl" value="/" />
+          <input type="hidden" name="callbackUrl" value={callbackUrl} />
           <button
             type="submit"
             className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-primary-dark text-white rounded-lg font-medium hover:bg-primary-dark/90 transition shadow-sm"
