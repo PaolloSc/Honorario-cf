@@ -1,5 +1,7 @@
 import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import { NextResponse } from "next/server";
+import { callbackUrlSeguro } from "@/lib/callback-url";
 
 declare module "next-auth" {
   interface Session {
@@ -39,9 +41,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     authorized({ auth, request }) {
       const isLoggedIn = !!auth?.user;
-      const isOnLogin = request.nextUrl.pathname.startsWith("/login");
-      if (isOnLogin) return true;
-      return isLoggedIn;
+      const path = request.nextUrl.pathname;
+      if (path.startsWith("/login")) return true;
+      if (isLoggedIn) return true;
+      // Caminho relativo: o form/OAuth da Vercel perde a URL absoluta do preview.
+      const login = request.nextUrl.clone();
+      login.pathname = "/login";
+      login.search = "";
+      login.searchParams.set("callbackUrl", `${path}${request.nextUrl.search}` || "/");
+      return NextResponse.redirect(login);
     },
     async jwt({ token, account }) {
       if (account) {
@@ -87,6 +95,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.sub;
       }
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      // Sempre o pathname interno + host desta request. AUTH_URL na Vercel
+      // (producao vs preview) nao pode mandar /consumidor de volta para /.
+      const path = callbackUrlSeguro(url);
+      return `${baseUrl}${path}`;
     },
   },
   pages: {
