@@ -7,6 +7,7 @@ import {
 } from "@/app/lib/api";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useAcessoConsumidor } from "@/components/AcessoConsumidor";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-gray-100 text-gray-700" },
@@ -36,6 +37,7 @@ function formatDate(iso: string) {
 
 export default function ContractsPage() {
   const { status: sessionStatus } = useSession();
+  const podeConsumidor = useAcessoConsumidor();
   const [data, setData] = useState<ContractListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,12 +82,23 @@ export default function ContractsPage() {
             {data ? `${data.total} contrato${data.total !== 1 ? "s" : ""}` : "Carregando..."}
           </p>
         </div>
-        <a
-          href="/"
-          className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition text-sm"
-        >
-          + Novo Contrato
-        </a>
+        {/* Dois tipos de contrato: o botao precisa dizer qual. */}
+        <div className="flex gap-2">
+          <a
+            href="/"
+            className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition text-sm"
+          >
+            + Honorários
+          </a>
+          {podeConsumidor && (
+            <a
+              href="/consumidor"
+              className="px-5 py-2.5 border border-primary text-primary rounded-lg font-medium hover:bg-primary/5 transition text-sm"
+            >
+              + Ação de Consumo
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
