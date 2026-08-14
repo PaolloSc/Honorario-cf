@@ -35,6 +35,12 @@ def test_previa_renderiza_sem_gravar(client):
     assert "CLÁUSULA I" in r.text
     assert "Os CONTRATANTES estão cientes" in r.text  # plural aplicado
     assert "R$ 40,00" in r.text  # milheiro da Azul
+    # Qualificacao: so nomes e as palavras CONTRATANTE/CONTRATADA em negrito.
+    assert "<strong>DANIELA ELIAS ARAUJO MARQUES</strong>" in r.text
+    assert "<strong>CONTRATANTES</strong>" in r.text
+    assert "<strong>MÔNICA FURTADO PINHEIRO CHAGAS</strong>" in r.text
+    assert "inscrita no CPF" in r.text
+    assert "<strong>inscrita no CPF" not in r.text
     # O ponto da previa: nada foi persistido.
     assert _contagens() == antes
 
@@ -50,7 +56,8 @@ def test_previa_aceita_pessoa_juridica(client):
 
     assert r.status_code == 200
     assert "pessoa jurídica de direito privado" in r.text
-    assert "neste ato representada por CARLOS SILVA" in r.text
+    assert "neste ato representada por" in r.text
+    assert "<strong>CARLOS SILVA</strong>" in r.text
 
 
 def test_previa_recusa_dados_invalidos(client):

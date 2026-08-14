@@ -58,6 +58,18 @@ def resolve_backend_path(value: str) -> Path:
     return BACKEND_DIR / path
 
 
+def _tipo_da_versao(form_data_json: str | None) -> str:
+    """Honorarios e o padrao: contratos antigos nao gravavam tipo_contrato."""
+    from app.services.contract_dispatch import TIPO_HONORARIOS, tipo_contrato
+
+    if not form_data_json:
+        return TIPO_HONORARIOS
+    try:
+        return tipo_contrato(json.loads(form_data_json))
+    except (ValueError, TypeError):
+        return TIPO_HONORARIOS
+
+
 def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
     """Resolve the contract file path, trying multiple strategies.
 
@@ -242,15 +254,29 @@ async def send_for_signature(
     try:
         service = get_docuseal_service()
 
+        latest_ver = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == data.contract_id)
+            .order_by(ContractVersionDB.version_number.desc())
+            .first()
+        )
+        from app.models.contrato_consumidor import TIPO_CONSUMIDOR_AEREO
+        from app.services.consumidor_generator import CONTRATADA_NOME
+
+        tipo = _tipo_da_versao(latest_ver.form_data_json if latest_ver else None)
+        eh_consumidor = tipo == TIPO_CONSUMIDOR_AEREO
+
         # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
 
-        # Always include C&F as "Contratado" role (the firm)
+        # Always include C&F as "Contratado" role (the firm). No contrato de
+        # consumidor a contratada e' a Monica — o e-mail segue o do escritorio,
+        # mas o nome no DocuSeal/documento nao pode ser o da sociedade.
         cf_already_included = any(s.get("role") == "Contratado" for s in all_signatarios)
         if not cf_already_included:
             all_signatarios.append({
                 "email": settings.cf_signer_email,
-                "name": "Carvalho & Furtado Advogados",
+                "name": CONTRATADA_NOME if eh_consumidor else "Carvalho & Furtado Advogados",
                 "role": "Contratado",
             })
 
@@ -311,13 +337,6 @@ async def send_for_signature(
         all_signatarios.sort(key=lambda s: s["order"])
 
         # Regenerate DOCX with signature fields matching the unique signatario roles
-        latest_ver = (
-            db.query(ContractVersionDB)
-            .filter(ContractVersionDB.contract_id == data.contract_id)
-            .order_by(ContractVersionDB.version_number.desc())
-            .first()
-        )
-
         filepath = _resolve_contract_filepath(data.contract_id, db)
 
         if latest_ver and latest_ver.form_data_json:
@@ -345,10 +364,13 @@ async def send_for_signature(
                     logger.error("Failed to patch DOCX with signatures: %s", patch_err)
 
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
+        rotulo = (
+            "Contrato de Prestação de Serviços" if eh_consumidor else "Contrato Honorários"
+        )
         template_name = (
-            f"Contrato Honorários — {contract.client_name}"
+            f"{rotulo} — {contract.client_name}"
             if contract and contract.client_name
-            else f"Contrato Honorarios {data.contract_id}"
+            else f"{rotulo} {data.contract_id}"
         )
         result = await service.create_template_from_docx(
             filepath=str(filepath),
