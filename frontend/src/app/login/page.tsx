@@ -1,74 +1,18 @@
-"use client";
+import { auth } from "@/auth";
+import { callbackUrlSeguro } from "@/lib/callback-url";
+import LoginForm from "./LoginForm";
+import { redirect } from "next/navigation";
 
-import { useEffect, useState } from "react";
-import Logo from "@/components/ui/Logo";
-
-function callbackUrlSeguro(): string {
-  if (typeof window === "undefined") return "/";
-  const raw = new URLSearchParams(window.location.search).get("callbackUrl");
-  if (!raw) return "/";
-  // So caminhos relativos da propria aplicacao — evita open redirect.
-  if (raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\")) {
-    return raw;
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const params = await searchParams;
+  const callbackUrl = callbackUrlSeguro(params.callbackUrl);
+  const session = await auth();
+  if (session?.user) {
+    redirect(callbackUrl);
   }
-  try {
-    const u = new URL(raw);
-    if (u.origin === window.location.origin) {
-      return `${u.pathname}${u.search}${u.hash}` || "/";
-    }
-  } catch {
-    /* ignore */
-  }
-  return "/";
-}
-
-export default function LoginPage() {
-  const [csrfToken, setCsrfToken] = useState("");
-  const [callbackUrl, setCallbackUrl] = useState("/");
-
-  useEffect(() => {
-    setCallbackUrl(callbackUrlSeguro());
-    fetch("/api/auth/csrf")
-      .then((r) => r.json())
-      .then((d) => setCsrfToken(d.csrfToken));
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-6">
-            <Logo variant="dark" format="vertical" className="h-24 w-auto" />
-          </div>
-          <h1 className="font-display text-xl font-semibold text-primary-dark tracking-wide">
-            Contrato de Honorário
-          </h1>
-          <p className="text-sm text-muted mt-2">
-            Faça login com sua conta Microsoft do escritório.
-          </p>
-        </div>
-
-        <form action="/api/auth/signin/microsoft-entra-id" method="POST">
-          <input type="hidden" name="csrfToken" value={csrfToken} />
-          <input type="hidden" name="callbackUrl" value={callbackUrl} />
-          <button
-            type="submit"
-            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-primary-dark text-white rounded-lg font-medium hover:bg-primary-dark/90 transition shadow-sm"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none">
-              <rect x="1" y="1" width="9" height="9" fill="#F25022" />
-              <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
-              <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
-              <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
-            </svg>
-            Entrar com Microsoft
-          </button>
-        </form>
-
-        <p className="text-xs text-muted text-center mt-6">
-          Acesso restrito ao Carvalho &amp; Furtado Advogados.
-        </p>
-      </div>
-    </div>
-  );
+  return <LoginForm callbackUrl={callbackUrl} />;
 }
