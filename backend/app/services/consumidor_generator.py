@@ -159,11 +159,14 @@ class ConsumidorGenerator(ContractGenerator):
 
         table = doc.add_table(rows=(len(entries) + 1) // 2, cols=2)
         table.autofit = True
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
         for idx, (tag, linhas) in enumerate(entries):
             cell = table.cell(idx // 2, idx % 2)
             cell.paragraphs[0].text = tag  # tag do DocuSeal
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             for linha in linhas:
-                cell.add_paragraph(linha)
+                p = cell.add_paragraph(linha)
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             cell.add_paragraph()
 
     # ── Concordancia ──────────────────────────────────────────────
