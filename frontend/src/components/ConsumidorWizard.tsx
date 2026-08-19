@@ -65,17 +65,16 @@ function validar(step: number, data: ConsumidorFormData): string[] {
         if (!isCPF(c.representante_cpf)) {
           erros.push(`${label}: CPF do representante inválido.`);
         }
-        // Sem e-mail o contrato nao chega ao signatario.
-        if (!isEmail(emailContato(c))) {
-          erros.push(`${label}: informe um e-mail válido do representante (usado na assinatura).`);
+        if (emailContato(c) && !isEmail(emailContato(c))) {
+          erros.push(`${label}: e-mail do representante inválido.`);
         }
         return;
       }
 
       if (!c.nome.trim()) erros.push(`${label}: informe o nome completo.`);
       if (!isCPF(c.cpf)) erros.push(`${label}: CPF inválido.`);
-      if (!isEmail(c.email ?? "")) {
-        erros.push(`${label}: informe um e-mail válido (usado no envio e na assinatura).`);
+      if (c.email && !isEmail(c.email)) {
+        erros.push(`${label}: e-mail inválido.`);
       }
       // O endereco e' montado pelo CEP — aponte o campo que o usuario preenche.
       if (!c.endereco.trim()) erros.push(`${label}: busque o CEP para montar o endereço.`);
