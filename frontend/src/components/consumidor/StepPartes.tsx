@@ -300,8 +300,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
 
                   <FormField
                     label="E-mail do representante"
-                    required
-                    hint="Recebe o contrato e o link de assinatura"
+                    hint="Opcional — recebe o contrato e o link de assinatura"
                   >
                     <Input
                       type="email"
@@ -428,7 +427,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
               </FormField>
 
               <div className="grid grid-cols-2 gap-4 items-end">
-                <FormField label="E-mail" required hint="Usado para envio e assinatura digital">
+                <FormField label="E-mail" hint="Opcional — usado para envio e assinatura digital">
                   <Input
                     type="email"
                     value={c.email ?? ""}
