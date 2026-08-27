@@ -47,7 +47,7 @@ export default function StepIndicator({
                   )}
                 </span>
                 <span
-                  className={`text-xs font-medium hidden sm:inline ${
+                  className={`text-xs font-medium hidden sm:inline whitespace-nowrap ${
                     isActive ? "text-primary" : isCompleted ? "text-success" : "text-muted"
                   }`}
                 >
