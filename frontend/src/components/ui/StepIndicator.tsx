@@ -16,9 +16,10 @@ export default function StepIndicator({
   currentStep,
   onStepClick,
 }: StepIndicatorProps) {
+  // overflow-x-auto: em mobile as 7 etapas nao cabem; rola a barra, nao a pagina.
   return (
-    <nav className="mb-8">
-      <ol className="flex items-center gap-2">
+    <nav className="mb-8 overflow-x-auto">
+      <ol className="flex items-center gap-2 w-max">
         {steps.map((step, idx) => {
           const isActive = step.id === currentStep;
           const isCompleted = step.id < currentStep;
