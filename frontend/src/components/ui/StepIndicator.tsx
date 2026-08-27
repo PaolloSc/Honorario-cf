@@ -16,10 +16,10 @@ export default function StepIndicator({
   currentStep,
   onStepClick,
 }: StepIndicatorProps) {
-  // overflow-x-auto: em mobile as 7 etapas nao cabem; rola a barra, nao a pagina.
+  // ponytail: sem scroll horizontal; as etapas quebram linha quando nao cabem.
   return (
-    <nav className="mb-8 overflow-x-auto">
-      <ol className="flex items-center gap-2 w-max">
+    <nav className="mb-8">
+      <ol className="flex flex-wrap items-center justify-center gap-y-3 gap-x-2">
         {steps.map((step, idx) => {
           const isActive = step.id === currentStep;
           const isCompleted = step.id < currentStep;
