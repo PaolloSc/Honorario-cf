@@ -23,8 +23,8 @@ export default function FormField({
         {label}
         {required && <span className="text-danger ml-1">*</span>}
       </label>
-      {hint && <p className="text-xs text-muted mb-1">{hint}</p>}
       {children}
+      {hint && <p className="text-xs text-muted mt-1">{hint}</p>}
       {error && <p className="text-xs text-danger mt-1">{error}</p>}
     </div>
   );
