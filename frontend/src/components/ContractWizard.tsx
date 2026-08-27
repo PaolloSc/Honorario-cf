@@ -22,7 +22,7 @@ const STEPS = [
   { id: 2, title: "Escopo" },
   { id: 3, title: "Honorários" },
   { id: 4, title: "Acessórios" },
-  { id: 5, title: "Participação" },
+  { id: 5, title: "Ficha Interna" },
   { id: 6, title: "Revisão" },
   { id: 7, title: "Envio" },
 ];
