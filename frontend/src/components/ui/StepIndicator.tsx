@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
 interface Step {
   id: number;
   title: string;
@@ -18,43 +16,22 @@ export default function StepIndicator({
   currentStep,
   onStepClick,
 }: StepIndicatorProps) {
-  const olRef = useRef<HTMLOListElement>(null);
-
-  // ponytail: invisible (nao hidden) para nao mexer no layout e nao oscilar o wrap.
-  useEffect(() => {
-    const ol = olRef.current;
-    if (!ol) return;
-    const update = () => {
-      const items = Array.from(ol.children) as HTMLElement[];
-      items.forEach((li, i) => {
-        const next = items[i + 1];
-        li
-          .querySelector("[data-connector]")
-          ?.classList.toggle("invisible", !next || next.offsetTop > li.offsetTop);
-      });
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(ol);
-    return () => ro.disconnect();
-  }, [steps.length, currentStep]);
-
-  // ponytail: sem scroll horizontal; as etapas quebram linha quando nao cabem.
+  // ponytail: conector elastico (flex-1) => sempre uma linha so, sem JS de medicao.
   return (
     <nav className="mb-8">
-      <ol ref={olRef} className="flex flex-wrap items-center justify-center gap-y-3 gap-x-1.5">
+      <ol className="flex items-center gap-1.5">
         {steps.map((step, idx) => {
           const isActive = step.id === currentStep;
           const isCompleted = step.id < currentStep;
           return (
-            <li key={step.id} className="flex items-center gap-1.5">
+            <li key={step.id} className="flex items-center gap-1.5 flex-1 last:flex-none">
               <button
                 type="button"
                 onClick={() => onStepClick?.(step.id)}
                 className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition"
               >
                 <span
-                  className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center w-7 h-7 shrink-0 rounded-full text-xs font-bold transition-all ${
                     isActive
                       ? "bg-primary text-white shadow-md"
                       : isCompleted
@@ -71,7 +48,7 @@ export default function StepIndicator({
                   )}
                 </span>
                 <span
-                  className={`text-[11px] font-medium hidden sm:inline whitespace-nowrap ${
+                  className={`text-[10px] font-medium hidden md:inline whitespace-nowrap ${
                     isActive ? "text-primary" : isCompleted ? "text-success" : "text-muted"
                   }`}
                 >
@@ -80,8 +57,7 @@ export default function StepIndicator({
               </button>
               {idx < steps.length - 1 && (
                 <div
-                  data-connector
-                  className={`w-4 h-0.5 ${
+                  className={`flex-1 min-w-2 h-0.5 ${
                     isCompleted ? "bg-success" : "bg-gray-200"
                   }`}
                 />
