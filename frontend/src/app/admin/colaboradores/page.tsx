@@ -26,6 +26,7 @@ export default function ColaboradoresAdminPage() {
   const [email, setEmail] = useState("");
   const [papel, setPapel] = useState("advogado");
   const [saving, setSaving] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -73,6 +74,16 @@ export default function ColaboradoresAdminPage() {
       fetchRows();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao atualizar");
+    }
+  };
+
+  const excluirDefinitivamente = async (c: Colaborador) => {
+    try {
+      await deleteColaborador(c.id, true);
+      setConfirmingDeleteId(null);
+      fetchRows();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao excluir");
     }
   };
 
@@ -201,13 +212,38 @@ export default function ColaboradoresAdminPage() {
                       {c.ativo ? "Ativo" : "Inativo"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right space-x-3">
                     <button
                       onClick={() => toggleAtivo(c)}
                       className="text-xs font-medium text-accent hover:underline"
                     >
                       {c.ativo ? "Desativar" : "Reativar"}
                     </button>
+                    {!c.ativo && (
+                      confirmingDeleteId === c.id ? (
+                        <>
+                          <button
+                            onClick={() => excluirDefinitivamente(c)}
+                            className="text-xs font-medium text-red-600 hover:underline"
+                          >
+                            Confirmar exclusão
+                          </button>
+                          <button
+                            onClick={() => setConfirmingDeleteId(null)}
+                            className="text-xs font-medium text-muted hover:underline"
+                          >
+                            Cancelar
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmingDeleteId(c.id)}
+                          className="text-xs font-medium text-red-600/70 hover:underline"
+                        >
+                          Excluir
+                        </button>
+                      )
+                    )}
                   </td>
                 </tr>
               ))}
