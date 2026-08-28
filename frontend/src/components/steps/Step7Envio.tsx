@@ -24,19 +24,19 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
     categoria_cliente: p.categoria_cliente,
     etiquetas: p.etiquetas ?? [],
     listas_transmissao: p.listas_transmissao ?? [],
+    // Contato financeiro do cliente independe de haver participação.
+    contato_financeiro_nome: p.contato_financeiro_nome,
+    contato_financeiro_email: p.contato_financeiro_email,
+    contato_financeiro_telefone: p.contato_financeiro_telefone,
     ...(p.tem_participacao
       ? {
           valor_tipo: p.valor_tipo,
           valor_percentual: p.valor_percentual,
           valor_monetario: p.valor_monetario,
           valor_outro: p.valor_outro,
-          para_quem: p.para_quem ?? [],
-          natureza: p.natureza,
+          participantes: p.participantes ?? [],
           responsavel_captacao: p.responsavel_captacao,
           responsavel_gestao: p.responsavel_gestao,
-          contato_financeiro_nome: p.contato_financeiro_nome,
-          contato_financeiro_email: p.contato_financeiro_email,
-          contato_financeiro_telefone: p.contato_financeiro_telefone,
           base_tipo: p.base_tipo,
           base_escopo_index: p.base_escopo_index,
           base_honorario: p.base_honorario,
@@ -46,15 +46,19 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
   };
 }
 
-// A ficha vai ao financeiro quando há participação ou quando o cadastro do
-// Legal One foi preenchido — contratos sem participação também precisam ser lançados.
+// A ficha vai ao financeiro quando há participação, cadastro do Legal One ou
+// contato financeiro preenchidos — contratos sem participação também precisam
+// ser lançados, e o contato financeiro agora independe da participação.
 function temFichaParaFinanceiro(p?: Participacao): p is Participacao {
   if (!p) return false;
   return Boolean(
     p.tem_participacao ||
       p.categoria_cliente ||
       p.etiquetas?.length ||
-      p.listas_transmissao?.length
+      p.listas_transmissao?.length ||
+      p.contato_financeiro_nome ||
+      p.contato_financeiro_email ||
+      p.contato_financeiro_telefone
   );
 }
 

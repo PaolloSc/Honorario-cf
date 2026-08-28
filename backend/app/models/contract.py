@@ -250,6 +250,12 @@ class Acessorios(BaseModel):
     clausulas_adicionais: Optional[str] = None
  
  
+class ParticipacaoParticipante(BaseModel):
+    nome: str
+    natureza: str = ""
+    percentual: Optional[str] = None
+
+
 class Participacao(BaseModel):
     tem_participacao: bool = False
     # Valor (tipo + campo do tipo escolhido)
@@ -257,9 +263,8 @@ class Participacao(BaseModel):
     valor_percentual: Optional[str] = None
     valor_monetario: Optional[float] = None
     valor_outro: Optional[str] = None
-    # Advogados
-    para_quem: list[str] = []
-    natureza: Optional[str] = None
+    # Advogados (cada um com natureza e percentual proprios)
+    participantes: list[ParticipacaoParticipante] = []
     responsavel_captacao: Optional[str] = None
     responsavel_gestao: Optional[str] = None
     # Contato financeiro do cliente (3 campos)
@@ -284,14 +289,14 @@ class Participacao(BaseModel):
     def _coerce_and_migrate(cls, data):
         if not isinstance(data, dict):
             return data
-        for field in ("natureza", "responsavel_captacao", "responsavel_gestao",
+        for field in ("responsavel_captacao", "responsavel_gestao",
                       "valor_percentual", "valor_outro", "percentual_ou_valor",
                       "contato_financeiro_nome", "contato_financeiro_email",
                       "contato_financeiro_telefone", "contato_financeiro_cliente",
                       "categoria_cliente"):
             if data.get(field) is None:
                 data[field] = ""
-        for field in ("para_quem", "etiquetas", "listas_transmissao"):
+        for field in ("etiquetas", "listas_transmissao"):
             v = data.get(field)
             if isinstance(v, str):
                 data[field] = [v] if v.strip() else []
@@ -301,6 +306,18 @@ class Participacao(BaseModel):
             data["valor_tipo"] = "outro"
             if not data.get("valor_outro"):
                 data["valor_outro"] = data["percentual_ou_valor"]
+        # Contratos salvos antes da participacao-por-advogado: para_quem (lista de
+        # nomes) + um unico natureza/valor_percentual viravam "participantes".
+        if not data.get("participantes") and data.get("para_quem"):
+            para_quem = data["para_quem"]
+            if isinstance(para_quem, str):
+                para_quem = [para_quem] if para_quem.strip() else []
+            natureza_legado = data.get("natureza") or ""
+            percentual_legado = data.get("valor_percentual") or None
+            data["participantes"] = [
+                {"nome": nome, "natureza": natureza_legado, "percentual": percentual_legado}
+                for nome in para_quem
+            ]
         return data
  
  

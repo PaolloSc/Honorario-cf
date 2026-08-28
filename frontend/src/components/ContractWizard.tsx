@@ -74,21 +74,28 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       // Aceita lista, string legada ou ausência — contratos antigos gravaram string.
       const lista = (v: unknown): string[] =>
         Array.isArray(v) ? v : typeof v === "string" && v.trim() ? [v] : [];
-      const paraQuem = lista(p.para_quem);
       let valorTipo = p.valor_tipo;
       let valorOutro = p.valor_outro ?? "";
       if (!valorTipo && p.percentual_ou_valor) {
         valorTipo = "outro";
         valorOutro = p.percentual_ou_valor;
       }
+      // Contratos antigos gravaram para_quem (lista de nomes) + uma natureza única —
+      // migra para participantes (cada advogado com natureza/percentual próprios).
+      const participantes = Array.isArray(p.participantes) && p.participantes.length
+        ? p.participantes
+        : lista(p.para_quem).map((nome) => ({
+            nome,
+            natureza: p.natureza ?? "",
+            percentual: p.valor_percentual,
+          }));
       return {
         tem_participacao: p.tem_participacao ?? false,
         valor_tipo: valorTipo,
         valor_percentual: p.valor_percentual ?? "",
         valor_monetario: p.valor_monetario,
         valor_outro: valorOutro,
-        para_quem: paraQuem,
-        natureza: p.natureza ?? "",
+        participantes,
         responsavel_captacao: p.responsavel_captacao ?? "",
         responsavel_gestao: p.responsavel_gestao ?? "",
         contato_financeiro_nome: p.contato_financeiro_nome ?? "",

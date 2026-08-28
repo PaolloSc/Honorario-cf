@@ -41,14 +41,28 @@ def linhas_participacao(p: Mapping[str, Any]) -> list[tuple[str, str]]:
     if valor:
         linhas.append(valor)
 
-    para_quem = p.get("para_quem") or []
-    if isinstance(para_quem, str):  # formato antigo: um nome só
-        para_quem = [para_quem] if para_quem.strip() else []
-    if para_quem:
-        linhas.append(("Para quem", ", ".join(para_quem)))
+    # Cada advogado com natureza/percentual proprios. Contratos antigos gravaram
+    # para_quem (lista de nomes) + uma unica natureza — cai aqui como fallback.
+    participantes = p.get("participantes") or []
+    if participantes:
+        for participante in participantes:
+            nome = participante.get("nome", "")
+            if not nome:
+                continue
+            natureza = participante.get("natureza", "")
+            percentual = participante.get("percentual", "")
+            valor = ", ".join(v for v in (natureza, f"{percentual}%" if percentual else "") if v)
+            linhas.append((f"Para quem — {nome}", valor or "—"))
+    else:
+        para_quem = p.get("para_quem") or []
+        if isinstance(para_quem, str):  # formato antigo: um nome só
+            para_quem = [para_quem] if para_quem.strip() else []
+        if para_quem:
+            linhas.append(("Para quem", ", ".join(para_quem)))
+        if p.get("natureza"):
+            linhas.append(("Natureza", p["natureza"]))
 
     for chave, rotulo in (
-        ("natureza", "Natureza"),
         ("responsavel_captacao", "Resp. Captação"),
         ("responsavel_gestao", "Resp. Gestão"),
     ):
@@ -69,12 +83,10 @@ def linhas_participacao(p: Mapping[str, Any]) -> list[tuple[str, str]]:
     # ficha (envio, pos-assinatura e rascunho do financeiro) nascerem iguais.
     if p.get("categoria_cliente"):
         linhas.append(("Categoria do cliente", p["categoria_cliente"]))
-    for chave, rotulo in (("etiquetas", "Etiqueta LO"),
-                          ("listas_transmissao", "Lista de transmissão")):
-        valores = p.get(chave) or []
-        if isinstance(valores, str):  # formato antigo: um valor so
-            valores = [valores] if valores.strip() else []
-        if valores:
-            linhas.append((rotulo, ", ".join(valores)))
+    valores = p.get("listas_transmissao") or []
+    if isinstance(valores, str):  # formato antigo: um valor so
+        valores = [valores] if valores.strip() else []
+    if valores:
+        linhas.append(("Lista de transmissão", ", ".join(valores)))
 
     return linhas

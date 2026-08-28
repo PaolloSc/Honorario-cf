@@ -6,10 +6,23 @@ def _dict(linhas):
     return dict(linhas)
 
 
-def test_para_quem_sai_separado_por_virgula():
-    """Lista crua vazava como 'AnaBruno' na revisão e ['Ana', 'Bruno'] no e-mail."""
-    linhas = _dict(linhas_participacao({"para_quem": ["Ana Souza", "Bruno Lima"]}))
+def test_participantes_saem_um_por_linha():
+    """Cada advogado tem natureza/percentual proprios, entao vira uma linha por nome."""
+    linhas = _dict(linhas_participacao({
+        "participantes": [
+            {"nome": "Ana Souza", "natureza": "Captação", "percentual": "10"},
+            {"nome": "Bruno Lima", "natureza": "Performance"},
+        ]
+    }))
+    assert linhas["Para quem — Ana Souza"] == "Captação, 10%"
+    assert linhas["Para quem — Bruno Lima"] == "Performance"
+
+
+def test_para_quem_legado_sai_separado_por_virgula():
+    """Contratos antigos (sem participantes) caem no formato legado: uma lista + natureza única."""
+    linhas = _dict(linhas_participacao({"para_quem": ["Ana Souza", "Bruno Lima"], "natureza": "Captação"}))
     assert linhas["Para quem"] == "Ana Souza, Bruno Lima"
+    assert linhas["Natureza"] == "Captação"
 
 
 def test_criterio_usa_os_campos_novos_do_wizard():
@@ -44,14 +57,16 @@ def test_ficha_completa_na_ordem_da_leitura():
     linhas = linhas_participacao({
         "base_tipo": "escopo", "base_label": "Contencioso",
         "valor_tipo": "percentual", "valor_percentual": "15",
-        "para_quem": ["Ana", "Bruno"],
-        "natureza": "Performance",
+        "participantes": [
+            {"nome": "Ana", "natureza": "Performance"},
+            {"nome": "Bruno", "natureza": "Captação"},
+        ],
         "responsavel_captacao": "Carlos",
         "responsavel_gestao": "Diana",
         "contato_financeiro_nome": "Eva",
         "contato_financeiro_email": "eva@cliente.com",
     })
     assert [r for r, _ in linhas] == [
-        "Base", "Percentual", "Para quem", "Natureza",
+        "Base", "Percentual", "Para quem — Ana", "Para quem — Bruno",
         "Resp. Captação", "Resp. Gestão", "Contato — Nome", "Contato — E-mail",
     ]

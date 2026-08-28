@@ -42,20 +42,23 @@ def test_request_aceita_campos_novos():
         cliente_nome="Cliente",
         valor_tipo="valor",
         valor_monetario=5000.0,
-        para_quem=["Bruno", "Ana"],
+        participantes=[
+            {"nome": "Bruno", "natureza": "Captação", "percentual": "10"},
+            {"nome": "Ana", "natureza": "Performance"},
+        ],
         contato_financeiro_nome="Carlos",
         contato_financeiro_email="c@x.com",
         contato_financeiro_telefone="(31) 99999-0000",
     )
     assert r.valor_tipo == "valor"
     assert r.valor_monetario == 5000.0
-    assert r.para_quem == ["Bruno", "Ana"]
+    assert [p["nome"] for p in r.participantes] == ["Bruno", "Ana"]
     assert r.contato_financeiro_email == "c@x.com"
 
 
-def test_request_migra_para_quem_string():
-    r = ParticipacaoEmailRequest(contract_id="c1", cliente_nome="X", para_quem="Bruno")
-    assert r.para_quem == ["Bruno"]
+def test_request_participantes_none_vira_lista_vazia():
+    r = ParticipacaoEmailRequest(contract_id="c1", cliente_nome="X", participantes=None)
+    assert r.participantes == []
 
 
 def test_request_aceita_campos_legalone():
@@ -77,14 +80,11 @@ def test_html_traz_linhas_do_legal_one(client, _override_auth):
         valor_tipo="percentual",
         valor_percentual="10",
         categoria_cliente="Corporativo",
-        etiquetas=["Trabalhista", "Consultivo"],
         listas_transmissao=["Newsletter", "Eventos"],
     )["html_content"]
 
     assert "Categoria do cliente" in html
     assert "Corporativo" in html
-    assert "Etiqueta LO" in html
-    assert "Trabalhista, Consultivo" in html
     assert "Lista de transmissão" in html
     assert "Newsletter, Eventos" in html
 
@@ -93,7 +93,6 @@ def test_html_omite_linhas_do_legal_one_quando_vazias(client, _override_auth):
     html = _enviar(client, valor_tipo="percentual", valor_percentual="10")["html_content"]
 
     assert "Categoria do cliente" not in html
-    assert "Etiqueta LO" not in html
     assert "Lista de transmissão" not in html
 
 
@@ -123,7 +122,7 @@ def test_html_escapa_valores_do_payload(client, _override_auth):
     html = _enviar(
         client,
         cliente_nome="<b>ACME</b>",
-        etiquetas=["</td></tr></table><p>Pix alterado: 123</p><table><tr><td>"],
+        listas_transmissao=["</td></tr></table><p>Pix alterado: 123</p><table><tr><td>"],
     )["html_content"]
 
     assert "<p>Pix alterado: 123</p>" not in html

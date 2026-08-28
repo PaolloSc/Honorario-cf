@@ -51,9 +51,8 @@ class ParticipacaoEmailRequest(BaseModel):
     valor_percentual: str = ""
     valor_monetario: float | None = None
     valor_outro: str = ""
-    # Advogados
-    para_quem: list[str] = []
-    natureza: str = ""
+    # Advogados (cada um com natureza e percentual proprios)
+    participantes: list[dict] = []
     responsavel_captacao: str = ""
     responsavel_gestao: str = ""
     # Contato financeiro (3 campos)
@@ -78,19 +77,21 @@ class ParticipacaoEmailRequest(BaseModel):
     def _coerce_nulls(cls, data):
         if isinstance(data, dict):
             for field in ("objeto_contrato", "valor_tipo", "valor_percentual",
-                          "valor_outro", "natureza", "responsavel_captacao",
+                          "valor_outro", "responsavel_captacao",
                           "responsavel_gestao", "contato_financeiro_nome",
                           "contato_financeiro_email", "contato_financeiro_telefone",
                           "percentual_ou_valor", "contato_financeiro_cliente",
                           "categoria_cliente"):
                 if data.get(field) is None:
                     data[field] = ""
-            for field in ("para_quem", "etiquetas", "listas_transmissao"):
+            for field in ("etiquetas", "listas_transmissao"):
                 v = data.get(field)
                 if isinstance(v, str):
                     data[field] = [v] if v.strip() else []
                 elif v is None:
                     data[field] = []
+            if data.get("participantes") is None:
+                data["participantes"] = []
         return data
 
 
@@ -392,17 +393,13 @@ async def send_participacao_email(
         # O wizard so manda estes campos quando o toggle esta ligado, mas a inferencia
         # cobre todos eles: uma ficha com apenas o responsavel preenchido ainda e
         # participacao, e rotula-la "Cadastro Legal One" seria mentira.
+        # Contato financeiro NAO entra aqui: ele e sempre enviado, com ou sem participacao.
         tem_participacao = any((
             data.base_label,
             data.valor_tipo,
-            data.para_quem,
-            data.natureza,
+            data.participantes,
             data.responsavel_captacao,
             data.responsavel_gestao,
-            data.contato_financeiro_nome,
-            data.contato_financeiro_email,
-            data.contato_financeiro_telefone,
-            data.contato_financeiro_cliente,
             data.percentual_ou_valor,
         ))
         titulo = "Ficha de Participação" if tem_participacao else "Cadastro Legal One"

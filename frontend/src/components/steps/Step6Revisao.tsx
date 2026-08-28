@@ -138,8 +138,12 @@ export default function Step6Revisao({ data }: Step6Props) {
               </li>
             )}
             <li>Critério: {criterioParticipacao(data.participacao)}</li>
-            <li>Para: {(data.participacao.para_quem ?? []).join(", ")}</li>
-            <li>Natureza: {data.participacao.natureza}</li>
+            {(data.participacao.participantes ?? []).map((p, i) => (
+              <li key={i}>
+                {p.nome} — {p.natureza}
+                {p.percentual ? ` (${p.percentual}%)` : ""}
+              </li>
+            ))}
             <li>
               Captação: {data.participacao.responsavel_captacao}
             </li>
@@ -149,19 +153,36 @@ export default function Step6Revisao({ data }: Step6Props) {
       )}
 
       {/* Cadastro no Legal One — vai ao financeiro mesmo sem participação */}
-      {(data.participacao.categoria_cliente ||
-        data.participacao.etiquetas?.length ||
-        data.participacao.listas_transmissao?.length) && (
+      {Boolean(
+        data.participacao.categoria_cliente ||
+          data.participacao.listas_transmissao?.length,
+      ) && (
         <Section title="Cadastro no Legal One (Interno)">
           <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
             {data.participacao.categoria_cliente && (
               <li>Categoria do cliente: {data.participacao.categoria_cliente}</li>
             )}
-            {!!data.participacao.etiquetas?.length && (
-              <li>Etiqueta LO: {data.participacao.etiquetas.join(", ")}</li>
-            )}
             {!!data.participacao.listas_transmissao?.length && (
               <li>Lista de transmissão: {data.participacao.listas_transmissao.join(", ")}</li>
+            )}
+          </ul>
+        </Section>
+      )}
+
+      {/* Contato financeiro — independe de participação */}
+      {(data.participacao.contato_financeiro_nome ||
+        data.participacao.contato_financeiro_email ||
+        data.participacao.contato_financeiro_telefone) && (
+        <Section title="Contato do responsável financeiro do cliente">
+          <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
+            {data.participacao.contato_financeiro_nome && (
+              <li>Nome: {data.participacao.contato_financeiro_nome}</li>
+            )}
+            {data.participacao.contato_financeiro_email && (
+              <li>E-mail: {data.participacao.contato_financeiro_email}</li>
+            )}
+            {data.participacao.contato_financeiro_telefone && (
+              <li>Telefone: {data.participacao.contato_financeiro_telefone}</li>
             )}
           </ul>
         </Section>
