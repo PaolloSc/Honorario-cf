@@ -50,9 +50,8 @@ class ParticipacaoEmailRequest(BaseModel):
     valor_percentual: str = ""
     valor_monetario: float | None = None
     valor_outro: str = ""
-    # Advogados
-    para_quem: list[str] = []
-    natureza: str = ""
+    # Advogados (cada um com natureza e percentual próprios)
+    participantes: list[dict] = []
     responsavel_captacao: str = ""
     responsavel_gestao: str = ""
     # Contato financeiro (3 campos)
@@ -77,19 +76,21 @@ class ParticipacaoEmailRequest(BaseModel):
     def _coerce_nulls(cls, data):
         if isinstance(data, dict):
             for field in ("objeto_contrato", "valor_tipo", "valor_percentual",
-                          "valor_outro", "natureza", "responsavel_captacao",
+                          "valor_outro", "responsavel_captacao",
                           "responsavel_gestao", "contato_financeiro_nome",
                           "contato_financeiro_email", "contato_financeiro_telefone",
                           "percentual_ou_valor", "contato_financeiro_cliente",
                           "categoria_cliente"):
                 if data.get(field) is None:
                     data[field] = ""
-            for field in ("para_quem", "etiquetas", "listas_transmissao"):
+            for field in ("etiquetas", "listas_transmissao"):
                 v = data.get(field)
                 if isinstance(v, str):
                     data[field] = [v] if v.strip() else []
                 elif v is None:
                     data[field] = []
+            if data.get("participantes") is None:
+                data["participantes"] = []
         return data
 
 
@@ -420,11 +421,15 @@ async def send_participacao_email(
             rows.append(("Critério", data.valor_outro))
         elif data.percentual_ou_valor:
             rows.append(("Percentual/Valor", data.percentual_ou_valor))
-        # Para quem (lista)
-        if data.para_quem:
-            rows.append(("Para quem", ", ".join(data.para_quem)))
-        if data.natureza:
-            rows.append(("Natureza", data.natureza))
+        # Para quem (lista, cada um com natureza e percentual próprios)
+        for participante in data.participantes:
+            nome = participante.get("nome", "")
+            if not nome:
+                continue
+            natureza = participante.get("natureza", "")
+            percentual = participante.get("percentual", "")
+            valor = ", ".join(v for v in (natureza, f"{percentual}%" if percentual else "") if v)
+            rows.append((f"Para quem — {nome}", valor or "—"))
         if data.responsavel_captacao:
             rows.append(("Resp. Captação", data.responsavel_captacao))
         if data.responsavel_gestao:
@@ -442,8 +447,6 @@ async def send_participacao_email(
         # Cadastro no Legal One (pode vir sem participacao)
         if data.categoria_cliente:
             rows.append(("Categoria do cliente", data.categoria_cliente))
-        if data.etiquetas:
-            rows.append(("Etiqueta LO", ", ".join(data.etiquetas)))
         if data.listas_transmissao:
             rows.append(("Lista de transmissão", ", ".join(data.listas_transmissao)))
 
@@ -451,17 +454,13 @@ async def send_participacao_email(
         # O wizard so manda estes campos quando o toggle esta ligado, mas a inferencia
         # cobre todos eles: uma ficha com apenas o responsavel preenchido ainda e
         # participacao, e rotula-la "Cadastro Legal One" seria mentira.
+        # Contato financeiro NAO entra aqui: ele e sempre enviado, com ou sem participacao.
         tem_participacao = any((
             data.base_label,
             data.valor_tipo,
-            data.para_quem,
-            data.natureza,
+            data.participantes,
             data.responsavel_captacao,
             data.responsavel_gestao,
-            data.contato_financeiro_nome,
-            data.contato_financeiro_email,
-            data.contato_financeiro_telefone,
-            data.contato_financeiro_cliente,
             data.percentual_ou_valor,
         ))
         titulo = "Ficha de Participação" if tem_participacao else "Cadastro Legal One"

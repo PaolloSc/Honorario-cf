@@ -7,14 +7,19 @@ def test_novos_campos_estruturados():
         tem_participacao=True,
         valor_tipo="percentual",
         valor_percentual="10",
-        para_quem=["Bruno Advogado", "Ana Admin"],
+        participantes=[
+            {"nome": "Bruno Advogado", "natureza": "Captação", "percentual": "15"},
+            {"nome": "Ana Admin", "natureza": "Performance"},
+        ],
         contato_financeiro_nome="Carlos",
         contato_financeiro_email="carlos@cli.com",
         contato_financeiro_telefone="(31) 99999-0000",
     )
     assert p.valor_tipo == "percentual"
     assert p.valor_percentual == "10"
-    assert p.para_quem == ["Bruno Advogado", "Ana Admin"]
+    assert [pp.nome for pp in p.participantes] == ["Bruno Advogado", "Ana Admin"]
+    assert p.participantes[0].natureza == "Captação"
+    assert p.participantes[0].percentual == "15"
     assert p.contato_financeiro_email == "carlos@cli.com"
 
 
@@ -24,14 +29,26 @@ def test_migra_valor_legado_para_outro():
     assert p.valor_outro == "20% sobre exito"
 
 
-def test_migra_para_quem_string_para_lista():
+def test_migra_para_quem_legado_para_participantes():
+    p = Participacao(
+        tem_participacao=True,
+        para_quem=["Bruno Advogado", "Ana Admin"],
+        natureza="Captação",
+        valor_percentual="10",
+    )
+    assert [pp.nome for pp in p.participantes] == ["Bruno Advogado", "Ana Admin"]
+    assert all(pp.natureza == "Captação" for pp in p.participantes)
+    assert all(pp.percentual == "10" for pp in p.participantes)
+
+
+def test_migra_para_quem_legado_string_unico():
     p = Participacao(tem_participacao=True, para_quem="Bruno Advogado")
-    assert p.para_quem == ["Bruno Advogado"]
+    assert [pp.nome for pp in p.participantes] == ["Bruno Advogado"]
 
 
-def test_para_quem_vazio_vira_lista_vazia():
+def test_para_quem_vazio_nao_gera_participantes():
     p = Participacao(tem_participacao=True, para_quem="")
-    assert p.para_quem == []
+    assert p.participantes == []
 
 
 def test_valor_monetario_float():

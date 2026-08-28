@@ -224,14 +224,19 @@ export interface Acessorios {
  
 export type ParticipacaoValorTipo = "percentual" | "valor" | "outro";
 
+export interface ParticipacaoParticipante {
+  nome: string;
+  natureza: string;
+  percentual?: string;
+}
+
 export interface Participacao {
   tem_participacao: boolean;
   valor_tipo?: ParticipacaoValorTipo;
   valor_percentual?: string;
   valor_monetario?: number;
   valor_outro?: string;
-  para_quem?: string[];
-  natureza?: string;
+  participantes?: ParticipacaoParticipante[];
   responsavel_captacao?: string;
   responsavel_gestao?: string;
   contato_financeiro_nome?: string;
