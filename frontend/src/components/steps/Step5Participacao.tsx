@@ -423,7 +423,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                               ]}
                             />
                           </FormField>
-                          <FormField label="Percentual (opcional, sobrescreve o geral)">
+                          <FormField label="Percentual deste advogado (opcional)">
                             <Input
                               type="number"
                               min="0"
