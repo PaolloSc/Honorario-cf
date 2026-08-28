@@ -259,6 +259,17 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
             />
           </FormField>
         </div>
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <FormField label="Responsável pela gestão do contrato">
+            <Select
+              value={participacao.responsavel_gestao || ""}
+              onChange={(e) => set({ responsavel_gestao: e.target.value })}
+              placeholder="Selecione o advogado"
+              options={optionsComSalvo(participacao.responsavel_gestao)}
+            />
+          </FormField>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
@@ -464,7 +475,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
               </div>
             </div>
 
-            {/* Responsáveis */}
+            {/* Responsável */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Responsável pela captação">
                 <Select
@@ -472,15 +483,6 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   onChange={(e) => set({ responsavel_captacao: e.target.value })}
                   placeholder="Selecione o advogado"
                   options={optionsComSalvo(participacao.responsavel_captacao)}
-                />
-              </FormField>
-
-              <FormField label="Responsável pela gestão do contrato">
-                <Select
-                  value={participacao.responsavel_gestao || ""}
-                  onChange={(e) => set({ responsavel_gestao: e.target.value })}
-                  placeholder="Selecione o advogado"
-                  options={optionsComSalvo(participacao.responsavel_gestao)}
                 />
               </FormField>
             </div>
