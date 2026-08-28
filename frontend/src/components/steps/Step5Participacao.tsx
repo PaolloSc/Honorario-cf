@@ -111,9 +111,20 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
   const setValorTipo = (tipo: ParticipacaoValorTipo) =>
     set({ valor_tipo: tipo, valor_percentual: "", valor_monetario: undefined, valor_outro: "" });
 
-  const toggleParaQuem = (nome: string, checked: boolean) => {
-    const atual = participacao.para_quem ?? [];
-    set({ para_quem: checked ? [...atual, nome] : atual.filter((n) => n !== nome) });
+  const participantesSel = participacao.participantes ?? [];
+
+  const toggleParticipante = (nome: string, checked: boolean) => {
+    if (checked) {
+      set({ participantes: [...participantesSel, { nome, natureza: "" }] });
+    } else {
+      set({ participantes: participantesSel.filter((p) => p.nome !== nome) });
+    }
+  };
+
+  const setParticipante = (nome: string, partial: Partial<{ natureza: string; percentual: string }>) => {
+    set({
+      participantes: participantesSel.map((p) => (p.nome === nome ? { ...p, ...partial } : p)),
+    });
   };
 
   const baseNomeOptions = colaboradores.map((c) => ({ value: c.name, label: c.name }));
@@ -124,7 +135,6 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
 
   // Legal One: um valor já salvo que saiu da tabela continua aparecendo, para não
   // sumir silenciosamente de contratos antigos.
-  const etiquetasSel = participacao.etiquetas ?? [];
   const listasSel = participacao.listas_transmissao ?? [];
   const valoresLO = (tipo: keyof LegalOneOpcoes, salvos: string[]) =>
     Array.from(new Set([...(loOpcoes?.[tipo] ?? []).map((o) => o.valor), ...salvos])).sort(
@@ -141,12 +151,13 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
   };
 
   const nomesColab = colaboradores.map((c) => c.name);
-  const paraQuemSel = participacao.para_quem ?? [];
-  const nomesParaExibir = Array.from(new Set([...nomesColab, ...paraQuemSel]));
+  const nomesParaExibir = Array.from(
+    new Set([...nomesColab, ...participantesSel.map((p) => p.nome)]),
+  );
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-primary mb-2">5. Participações (Ficha Interna)</h2>
+      <h2 className="text-xl font-bold text-primary mb-2">5. Ficha Interna</h2>
       <p className="text-sm text-muted mb-2">
         Informações internas sobre participação. O cliente <strong>não terá acesso</strong> a estes dados.
       </p>
@@ -192,15 +203,11 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
           />
         </FormField>
 
-        {(["etiqueta", "lista_transmissao"] as const).map((tipo) => {
-          const campo = tipo === "etiqueta" ? "etiquetas" : "listas_transmissao";
-          const sel = tipo === "etiqueta" ? etiquetasSel : listasSel;
-          const valores = valoresLO(tipo, sel);
+        {(() => {
+          const valores = valoresLO("lista_transmissao", listasSel);
           return (
-            <div key={tipo} className="mt-4">
-              <p className="text-sm font-medium text-foreground mb-2">
-                {tipo === "etiqueta" ? "Etiqueta LO" : "Lista de transmissão"}
-              </p>
+            <div className="mt-4">
+              <p className="text-sm font-medium text-foreground mb-2">Lista de transmissão</p>
               {valores.length === 0 ? (
                 <p className="text-xs text-muted">
                   Nenhuma opção cadastrada. Um administrador pode incluí-las em
@@ -212,15 +219,46 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                     <Checkbox
                       key={v}
                       label={v}
-                      checked={sel.includes(v)}
-                      onChange={(checked) => toggleLO(campo, v, checked)}
+                      checked={listasSel.includes(v)}
+                      onChange={(checked) => toggleLO("listas_transmissao", v, checked)}
                     />
                   ))}
                 </div>
               )}
             </div>
           );
-        })}
+        })()}
+      </div>
+
+      {/* Contato do responsável financeiro do cliente — independe de participação */}
+      <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6">
+        <p className="text-sm font-semibold text-foreground mb-2">
+          Contato do responsável financeiro do cliente
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FormField label="Nome">
+            <Input
+              value={participacao.contato_financeiro_nome ?? ""}
+              onChange={(e) => set({ contato_financeiro_nome: e.target.value })}
+              placeholder="Nome"
+            />
+          </FormField>
+          <FormField label="E-mail">
+            <Input
+              type="email"
+              value={participacao.contato_financeiro_email ?? ""}
+              onChange={(e) => set({ contato_financeiro_email: e.target.value })}
+              placeholder="email@exemplo.com"
+            />
+          </FormField>
+          <FormField label="Telefone">
+            <Input
+              value={participacao.contato_financeiro_telefone ?? ""}
+              onChange={(e) => set({ contato_financeiro_telefone: maskTelefoneBR(e.target.value) })}
+              placeholder="(00) 00000-0000"
+            />
+          </FormField>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
@@ -351,7 +389,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
               )}
             </div>
 
-            {/* Para quem (multi advogados) */}
+            {/* Para quem (multi advogados, cada um com natureza + % próprios) */}
             <div>
               <p className="text-sm font-semibold text-foreground mb-2">Para quem?</p>
               {colabError && <p className="text-xs text-red-500 mb-2">{colabError}</p>}
@@ -359,15 +397,48 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
               {!loadingColab && nomesParaExibir.length === 0 && (
                 <p className="text-xs text-muted">Nenhum colaborador encontrado.</p>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {nomesParaExibir.map((nome) => (
-                  <Checkbox
-                    key={nome}
-                    label={nome}
-                    checked={paraQuemSel.includes(nome)}
-                    onChange={(checked) => toggleParaQuem(nome, checked)}
-                  />
-                ))}
+              <div className="space-y-2">
+                {nomesParaExibir.map((nome) => {
+                  const participante = participantesSel.find((p) => p.nome === nome);
+                  return (
+                    <div key={nome}>
+                      <Checkbox
+                        label={nome}
+                        checked={Boolean(participante)}
+                        onChange={(checked) => toggleParticipante(nome, checked)}
+                      />
+                      {participante && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 ml-6">
+                          <FormField label="Natureza da participação">
+                            <Select
+                              value={participante.natureza || ""}
+                              onChange={(e) => setParticipante(nome, { natureza: e.target.value })}
+                              placeholder="Selecione a natureza"
+                              options={[
+                                { value: "Captação", label: "Captação" },
+                                { value: "Performance", label: "Performance" },
+                                { value: "Captação e performance", label: "Captação e performance" },
+                                { value: "Projeto", label: "Projeto" },
+                                { value: "Outro", label: "Outro" },
+                              ]}
+                            />
+                          </FormField>
+                          <FormField label="Percentual (opcional, sobrescreve o geral)">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={participante.percentual ?? ""}
+                              onChange={(e) => setParticipante(nome, { percentual: e.target.value })}
+                              placeholder="Ex: 10"
+                            />
+                          </FormField>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* A participacao pode envolver terceiros que nao estao no cadastro. */}
@@ -381,8 +452,8 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   type="button"
                   onClick={() => {
                     const nome = novoParticipante.trim();
-                    if (!nome || paraQuemSel.includes(nome)) return;
-                    toggleParaQuem(nome, true);
+                    if (!nome || participantesSel.some((p) => p.nome === nome)) return;
+                    toggleParticipante(nome, true);
                     setNovoParticipante("");
                   }}
                   disabled={!novoParticipante.trim()}
@@ -393,23 +464,8 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
               </div>
             </div>
 
-            {/* Natureza + responsáveis */}
+            {/* Responsáveis */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField label="Natureza da participação">
-                <Select
-                  value={participacao.natureza || ""}
-                  onChange={(e) => set({ natureza: e.target.value })}
-                  placeholder="Selecione a natureza da participação"
-                  options={[
-                    { value: "Captação", label: "Captação" },
-                    { value: "Performance", label: "Performance" },
-                    { value: "Captação e performance", label: "Captação e performance" },
-                    { value: "Projeto", label: "Projeto" },
-                    { value: "Outro", label: "Outro" },
-                  ]}
-                />
-              </FormField>
-
               <FormField label="Responsável pela captação">
                 <Select
                   value={participacao.responsavel_captacao || ""}
@@ -427,37 +483,6 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   options={optionsComSalvo(participacao.responsavel_gestao)}
                 />
               </FormField>
-            </div>
-
-            {/* Contato financeiro do cliente (3 campos) */}
-            <div>
-              <p className="text-sm font-semibold text-foreground mb-2">
-                Contato do responsável financeiro do cliente
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Nome">
-                  <Input
-                    value={participacao.contato_financeiro_nome ?? ""}
-                    onChange={(e) => set({ contato_financeiro_nome: e.target.value })}
-                    placeholder="Nome"
-                  />
-                </FormField>
-                <FormField label="E-mail">
-                  <Input
-                    type="email"
-                    value={participacao.contato_financeiro_email ?? ""}
-                    onChange={(e) => set({ contato_financeiro_email: e.target.value })}
-                    placeholder="email@exemplo.com"
-                  />
-                </FormField>
-                <FormField label="Telefone">
-                  <Input
-                    value={participacao.contato_financeiro_telefone ?? ""}
-                    onChange={(e) => set({ contato_financeiro_telefone: maskTelefoneBR(e.target.value) })}
-                    placeholder="(00) 00000-0000"
-                  />
-                </FormField>
-              </div>
             </div>
               </>
             )}

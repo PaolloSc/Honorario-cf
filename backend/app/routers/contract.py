@@ -172,13 +172,15 @@ def generate_contract(
             tipo = _infer_tipo_honorario(data)
             participacao_data = data.participacao
 
+            participantes_wizard = (participacao_data.participantes if participacao_data else None) or []
+
             # Parse valores da wizard
             pct = _parse_percentual(
                 participacao_data.percentual_ou_valor if participacao_data else None
             )
-            eh_cap, eh_perf = _map_natureza_wizard(
-                participacao_data.natureza if participacao_data else None
-            )
+            # Natureza vem agora por advogado; usa a do primeiro participante como base.
+            primeira_natureza = participantes_wizard[0].natureza if participantes_wizard else None
+            eh_cap, eh_perf = _map_natureza_wizard(primeira_natureza)
             pct_captacao = pct if eh_cap else 0.0
             pct_performance = pct if eh_perf else 0.0
 
@@ -188,9 +190,10 @@ def generate_contract(
                 participacao_data.contato_financeiro_cliente if participacao_data else None
             )
             beneficiario_email = email_wizard or user.email
-            # Nome: para_quem agora e' lista; junta nomes. Fallback user.name.
-            para_quem_nomes = (participacao_data.para_quem if participacao_data else None) or []
-            beneficiario_nome = ", ".join(para_quem_nomes) if para_quem_nomes else user.name
+            # Nome: junta os nomes de todos os participantes. Fallback user.name.
+            beneficiario_nome = (
+                ", ".join(p.nome for p in participantes_wizard) if participantes_wizard else user.name
+            )
 
             # Backend natureza = contratual/societario (campo legal, nao wizard)
             natureza_val = "contratual"
@@ -217,12 +220,16 @@ def generate_contract(
                     valor_str = participacao_data.valor_outro
                 else:
                     valor_str = participacao_data.percentual_ou_valor or "-"
+                participantes_str = "; ".join(
+                    f"{p.nome} ({p.natureza or '-'}{f', {p.percentual}%' if p.percentual else ''})"
+                    for p in participantes_wizard
+                ) or "-"
                 obs_extra = (
                     f"Rascunho automatico do wizard. "
                     f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
                     f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
                     f"Valor wizard: {valor_str} · "
-                    f"Natureza wizard: {participacao_data.natureza or '-'}"
+                    f"Participantes: {participantes_str}"
                 )
             else:
                 obs_extra = "Rascunho automatico do wizard."

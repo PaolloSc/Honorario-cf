@@ -25,8 +25,6 @@ _ORDEM = {"socio": 1, "advogado": 2, "estagiario": 3}
 COLABORADORES = [
     ("André Fortes Chaves", "advogado", "andre@carvalhofurtadoadv.com.br"),
     ("Caio César Amaral Franco", "socio", "caio@carvalhofurtadoadv.com.br"),
-    ("Clara Marques de Albuquerque", "advogado", "clara.albuquerque@carvalhofurtadoadv.com.br"),
-    ("Cristina Mascarenhas Diniz de Magalhães Santos", "advogado", "cristina.mascarenhas@carvalhofurtadoadv.com.br"),
     ("Gabriel Siqueira Eliazar de Carvalho", "socio", "gabriel@carvalhofurtadoadv.com.br"),
     ("Gabriela Peixoto Mello de Azevedo", "advogado", "gabriela.azevedo@carvalhofurtadoadv.com.br"),
     ("Marcello Silva Nunes Leite", "advogado", "marcello.leite@carvalhofurtadoadv.com.br"),
@@ -40,8 +38,6 @@ COLABORADORES = [
     ("Lilian Silveira Correa", "financeiro", "financeiro@carvalhofurtadoadv.com.br"),
     ("Marcela Leite Kato", "estagiario", "trabalhista3@carvalhofurtadoadv.com.br"),
     ("Maria Karolyne Moraes Malard", "recepcionista", "arquivo@carvalhofurtadoadv.com.br"),
-    ("Thaíza Alice Pereira da Silva", "estagiario", "thaiza.silva@carvalhofurtadoadv.com.br"),
-    ("Victor Barbosa Horta", "estagiario", "victor.horta@carvalhofurtadoadv.com.br"),
     ("Paollo Sanchez", "dev", "paollo.sanchez@carvalhofurtadoadv.com.br"),
 ]
 

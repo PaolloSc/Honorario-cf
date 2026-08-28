@@ -28,8 +28,7 @@ class TestParticipacaoNullCoercion:
         }
         p = Participacao(**data)
         assert p.percentual_ou_valor == ""
-        assert p.para_quem == []  # para_quem é agora list[str]; None/vazio → []
-        assert p.natureza == ""
+        assert p.participantes == []  # para_quem vazio/None não gera participantes
         assert p.responsavel_captacao == ""
         assert p.responsavel_gestao == ""
         assert p.contato_financeiro_cliente == ""
@@ -38,8 +37,7 @@ class TestParticipacaoNullCoercion:
         """Fields not provided at all should also default to empty string."""
         p = Participacao(tem_participacao=True)
         assert p.percentual_ou_valor == ""
-        assert p.para_quem == []  # para_quem é agora list[str]; ausente → []
-        assert p.natureza == ""
+        assert p.participantes == []
         assert p.responsavel_captacao == ""
         assert p.responsavel_gestao == ""
         assert p.contato_financeiro_cliente == ""
@@ -56,8 +54,9 @@ class TestParticipacaoNullCoercion:
         }
         p = Participacao(**data)
         assert p.percentual_ou_valor == "10%"
-        assert p.para_quem == ["Fulano"]  # para_quem é agora list[str]; string → [string]
-        assert p.natureza == "captacao"
+        # para_quem/natureza legados migram para participantes
+        assert [pp.nome for pp in p.participantes] == ["Fulano"]
+        assert p.participantes[0].natureza == "captacao"
         assert p.responsavel_captacao == "Beltrano"
         assert p.responsavel_gestao == "Cicrano"
         assert p.contato_financeiro_cliente == "email@test.com"
@@ -75,8 +74,7 @@ class TestParticipacaoNullCoercion:
         }
         p = Participacao(**data)
         assert p.percentual_ou_valor == "5%"
-        assert p.para_quem == []  # para_quem é agora list[str]; None → []
-        assert p.natureza == "performance"
+        assert p.participantes == []  # sem para_quem, natureza legado sozinho não gera participante
         assert p.responsavel_captacao == ""
         assert p.responsavel_gestao == "Gestor"
         assert p.contato_financeiro_cliente == ""
