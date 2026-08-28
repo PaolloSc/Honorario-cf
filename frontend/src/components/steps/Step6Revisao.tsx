@@ -153,8 +153,10 @@ export default function Step6Revisao({ data }: Step6Props) {
       )}
 
       {/* Cadastro no Legal One — vai ao financeiro mesmo sem participação */}
-      {(data.participacao.categoria_cliente ||
-        data.participacao.listas_transmissao?.length) && (
+      {Boolean(
+        data.participacao.categoria_cliente ||
+          data.participacao.listas_transmissao?.length,
+      ) && (
         <Section title="Cadastro no Legal One (Interno)">
           <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
             {data.participacao.categoria_cliente && (
