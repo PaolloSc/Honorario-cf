@@ -179,13 +179,25 @@ def update_colaborador(
 @router.delete("/{colaborador_id}")
 def delete_colaborador(
     colaborador_id: int,
+    hard: bool = Query(False),
     admin: CurrentUser = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Soft delete: marca ativo=False (mantém histórico)."""
+    """Soft delete (default): marca ativo=False, mantém histórico.
+
+    hard=true apaga a linha de vez. Só permitido em quem já está inativo —
+    evita que um clique isolado apague alguém sem passar pela desativação antes.
+    """
     c = db.query(ColaboradorDB).filter(ColaboradorDB.id == colaborador_id).first()
     if not c:
         raise HTTPException(404, "Colaborador nao encontrado")
+    if hard:
+        if c.ativo:
+            raise HTTPException(400, "Desative o colaborador antes de excluir definitivamente")
+        db.delete(c)
+        db.commit()
+        logger.info("Colaborador %s excluido definitivamente por %s", colaborador_id, admin.email)
+        return {"success": True, "id": colaborador_id, "deleted": True}
     c.ativo = False
     db.commit()
     logger.info("Colaborador %s desativado por %s", colaborador_id, admin.email)

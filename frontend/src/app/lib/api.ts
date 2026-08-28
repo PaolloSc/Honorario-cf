@@ -267,9 +267,9 @@ export async function updateColaborador(
   });
 }
 
-export async function deleteColaborador(id: number) {
-  return request<{ success: boolean; id: number; ativo: boolean }>(
-    `/api/colaboradores/${id}`,
+export async function deleteColaborador(id: number, hard = false) {
+  return request<{ success: boolean; id: number; ativo?: boolean; deleted?: boolean }>(
+    `/api/colaboradores/${id}${hard ? "?hard=true" : ""}`,
     { method: "DELETE" }
   );
 }

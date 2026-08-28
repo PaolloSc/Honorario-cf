@@ -98,6 +98,27 @@ def test_soft_delete(client, as_admin):
     assert client.get("/api/colaboradores?include_inactive=false").json()["colaboradores"] == []
 
 
+def test_hard_delete_rejeita_colaborador_ativo(client, as_admin):
+    cid = client.post(
+        "/api/colaboradores", json={"nome": "Ainda Ativo", "papel": "advogado"}
+    ).json()["id"]
+    resp = client.delete(f"/api/colaboradores/{cid}?hard=true")
+    assert resp.status_code == 400
+    # continua existindo
+    assert any(c["id"] == cid for c in client.get("/api/colaboradores").json()["colaboradores"])
+
+
+def test_hard_delete_apaga_colaborador_inativo(client, as_admin):
+    cid = client.post(
+        "/api/colaboradores", json={"nome": "Vai Sumir", "papel": "advogado"}
+    ).json()["id"]
+    client.delete(f"/api/colaboradores/{cid}")  # soft delete primeiro
+    resp = client.delete(f"/api/colaboradores/{cid}?hard=true")
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] is True
+    assert not any(c["id"] == cid for c in client.get("/api/colaboradores").json()["colaboradores"])
+
+
 def test_patch_404(client, as_admin):
     assert client.patch("/api/colaboradores/9999", json={"ativo": False}).status_code == 404
 
