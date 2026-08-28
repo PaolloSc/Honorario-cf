@@ -393,13 +393,13 @@ async def send_participacao_email(
         # O wizard so manda estes campos quando o toggle esta ligado, mas a inferencia
         # cobre todos eles: uma ficha com apenas o responsavel preenchido ainda e
         # participacao, e rotula-la "Cadastro Legal One" seria mentira.
-        # Contato financeiro NAO entra aqui: ele e sempre enviado, com ou sem participacao.
+        # Contato financeiro e responsavel_gestao NAO entram aqui: sao sempre
+        # enviados, com ou sem participacao.
         tem_participacao = any((
             data.base_label,
             data.valor_tipo,
             data.participantes,
             data.responsavel_captacao,
-            data.responsavel_gestao,
             data.percentual_ou_valor,
         ))
         titulo = "Ficha de Participação" if tem_participacao else "Cadastro Legal One"

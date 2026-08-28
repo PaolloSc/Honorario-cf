@@ -24,10 +24,12 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
     categoria_cliente: p.categoria_cliente,
     etiquetas: p.etiquetas ?? [],
     listas_transmissao: p.listas_transmissao ?? [],
-    // Contato financeiro do cliente independe de haver participação.
+    // Contato financeiro do cliente e responsável pela gestão do contrato
+    // independem de haver participação.
     contato_financeiro_nome: p.contato_financeiro_nome,
     contato_financeiro_email: p.contato_financeiro_email,
     contato_financeiro_telefone: p.contato_financeiro_telefone,
+    responsavel_gestao: p.responsavel_gestao,
     ...(p.tem_participacao
       ? {
           valor_tipo: p.valor_tipo,
@@ -36,7 +38,6 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
           valor_outro: p.valor_outro,
           participantes: p.participantes ?? [],
           responsavel_captacao: p.responsavel_captacao,
-          responsavel_gestao: p.responsavel_gestao,
           base_tipo: p.base_tipo,
           base_escopo_index: p.base_escopo_index,
           base_honorario: p.base_honorario,
@@ -46,9 +47,10 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
   };
 }
 
-// A ficha vai ao financeiro quando há participação, cadastro do Legal One ou
-// contato financeiro preenchidos — contratos sem participação também precisam
-// ser lançados, e o contato financeiro agora independe da participação.
+// A ficha vai ao financeiro quando há participação, cadastro do Legal One,
+// contato financeiro ou responsável pela gestão preenchidos — contratos sem
+// participação também precisam ser lançados, e esses campos agora independem
+// da participação.
 function temFichaParaFinanceiro(p?: Participacao): p is Participacao {
   if (!p) return false;
   return Boolean(
@@ -58,7 +60,8 @@ function temFichaParaFinanceiro(p?: Participacao): p is Participacao {
       p.listas_transmissao?.length ||
       p.contato_financeiro_nome ||
       p.contato_financeiro_email ||
-      p.contato_financeiro_telefone
+      p.contato_financeiro_telefone ||
+      p.responsavel_gestao
   );
 }
 
