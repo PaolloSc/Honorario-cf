@@ -212,37 +212,55 @@ export default function ColaboradoresAdminPage() {
                       {c.ativo ? "Ativo" : "Inativo"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right space-x-3">
-                    <button
-                      onClick={() => toggleAtivo(c)}
-                      className="text-xs font-medium text-accent hover:underline"
-                    >
-                      {c.ativo ? "Desativar" : "Reativar"}
-                    </button>
-                    {!c.ativo && (
-                      confirmingDeleteId === c.id ? (
-                        <>
-                          <button
-                            onClick={() => excluirDefinitivamente(c)}
-                            className="text-xs font-medium text-red-600 hover:underline"
-                          >
-                            Confirmar exclusão
-                          </button>
-                          <button
-                            onClick={() => setConfirmingDeleteId(null)}
-                            className="text-xs font-medium text-muted hover:underline"
-                          >
-                            Cancelar
-                          </button>
-                        </>
-                      ) : (
+                  <td className="px-3 py-2 text-right">
+                    {confirmingDeleteId === c.id ? (
+                      <span className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 py-1 pl-2.5 pr-1.5">
+                        <span className="whitespace-nowrap text-xs font-medium text-red-800">
+                          Excluir definitivamente?
+                        </span>
                         <button
-                          onClick={() => setConfirmingDeleteId(c.id)}
-                          className="text-xs font-medium text-red-600/70 hover:underline"
+                          onClick={() => excluirDefinitivamente(c)}
+                          title="Confirmar exclusão"
+                          className="flex h-[26px] w-[26px] items-center justify-center rounded-md bg-red-700 text-white transition hover:bg-red-800"
                         >
-                          Excluir
+                          <svg viewBox="0 0 20 20" fill="none" width="14" height="14">
+                            <path d="M4 10.5 8 14.5 16 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         </button>
-                      )
+                        <button
+                          onClick={() => setConfirmingDeleteId(null)}
+                          title="Cancelar"
+                          className="flex h-[26px] w-[26px] items-center justify-center rounded-md border border-red-200 text-red-700 transition hover:bg-red-100"
+                        >
+                          <svg viewBox="0 0 20 20" fill="none" width="14" height="14">
+                            <path d="M5 5l10 10M15 5 5 15" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5">
+                        <button
+                          onClick={() => toggleAtivo(c)}
+                          title={c.ativo ? "Desativar" : "Reativar"}
+                          className="flex h-[30px] w-[30px] items-center justify-center rounded-lg text-muted transition hover:bg-gray-100 hover:text-primary"
+                        >
+                          <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+                            <path d="M10 5v5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                            <path d="M6.2 6.2a5 5 0 1 0 7.6 0" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                        {!c.ativo && (
+                          <button
+                            onClick={() => setConfirmingDeleteId(c.id)}
+                            title="Excluir definitivamente"
+                            className="flex h-[30px] w-[30px] items-center justify-center rounded-lg text-muted transition hover:bg-red-100 hover:text-red-700"
+                          >
+                            <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+                              <path d="M4.5 6h11M8.5 6V4.5h3V6M6 6l.6 9a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9L14 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
+                        )}
+                      </span>
                     )}
                   </td>
                 </tr>
