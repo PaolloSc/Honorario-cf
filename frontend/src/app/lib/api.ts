@@ -178,8 +178,7 @@ export async function sendParticipacao(data: {
   valor_percentual?: string;
   valor_monetario?: number;
   valor_outro?: string;
-  para_quem?: string[];
-  natureza?: string;
+  participantes?: Array<{ nome: string; natureza: string; percentual?: string }>;
   responsavel_captacao?: string;
   responsavel_gestao?: string;
   contato_financeiro_nome?: string;
