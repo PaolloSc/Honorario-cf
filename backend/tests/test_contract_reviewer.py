@@ -1,3 +1,5 @@
+import json
+
 from app.services import contract_reviewer
 
 
@@ -25,6 +27,79 @@ def test_extracts_json_array_from_prose_wrapped_response(monkeypatch):
     assert findings == [
         {"trecho": "a CONTRATANTE", "problema": "concordancia", "sugestao": "o CONTRATANTE"}
     ]
+
+
+def test_drops_finding_whose_trecho_is_nested_inside_another(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            [
+                                {
+                                    "trecho": "legislacao LGBT",
+                                    "problema": "termo informal",
+                                    "sugestao": "legislacao aplicavel aos direitos LGBT",
+                                },
+                                {
+                                    "trecho": "para conformidade com a legislacao LGBT ou conformidade legal",
+                                    "problema": "frase redundante",
+                                    "sugestao": "para conformidade legal com os direitos LGBT",
+                                },
+                            ]
+                        ),
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(contract_reviewer.settings, "deepseek_api_key", "fake-key")
+    monkeypatch.setattr(contract_reviewer.httpx, "post", lambda *a, **kw: FakeResponse())
+
+    findings = contract_reviewer.review_text("texto do contrato")
+
+    assert len(findings) == 1
+    assert findings[0]["trecho"] == "para conformidade com a legislacao LGBT ou conformidade legal"
+
+
+def test_drops_finding_whose_sugestao_is_an_instruction_not_replacement_text(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            [
+                                {
+                                    "trecho": "teste",
+                                    "problema": "placeholder",
+                                    "sugestao": "Substituir por descrição formal dos documentos ou remover o conteúdo de teste.",
+                                },
+                                {
+                                    "trecho": "vc",
+                                    "problema": "giria",
+                                    "sugestao": "você",
+                                },
+                            ]
+                        ),
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(contract_reviewer.settings, "deepseek_api_key", "fake-key")
+    monkeypatch.setattr(contract_reviewer.httpx, "post", lambda *a, **kw: FakeResponse())
+
+    findings = contract_reviewer.review_text("texto do contrato")
+
+    assert findings == [{"trecho": "vc", "problema": "giria", "sugestao": "você"}]
 
 
 def test_returns_empty_list_when_no_json_found(monkeypatch):

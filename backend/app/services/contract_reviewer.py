@@ -22,10 +22,20 @@ _SYSTEM_PROMPT = (
     "confusas. Examine com atencao mesmo campos curtos de poucas palavras — nao "
     "deixe de apontar um erro so' por o campo ser curto. NAO opine sobre valores, "
     "percentuais, prazos ou o merito do conteudo. "
+    "Se dois problemas ocorrem na mesma frase e um trecho esta contido dentro do "
+    "outro, NAO liste os dois separadamente: aponte so' o trecho mais abrangente, "
+    "cobrindo tudo o que precisa mudar naquela frase num unico item. "
+    "O campo \"sugestao\" e' colado automaticamente no lugar do \"trecho\" — "
+    "escreva SEMPRE o texto final pronto, no mesmo idioma e tom do contrato, "
+    "nunca uma instrucao para a pessoa (nunca frases como 'substitua por', "
+    "'remova', 'descreva aqui', 'ex.:'). Se o campo for um valor de teste/placeholder "
+    "(ex.: 'teste', 'aaa', 'xxx') sem conteudo real para basear uma reescrita, "
+    "NAO o liste — nao ha' texto formal para sugerir ali. "
     "Liste no MAXIMO os 15 problemas mais relevantes, do mais para o menos grave. "
     "Responda SOMENTE com um JSON array (sem markdown, sem texto ao redor). Cada item: "
     '{"trecho": "citacao curta do texto original", "problema": "o que esta errado", '
-    '"sugestao": "como corrigir"}. Se nao houver nada a apontar, responda [].'
+    '"sugestao": "texto pronto para substituir o trecho, nunca uma instrucao"}. '
+    "Se nao houver nada a apontar, responda []."
 )
 
 _JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
@@ -128,4 +138,41 @@ def review_text(document_text: str) -> list[dict]:
 
     if not isinstance(findings, list):
         return []
-    return [f for f in findings if isinstance(f, dict)]
+    findings = [f for f in findings if isinstance(f, dict)]
+    findings = [f for f in findings if not _is_instruction_not_text(f.get("sugestao"))]
+    return _drop_nested_trechos(findings)
+
+
+# Instrucao pro humano em vez de texto pronto (ex.: "Substituir por X ou remover")
+# gera um loop: aplicar cola a instrucao no contrato, a IA aponta ela de novo na
+# proxima revisao. So' descarta o achado; o prompt ja pede pra nao gerar isso, isto
+# e' so' a rede de seguranca caso o modelo escorregue.
+_INSTRUCTION_RE = re.compile(
+    r"^\s*(substitu\w+|remov\w+|remova|descrev\w+|informe|coloque|adicione|preench\w+)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_instruction_not_text(sugestao) -> bool:
+    if not isinstance(sugestao, str) or not sugestao.strip():
+        return False
+    return bool(_INSTRUCTION_RE.match(sugestao)) or " ou remover" in sugestao.lower()
+
+
+def _drop_nested_trechos(findings: list[dict]) -> list[dict]:
+    """Se o trecho de um achado esta contido dentro do trecho de outro achado (mesma
+    frase apontada duas vezes), descarta o mais estreito — aplicar os dois em sequencia
+    quebraria o "Aplicar correcao" do segundo, porque o primeiro ja teria alterado o
+    texto onde ele procura."""
+    trechos = [(f.get("trecho") or "").strip() for f in findings]
+
+    def is_nested_in_another(i: int) -> bool:
+        t = trechos[i]
+        if not t:
+            return False
+        return any(
+            j != i and trechos[j] and t != trechos[j] and t in trechos[j]
+            for j in range(len(trechos))
+        )
+
+    return [f for i, f in enumerate(findings) if not is_nested_in_another(i)]

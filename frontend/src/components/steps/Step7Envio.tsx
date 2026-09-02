@@ -11,6 +11,11 @@ interface Step7EnvioProps {
   editContractId?: string;
   onSaveComplete?: (contractId: string) => void;
   onDataChange?: (data: ContratoFormData) => void;
+  // Levantado pro ContractWizard (que não desmonta ao trocar de passo) — sem isso,
+  // sair do Step 7 e voltar reseta o histórico de "Aplicar correção" pra vazio,
+  // mesmo com o texto já corrigido continuando lá.
+  correcoesAplicadas: Array<{ trecho: string; sugestao: string }>;
+  onCorrecoesAplicadasChange: (updater: (prev: Array<{ trecho: string; sugestao: string }>) => Array<{ trecho: string; sugestao: string }>) => void;
 }
 
 // Os campos de participação só entram no payload quando o toggle está ligado: o
@@ -223,7 +228,14 @@ function applyFix(data: ContratoFormData, trecho: string, sugestao: string): Con
   return null;
 }
 
-export default function Step7Envio({ data, editContractId, onSaveComplete, onDataChange }: Step7EnvioProps) {
+export default function Step7Envio({
+  data,
+  editContractId,
+  onSaveComplete,
+  onDataChange,
+  correcoesAplicadas,
+  onCorrecoesAplicadasChange,
+}: Step7EnvioProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "generating" | "sending" | "sent_email" | "success" | "error">("idle");
@@ -254,9 +266,6 @@ export default function Step7Envio({ data, editContractId, onSaveComplete, onDat
   const [reviewStatus, setReviewStatus] = useState<"idle" | "checking" | "done" | "error">("idle");
   // Indice do achado com "Aplicar correção" em andamento (desabilita só aquele botão).
   const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
-  // Histórico do que já foi corrigido — sem isso o card só sumia da lista quando a
-  // revisão rodava de novo, sem nenhuma confirmação visível de que funcionou.
-  const [correcoesAplicadas, setCorrecoesAplicadas] = useState<Array<{ trecho: string; sugestao: string }>>([]);
 
   useEffect(() => {
     listTestemunhas()
@@ -293,7 +302,7 @@ export default function Step7Envio({ data, editContractId, onSaveComplete, onDat
     setApplyingIndex(index);
     // Marca como corrigido imediatamente — o campo já foi alterado nesse ponto,
     // então a confirmação (check) aparece na hora, antes mesmo da revisão nova voltar.
-    setCorrecoesAplicadas((prev) => [...prev, { trecho: finding.trecho, sugestao: finding.sugestao }]);
+    onCorrecoesAplicadasChange((prev) => [...prev, { trecho: finding.trecho, sugestao: finding.sugestao }]);
     try {
       const r = await reviewContract(updated);
       if (r.preview_html) setReviewPreviewHtml(r.preview_html);

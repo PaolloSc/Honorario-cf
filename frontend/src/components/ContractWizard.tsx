@@ -297,6 +297,11 @@ export default function ContractWizard({
     []
   );
  
+  // Histórico do que já foi corrigido na revisão por IA (Step 7). Fica aqui, e não
+  // dentro do Step7Envio, porque esse componente desmonta ao trocar de passo — sem
+  // isso, sair e voltar pro Step 7 resetava o histórico pra vazio.
+  const [correcoesAplicadas, setCorrecoesAplicadas] = useState<Array<{ trecho: string; sugestao: string }>>([]);
+
   const updateEscopos = useCallback((escopos: EscopoItem[]) => {
     setValidationErrors([]);
     setFormData((prev) => ({ ...prev, escopos }));
@@ -405,6 +410,8 @@ export default function ContractWizard({
             editContractId={editContractId}
             onSaveComplete={onSaveComplete}
             onDataChange={setFormData}
+            correcoesAplicadas={correcoesAplicadas}
+            onCorrecoesAplicadasChange={setCorrecoesAplicadas}
           />
         )}
       </div>
