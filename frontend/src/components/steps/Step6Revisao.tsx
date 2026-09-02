@@ -138,12 +138,22 @@ export default function Step6Revisao({ data }: Step6Props) {
             {data.participacao.valor_tipo === "outro" && data.participacao.valor_outro && (
               <li>Critério: {data.participacao.valor_outro}</li>
             )}
-            {(data.participacao.participantes ?? []).map((p, i) => (
-              <li key={i}>
-                {p.nome} — {p.natureza}
-                {p.percentual ? ` (${p.percentual}%)` : ""}
-              </li>
-            ))}
+            {(data.participacao.participantes ?? []).map((p, i) => {
+              const override =
+                p.valor_tipo === "valor" && p.valor_monetario != null
+                  ? ` (${formatCurrency(p.valor_monetario)})`
+                  : p.valor_tipo === "outro" && p.valor_outro
+                  ? ` (${p.valor_outro})`
+                  : p.percentual
+                  ? ` (${p.percentual}%)`
+                  : "";
+              return (
+                <li key={i}>
+                  {p.nome} — {p.natureza}
+                  {override}
+                </li>
+              );
+            })}
             <li>
               Captação: {data.participacao.responsavel_captacao}
             </li>

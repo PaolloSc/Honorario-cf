@@ -56,7 +56,7 @@ function emptyPF(): ContratantePF {
   return {
     tipo: "PF",
     nome: "",
-    nacionalidade: "Brasileira (o)",
+    nacionalidade: "Brasileiro(a)",
     cpf: "",
     profissao: "",
     estado_civil: "Solteiro(a)",
@@ -198,7 +198,7 @@ export default function Step1Contratante({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                 c.tipo === "PF"
                   ? "bg-primary text-white"
-                  : "bg-gray-100 text-muted hover:bg-gray-200"
+                  : "bg-background border border-border text-muted hover:border-primary/50"
               }`}
             >
               Pessoa Física
@@ -209,7 +209,7 @@ export default function Step1Contratante({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                 c.tipo === "PJ"
                   ? "bg-primary text-white"
-                  : "bg-gray-100 text-muted hover:bg-gray-200"
+                  : "bg-background border border-border text-muted hover:border-primary/50"
               }`}
             >
               Pessoa Jurídica
@@ -242,7 +242,7 @@ export default function Step1Contratante({
       </button>
 
       {cnpjError && (
-        <p className="text-sm text-red-500 mb-4">{cnpjError}</p>
+        <p className="text-sm text-danger mb-4">{cnpjError}</p>
       )}
     </div>
   );
@@ -305,7 +305,7 @@ function PJForm({
             value={data.razao_social}
             readOnly
             placeholder="Preenchido automaticamente pelo CNPJ"
-            className="bg-gray-50 cursor-not-allowed"
+            className="bg-border/35 border-muted text-muted cursor-not-allowed"
           />
         </FormField>
       )}
@@ -316,7 +316,7 @@ function PJForm({
             value={data.endereco}
             readOnly
             placeholder="Preenchido automaticamente pelo CNPJ"
-            className="bg-gray-50 cursor-not-allowed"
+            className="bg-border/35 border-muted text-muted cursor-not-allowed"
           />
         </FormField>
       )}
@@ -506,7 +506,7 @@ function PFForm({
         <Input
           value={data.nacionalidade}
           onChange={(e) => onUpdate({ nacionalidade: e.target.value })}
-          placeholder="Brasileira (o)"
+          placeholder="Brasileiro(a)"
         />
       </FormField>
 
@@ -550,7 +550,7 @@ function PFForm({
           />
           {loadingCEP && <span className="text-sm text-muted self-center">Buscando...</span>}
         </div>
-        {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
+        {cepError && <p className="text-xs text-danger mt-1">{cepError}</p>}
       </FormField>
 
       {cepData && (
@@ -579,7 +579,7 @@ function PFForm({
             value={data.endereco}
             readOnly
             placeholder="Preenchido automaticamente pelo CEP"
-            className="bg-gray-50 cursor-not-allowed"
+            className="bg-border/35 border-muted text-muted cursor-not-allowed"
             required
           />
         </FormField>

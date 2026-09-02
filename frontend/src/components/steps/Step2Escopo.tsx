@@ -211,7 +211,7 @@ function EscopoDetails({
               placeholder="0000000-00.0000.0.00.0000"
             />
           </FormField>
-          <div className="bg-white rounded-lg p-3 border border-border/50">
+          <div className="bg-card rounded-lg p-3 border border-border/50">
             <p className="text-sm font-medium mb-2">
               Selecione as atividades aplicáveis:
             </p>

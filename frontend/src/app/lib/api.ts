@@ -88,6 +88,21 @@ async function request<T>(
   return res.json();
 }
 
+// Varredura de portugues/padrao via DeepSeek antes de gerar o contrato definitivo.
+// Chamada pode demorar (LLM) — usa timeout proprio, maior que o default de 8s.
+export async function reviewContract(data: unknown) {
+  return request<{
+    enabled: boolean;
+    findings: Array<{ trecho: string; problema: string; sugestao: string }>;
+    preview_html?: string;
+    error?: string;
+  }>("/api/contract/review", {
+    method: "POST",
+    body: JSON.stringify(data),
+    signal: AbortSignal.timeout(45000),
+  });
+}
+
 export async function generateContract(data: unknown) {
   return request<{
     success: boolean;
@@ -362,6 +377,7 @@ export interface ContractSummary {
   status: string;
   client_name: string;
   client_email: string;
+  tipo_contrato: string;
   current_version: number;
   created_by?: string;
   created_at: string;
