@@ -136,7 +136,7 @@ export default function DateRangePicker({
           readOnly
           value={duracao ?? ""}
           placeholder="—"
-          className="w-full px-3 py-2 rounded-lg border border-border bg-gray-50 text-foreground text-sm cursor-not-allowed"
+          className="w-full px-3 py-2 rounded-lg border border-muted bg-border/35 text-muted text-sm cursor-not-allowed"
         />
       </div>
     </div>

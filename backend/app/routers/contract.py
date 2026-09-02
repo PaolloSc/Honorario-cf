@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
+from app.config import settings
 from app.database import (
     AuditLogDB,
     ContractDB,
@@ -21,7 +22,36 @@ from app.database import (
     utcnow,
 )
 from app.models.contract import ContratoRequest, ContratoResponse
+from app.models.contrato_consumidor import (
+    TIPO_CONSUMIDOR_AEREO,
+    ContratoConsumidorRequest,
+    email_contato,
+    nome_exibicao,
+)
+from app.services import contract_reviewer
+from app.services.contract_dispatch import TIPO_HONORARIOS
+from app.services.contract_dispatch import get_generator as get_consumidor_gen
+from app.services.contract_dispatch import parse_form_data
 from app.services.contract_generator import ContractGenerator
+
+
+def get_consumidor_generator():
+    return get_consumidor_gen(TIPO_CONSUMIDOR_AEREO)
+
+
+def _emails_consumidor() -> set[str]:
+    return {e.strip().lower() for e in settings.consumidor_emails.split(",") if e.strip()}
+
+
+def pode_usar_consumidor(user: CurrentUser) -> bool:
+    """Contrato de consumo e' restrito a equipe indicada pelo escritorio."""
+    return user.role == "admin" or user.email.lower() in _emails_consumidor()
+
+
+def exigir_acesso_consumidor(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    if not pode_usar_consumidor(user):
+        raise HTTPException(403, "Sem permissão para o contrato de Ação de Consumo")
+    return user
 
 
 def _infer_tipo_honorario(data: ContratoRequest) -> str:
@@ -136,6 +166,7 @@ def generate_contract(
             status="rascunho",
             client_name=client_name,
             client_email=client_email,
+            tipo_contrato=TIPO_HONORARIOS,
             current_version=1,
             created_by=user.email,
             updated_by=user.email,
@@ -282,6 +313,111 @@ def generate_contract(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/review")
+def review_contract(
+    data: ContratoRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Previa + varredura de portugues/padrao via DeepSeek antes da geracao definitiva.
+    Nao grava nada — gera o docx num arquivo temporario so' para a previa em HTML.
+    A revisao olha so' os campos de texto livre que quem preenche o wizard digitou
+    (nao a clausula padrao do contrato, que nao ha' onde editar ali). A previa
+    (preview_html) e' sempre retornada; achados so' quando DEEPSEEK_API_KEY esta
+    configurada (enabled=False caso contrario, sem erro)."""
+    import tempfile
+
+    gen = get_generator()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        gen._build_document(data).save(str(tmp_path))
+        preview_html = _docx_to_html(tmp_path)
+
+        if not contract_reviewer.is_configured():
+            return {"enabled": False, "findings": [], "preview_html": preview_html}
+
+        text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"))
+        findings = contract_reviewer.review_text(text) if text.strip() else []
+        return {"enabled": True, "findings": findings, "preview_html": preview_html}
+    except contract_reviewer.ContractReviewError as e:
+        logger.warning("Revisao do contrato indisponivel: %s", e)
+        return {"enabled": True, "findings": [], "preview_html": preview_html, "error": str(e)}
+    except Exception as e:
+        logger.error("Falha na revisao do contrato: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+@router.post("/generate-consumidor", response_model=ContratoResponse)
+def generate_contrato_consumidor(
+    data: ContratoConsumidorRequest,
+    user: CurrentUser = Depends(exigir_acesso_consumidor),
+    db: Session = Depends(get_db),
+) -> ContratoResponse:
+    """Contrato de consumidor/aereo. Sem ficha de participacao: honorario e' fixo (25%)."""
+    try:
+        gen = get_consumidor_generator()
+        contract_id, filepath = gen.generate(data)
+
+        primeiro = data.contratantes[0]
+        client_name = nome_exibicao(primeiro)
+        form_dict = data.model_dump(mode="json")
+
+        contract = ContractDB(
+            contract_id=contract_id,
+            status="rascunho",
+            client_name=client_name,
+            client_email=email_contato(primeiro),
+            tipo_contrato=TIPO_CONSUMIDOR_AEREO,
+            current_version=1,
+            created_by=user.email,
+            updated_by=user.email,
+            created_at=utcnow(),
+            updated_at=utcnow(),
+            cliente_docs=serialize_cliente_docs(form_dict),
+        )
+        db.add(contract)
+        db.add(
+            ContractVersionDB(
+                contract_id=contract_id,
+                version_number=1,
+                form_data_json=json.dumps(form_dict, ensure_ascii=False),
+                file_path=filepath,
+                created_by=user.email,
+                created_at=utcnow(),
+            )
+        )
+        db.add(
+            AuditLogDB(
+                contract_id=contract_id,
+                action="criacao",
+                detail=f"Contrato de consumidor gerado para {client_name}",
+                version_number=1,
+                user_email=user.email,
+                created_at=utcnow(),
+            )
+        )
+        db.commit()
+
+        logger.info("Consumer contract generated by %s: %s", user.email, contract_id)
+
+        return ContratoResponse(
+            success=True,
+            message="Contrato gerado com sucesso",
+            contract_id=contract_id,
+            download_url=f"/api/contract/{contract_id}/download",
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to generate consumer contract: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{contract_id}/download")
 def download_contract(
     contract_id: str,
@@ -336,8 +472,10 @@ def download_contract(
         )
         try:
             form_data = json.loads(ver.form_data_json)
-            contrato_data = ContratoRequest(**form_data)
-            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            # Cada tipo de contrato tem seu gerador — em FS efemero (serverless)
+            # este e' o caminho normal de download, nao um caso de borda.
+            contrato_data, gen_tipo = parse_form_data(form_data)
+            _, new_filepath = gen_tipo.generate(contrato_data, contract_id=contract_id)
             filepath = Path(new_filepath)
             # Update stored path
             ver.file_path = str(filepath)
@@ -392,9 +530,16 @@ def _safe_filename_part(name: str) -> str:
     return cleaned[:120].strip()
 
 
-def _contract_filename(client_name: str | None, contract_id: str) -> str:
+def _contract_filename(
+    client_name: str | None, contract_id: str, tipo: str = TIPO_HONORARIOS
+) -> str:
+    """Nome do anexo: o cliente precisa reconhecer o contrato pelo arquivo."""
+    consumidor = tipo == TIPO_CONSUMIDOR_AEREO
+    rotulo = "Contrato de Prestação de Serviços" if consumidor else "Contrato Honorários"
+    generico = f"contrato_{'servicos' if consumidor else 'honorarios'}_{contract_id}.docx"
+
     nome = _safe_filename_part(client_name) if client_name else ""
-    return f"Contrato Honorários — {nome}.docx" if nome else f"contrato_honorarios_{contract_id}.docx"
+    return f"{rotulo} — {nome}.docx" if nome else generico
 
 
 def _clean_preview_text(text: str) -> str:
@@ -414,6 +559,21 @@ def _clause_level(paragraph_el) -> int | None:
     return int(ilvl.get(qn("w:val"))) if ilvl is not None else 0
 
 
+def _inline_html(paragraph) -> str:
+    """Preserva negrito dos runs (nomes e CONTRATANTE/CONTRATADA na qualificacao)."""
+    from html import escape
+
+    if not paragraph.runs:
+        return escape(_clean_preview_text(paragraph.text))
+    bits: list[str] = []
+    for run in paragraph.runs:
+        piece = escape(_clean_preview_text(run.text or ""))
+        if not piece:
+            continue
+        bits.append(f"<strong>{piece}</strong>" if run.bold else piece)
+    return "".join(bits) or escape(_clean_preview_text(paragraph.text))
+
+
 def _docx_to_html(filepath: Path) -> str:
     """Render the generated DOCX as simple HTML for inline preview (no external deps)."""
     from html import escape
@@ -429,7 +589,7 @@ def _docx_to_html(filepath: Path) -> str:
     for child in doc.element.body.iterchildren():
         if child.tag == qn("w:p"):
             p = Paragraph(child, doc)
-            text = escape(_clean_preview_text(p.text))
+            text = _inline_html(p)
             if not text.strip():
                 continue
             ilvl = _clause_level(child)
@@ -448,7 +608,12 @@ def _docx_to_html(filepath: Path) -> str:
         elif child.tag == qn("w:tbl"):
             t = Table(child, doc)
             has_borders = t._tbl.tblPr.first_child_found_in("w:tblBorders") is not None
-            # Tabelas com borda tem linha de titulo (Escopo/Preco etc.) -> th centralizado.
+            # <th> so' na linha marcada como cabecalho (w:tblHeader). A tabela do
+            # milheiro nao tem titulo: a 1a linha ja e' dado.
+            def _e_cabecalho(row) -> bool:
+                trPr = row._tr.trPr
+                return trPr is not None and trPr.find(qn("w:tblHeader")) is not None
+
             def celula_html(cell) -> str:
                 # Cada paragrafo da celula e' uma linha. `cell.text` junta tudo num
                 # texto so e o HTML colapsa a quebra: o rotulo da assinatura acabava
@@ -460,11 +625,11 @@ def _docx_to_html(filepath: Path) -> str:
 
             rows_html = "".join(
                 "<tr>" + "".join(
-                    f"<{'th' if has_borders and i == 0 else 'td'}>{celula_html(c)}"
-                    f"</{'th' if has_borders and i == 0 else 'td'}>"
+                    f"<{'th' if _e_cabecalho(row) else 'td'}>{celula_html(c)}"
+                    f"</{'th' if _e_cabecalho(row) else 'td'}>"
                     for c in row.cells
                 ) + "</tr>"
-                for i, row in enumerate(t.rows)
+                for row in t.rows
             )
             css = "" if has_borders else ' class="noborder"'
             parts.append(f"<table{css}>{rows_html}</table>")
@@ -482,6 +647,42 @@ def _docx_to_html(filepath: Path) -> str:
         "</style></head>"
         f"<body>{''.join(parts)}</body></html>"
     )
+
+
+@router.get("/consumidor/acesso")
+def acesso_consumidor(user: CurrentUser = Depends(get_current_user)) -> dict:
+    """O frontend usa isto para mostrar (ou nao) o menu de Ação de Consumo."""
+    return {"permitido": pode_usar_consumidor(user)}
+
+
+@router.post("/preview-consumidor", response_class=HTMLResponse)
+def preview_contrato_consumidor(
+    data: ContratoConsumidorRequest,
+    user: CurrentUser = Depends(exigir_acesso_consumidor),
+) -> HTMLResponse:
+    """Previa do contrato de consumidor antes de gravar: nada vai para o banco.
+
+    Gera o DOCX num arquivo temporario so' para converter em HTML. Nao usa o gerador
+    em cache — trocar o output_dir de um singleton afetaria geracoes simultaneas.
+    """
+    import tempfile
+
+    from app.services.consumidor_generator import ConsumidorGenerator
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        ConsumidorGenerator()._build_document(data).save(str(tmp_path))
+        return HTMLResponse(content=_docx_to_html(tmp_path))
+    except Exception as e:
+        logger.error("Failed to preview consumer contract: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
 
 
 @router.get("/{contract_id}/preview", response_class=HTMLResponse)

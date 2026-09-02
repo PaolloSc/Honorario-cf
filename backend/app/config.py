@@ -29,7 +29,19 @@ class Settings(BaseSettings):
     docuseal_api_key: str = ""
     docuseal_base_url: str = "https://api.docuseal.com"
 
+    # Varredura de portugues/padrao do contrato antes da geracao (Step7).
+    # DeepSeek expoe endpoint compativel com a API da Anthropic.
+    deepseek_api_key: str = ""
+    deepseek_api_base: str = "https://api.deepseek.com/anthropic"
+    # deepseek-v4-pro (thinking mode) pega erros de portugues que o deepseek-chat
+    # (sem thinking) deixa passar em testes reais — ver contract_reviewer.py.
+    deepseek_model: str = "deepseek-v4-pro"
+
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
+
+    # Quem pode usar o contrato de Acao de Consumo (aerea). Lista de e-mails
+    # separados por virgula; admin sempre pode. Vazio = so' admin.
+    consumidor_emails: str = os.getenv("CONSUMIDOR_EMAILS", "")
 
     financeiro_email: str = os.getenv("FINANCEIRO_EMAIL", "financeiro@carvalhofurtadoadv.com.br,gabriel@carvalhofurtadoadv.com.br")
 
@@ -40,7 +52,10 @@ class Settings(BaseSettings):
     testemunha1_nome: str = os.getenv("TESTEMUNHA1_NOME", "Lilian Siqueira")
     testemunha1_email: str = os.getenv("TESTEMUNHA1_EMAIL", "financeiro@carvalhofurtadoadv.com.br")
 
-    bank_account_info: str = os.getenv("BANK_ACCOUNT_INFO", "Banco Inter - Ag. 0001 c/c 17841983-4 ou Pix 25463159000173")
+    bank_account_info: str = os.getenv(
+        "BANK_ACCOUNT_INFO",
+        "Banco Inter, agência 0001, conta corrente 17841983-4, ou chave Pix (CNPJ) 25463159000173",
+    )
 
     template_path: str = "templates/timbrado_peticao_1.dotx"
     output_dir: str = "generated_contracts"

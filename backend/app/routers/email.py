@@ -51,7 +51,7 @@ class ParticipacaoEmailRequest(BaseModel):
     valor_percentual: str = ""
     valor_monetario: float | None = None
     valor_outro: str = ""
-    # Advogados (cada um com natureza e percentual proprios)
+    # Advogados (cada um com natureza e percentual próprios)
     participantes: list[dict] = []
     responsavel_captacao: str = ""
     responsavel_gestao: str = ""
@@ -158,12 +158,10 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
         )
         try:
             import json as _json
-            from app.models.contract import ContratoRequest as _CR
-            from app.services.contract_generator import ContractGenerator as _CG
+            from app.services.contract_dispatch import parse_form_data
 
             form_data = _json.loads(latest_ver.form_data_json)
-            contrato_data = _CR(**form_data)
-            gen = _CG()
+            contrato_data, gen = parse_form_data(form_data)
             _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
             regenerated = Path(new_filepath)
 
@@ -246,6 +244,26 @@ def _docx_review_copy(src: Path) -> Path:
     return Path(tmp_name)
 
 
+def _tipo_do_contrato(contract_id: str, db: Session) -> str:
+    """Define o rotulo do anexo: honorarios ou prestacao de servicos."""
+    import json as _json
+
+    from app.services.contract_dispatch import TIPO_HONORARIOS, tipo_contrato
+
+    ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id)
+        .order_by(ContractVersionDB.version_number.desc())
+        .first()
+    )
+    if not ver or not ver.form_data_json:
+        return TIPO_HONORARIOS
+    try:
+        return tipo_contrato(_json.loads(ver.form_data_json))
+    except (ValueError, TypeError):
+        return TIPO_HONORARIOS
+
+
 @router.post("/send", response_model=EmailResponse)
 async def send_contract_email(
     data: EmailRequest,
@@ -258,7 +276,11 @@ async def send_contract_email(
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
 
         review_path = _docx_review_copy(filepath)
-        attachment_name = _contract_filename(contract.client_name if contract else None, data.contract_id)
+        attachment_name = _contract_filename(
+            contract.client_name if contract else None,
+            data.contract_id,
+            _tipo_do_contrato(data.contract_id, db),
+        )
 
         service = get_email_service()
         try:

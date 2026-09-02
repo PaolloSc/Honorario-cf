@@ -6,19 +6,36 @@ import {
   type ContractListResponse,
 } from "@/app/lib/api";
 import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStatus } from "@/app/lib/useAuthStatus";
+import { useAcessoConsumidor } from "@/components/AcessoConsumidor";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  rascunho: { label: "Rascunho", color: "bg-gray-100 text-gray-700" },
-  enviado: { label: "Enviado p/ Assinatura", color: "bg-amber-100 text-amber-800" },
-  assinado: { label: "Assinado", color: "bg-green-100 text-green-800" },
-  cancelado: { label: "Cancelado", color: "bg-red-100 text-red-800" },
+  rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
+  enviado: { label: "Enviado p/ Assinatura", color: "bg-warning/[0.16] text-warning" },
+  assinado: { label: "Assinado", color: "bg-primary/[0.16] text-primary-dark" },
+  cancelado: { label: "Cancelado", color: "bg-danger/[0.14] text-danger" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const info = STATUS_LABELS[status] || { label: status, color: "bg-gray-100 text-gray-700" };
+  const info = STATUS_LABELS[status] || { label: status, color: "bg-border/35 text-muted" };
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${info.color}`}>
+      {info.label}
+    </span>
+  );
+}
+
+const TIPO_LABELS: Record<string, { label: string; color: string }> = {
+  honorarios: { label: "Honorários", color: "bg-primary-light/40 text-primary-dark" },
+  consumidor_aereo: { label: "Ação de Consumo", color: "bg-brand-marrom/15 text-brand-marrom" },
+};
+
+// Cada tipo abre num wizard diferente ao editar — sem isso a pessoa clica
+// "Editar" achando que e' honorarios e cai na Acao de Consumo sem aviso.
+function TipoBadge({ tipo }: { tipo: string }) {
+  const info = TIPO_LABELS[tipo] || { label: tipo, color: "bg-border/35 text-muted" };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${info.color}`}>
       {info.label}
     </span>
   );
@@ -35,7 +52,8 @@ function formatDate(iso: string) {
 }
 
 export default function ContractsPage() {
-  const { status: sessionStatus } = useSession();
+  const sessionStatus = useAuthStatus();
+  const podeConsumidor = useAcessoConsumidor();
   const [data, setData] = useState<ContractListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,12 +98,23 @@ export default function ContractsPage() {
             {data ? `${data.total} contrato${data.total !== 1 ? "s" : ""}` : "Carregando..."}
           </p>
         </div>
-        <a
-          href="/"
-          className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition text-sm"
-        >
-          + Novo Contrato
-        </a>
+        {/* Dois tipos de contrato: o botao precisa dizer qual. */}
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="/"
+            className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition text-sm"
+          >
+            + Honorários
+          </a>
+          {podeConsumidor && (
+            <a
+              href="/consumidor"
+              className="px-5 py-2.5 border border-primary text-primary rounded-lg font-medium hover:bg-primary/5 transition text-sm"
+            >
+              + Ação de Consumo
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -106,7 +135,7 @@ export default function ContractsPage() {
             setStatusFilter(e.target.value);
             setPage(1);
           }}
-          className="px-4 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="px-4 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <option value="">Todos os status</option>
           <option value="rascunho">Rascunho</option>
@@ -117,7 +146,7 @@ export default function ContractsPage() {
       </div>
 
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="mb-6 rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
           {error}
         </div>
       )}
@@ -127,7 +156,7 @@ export default function ContractsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-gray-50/50">
+              <tr className="border-b border-border bg-background/60">
                 <th className="text-left px-4 py-3 font-medium text-muted">Cliente</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
                 <th className="text-left px-4 py-3 font-medium text-muted hidden md:table-cell">Versao</th>
@@ -153,10 +182,13 @@ export default function ContractsPage() {
               )}
               {!loading &&
                 data?.contracts.map((c: ContractSummary) => (
-                  <tr key={c.contract_id} className="border-b border-border/50 hover:bg-gray-50/50 transition">
+                  <tr key={c.contract_id} className="border-b border-border/50 hover:bg-background/60 transition">
                     <td className="px-4 py-3">
                       <div>
-                        <p className="font-medium text-foreground">{c.client_name || "—"}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">{c.client_name || "—"}</p>
+                          <TipoBadge tipo={c.tipo_contrato} />
+                        </div>
                         <p className="text-xs text-muted">{c.client_email || c.contract_id.slice(0, 8)}</p>
                       </div>
                     </td>

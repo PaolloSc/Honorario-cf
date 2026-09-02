@@ -250,7 +250,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
       </p>
 
       {escopos.length === 0 ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+        <div className="bg-warning/[0.1] border border-warning rounded-lg p-4 text-warning text-sm">
           Volte à etapa anterior e adicione pelo menos um escopo.
         </div>
       ) : (
@@ -279,8 +279,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                 {/* Hora Trabalhada Details */}
                 {escopo.honorarios.includes("hora_trabalhada") && escopo.hora_trabalhada && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mt-3">
-                    <p className="text-sm font-medium text-blue-900 mb-3">
+                  <div className="bg-background border border-border rounded-lg p-4 mt-3">
+                    <p className="text-sm font-medium text-foreground mb-3">
                       Hora Trabalhada - Detalhes
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -353,8 +353,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         onChange={(v) => updateHoraTrabalhada(idx, { tem_hora_fora_expediente: v })}
                       />
 
-                      <div className="md:col-span-2 pt-2 border-t border-blue-200">
-                        <p className="text-xs font-medium text-blue-900 mb-2 uppercase tracking-wide">
+                      <div className="md:col-span-2 pt-2 border-t border-border">
+                        <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
                           Período do contrato
                         </p>
                         <DateRangePicker
@@ -383,22 +383,19 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         const horasTrabalhadas = escopo.hora_trabalhada.horas_trabalhadas ?? 0;
                         const saldo = (horasContratadas ?? 0) - horasTrabalhadas;
                         return (
-                          <div className="md:col-span-2 pt-2 border-t border-blue-200">
-                            <p className="text-xs font-medium text-blue-900 mb-2 uppercase tracking-wide">
+                          <div className="md:col-span-2 pt-2 border-t border-border">
+                            <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
                               Horas
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <div>
-                                <label className="block text-sm font-semibold text-foreground mb-1">
-                                  Horas contratadas
-                                </label>
+                              <FormField label="Horas contratadas">
                                 <input
                                   readOnly
                                   value={formatHorasBR(horasContratadas)}
                                   placeholder="—"
-                                  className="w-full px-3 py-2 rounded-lg border border-border bg-gray-50 text-foreground text-sm cursor-not-allowed"
+                                  className="w-full px-3 py-2 rounded-lg border border-muted bg-border/35 text-muted text-sm cursor-not-allowed"
                                 />
-                              </div>
+                              </FormField>
                               <FormField label="Horas já trabalhadas">
                                 <Input
                                   type="number"
@@ -413,19 +410,16 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                                   placeholder="0"
                                 />
                               </FormField>
-                              <div>
-                                <label className="block text-sm font-semibold text-foreground mb-1">
-                                  Saldo
-                                </label>
+                              <FormField label="Saldo">
                                 <div
                                   className={`px-3 py-2 rounded-lg border text-sm ${
                                     horasContratadas == null
-                                      ? "bg-gray-50 border-border text-muted"
+                                      ? "bg-border/25 border-muted text-muted"
                                       : saldo > 0
-                                        ? "bg-green-50 border-green-200 text-green-800"
+                                        ? "bg-primary/[0.1] border-primary text-primary-dark"
                                         : saldo < 0
-                                          ? "bg-red-50 border-red-200 text-red-800"
-                                          : "bg-amber-50 border-amber-200 text-amber-800"
+                                          ? "bg-danger/[0.08] border-danger text-danger"
+                                          : "bg-warning/[0.1] border-warning text-warning"
                                   }`}
                                 >
                                   {horasContratadas == null
@@ -436,7 +430,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                                         ? `Horas excedidas: ${formatHorasBR(Math.abs(saldo))} horas`
                                         : "Horas integralmente utilizadas"}
                                 </div>
-                              </div>
+                              </FormField>
                             </div>
                           </div>
                         );
@@ -447,8 +441,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                 {/* Pró-labore Details */}
                 {escopo.honorarios.includes("pro_labore") && escopo.pro_labore && (
-                  <div className="bg-green-50 border border-green-100 rounded-lg p-4 mt-3">
-                    <p className="text-sm font-medium text-green-900 mb-3">
+                  <div className="bg-background border border-border rounded-lg p-4 mt-3">
+                    <p className="text-sm font-medium text-foreground mb-3">
                       Pró-labore - Detalhes
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -510,8 +504,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         </>
                       )}
 
-                      <div className="md:col-span-2 pt-2 border-t border-green-200">
-                        <p className="text-xs font-medium text-green-900 mb-2 uppercase tracking-wide">
+                      <div className="md:col-span-2 pt-2 border-t border-border">
+                        <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
                           Vigência
                         </p>
                         <DateRangePicker
@@ -532,8 +526,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                 {/* Mensalidade Details */}
                 {escopo.honorarios.includes("mensalidade") && escopo.mensalidade && (
-                  <div className="bg-purple-50 border border-purple-100 rounded-lg p-4 mt-3">
-                    <p className="text-sm font-medium text-purple-900 mb-3">
+                  <div className="bg-background border border-border rounded-lg p-4 mt-3">
+                    <p className="text-sm font-medium text-foreground mb-3">
                       Mensalidade - Detalhes
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -589,8 +583,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         </FormField>
                       )}
 
-                      <div className="md:col-span-2 pt-2 border-t border-purple-200">
-                        <p className="text-xs font-medium text-purple-900 mb-2 uppercase tracking-wide">
+                      <div className="md:col-span-2 pt-2 border-t border-border">
+                        <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
                           Período da mensalidade
                         </p>
                         <DateRangePicker
@@ -611,8 +605,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                 {/* Êxito Details */}
                 {escopo.honorarios.includes("exito") && escopo.exito && (
-                  <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 mt-3">
-                    <p className="text-sm font-medium text-amber-900 mb-3">
+                  <div className="bg-background border border-border rounded-lg p-4 mt-3">
+                    <p className="text-sm font-medium text-foreground mb-3">
                       Êxito - Detalhes
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -703,8 +697,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </FormField>
 
-                      <div className="md:col-span-2 pt-2 border-t border-amber-200">
-                        <p className="text-xs font-medium text-amber-900 mb-2 uppercase tracking-wide">
+                      <div className="md:col-span-2 pt-2 border-t border-border">
+                        <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
                           Período do êxito
                         </p>
                         <DateRangePicker
@@ -768,8 +762,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                 {/* Permuta Details */}
                 {escopo.honorarios.includes("permuta") && escopo.permuta && (
-                  <div className="bg-teal-50 border border-teal-100 rounded-lg p-4 mt-3">
-                    <p className="text-sm font-medium text-teal-900 mb-3">
+                  <div className="bg-background border border-border rounded-lg p-4 mt-3">
+                    <p className="text-sm font-medium text-foreground mb-3">
                       Permuta - Detalhes
                     </p>
                     <div className="grid grid-cols-1 gap-4">

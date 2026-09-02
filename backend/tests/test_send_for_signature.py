@@ -982,3 +982,85 @@ class TestSendForSignatureEndpoint:
 
         if temp_file.exists():
             temp_file.unlink()
+
+    def test_docuseal_consumidor_nao_usa_contrato_de_honorarios(self, client):
+        """Acao de consumo: template e contratada sao do modelo de consumidor, nao C&F."""
+        from app.models.contrato_consumidor import ContratoConsumidorRequest
+        from app.services.consumidor_generator import CONTRATADA_NOME
+
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        contract_id = "sig-consumidor-001"
+        temp_file = output_dir / f"contrato_{contract_id}.docx"
+        temp_file.write_bytes(b"placeholder {{Assinatura;type=signature;role=Contratante}}")
+
+        form = {
+            "tipo_contrato": "consumidor_aereo",
+            "contratantes": [{
+                "nome": "Maria de Fatima Soares Pereira",
+                "genero": "F",
+                "cpf": "761.794.436-53",
+                "endereco": "Rua X, 1, Belo Horizonte/MG",
+            }],
+            "companhia": "KLM",
+            "re_razao_social": "KLM CIA REAL HOLANDESA DE AVIACAO",
+            "re_cnpj": "33.643.420/0001-45",
+        }
+        form_data = json.dumps(ContratoConsumidorRequest(**form).model_dump(mode="json"))
+
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(
+                db, contract_id,
+                file_path=str(temp_file),
+                form_data_json=form_data,
+                client_name="Maria de Fatima Soares Pereira",
+            )
+        finally:
+            db.close()
+
+        mock_service = self._mock_docuseal_success()
+        captured: list = []
+
+        async def capture_send(template_id, signatarios, send_email=True):
+            captured.extend(signatarios)
+            return {
+                "success": True,
+                "submission": {"id": 1, "submitters": []},
+                "message": "ok",
+            }
+
+        mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
+
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
+             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={
+                    "contract_id": contract_id,
+                    "signatarios": [
+                        {"email": "maria@example.com", "name": "Maria", "role": "Contratante"}
+                    ],
+                },
+            )
+
+        assert response.status_code == 200
+        name_arg = mock_service.create_template_from_docx.call_args.kwargs["name"]
+        assert "Prestação de Serviços" in name_arg
+        assert "Honorários" not in name_arg
+
+        contratado = [s for s in captured if s.get("role") == "Contratado"]
+        assert len(contratado) == 1
+        assert contratado[0]["name"] == CONTRATADA_NOME
+
+        filepath = mock_service.create_template_from_docx.call_args.kwargs["filepath"]
+        from docx import Document
+        texto = "\n".join(p.text for p in Document(filepath).paragraphs)
+        assert "CLÁUSULA I" in texto
+        assert CONTRATADA_NOME in texto
+        assert "DAS PARTES" not in texto
+
+        if temp_file.exists():
+            temp_file.unlink()

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import {
   listLegalOneOpcoes,
   createLegalOneOpcao,
@@ -18,7 +18,7 @@ const VAZIO: LegalOneOpcoes = {
 };
 
 export default function LegalOneAdminPage() {
-  const { status: sessionStatus } = useSession();
+  const sessionStatus = useAuthStatus();
   const [opcoes, setOpcoes] = useState<LegalOneOpcoes>(VAZIO);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -71,9 +71,9 @@ export default function LegalOneAdminPage() {
 
   if (accessDenied) {
     return (
-      <div className="max-w-xl mx-auto mt-16 p-8 bg-red-50 border border-red-200 rounded-lg text-center">
-        <h2 className="text-lg font-semibold text-red-900 mb-2">Acesso Restrito</h2>
-        <p className="text-red-700">Você não tem permissão para acessar esta página.</p>
+      <div className="max-w-xl mx-auto mt-16 p-8 bg-danger/[0.08] border border-danger rounded-lg text-center">
+        <h2 className="text-lg font-semibold text-danger mb-2">Acesso Restrito</h2>
+        <p className="text-danger">Você não tem permissão para acessar esta página.</p>
         <a href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
           Voltar ao início
         </a>
@@ -93,13 +93,13 @@ export default function LegalOneAdminPage() {
       </p>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+        <div className="mb-4 p-3 rounded-lg bg-danger/[0.08] border border-danger text-sm text-danger">
           {error}
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-500">Carregando...</p>
+        <p className="text-sm text-muted">Carregando...</p>
       ) : (
         <div className="space-y-6">
           {LEGALONE_TIPOS.map(({ value: tipo, label }) => (
@@ -115,7 +115,7 @@ export default function LegalOneAdminPage() {
                     if (e.key === "Enter") adicionar(tipo);
                   }}
                   placeholder={`Nova ${label.toLowerCase()}`}
-                  className="flex-1 min-w-48 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  className="flex-1 min-w-48 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
                 />
                 <button
                   onClick={() => adicionar(tipo)}
@@ -127,7 +127,7 @@ export default function LegalOneAdminPage() {
               </div>
 
               {opcoes[tipo].length === 0 ? (
-                <p className="text-sm text-gray-500">Nenhuma opção cadastrada.</p>
+                <p className="text-sm text-muted">Nenhuma opção cadastrada.</p>
               ) : (
                 <ul className="divide-y divide-border/50">
                   {opcoes[tipo].map((o) => (

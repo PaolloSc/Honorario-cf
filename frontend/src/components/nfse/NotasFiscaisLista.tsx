@@ -9,12 +9,12 @@ function brl(v: string) {
 }
 
 const statusBadge: Record<NFSeOut["status_matching"], { label: string; cls: string }> = {
-  auto: { label: "✓ auto", cls: "bg-green-100 text-green-800" },
-  manual: { label: "✓ manual", cls: "bg-green-100 text-green-800" },
-  pendente: { label: "⚠ pendente", cls: "bg-amber-100 text-amber-800" },
-  sem_match: { label: "✗ sem match", cls: "bg-red-100 text-red-800" },
-  erro: { label: "✗ erro", cls: "bg-red-100 text-red-800" },
-  cancelada: { label: "🚫 cancelada", cls: "bg-gray-200 text-gray-700" },
+  auto: { label: "✓ auto", cls: "bg-primary/[0.16] text-primary-dark" },
+  manual: { label: "✓ manual", cls: "bg-primary/[0.16] text-primary-dark" },
+  pendente: { label: "⚠ pendente", cls: "bg-warning/[0.16] text-warning" },
+  sem_match: { label: "✗ sem match", cls: "bg-danger/[0.16] text-danger" },
+  erro: { label: "✗ erro", cls: "bg-danger/[0.16] text-danger" },
+  cancelada: { label: "🚫 cancelada", cls: "bg-border/35 text-muted" },
 };
 
 export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string }) {
@@ -47,7 +47,7 @@ export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-border rounded px-2 py-1"
+          className="border border-border bg-card text-foreground rounded px-2 py-1"
         >
           <option value="">Todos status</option>
           <option value="auto">Auto</option>

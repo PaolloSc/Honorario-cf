@@ -162,6 +162,7 @@ class ContractDB(Base):
     status = Column(String(32), nullable=False, default="rascunho")
     client_name = Column(String(256), nullable=False, default="")
     client_email = Column(String(256), nullable=False, default="")
+    tipo_contrato = Column(String(32), nullable=False, default="honorarios", server_default="honorarios")
     current_version = Column(Integer, nullable=False, default=1)
     created_by = Column(String(256), nullable=True)  # user email
     updated_by = Column(String(256), nullable=True)  # user email
