@@ -28,6 +28,7 @@ from app.models.contrato_consumidor import (
     email_contato,
     nome_exibicao,
 )
+from app.services import contract_reviewer
 from app.services.contract_dispatch import TIPO_HONORARIOS
 from app.services.contract_dispatch import get_generator as get_consumidor_gen
 from app.services.contract_dispatch import parse_form_data
@@ -165,6 +166,7 @@ def generate_contract(
             status="rascunho",
             client_name=client_name,
             client_email=client_email,
+            tipo_contrato=TIPO_HONORARIOS,
             current_version=1,
             created_by=user.email,
             updated_by=user.email,
@@ -304,6 +306,46 @@ def generate_contract(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/review")
+def review_contract(
+    data: ContratoRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Previa + varredura de portugues/padrao via DeepSeek antes da geracao definitiva.
+    Nao grava nada — gera o docx num arquivo temporario so' para a previa em HTML.
+    A revisao olha so' os campos de texto livre que quem preenche o wizard digitou
+    (nao a clausula padrao do contrato, que nao ha' onde editar ali). A previa
+    (preview_html) e' sempre retornada; achados so' quando DEEPSEEK_API_KEY esta
+    configurada (enabled=False caso contrario, sem erro)."""
+    import tempfile
+
+    gen = get_generator()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        gen._build_document(data).save(str(tmp_path))
+        preview_html = _docx_to_html(tmp_path)
+
+        if not contract_reviewer.is_configured():
+            return {"enabled": False, "findings": [], "preview_html": preview_html}
+
+        text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"))
+        findings = contract_reviewer.review_text(text) if text.strip() else []
+        return {"enabled": True, "findings": findings, "preview_html": preview_html}
+    except contract_reviewer.ContractReviewError as e:
+        logger.warning("Revisao do contrato indisponivel: %s", e)
+        return {"enabled": True, "findings": [], "preview_html": preview_html, "error": str(e)}
+    except Exception as e:
+        logger.error("Falha na revisao do contrato: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
 @router.post("/generate-consumidor", response_model=ContratoResponse)
 def generate_contrato_consumidor(
     data: ContratoConsumidorRequest,
@@ -324,6 +366,7 @@ def generate_contrato_consumidor(
             status="rascunho",
             client_name=client_name,
             client_email=email_contato(primeiro),
+            tipo_contrato=TIPO_CONSUMIDOR_AEREO,
             current_version=1,
             created_by=user.email,
             updated_by=user.email,

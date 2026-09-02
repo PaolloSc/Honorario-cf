@@ -47,7 +47,7 @@ export default function FinanceiroLoginPage() {
         {process.env.NEXT_PUBLIC_DEV_MODE === "true" && (
           <a
             href="/financeiro/dev-login"
-            className="block mt-3 text-center text-xs text-amber-700 hover:underline"
+            className="block mt-3 text-center text-xs text-warning hover:underline"
           >
             [DEV] Entrar como usuário de teste
           </a>

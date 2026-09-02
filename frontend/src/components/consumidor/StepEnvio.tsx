@@ -210,9 +210,9 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
         {isEdit ? "Salvar Nova Versão" : "Revisão e Envio"}
       </h2>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-medium text-blue-900 mb-2">Resumo</h3>
-        <div className="text-sm text-blue-800 space-y-1">
+      <div className="bg-primary/[0.08] border border-primary rounded-lg p-4">
+        <h3 className="font-medium text-primary-dark mb-2">Resumo</h3>
+        <div className="text-sm text-primary-dark space-y-1">
           <p>
             <strong>Contratante(s):</strong>{" "}
             {data.contratantes.map(nomeExibicao).filter(Boolean).join(", ") || "—"}
@@ -232,7 +232,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
           <div className="space-y-2 mt-1">
             {recipients.map((r, i) => (
               <div key={i}>
-                <label className="block text-xs text-blue-700 mb-0.5">
+                <label className="block text-xs text-primary-dark mb-0.5">
                   {r.nome || `Contratante ${i + 1}`}
                 </label>
                 <input
@@ -244,7 +244,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
                     )
                   }
                   disabled={podeAssinar}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border border-border bg-card text-foreground rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:bg-border/35 disabled:border-muted"
                   placeholder="email@exemplo.com"
                 />
               </div>
@@ -254,7 +254,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
       </div>
 
       {previewErro && !previewHtml && (
-        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <p className="text-sm text-warning bg-warning/[0.08] border border-warning rounded-lg px-3 py-2">
           {previewErro}
         </p>
       )}
@@ -282,10 +282,10 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
         <div
           className={`p-4 rounded-lg text-sm ${
             status === "error"
-              ? "bg-red-50 text-red-800 border border-red-200"
+              ? "bg-danger/[0.08] text-danger border border-danger"
               : status === "success" || status === "sent_email"
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : "bg-blue-50 text-blue-800 border border-blue-200"
+              ? "bg-primary/[0.08] text-primary-dark border border-primary"
+              : "bg-primary/[0.08] text-primary-dark border border-primary"
           }`}
         >
           {message}
@@ -293,7 +293,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
       )}
 
       {emailWarning && (
-        <div className="p-4 rounded-lg text-sm bg-amber-50 text-amber-800 border border-amber-200">
+        <div className="p-4 rounded-lg text-sm bg-warning/[0.08] text-warning border border-warning">
           {emailWarning}
         </div>
       )}
@@ -336,7 +336,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
               type="button"
               onClick={handleSalvarSomente}
               disabled={isSubmitting}
-              className="px-6 py-2.5 border border-border rounded-lg font-medium hover:bg-gray-50 transition disabled:opacity-40"
+              className="px-6 py-2.5 border border-border rounded-lg font-medium hover:bg-background transition disabled:opacity-40"
             >
               {isEdit ? "Salvar sem enviar" : "Gerar sem enviar"}
             </button>
@@ -360,7 +360,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
             onClick={() =>
               onSaveComplete ? onSaveComplete(contractId) : router.push(`/contracts/${contractId}`)
             }
-            className="px-6 py-2.5 border border-border rounded-lg font-medium hover:bg-gray-50 transition"
+            className="px-6 py-2.5 border border-border rounded-lg font-medium hover:bg-background transition"
           >
             Ir para o contrato
           </button>

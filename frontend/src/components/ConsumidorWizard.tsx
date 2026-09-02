@@ -180,7 +180,7 @@ export default function ConsumidorWizard({
       </div>
 
       {erros.length > 0 && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="mb-6 rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
           <p className="font-semibold mb-2">Preencha os campos obrigatórios antes de avançar:</p>
           <ul className="list-disc list-inside space-y-1">
             {erros.map((e) => (
@@ -195,7 +195,7 @@ export default function ConsumidorWizard({
           type="button"
           onClick={() => step > 1 && irPara(step - 1)}
           disabled={step === 1}
-          className="px-6 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-gray-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-6 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-background transition disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Anterior
         </button>

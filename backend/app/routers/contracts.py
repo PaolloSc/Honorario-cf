@@ -28,6 +28,7 @@ class ContractSummary(BaseModel):
     status: str
     client_name: str
     client_email: str
+    tipo_contrato: str
     current_version: int
     created_by: Optional[str] = None
     created_at: str
@@ -162,6 +163,7 @@ def list_contracts(
                 status=c.status,
                 client_name=c.client_name,
                 client_email=c.client_email,
+                tipo_contrato=c.tipo_contrato,
                 current_version=c.current_version,
                 created_by=c.created_by,
                 created_at=c.created_at.isoformat(),

@@ -65,7 +65,7 @@ const GENEROS = [
   { value: "M", label: "Masculino (brasileiro, inscrito)" },
 ];
 
-const SOMENTE_LEITURA = "bg-gray-100 cursor-not-allowed text-muted";
+const SOMENTE_LEITURA = "bg-border/35 cursor-not-allowed text-muted";
 
 interface Props {
   contratantes: ContratanteConsumidor[];
@@ -198,7 +198,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                   c.tipo === tipo
                     ? "bg-primary text-white"
-                    : "bg-gray-100 text-foreground hover:bg-gray-200"
+                    : "bg-background border border-border hover:border-primary/50"
                 }`}
               >
                 {tipo === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
@@ -451,7 +451,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
       <button
         type="button"
         onClick={() => onChange([...contratantes, contratanteVazio()])}
-        className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+        className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition"
       >
         + Adicionar Contratante
       </button>

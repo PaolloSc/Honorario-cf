@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import {
   listColaboradoresAdmin,
   createColaborador,
@@ -16,7 +16,7 @@ const PAPEL_LABEL: Record<string, string> = Object.fromEntries(
 );
 
 export default function ColaboradoresAdminPage() {
-  const { status: sessionStatus } = useSession();
+  const sessionStatus = useAuthStatus();
   const [rows, setRows] = useState<Colaborador[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -87,9 +87,9 @@ export default function ColaboradoresAdminPage() {
 
   if (accessDenied) {
     return (
-      <div className="max-w-xl mx-auto mt-16 p-8 bg-red-50 border border-red-200 rounded-lg text-center">
-        <h2 className="text-lg font-semibold text-red-900 mb-2">Acesso Restrito</h2>
-        <p className="text-red-700">Você não tem permissão para acessar esta página.</p>
+      <div className="max-w-xl mx-auto mt-16 p-8 bg-danger/[0.08] border border-danger rounded-lg text-center">
+        <h2 className="text-lg font-semibold text-danger mb-2">Acesso Restrito</h2>
+        <p className="text-danger">Você não tem permissão para acessar esta página.</p>
         <a href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
           Voltar ao início
         </a>
@@ -108,32 +108,32 @@ export default function ColaboradoresAdminPage() {
       </p>
 
       {error && !accessDenied && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+        <div className="mb-4 p-3 rounded-lg bg-danger/[0.08] border border-danger text-sm text-danger">
           {error}
         </div>
       )}
 
       {/* Create form */}
-      <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-border">
+      <div className="mb-6 p-4 rounded-xl bg-background border border-border">
         <div className="flex flex-wrap gap-2">
           <input
             type="text"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
             placeholder="Nome"
-            className="flex-1 min-w-40 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="flex-1 min-w-40 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="email@exemplo.com (opcional)"
-            className="flex-1 min-w-48 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="flex-1 min-w-48 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           <select
             value={papel}
             onChange={(e) => setPapel(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           >
             {PAPEIS_COLABORADOR.map((p) => (
               <option key={p.value} value={p.value}>
@@ -152,14 +152,14 @@ export default function ColaboradoresAdminPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-gray-500">Carregando...</p>
+        <p className="text-sm text-muted">Carregando...</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-gray-500">Nenhum colaborador cadastrado.</p>
+        <p className="text-sm text-muted">Nenhum colaborador cadastrado.</p>
       ) : (
         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-gray-50/50">
+              <tr className="border-b border-border bg-background/60">
                 <th className="text-left px-4 py-3 font-medium text-muted">Nome</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">E-mail</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Papel</th>
@@ -169,11 +169,11 @@ export default function ColaboradoresAdminPage() {
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr key={c.id} className="border-b border-border/50 hover:bg-gray-50/50">
+                <tr key={c.id} className="border-b border-border/50 hover:bg-background/60">
                   <td className="px-4 py-3 font-medium">
                     {c.nome}
                     {c.participavel && (
-                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/[0.16] text-primary-dark">
                         wizard
                       </span>
                     )}
@@ -183,7 +183,7 @@ export default function ColaboradoresAdminPage() {
                     <select
                       value={c.papel}
                       onChange={(e) => changePapel(c, e.target.value)}
-                      className="text-xs border border-border rounded px-2 py-1"
+                      className="text-xs border border-border bg-card text-foreground rounded px-2 py-1"
                     >
                       {PAPEIS_COLABORADOR.map((p) => (
                         <option key={p.value} value={p.value}>
@@ -195,7 +195,7 @@ export default function ColaboradoresAdminPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        c.ativo ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                        c.ativo ? "bg-primary/[0.16] text-primary-dark" : "bg-border/35 text-muted"
                       }`}
                     >
                       {c.ativo ? "Ativo" : "Inativo"}

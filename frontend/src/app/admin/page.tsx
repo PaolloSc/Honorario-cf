@@ -87,9 +87,9 @@ export default function AdminPage() {
 
   if (accessDenied) {
     return (
-      <div className="max-w-xl mx-auto mt-16 p-8 bg-red-50 border border-red-200 rounded-lg text-center">
-        <h2 className="text-lg font-semibold text-red-900 mb-2">Acesso Restrito</h2>
-        <p className="text-red-700">Você não tem permissão para acessar esta página.</p>
+      <div className="max-w-xl mx-auto mt-16 p-8 bg-danger/[0.08] border border-danger rounded-lg text-center">
+        <h2 className="text-lg font-semibold text-danger mb-2">Acesso Restrito</h2>
+        <p className="text-danger">Você não tem permissão para acessar esta página.</p>
         <a href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
           Voltar ao inicio
         </a>
@@ -139,7 +139,7 @@ export default function AdminPage() {
       </nav>
 
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-border bg-gray-50/50">
+        <div className="px-4 py-3 border-b border-border bg-background/60">
           <h2 className="font-medium text-sm text-foreground">
             Usuarios ({users.length})
           </h2>
@@ -163,19 +163,19 @@ export default function AdminPage() {
             )}
             {!loading &&
               users.map((u) => (
-                <tr key={u.id} className="border-b border-border/50 hover:bg-gray-50/50">
+                <tr key={u.id} className="border-b border-border/50 hover:bg-background/60">
                   <td className="px-4 py-3 font-medium">{u.name}</td>
                   <td className="px-4 py-3 text-muted">{u.email}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         u.role === "admin"
-                          ? "bg-purple-100 text-purple-800"
+                          ? "bg-accent/[0.16] text-accent"
                           : u.role === "financeiro"
-                          ? "bg-emerald-100 text-emerald-800"
+                          ? "bg-primary/[0.16] text-primary-dark"
                           : u.role === "leitor"
-                          ? "bg-gray-100 text-gray-700"
-                          : "bg-blue-100 text-blue-800"
+                          ? "bg-border/35 text-muted"
+                          : "bg-warning/[0.16] text-warning"
                       }`}
                     >
                       {u.role === "admin"
@@ -191,7 +191,7 @@ export default function AdminPage() {
                     <select
                       value={u.role}
                       onChange={(e) => setRole(u.id, e.target.value)}
-                      className="text-xs border border-border rounded px-2 py-1"
+                      className="text-xs border border-border bg-card text-foreground rounded px-2 py-1"
                     >
                       <option value="advogado">Advogado</option>
                       <option value="financeiro">Financeiro</option>
@@ -206,7 +206,7 @@ export default function AdminPage() {
       </div>
 
       {error && !accessDenied && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="mt-4 rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
           {error}
         </div>
       )}

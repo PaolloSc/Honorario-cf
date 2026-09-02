@@ -27,7 +27,7 @@ const COMPANHIAS = Object.keys(MILHEIRO_POR_COMPANHIA).map((nome) => ({
   label: `${nome} — milheiro R$ ${MILHEIRO_POR_COMPANHIA[nome].toFixed(2).replace(".", ",")}`,
 }));
 
-const SOMENTE_LEITURA = "bg-gray-100 cursor-not-allowed text-muted";
+const SOMENTE_LEITURA = "bg-border/35 cursor-not-allowed text-muted";
 
 function reais(v: number): string {
   return v.toFixed(2).replace(".", ",");
@@ -194,7 +194,7 @@ export default function StepCaso({ data, onChange }: Props) {
             </FormField>
 
             {re.companhia && milheiro !== undefined && (
-              <p className="text-sm text-primary-dark bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-4">
+              <p className="text-sm text-primary-dark bg-primary/5 border border-primary rounded-lg px-3 py-2 mb-4">
                 Linha na tabela do milheiro:{" "}
                 <strong>
                   {re.companhia.toUpperCase()} — R$ {reais(milheiro)}
@@ -231,7 +231,7 @@ export default function StepCaso({ data, onChange }: Props) {
       <button
         type="button"
         onClick={adicionarRe}
-        className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+        className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition"
       >
         + Adicionar Companhia
       </button>

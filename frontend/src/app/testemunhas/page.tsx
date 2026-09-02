@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import {
   listTestemunhas,
   createTestemunha,
@@ -10,7 +10,7 @@ import {
 } from "@/app/lib/api";
 
 export default function TestemunhasPage() {
-  const { status: sessionStatus } = useSession();
+  const sessionStatus = useAuthStatus();
   const [rows, setRows] = useState<Testemunha[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -65,33 +65,33 @@ export default function TestemunhasPage() {
       <h1 className="font-display text-xl font-semibold text-foreground mb-1">
         Cadastro de Testemunhas
       </h1>
-      <p className="text-sm text-gray-500 mb-6">
+      <p className="text-sm text-muted mb-6">
         Testemunhas recorrentes do escritório. Selecionáveis no envio para assinatura.
         A Testemunha 1 (financeiro) é incluída automaticamente em todo contrato.
       </p>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+        <div className="mb-4 p-3 rounded-lg bg-danger/[0.08] border border-danger text-sm text-danger">
           {error}
         </div>
       )}
 
       {/* Create form */}
-      <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-border">
-        <div className="flex gap-2">
+      <div className="mb-6 p-4 rounded-xl bg-background border border-border">
+        <div className="flex flex-wrap gap-2">
           <input
             type="text"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
             placeholder="Nome"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="flex-1 min-w-40 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="email@exemplo.com"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="flex-1 min-w-48 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           <button
             onClick={handleCreate}
@@ -103,7 +103,7 @@ export default function TestemunhasPage() {
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-gray-600 mb-3 cursor-pointer">
+      <label className="flex items-center gap-2 text-sm text-muted mb-3 cursor-pointer">
         <input
           type="checkbox"
           checked={showInactive}
@@ -113,23 +113,23 @@ export default function TestemunhasPage() {
       </label>
 
       {loading ? (
-        <p className="text-sm text-gray-500">Carregando...</p>
+        <p className="text-sm text-muted">Carregando...</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-gray-500">Nenhuma testemunha cadastrada.</p>
+        <p className="text-sm text-muted">Nenhuma testemunha cadastrada.</p>
       ) : (
         <div className="space-y-2">
           {rows.map((t) => (
             <div
               key={t.id}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-white"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card"
             >
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">{t.nome}</p>
-                <p className="text-xs text-gray-500">{t.email}</p>
+                <p className="text-xs text-muted">{t.email}</p>
               </div>
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  t.ativo ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                  t.ativo ? "bg-primary/[0.16] text-primary-dark" : "bg-border/35 text-muted"
                 }`}
               >
                 {t.ativo ? "Ativa" : "Inativa"}

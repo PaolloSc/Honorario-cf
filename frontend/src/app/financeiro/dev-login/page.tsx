@@ -38,9 +38,9 @@ export default function DevLoginPage() {
 
   if (!enabled) {
     return (
-      <div className="max-w-md mx-auto mt-20 p-8 bg-red-50 border border-red-200 rounded-lg text-center">
-        <h2 className="font-semibold text-red-900">Modo dev desativado</h2>
-        <p className="text-sm text-red-700 mt-2">
+      <div className="max-w-md mx-auto mt-20 p-8 bg-danger/[0.08] border border-danger rounded-lg text-center">
+        <h2 className="font-semibold text-danger">Modo dev desativado</h2>
+        <p className="text-sm text-danger mt-2">
           Defina <code>NEXT_PUBLIC_DEV_MODE=true</code> em <code>.env.local</code> e reinicie o frontend.
         </p>
       </div>
@@ -55,7 +55,7 @@ export default function DevLoginPage() {
         </h1>
         <p className="text-xs text-muted text-center mb-6">
           Selecione um usuário de teste. Requer{" "}
-          <code className="bg-gray-100 px-1 rounded">DEV_MODE=true</code> no backend e seed rodado.
+          <code className="bg-border/35 px-1 rounded">DEV_MODE=true</code> no backend e seed rodado.
         </p>
 
         <div className="space-y-2">
@@ -73,10 +73,10 @@ export default function DevLoginPage() {
                 <span
                   className={`text-xs px-2 py-1 rounded-full ${
                     u.role === "admin"
-                      ? "bg-purple-100 text-purple-800"
+                      ? "bg-accent/[0.16] text-accent"
                       : u.role === "financeiro"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-blue-100 text-blue-800"
+                      ? "bg-primary/[0.16] text-primary-dark"
+                      : "bg-warning/[0.16] text-warning"
                   }`}
                 >
                   {u.role}
@@ -88,7 +88,7 @@ export default function DevLoginPage() {
 
         <p className="text-xs text-muted text-center mt-6">
           Antes de usar:{" "}
-          <code className="bg-gray-100 px-1 rounded">python backend/seed_test_users.py</code>
+          <code className="bg-border/35 px-1 rounded">python backend/seed_test_users.py</code>
         </p>
       </div>
     </div>

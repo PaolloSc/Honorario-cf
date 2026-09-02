@@ -118,11 +118,25 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
     }
   };
 
-  const setParticipante = (nome: string, partial: Partial<{ natureza: string; percentual: string }>) => {
+  const setParticipante = (
+    nome: string,
+    partial: Partial<{
+      natureza: string;
+      percentual: string;
+      valor_tipo: ParticipacaoValorTipo;
+      valor_monetario: number;
+      valor_outro: string;
+    }>,
+  ) => {
     set({
       participantes: participantesSel.map((p) => (p.nome === nome ? { ...p, ...partial } : p)),
     });
   };
+
+  // Troca o tipo de valor do participante limpando os outros campos, mesmo padrão
+  // do setValorTipo geral — evita mandar percentual+valor+outro preenchidos juntos.
+  const setParticipanteValorTipo = (nome: string, tipo: ParticipacaoValorTipo) =>
+    setParticipante(nome, { valor_tipo: tipo, percentual: "", valor_monetario: undefined, valor_outro: "" });
 
   const baseNomeOptions = colaboradores.map((c) => ({ value: c.name, label: c.name }));
   const optionsComSalvo = (saved?: string) =>
@@ -158,18 +172,18 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
       <p className="text-sm text-muted mb-2">
         Informações internas sobre participação. O cliente <strong>não terá acesso</strong> a estes dados.
       </p>
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
-        <p className="text-xs text-yellow-800 font-medium">
+      <div className="bg-warning/[0.08] border border-warning rounded-lg p-3 mb-6">
+        <p className="text-xs text-warning font-medium">
           Atenção: Esta ficha é apenas para fins internos do escritório.
         </p>
       </div>
 
       {objetoLines.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <p className="text-sm font-semibold text-blue-900 mb-2">Objeto do Contrato</p>
+        <div className="bg-primary/[0.08] border border-primary rounded-lg p-4 mb-6">
+          <p className="text-sm font-semibold text-primary-dark mb-2">Objeto do Contrato</p>
           <ul className="list-disc list-inside space-y-1">
             {objetoLines.map((line, idx) => (
-              <li key={idx} className="text-sm text-blue-800">{line}</li>
+              <li key={idx} className="text-sm text-primary-dark">{line}</li>
             ))}
           </ul>
         </div>
@@ -181,7 +195,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
         <p className="text-xs text-muted mb-4">
           Informado ao financeiro para o lançamento do cliente no Legal One.
         </p>
-        {loError && <p className="text-xs text-red-500 mb-2">{loError}</p>}
+        {loError && <p className="text-xs text-danger mb-2">{loError}</p>}
 
         <FormField label="Categoria do cliente">
           <Select
@@ -387,7 +401,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
             {/* Para quem (multi advogados, cada um com natureza + % próprios) */}
             <div>
               <p className="text-sm font-semibold text-foreground mb-2">Para quem?</p>
-              {colabError && <p className="text-xs text-red-500 mb-2">{colabError}</p>}
+              {colabError && <p className="text-xs text-danger mb-2">{colabError}</p>}
               {loadingColab && <p className="text-xs text-muted">Carregando advogados...</p>}
               {!loadingColab && nomesParaExibir.length === 0 && (
                 <p className="text-xs text-muted">Nenhum colaborador encontrado.</p>
@@ -418,17 +432,67 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                               ]}
                             />
                           </FormField>
-                          <FormField label="Percentual (opcional, sobrescreve o geral)">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={participante.percentual ?? ""}
-                              onChange={(e) => setParticipante(nome, { percentual: e.target.value })}
-                              placeholder="Ex: 10"
-                            />
-                          </FormField>
+                          {participantesSel.length > 1 ? (
+                            // Só faz sentido escolher valor/outro por advogado quando há mais de
+                            // um: com um só, o valor geral da participação já cobre o caso.
+                            // h-full+justify-end alinha o input com o Select de "Natureza" ao
+                            // lado, que não tem a linha extra de radios acima do campo.
+                            <div className="h-full flex flex-col justify-end">
+                              <p className="text-sm text-foreground mb-1">Valor (opcional, sobrescreve o geral)</p>
+                              <div className="flex flex-wrap gap-3 mb-2">
+                                {VALOR_TIPOS.map((t) => (
+                                  <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                                    <input
+                                      type="radio"
+                                      name={`participante-valor-tipo-${nome}`}
+                                      checked={(participante.valor_tipo || "percentual") === t.value}
+                                      onChange={() => setParticipanteValorTipo(nome, t.value)}
+                                      className="h-3.5 w-3.5 text-primary focus:ring-primary-light"
+                                    />
+                                    {t.label}
+                                  </label>
+                                ))}
+                              </div>
+
+                              {(participante.valor_tipo || "percentual") === "percentual" && (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
+                                  value={participante.percentual ?? ""}
+                                  onChange={(e) => setParticipante(nome, { percentual: e.target.value })}
+                                  placeholder="Ex: 10"
+                                />
+                              )}
+                              {participante.valor_tipo === "valor" && (
+                                <CurrencyInput
+                                  value={participante.valor_monetario}
+                                  onChange={(v) => setParticipante(nome, { valor_monetario: v })}
+                                  placeholder="0,00"
+                                />
+                              )}
+                              {participante.valor_tipo === "outro" && (
+                                <Input
+                                  value={participante.valor_outro ?? ""}
+                                  onChange={(e) => setParticipante(nome, { valor_outro: e.target.value })}
+                                  placeholder="Descreva o critério"
+                                />
+                              )}
+                            </div>
+                          ) : (
+                            <FormField label="Percentual (opcional, sobrescreve o geral)">
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={participante.percentual ?? ""}
+                                onChange={(e) => setParticipante(nome, { percentual: e.target.value })}
+                                placeholder="Ex: 10"
+                              />
+                            </FormField>
+                          )}
                         </div>
                       )}
                     </div>
