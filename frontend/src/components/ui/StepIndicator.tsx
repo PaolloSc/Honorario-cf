@@ -18,24 +18,24 @@ export default function StepIndicator({
 }: StepIndicatorProps) {
   return (
     <nav className="mb-8">
-      <ol className="flex items-center gap-2">
+      <ol className="flex items-center justify-center gap-2">
         {steps.map((step, idx) => {
           const isActive = step.id === currentStep;
           const isCompleted = step.id < currentStep;
           return (
-            <li key={step.id} className="flex items-center gap-2">
+            <li key={step.id} className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => onStepClick?.(step.id)}
                 className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition"
               >
                 <span
-                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold transition-all ${
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold transition-all shrink-0 ${
                     isActive
                       ? "bg-primary text-white shadow-md"
                       : isCompleted
                         ? "bg-success text-white"
-                        : "bg-gray-200 text-muted"
+                        : "bg-border/50 text-muted border border-muted"
                   }`}
                 >
                   {isCompleted ? (
@@ -47,7 +47,7 @@ export default function StepIndicator({
                   )}
                 </span>
                 <span
-                  className={`text-xs font-medium hidden sm:inline ${
+                  className={`text-xs font-medium hidden lg:inline whitespace-nowrap ${
                     isActive ? "text-primary" : isCompleted ? "text-success" : "text-muted"
                   }`}
                 >
@@ -56,8 +56,8 @@ export default function StepIndicator({
               </button>
               {idx < steps.length - 1 && (
                 <div
-                  className={`w-8 h-0.5 ${
-                    isCompleted ? "bg-success" : "bg-gray-200"
+                  className={`w-8 h-[3px] rounded-full shrink-0 ${
+                    isCompleted ? "bg-success" : "bg-border"
                   }`}
                 />
               )}
