@@ -476,6 +476,13 @@ class ContractGenerator:
             cell.text = title
             cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+        # Marca a linha como cabecalho de verdade (repete a cada pagina no Word).
+        # A previa em HTML usa esta marca para decidir <th> — sem ela, uma tabela
+        # sem titulo teria a 1a linha de dados exibida como cabecalho.
+        trPr = table.rows[0]._tr.get_or_add_trPr()
+        if trPr.find(qn("w:tblHeader")) is None:
+            trPr.append(OxmlElement("w:tblHeader"))
+
     def _add_title(self, doc: Document) -> None:
         title = doc.add_heading("CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS", level=1)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -883,9 +890,9 @@ class ContractGenerator:
             "apresentação de boleto ou outro título em que este seja o beneficiário.",
             "A CONTRATANTE reconhece que qualquer pagamento realizado em inobservância ao "
             "previsto neste Contrato será considerado inválido e ineficaz.",
-            "As obrigações de pagamento previstas neste Contrato serão devidas, independente "
+            "As obrigações de pagamento previstas neste Contrato serão devidas, independentemente "
             "de notificação, tão logo se dê o seu vencimento.",
-            "O atraso no pagamento implicará na incidência do seguinte: juros de 1% a.m; "
+            "O atraso no pagamento implicará a incidência do seguinte: juros de 1% a.m; "
             "multa de 10% (dez por cento) sobre o valor em atraso e atualização monetária "
             "pelo IPCA, sem prejuízo de suspensão do serviço ou rescisão contratual a "
             "critério do C&F.",
@@ -998,7 +1005,7 @@ class ContractGenerator:
             doc,
             "As Partes comprometem-se a tratar dados pessoais estritamente para as "
             "finalidades deste Contrato, observando medidas razoáveis de segurança e "
-            "confidencialidade, sendo autorizado desde já a criação de cadastros internos "
+            "confidencialidade, sendo autorizada desde já a criação de cadastros internos "
             "para fins de comunicação em geral."
         )
         self._add_clausula(
@@ -1025,7 +1032,7 @@ class ContractGenerator:
             doc,
             "Este prazo de antecedência não substitui nem prejudica o disposto nos "
             "art. 112, §1º, do Código de Processo Civil e 5º, §3º, do Estatuto da OAB, de "
-            "modo que, no caso de demandas judiciais, arbitrais ou administrativos, o C&F e "
+            "modo que, no caso de demandas judiciais, arbitrais ou administrativas, o C&F e "
             "seus advogados permanecerão representando a CONTRATANTE durante os dez dias "
             "seguintes à notificação, salvo se forem substituídos antes do término desse "
             "prazo.",
@@ -1036,7 +1043,7 @@ class ContractGenerator:
             "vencidos serão devidos integralmente; (ii) honorários vincendos pactuados por "
             "hora trabalhada serão devidos em relação aos serviços executados até a efetiva "
             "extinção; (iii) honorários vincendos pactuados por mensalidade serão devidos "
-            "observando-se o prazo de antecedência de 30 dias previstos nesta cláusula; "
+            "observando-se o prazo de antecedência de 30 dias previsto nesta cláusula; "
             "(iv) honorários vincendos pactuados por pró-labore serão devidos, "
             "proporcionalmente, observando-se os serviços executados e ainda não "
             "remunerados"

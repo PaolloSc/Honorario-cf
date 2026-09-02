@@ -239,7 +239,12 @@ export type ParticipacaoValorTipo = "percentual" | "valor" | "outro";
 export interface ParticipacaoParticipante {
   nome: string;
   natureza: string;
+  // Sobrescreve o valor geral da participação só para este advogado — mesmo
+  // padrão de valor_tipo/valor_percentual/valor_monetario/valor_outro abaixo.
   percentual?: string;
+  valor_tipo?: ParticipacaoValorTipo;
+  valor_monetario?: number;
+  valor_outro?: string;
 }
 
 export interface Participacao {

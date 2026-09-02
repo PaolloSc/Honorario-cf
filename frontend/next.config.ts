@@ -11,8 +11,13 @@ const nextConfig: NextConfig = {
   // em /calculadora (sem barra), e aí o relativo resolve para /docx.umd.js na
   // raiz — 404, as libs não carregam e nenhum documento é gerado, em silêncio.
   // Com redirect a URL vira o caminho real e os relativos resolvem ao lado dela.
+  //
+  // /jesp e' como o escritorio chama o contrato de acao de consumo.
   async redirects() {
-    return [{ source: "/calculadora", destination: "/calculadora/index.html", permanent: false }];
+    return [
+      { source: "/calculadora", destination: "/calculadora/index.html", permanent: false },
+      { source: "/jesp", destination: "/consumidor", permanent: false },
+    ];
   },
 };
 

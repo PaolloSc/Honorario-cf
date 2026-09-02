@@ -32,7 +32,7 @@ const INITIAL_DATA: ContratoFormData = {
     {
       tipo: "PF",
       nome: "",
-      nacionalidade: "Brasileira (o)",
+      nacionalidade: "Brasileiro(a)",
       cpf: "",
       profissao: "",
       estado_civil: "Solteiro(a)",
@@ -297,6 +297,11 @@ export default function ContractWizard({
     []
   );
  
+  // Histórico do que já foi corrigido na revisão por IA (Step 7). Fica aqui, e não
+  // dentro do Step7Envio, porque esse componente desmonta ao trocar de passo — sem
+  // isso, sair e voltar pro Step 7 resetava o histórico pra vazio.
+  const [correcoesAplicadas, setCorrecoesAplicadas] = useState<Array<{ trecho: string; sugestao: string }>>([]);
+
   const updateEscopos = useCallback((escopos: EscopoItem[]) => {
     setValidationErrors([]);
     setFormData((prev) => ({ ...prev, escopos }));
@@ -340,7 +345,7 @@ export default function ContractWizard({
   };
  
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
         <h1 className="font-display text-2xl font-semibold text-primary-dark tracking-wide">
           {editContractId ? "Editar Contrato" : "Novo Contrato de Honorários"}
@@ -404,12 +409,15 @@ export default function ContractWizard({
             data={formData}
             editContractId={editContractId}
             onSaveComplete={onSaveComplete}
+            onDataChange={setFormData}
+            correcoesAplicadas={correcoesAplicadas}
+            onCorrecoesAplicadasChange={setCorrecoesAplicadas}
           />
         )}
       </div>
 
       {validationErrors.length > 0 && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="mb-6 rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
           <p className="font-semibold mb-2">
             Preencha os campos obrigatórios antes de avançar:
           </p>
@@ -427,7 +435,7 @@ export default function ContractWizard({
           type="button"
           onClick={goPrev}
           disabled={currentStep === 1}
-          className="px-6 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-gray-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-6 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-background transition disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Anterior
         </button>

@@ -21,7 +21,7 @@ export function HealthBanner() {
   if (ok) return null;
 
   return (
-    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+    <div className="mb-4 rounded-lg border border-danger bg-danger/[0.08] p-3 text-sm text-danger">
       <strong>NFS-e sync:</strong>{" "}
       {last.status !== "ok"
         ? `último job falhou (${last.status})`

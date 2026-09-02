@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import {
   getContract,
   downloadContract,
@@ -19,11 +19,11 @@ import {
 } from "@/app/lib/api";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  rascunho: { label: "Rascunho", color: "bg-gray-100 text-gray-700" },
-  enviado: { label: "Enviado p/ Assinatura", color: "bg-amber-100 text-amber-800" },
-  assinado: { label: "Assinado", color: "bg-green-100 text-green-800" },
-  cancelado: { label: "Cancelado", color: "bg-red-100 text-red-800" },
-  recusado: { label: "Recusado", color: "bg-red-100 text-red-800" },
+  rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
+  enviado: { label: "Enviado p/ Assinatura", color: "bg-warning/[0.16] text-warning" },
+  assinado: { label: "Assinado", color: "bg-primary/[0.16] text-primary-dark" },
+  cancelado: { label: "Cancelado", color: "bg-danger/[0.14] text-danger" },
+  recusado: { label: "Recusado", color: "bg-danger/[0.14] text-danger" },
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -49,7 +49,7 @@ const ACTION_ICONS: Record<string, string> = {
   envio_participacao_assinatura: "bg-teal-100 border-teal-300",
   envio_participacao_final: "bg-teal-100 border-teal-300",
   envio_ficha_participacao: "bg-teal-100 border-teal-300",
-  mudanca_status: "bg-gray-100 border-gray-300",
+  mudanca_status: "bg-border/40 border-muted",
   webhook_assinado: "bg-green-100 border-green-300",
   webhook_recusado: "bg-red-100 border-red-300",
 };
@@ -65,7 +65,7 @@ function formatDate(iso: string) {
 }
 
 export default function ContractDetailPage() {
-  const { status: sessionStatus } = useSession();
+  const sessionStatus = useAuthStatus();
   const params = useParams();
   const contractId = params.id as string;
 
@@ -257,7 +257,7 @@ export default function ContractDetailPage() {
   if (error || !contract) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
           {error || "Contrato nao encontrado"}
         </div>
         <a href="/contracts" className="mt-4 inline-block text-sm text-primary hover:underline">
@@ -299,7 +299,7 @@ export default function ContractDetailPage() {
       </div>
 
       {notification && (
-        <div className={`p-4 rounded-lg mb-4 ${notification.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+        <div className={`p-4 rounded-lg mb-4 ${notification.type === "success" ? "bg-primary/[0.1] text-primary-dark border border-primary" : "bg-danger/[0.08] text-danger border border-danger"}`}>
           <div className="flex justify-between items-center">
             <span>{notification.message}</span>
             <button onClick={() => setNotification(null)} className="text-sm underline">Fechar</button>
@@ -318,21 +318,21 @@ export default function ContractDetailPage() {
         <button
           onClick={handlePreview}
           disabled={loadingPreview}
-          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loadingPreview ? "Carregando..." : showPreview ? "Ocultar Visualização" : "Visualizar"}
         </button>
         <button
           onClick={handleDownload}
           disabled={downloading}
-          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {downloading ? "Baixando..." : "Baixar DOCX"}
         </button>
         <button
           onClick={handleResendEmail}
           disabled={sendingEmail}
-          className="px-5 py-2.5 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-5 py-2.5 border border-warning/40 text-warning rounded-lg text-sm font-medium hover:bg-warning/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {sendingEmail ? "Enviando..." : "Reenviar por E-mail"}
         </button>
@@ -348,7 +348,7 @@ export default function ContractDetailPage() {
         {contract.status === "rascunho" && (
           <button
             onClick={() => handleStatusChange("cancelado")}
-            className="px-5 py-2.5 border border-red-200 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition"
+            className="px-5 py-2.5 border border-danger/40 text-danger rounded-lg text-sm font-medium hover:bg-danger/10 transition"
           >
             Cancelar
           </button>
@@ -356,7 +356,7 @@ export default function ContractDetailPage() {
         {contract.status === "enviado" && (
           <button
             onClick={() => handleStatusChange("assinado")}
-            className="px-5 py-2.5 border border-green-200 text-green-700 rounded-lg text-sm font-medium hover:bg-green-50 transition"
+            className="px-5 py-2.5 border border-primary/40 text-primary-dark rounded-lg text-sm font-medium hover:bg-primary/10 transition"
           >
             Marcar como Assinado
           </button>
@@ -378,7 +378,7 @@ export default function ContractDetailPage() {
 
       {/* Signature Panel - Additional Lawyers */}
       {showSignaturePanel && canSendForSignature && (
-        <div className="mb-8 p-5 bg-purple-50 border border-purple-200 rounded-xl">
+        <div className="mb-8 p-5 bg-card border border-purple-300/40 rounded-xl">
           <h3 className="font-display text-sm font-semibold text-purple-900 mb-3">
             Enviar para Assinatura Digital
           </h3>
@@ -391,11 +391,11 @@ export default function ContractDetailPage() {
           {additionalLawyers.length > 0 && (
             <div className="space-y-1 mb-3">
               {additionalLawyers.map((lawyer, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
+                <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40">
                   <span className="flex-1">{lawyer.name} ({lawyer.email})</span>
                   <button
                     onClick={() => setAdditionalLawyers((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="text-red-500 hover:text-red-700 text-xs font-medium"
+                    className="text-danger hover:opacity-80 text-xs font-medium"
                   >
                     Remover
                   </button>
@@ -405,20 +405,20 @@ export default function ContractDetailPage() {
           )}
 
           {/* Add lawyer form */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
             <input
               type="text"
               value={newLawyerName}
               onChange={(e) => setNewLawyerName(e.target.value)}
               placeholder="Nome do advogado"
-              className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+              className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
             />
             <input
               type="email"
               value={newLawyerEmail}
               onChange={(e) => setNewLawyerEmail(e.target.value)}
               placeholder="email@exemplo.com"
-              className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+              className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
             />
             <button
               onClick={() => {
@@ -428,7 +428,7 @@ export default function ContractDetailPage() {
                 setNewLawyerName("");
               }}
               disabled={!newLawyerEmail.trim()}
-              className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+              className="shrink-0 px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
             >
               Adicionar
             </button>
@@ -444,7 +444,7 @@ export default function ContractDetailPage() {
             {roster.length > 0 && (
               <div className="space-y-1 mb-2">
                 {roster.map((t) => (
-                  <label key={t.id} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100 cursor-pointer">
+                  <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selectedTestemunhaIds.includes(t.id)}
@@ -463,11 +463,11 @@ export default function ContractDetailPage() {
             {extraTestemunhas.length > 0 && (
               <div className="space-y-1 mb-2">
                 {extraTestemunhas.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded border border-purple-100">
-                    <span className="flex-1">{t.name} ({t.email}) <em className="text-purple-500">avulsa</em></span>
+                  <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40">
+                    <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
                     <button
                       onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="text-red-500 hover:text-red-700 text-xs font-medium"
+                      className="text-danger hover:opacity-80 text-xs font-medium"
                     >
                       Remover
                     </button>
@@ -476,20 +476,20 @@ export default function ContractDetailPage() {
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 type="text"
                 value={newTestemunhaNome}
                 onChange={(e) => setNewTestemunhaNome(e.target.value)}
                 placeholder="Nome da testemunha"
-                className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
               />
               <input
                 type="email"
                 value={newTestemunhaEmail}
                 onChange={(e) => setNewTestemunhaEmail(e.target.value)}
                 placeholder="email@exemplo.com"
-                className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
               />
               <button
                 onClick={() => {
@@ -499,7 +499,7 @@ export default function ContractDetailPage() {
                   setNewTestemunhaNome("");
                 }}
                 disabled={!newTestemunhaEmail.trim()}
-                className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                className="shrink-0 px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
               >
                 Adicionar
               </button>
@@ -517,7 +517,7 @@ export default function ContractDetailPage() {
             </button>
             <button
               onClick={() => setShowSignaturePanel(false)}
-              className="px-5 py-2 border border-border text-foreground rounded-lg text-sm hover:bg-gray-50 transition"
+              className="px-5 py-2 border border-border text-foreground rounded-lg text-sm hover:bg-background transition"
             >
               Cancelar
             </button>
@@ -537,21 +537,21 @@ export default function ContractDetailPage() {
               const isError = entry.action === "webhook_recusado";
               const isSent = entry.action === "envio_assinatura";
 
-              let badgeColor = "bg-amber-100 text-amber-800";
+              let badgeColor = "bg-warning/[0.16] text-warning";
               let badgeLabel = "Aguardando assinatura";
               if (isSuccess) {
-                badgeColor = "bg-green-100 text-green-800";
+                badgeColor = "bg-primary/[0.16] text-primary-dark";
                 badgeLabel = "Assinado";
               } else if (isError) {
-                badgeColor = "bg-red-100 text-red-800";
+                badgeColor = "bg-danger/[0.14] text-danger";
                 badgeLabel = "Recusado";
               } else if (isSent) {
-                badgeColor = "bg-amber-100 text-amber-800";
+                badgeColor = "bg-warning/[0.16] text-warning";
                 badgeLabel = "Enviado - Aguardando";
               }
 
               return (
-                <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-border/50">
+                <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-background border border-border/50">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badgeColor}`}>
@@ -620,8 +620,8 @@ export default function ContractDetailPage() {
                 key={v.version_number}
                 className={`flex items-center justify-between text-sm px-3 py-2 rounded-lg ${
                   v.version_number === contract.current_version
-                    ? "bg-primary/5 border border-primary/20"
-                    : "bg-gray-50"
+                    ? "bg-primary/5 border border-primary"
+                    : "bg-background"
                 }`}
               >
                 <div>
@@ -670,7 +670,7 @@ export default function ContractDetailPage() {
           <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
           <div className="space-y-4">
             {contract.audit_log.map((entry: AuditEntry, i: number) => {
-              const iconClass = ACTION_ICONS[entry.action] || "bg-gray-100 border-gray-300";
+              const iconClass = ACTION_ICONS[entry.action] || "bg-border/40 border-muted";
               return (
                 <div key={i} className="relative pl-10">
                   <div className={`absolute left-2.5 top-1.5 w-3 h-3 rounded-full border-2 ${iconClass}`} />
