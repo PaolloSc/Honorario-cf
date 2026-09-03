@@ -17,17 +17,15 @@ export default function FormField({
   error,
   children,
 }: FormFieldProps) {
-    // flex+justify-end alinha o input ao fim da célula: numa linha de grid, um
-    // campo com hint (uma linha a mais de texto) empurraria só o próprio input
-    // pra baixo, desalinhando com o vizinho sem hint na mesma linha. h-full é
-    // no-op fora de grid (altura do pai é auto).
   return (
-    <div className="mb-4 h-full flex flex-col justify-end">
+    <div className="mb-4">
       <label className="block text-sm font-semibold text-foreground mb-1">
         {label}
         {required && <span className="text-danger ml-1">*</span>}
       </label>
-      {hint && <p className="text-xs text-muted mb-1">{hint}</p>}
+      {/* altura reservada mesmo sem hint: mantém rótulo e input alinhados com o
+          campo vizinho na mesma linha do grid quando só um dos dois tem hint. */}
+      <p className="text-xs text-muted mb-1 min-h-[1rem]">{hint}</p>
       {children}
       {error && <p className="text-xs text-danger mt-1">{error}</p>}
     </div>
