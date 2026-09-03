@@ -9,17 +9,18 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { useAcessoConsumidor } from "@/components/AcessoConsumidor";
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
-  enviado: { label: "Enviado p/ Assinatura", color: "bg-warning/[0.16] text-warning" },
-  assinado: { label: "Assinado", color: "bg-primary/[0.16] text-primary-dark" },
-  cancelado: { label: "Cancelado", color: "bg-danger/[0.14] text-danger" },
+const STATUS_LABELS: Record<string, { label: string; color: string; dot: string }> = {
+  rascunho: { label: "Rascunho", color: "border-muted/30 bg-muted/10 text-muted", dot: "bg-muted" },
+  enviado: { label: "Enviado p/ Assinatura", color: "border-warning/30 bg-warning/10 text-warning", dot: "bg-warning" },
+  assinado: { label: "Assinado", color: "border-primary/30 bg-primary/10 text-primary-dark", dot: "bg-primary-dark" },
+  cancelado: { label: "Cancelado", color: "border-danger/30 bg-danger/10 text-danger", dot: "bg-danger" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const info = STATUS_LABELS[status] || { label: status, color: "bg-border/35 text-muted" };
+  const info = STATUS_LABELS[status] || { label: status, color: "border-muted/30 bg-muted/10 text-muted", dot: "bg-muted" };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${info.color}`}>
+    <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 rounded-full text-xs font-medium ${info.color}`}>
+      <span className={`size-1.5 rounded-full ${info.dot}`} />
       {info.label}
     </span>
   );
