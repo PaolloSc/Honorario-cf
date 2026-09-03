@@ -23,10 +23,8 @@ export default function FormField({
         {label}
         {required && <span className="text-danger ml-1">*</span>}
       </label>
-      {/* altura reservada mesmo sem hint: mantém rótulo e input alinhados com o
-          campo vizinho na mesma linha do grid quando só um dos dois tem hint. */}
-      <p className="text-xs text-muted mb-1 min-h-[1rem]">{hint}</p>
       {children}
+      {hint && <p className="text-xs text-muted mt-1">{hint}</p>}
       {error && <p className="text-xs text-danger mt-1">{error}</p>}
     </div>
   );
