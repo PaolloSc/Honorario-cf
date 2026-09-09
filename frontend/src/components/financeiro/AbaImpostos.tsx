@@ -152,7 +152,7 @@ export function AbaImpostos() {
           Alíquota total (soma):{" "}
           <strong className="text-foreground">{pct(form.aliquota_total)}</strong>
         </p>
-        {err && <div className="text-xs text-red-700">{err}</div>}
+        {err && <div className="text-xs text-danger">{err}</div>}
         <div className="flex gap-2">
           <button
             disabled={saving}
@@ -207,9 +207,9 @@ export function AbaImpostos() {
                   <td className="py-2 text-right">{pct(tc.aliquota_csll)}</td>
                   <td className="py-2">
                     {tc.ativo ? (
-                      <span className="text-green-700">ativo</span>
+                      <span className="text-primary-dark">ativo</span>
                     ) : (
-                      <span className="text-red-700">inativo</span>
+                      <span className="text-danger">inativo</span>
                     )}
                   </td>
                   <td className="py-2 text-right space-x-2">
@@ -222,7 +222,7 @@ export function AbaImpostos() {
                     {tc.ativo && (
                       <button
                         onClick={() => desativar(tc)}
-                        className="text-xs text-red-700 hover:underline"
+                        className="text-xs text-danger hover:underline"
                       >
                         Desativar
                       </button>

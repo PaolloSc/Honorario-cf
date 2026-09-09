@@ -1,16 +1,8 @@
 "use client";
  
-import type { ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
+import type { ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
 
-/** Critério da participação: campos estruturados, com fallback p/ o formato antigo. */
-function criterioParticipacao(p: Participacao): string {
-  if (p.valor_tipo === "percentual" && p.valor_percentual) return `${p.valor_percentual}%`;
-  if (p.valor_tipo === "valor" && p.valor_monetario != null) return formatCurrency(p.valor_monetario);
-  if (p.valor_tipo === "outro" && p.valor_outro) return p.valor_outro;
-  return p.percentual_ou_valor || "—";
-}
- 
 const HONORARIO_LABELS: Record<string, string> = {
   hora_trabalhada: "Hora Trabalhada",
   pro_labore: "Pró-labore",
@@ -137,13 +129,31 @@ export default function Step6Revisao({ data }: Step6Props) {
                 Base: {data.participacao.base_tipo === "escopo" ? "Escopo" : "Honorário"} — {data.participacao.base_label}
               </li>
             )}
-            <li>Critério: {criterioParticipacao(data.participacao)}</li>
-            {(data.participacao.participantes ?? []).map((p, i) => (
-              <li key={i}>
-                {p.nome} — {p.natureza}
-                {p.percentual ? ` (${p.percentual}%)` : ""}
-              </li>
-            ))}
+            {data.participacao.valor_tipo === "percentual" && data.participacao.valor_percentual && (
+              <li>Percentual geral: {data.participacao.valor_percentual}%</li>
+            )}
+            {data.participacao.valor_tipo === "valor" && data.participacao.valor_monetario != null && (
+              <li>Valor: {formatCurrency(data.participacao.valor_monetario)}</li>
+            )}
+            {data.participacao.valor_tipo === "outro" && data.participacao.valor_outro && (
+              <li>Critério: {data.participacao.valor_outro}</li>
+            )}
+            {(data.participacao.participantes ?? []).map((p, i) => {
+              const override =
+                p.valor_tipo === "valor" && p.valor_monetario != null
+                  ? ` (${formatCurrency(p.valor_monetario)})`
+                  : p.valor_tipo === "outro" && p.valor_outro
+                  ? ` (${p.valor_outro})`
+                  : p.percentual
+                  ? ` (${p.percentual}%)`
+                  : "";
+              return (
+                <li key={i}>
+                  {p.nome} — {p.natureza}
+                  {override}
+                </li>
+              );
+            })}
             <li>
               Captação: {data.participacao.responsavel_captacao}
             </li>

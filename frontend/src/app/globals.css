@@ -17,9 +17,49 @@
   --danger: #B91C1C;
   --success: #006451;
   --warning: #B45309;
-  --border: #D7D1CA;
+  --border: #8F8370;
   --card: #FFFFFF;
-  --muted: #6B6359;
+  --muted: #5B5346;
+  /* Fixo nos dois temas: o cabeçalho/rodapé são a faixa de marca, não conteúdo —
+     não deve clarear no escuro (senão texto branco em cima fica ilegível). */
+  --header-bg: #1A3C34;
+}
+
+/* Modo escuro: sem preferência salva, segue o sistema; "data-theme" no <html>
+   (setado pelo ThemeToggle) sempre vence — inclusive pra forçar claro num
+   sistema escuro. Mesma matiz verde da marca, luminosidade invertida.
+   primary-dark continua mais ESCURO que primary (não mais claro) porque
+   "hover:bg-primary-dark" em botões depende disso pra continuar escurecendo
+   ao passar o mouse, com texto branco legível em cima. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0F1815;
+    --foreground: #F2F4F1;
+    --primary: #3FCB98;
+    --primary-light: #234438;
+    --primary-dark: #22B383;
+    --accent: #C3B6A4;
+    --danger: #F0827A;
+    --success: #3FCB98;
+    --warning: #F0AD5E;
+    --border: #4A6058;
+    --card: #20302A;
+    --muted: #AAB8B1;
+  }
+}
+:root[data-theme="dark"] {
+  --background: #0F1815;
+  --foreground: #F2F4F1;
+  --primary: #3FCB98;
+  --primary-light: #234438;
+  --primary-dark: #22B383;
+  --accent: #C3B6A4;
+  --danger: #F0827A;
+  --success: #3FCB98;
+  --warning: #F0AD5E;
+  --border: #4A6058;
+  --card: #20302A;
+  --muted: #AAB8B1;
 }
 
 @theme inline {
@@ -35,6 +75,7 @@
   --color-border: var(--border);
   --color-card: var(--card);
   --color-muted: var(--muted);
+  --color-header-bg: var(--header-bg);
   --color-brand-verde-escuro: var(--brand-verde-escuro);
   --color-brand-verde-medio: var(--brand-verde-medio);
   --color-brand-verde-claro: var(--brand-verde-claro);

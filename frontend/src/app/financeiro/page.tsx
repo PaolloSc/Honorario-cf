@@ -73,7 +73,7 @@ function StatusSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as PagamentoStatus)}
-      className="text-xs border border-border rounded px-1 py-0.5 bg-white"
+      className="text-xs border border-border rounded px-1 py-0.5 bg-card text-foreground"
     >
       <option value="a_receber">{STATUS_LABELS.a_receber}</option>
       <option value="aguardando_pagamento">{STATUS_LABELS.aguardando_pagamento}</option>
@@ -146,9 +146,9 @@ export default function FinanceiroPage() {
 
   if (accessDenied) {
     return (
-      <div className="max-w-xl mx-auto mt-16 p-8 bg-red-50 border border-red-200 rounded-lg text-center">
-        <h2 className="text-lg font-semibold text-red-900 mb-2">Acesso Restrito</h2>
-        <p className="text-red-700">
+      <div className="max-w-xl mx-auto mt-16 p-8 bg-danger/[0.08] border border-danger rounded-lg text-center">
+        <h2 className="text-lg font-semibold text-danger mb-2">Acesso Restrito</h2>
+        <p className="text-danger">
           Esta página é exclusiva do setor financeiro. Solicite ao administrador o perfil "financeiro".
         </p>
         <a href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
@@ -172,12 +172,12 @@ export default function FinanceiroPage() {
 
       {regras && <RegrasBox regras={regras} />}
 
-      <nav className="flex gap-2 mt-6 mb-4 border-b border-border">
+      <nav className="flex gap-2 mt-6 mb-4 border-b border-border overflow-x-auto">
         {(["pendentes", "lista", "nova", "simular", "nfse", "impostos"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition shrink-0 whitespace-nowrap ${
               tab === t
                 ? "border-primary-dark text-primary-dark"
                 : "border-transparent text-muted hover:text-foreground"
@@ -194,7 +194,7 @@ export default function FinanceiroPage() {
       </nav>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div className="mb-4 rounded-lg border border-danger bg-danger/[0.08] p-3 text-sm text-danger">
           {error}
         </div>
       )}
@@ -318,11 +318,11 @@ function PendentesLista({
             </div>
             <div className="text-xs mt-1">
               {c.tem_rascunho ? (
-                <span className="text-amber-700">
+                <span className="text-warning">
                   Rascunho · tipo inferido: {c.tipo_honorario_inferido}
                 </span>
               ) : (
-                <span className="text-red-700">Sem participação cadastrada</span>
+                <span className="text-danger">Sem participação cadastrada</span>
               )}
             </div>
           </div>
@@ -342,7 +342,7 @@ function PendentesLista({
                   navigator.clipboard.writeText(c.contract_id);
                   alert(`ID copiado: ${c.contract_id}\nUse na aba "Nova Participação".`);
                 }}
-                className="px-3 py-1.5 text-xs border border-border rounded hover:bg-gray-50"
+                className="px-3 py-1.5 text-xs border border-border rounded hover:bg-background"
               >
                 Copiar ID
               </a>
@@ -485,7 +485,7 @@ function FormAprovarRascunho({
             />
           </Field>
           <Field label="Total">
-            <div className={`input bg-gray-100 ${total > 40 ? "text-red-700 font-bold" : ""}`}>
+            <div className={`input bg-border/35 ${total > 40 ? "text-danger font-bold" : ""}`}>
               {total.toFixed(2)}%
             </div>
           </Field>
@@ -547,7 +547,7 @@ function FormAprovarRascunho({
         </Field>
 
         {err && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+          <div className="rounded-lg border border-danger bg-danger/[0.08] p-3 text-xs text-danger">
             {err}
           </div>
         )}
@@ -611,7 +611,7 @@ function ListaParticipacoes({
         <div key={p.id} className="bg-card border border-border rounded-lg overflow-hidden">
           <button
             onClick={() => setOpenId(openId === p.id ? null : p.id)}
-            className="w-full text-left px-4 py-3 hover:bg-gray-50/50 transition flex items-center justify-between"
+            className="w-full text-left px-4 py-3 hover:bg-background/60 transition flex items-center justify-between"
           >
             <div>
               <div className="font-medium text-foreground">
@@ -627,9 +627,9 @@ function ListaParticipacoes({
               <div className="text-sm font-medium">{brl(p.total_pago)}</div>
               <div className="text-xs text-muted">
                 {p.vinculo_ativo ? (
-                  <span className="text-green-700">vínculo ativo</span>
+                  <span className="text-primary-dark">vínculo ativo</span>
                 ) : (
-                  <span className="text-red-700">encerrado</span>
+                  <span className="text-danger">encerrado</span>
                 )}
               </div>
             </div>
@@ -661,7 +661,7 @@ function DetalheParticipacao({
   }, [reload]);
 
   return (
-    <div className="border-t border-border bg-gray-50/30 p-4 space-y-4">
+    <div className="border-t border-border bg-background/50 p-4 space-y-4">
       <div className="grid md:grid-cols-2 gap-3 text-sm">
         <Info label="Data início" value={participacao.data_inicio} />
         <Info
@@ -747,7 +747,7 @@ function DetalheParticipacao({
                       </td>
                       <td className="py-1 text-right">{brl(pg.imposto_total)}</td>
                       <td className="py-1 text-right">{brl(pg.valor_liquido_recebido)}</td>
-                      <td className={`py-1 text-right ${pg.valor_participacao === 0 ? "text-red-700" : ""}`}>
+                      <td className={`py-1 text-right ${pg.valor_participacao === 0 ? "text-danger" : ""}`}>
                         {brl(pg.valor_participacao)}
                       </td>
                       <td className="py-1">
@@ -785,7 +785,7 @@ function DetalheParticipacao({
               alert(e instanceof Error ? e.message : "Erro");
             }
           }}
-          className="text-xs text-red-700 hover:underline"
+          className="text-xs text-danger hover:underline"
         >
           Encerrar vínculo
         </button>
@@ -938,7 +938,7 @@ function FormNovaParticipacao({
           />
         </Field>
         <Field label="Total">
-          <div className={`input bg-gray-100 ${total > 40 ? "text-red-700 font-bold" : ""}`}>
+          <div className={`input bg-border/35 ${total > 40 ? "text-danger font-bold" : ""}`}>
             {total.toFixed(2)}% {total > 40 && "(excede 40%)"}
           </div>
         </Field>
@@ -1020,12 +1020,12 @@ function FormNovaParticipacao({
       </Field>
 
       {validClient.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <div className="rounded-lg border border-warning bg-warning/[0.08] p-3 text-xs text-warning">
           {validClient.join(" · ")}
         </div>
       )}
       {err && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+        <div className="rounded-lg border border-danger bg-danger/[0.08] p-3 text-xs text-danger">
           {err}
         </div>
       )}
@@ -1139,7 +1139,7 @@ function FormPagamento({
   return (
     <form
       onSubmit={submit}
-      className="bg-white border border-border rounded-lg p-4 space-y-3 text-xs"
+      className="bg-card border border-border rounded-lg p-4 space-y-3 text-xs"
     >
       <div className="grid grid-cols-2 gap-2">
         <label>
@@ -1287,7 +1287,7 @@ function FormPagamento({
         />
       </label>
 
-      <div className="bg-gray-50 border border-border/40 rounded p-2 grid grid-cols-2 gap-2 text-[11px]">
+      <div className="bg-background border border-border/40 rounded p-2 grid grid-cols-2 gap-2 text-[11px]">
         <span>Bruto: <strong>{brl(form.valor_bruto)}</strong></span>
         <span>Imposto ({(aliquota * 100).toFixed(2)}%): <strong>{brl(previewImposto)}</strong></span>
         <span>Líquido: <strong>{brl(previewLiquido)}</strong></span>
@@ -1295,7 +1295,7 @@ function FormPagamento({
       </div>
 
       {err && (
-        <div className="rounded border border-red-200 bg-red-50 p-2 text-red-800">{err}</div>
+        <div className="rounded border border-danger bg-danger/[0.08] p-2 text-danger">{err}</div>
       )}
 
       <button
@@ -1439,7 +1439,7 @@ function Simulador() {
       </div>
 
       {err && (
-        <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">{err}</div>
+        <div className="rounded border border-danger bg-danger/[0.08] p-2 text-xs text-danger">{err}</div>
       )}
 
       <button
@@ -1453,8 +1453,8 @@ function Simulador() {
         <div
           className={`mt-4 p-4 rounded-lg border ${
             result.valor_participacao > 0
-              ? "border-green-200 bg-green-50"
-              : "border-amber-200 bg-amber-50"
+              ? "border-primary bg-primary/[0.08]"
+              : "border-warning bg-warning/[0.08]"
           }`}
         >
           <p className="text-lg font-bold">
@@ -1466,7 +1466,7 @@ function Simulador() {
             {result.vinculo_ativo ? "ativo" : "encerrado"}
           </p>
           {result.motivo_zerado && (
-            <p className="text-xs text-amber-900 mt-2">Motivo zerado: {result.motivo_zerado}</p>
+            <p className="text-xs text-warning mt-2">Motivo zerado: {result.motivo_zerado}</p>
           )}
         </div>
       )}
