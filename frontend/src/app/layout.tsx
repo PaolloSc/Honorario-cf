@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { Lexend_Zetta } from "next/font/google";
 import Logo from "@/components/ui/Logo";
+import NavConsumidor from "@/components/NavConsumidor";
 import Providers from "@/components/Providers";
+import ThemeToggle from "@/components/ThemeToggle";
 import UserMenu from "@/components/UserMenu";
 import { auth } from "@/auth";
 import "./globals.css";
@@ -26,15 +29,33 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await auth();
-  const isAuthenticated = !!session?.user;
+  // Login de desenvolvimento usa o cookie dev_session (sem sessao next-auth).
+  // O middleware ja o aceita; sem isto o menu some e as telas ficam sem acesso.
+  const devSession =
+    process.env.NEXT_PUBLIC_DEV_MODE === "true" &&
+    !!(await cookies()).get("dev_session");
+  const isAuthenticated = !!session?.user || devSession;
   return (
     <html
       lang="pt-BR"
       className={`${lexendZetta.variable} h-full antialiased`}
+      // O script anti-flash abaixo seta data-theme antes da hidratação —
+      // sem isto o React acusa mismatch (o HTML do servidor não tem o atributo).
+      suppressHydrationWarning
     >
+      <head>
+        {/* Aplica o tema salvo antes do primeiro paint — sem isto a página pisca
+            no tema errado (claro) até o React hidratar e o ThemeToggle rodar. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();",
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>
-          <header className="bg-primary-dark text-white shadow-md">
+          <header className="bg-header-bg text-white shadow-md">
             <div className="px-6 py-5 flex items-center justify-between">
               <Link href="/" className="flex items-center">
                 <Logo variant="light" className="h-10 w-auto" showSubtitle={false} />
@@ -43,13 +64,16 @@ export default async function RootLayout({
                 {isAuthenticated && (
                   <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
                     <Link href="/" className="text-brand-verde-claro/80 hover:text-white transition">
-                      Novo Contrato
+                      Honorários
                     </Link>
+                    {/* Restrito: o link so' aparece para a equipe autorizada. */}
+                    <NavConsumidor />
                     <Link href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
                       Contratos
                     </Link>
                   </nav>
                 )}
+                <ThemeToggle />
                 <UserMenu />
               </div>
             </div>
@@ -57,7 +81,7 @@ export default async function RootLayout({
 
           <main className="flex-1">{children}</main>
 
-          <footer className="bg-primary-dark text-brand-verde-claro/90 mt-12">
+          <footer className="bg-header-bg text-brand-verde-claro/90 mt-12">
             <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2">
                 <Logo variant="light" format="35" className="h-6 w-auto" showSubtitle={false} />

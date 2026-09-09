@@ -199,7 +199,7 @@ export default function Step1Contratante({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                 c.tipo === "PF"
                   ? "bg-primary text-white"
-                  : "bg-gray-100 text-muted hover:bg-gray-200"
+                  : "bg-background border border-border text-muted hover:border-primary/50"
               }`}
             >
               Pessoa Física
@@ -210,7 +210,7 @@ export default function Step1Contratante({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                 c.tipo === "PJ"
                   ? "bg-primary text-white"
-                  : "bg-gray-100 text-muted hover:bg-gray-200"
+                  : "bg-background border border-border text-muted hover:border-primary/50"
               }`}
             >
               Pessoa Jurídica
@@ -243,7 +243,7 @@ export default function Step1Contratante({
       </button>
 
       {cnpjError && (
-        <p className="text-sm text-red-500 mb-4">{cnpjError}</p>
+        <p className="text-sm text-danger mb-4">{cnpjError}</p>
       )}
     </div>
   );
@@ -317,7 +317,7 @@ function PJForm({
             value={data.razao_social}
             readOnly
             placeholder="Preenchido automaticamente pelo CNPJ"
-            className="bg-gray-50 cursor-not-allowed"
+            className="bg-border/35 border-muted text-muted cursor-not-allowed"
           />
         </FormField>
       )}
@@ -328,7 +328,7 @@ function PJForm({
             value={data.endereco}
             readOnly
             placeholder="Preenchido automaticamente pelo CNPJ"
-            className="bg-gray-50 cursor-not-allowed"
+            className="bg-border/35 border-muted text-muted cursor-not-allowed"
           />
         </FormField>
       )}
@@ -436,6 +436,22 @@ function RepresentantesForm({
   );
 }
 
+// Desmonta o endereco montado por buildEndereco para reidratar CEP/numero/complemento na edicao.
+// Formato: "<logradouro>[, n. X][, <comp>], <bairro>, <cidade>/<UF>, CEP 00000-000"
+function parseEndereco(endereco: string | undefined) {
+  const vazio = { cep: "", numero: "", complemento: "" };
+  const partes = (endereco || "").split(", ");
+  const ultima = partes[partes.length - 1] || "";
+  if (partes.length < 4 || !ultima.startsWith("CEP ")) return vazio;
+
+  const meio = partes.slice(1, -3); // entre logradouro e bairro: numero e/ou complemento
+  return {
+    cep: formatCEP(ultima.replace(/\D/g, "").slice(0, 8)),
+    numero: (meio.find((p) => p.startsWith("n. ")) || "").replace("n. ", ""),
+    complemento: meio.filter((p) => !p.startsWith("n. ")).join(", "),
+  };
+}
+
 function PFForm({
   data,
   onUpdate,
@@ -443,9 +459,10 @@ function PFForm({
   data: ContratantePF;
   onUpdate: (partial: Partial<ContratantePF>) => void;
 }) {
-  const [cep, setCep] = useState("");
-  const [numero, setNumero] = useState("");
-  const [complemento, setComplemento] = useState("");
+  const inicial = parseEndereco(data.endereco);
+  const [cep, setCep] = useState(inicial.cep);
+  const [numero, setNumero] = useState(inicial.numero);
+  const [complemento, setComplemento] = useState(inicial.complemento);
   const [cepData, setCepData] = useState<{ logradouro: string; bairro: string; localidade: string; uf: string } | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
@@ -563,7 +580,7 @@ function PFForm({
           />
           {loadingCEP && <span className="text-sm text-muted self-center">Buscando...</span>}
         </div>
-        {cepError && <p className="text-xs text-red-500 mt-1">{cepError}</p>}
+        {cepError && <p className="text-xs text-danger mt-1">{cepError}</p>}
       </FormField>
 
       {cepData && (
@@ -592,7 +609,7 @@ function PFForm({
             value={data.endereco}
             readOnly
             placeholder="Preenchido automaticamente pelo CEP"
-            className="bg-gray-50 cursor-not-allowed"
+            className="bg-border/35 border-muted text-muted cursor-not-allowed"
             required
           />
         </FormField>

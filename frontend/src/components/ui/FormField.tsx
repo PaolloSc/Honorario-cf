@@ -134,13 +134,13 @@ export function Toggle({ label, value, onChange }: ToggleProps) {
         role="switch"
         aria-checked={value}
         onClick={() => onChange(!value)}
-        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
-          value ? "bg-primary" : "bg-gray-300"
+        className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent shadow-sm transition-colors ${
+          value ? "bg-primary" : "bg-border/40"
         }`}
       >
         <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform mt-0.5 ${
-            value ? "translate-x-5.5 ml-0.5" : "translate-x-0.5"
+          className={`pointer-events-none block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform ${
+            value ? "translate-x-5" : "translate-x-0"
           }`}
         />
       </button>

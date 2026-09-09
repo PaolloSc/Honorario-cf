@@ -50,7 +50,7 @@ export function CredencialPbhPanel() {
                    className="w-full px-2 py-1 border border-border rounded"/>
           </label>
         </div>
-        {err && <div className="text-xs text-red-700">{err}</div>}
+        {err && <div className="text-xs text-danger">{err}</div>}
         <button disabled={saving}
                 className="px-3 py-1.5 bg-primary-dark text-white rounded text-xs disabled:opacity-50">
           {saving ? "Salvando..." : "Salvar credencial"}
@@ -81,8 +81,8 @@ export function CredencialPbhPanel() {
                   <td className="py-2 font-mono text-xs">{c.cnpj_prestador}</td>
                   <td className="py-2">
                     <span className={c.ativo
-                        ? "text-green-700 text-xs"
-                        : "text-red-700 text-xs"}>
+                        ? "text-primary-dark text-xs"
+                        : "text-danger text-xs"}>
                       {c.ativo ? "ativo" : `inativo${c.motivo_inativacao ? " · " + c.motivo_inativacao : ""}`}
                     </span>
                   </td>
@@ -96,7 +96,7 @@ export function CredencialPbhPanel() {
                           await credencialApi.desativar(c.cnpj_prestador, "manual");
                           refresh();
                         }}
-                        className="text-xs text-red-700 hover:underline"
+                        className="text-xs text-danger hover:underline"
                       >
                         Desativar
                       </button>

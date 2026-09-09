@@ -2,10 +2,12 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { getContract, getContractFormData, type ContractFormDataResponse, type ContractDetail } from "@/app/lib/api";
 import ContractWizard from "@/components/ContractWizard";
+import ConsumidorWizard from "@/components/ConsumidorWizard";
 import type { ContratoFormData } from "@/types/contract";
+import { TIPO_CONSUMIDOR_AEREO, type ConsumidorFormData } from "@/types/consumidor";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", {
@@ -18,7 +20,7 @@ function formatDate(iso: string) {
 }
 
 export default function EditContractPage() {
-  const { status: sessionStatus } = useSession();
+  const sessionStatus = useAuthStatus();
   const params = useParams();
   const router = useRouter();
   const contractId = params.id as string;
@@ -83,7 +85,7 @@ export default function EditContractPage() {
   if (error || !formData) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
           {error || "Dados nao encontrados"}
         </div>
         <a href="/contracts" className="mt-4 inline-block text-sm text-primary hover:underline">
@@ -105,8 +107,8 @@ export default function EditContractPage() {
 
         {/* Version selector */}
         {contract && contract.versions.length > 1 && (
-          <div className="mt-3 mb-2 p-4 rounded-lg bg-blue-50 border border-blue-200">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">
+          <div className="mt-3 mb-2 p-4 rounded-lg bg-primary/[0.08] border border-primary">
+            <h4 className="text-sm font-medium text-primary-dark mb-2">
               Selecionar versao para editar
             </h4>
             <div className="flex flex-wrap gap-2">
@@ -117,7 +119,7 @@ export default function EditContractPage() {
                   className={`px-3 py-1.5 text-xs font-medium rounded-md border transition ${
                     selectedVersion === v.version_number
                       ? "bg-primary text-white border-primary"
-                      : "bg-white text-foreground border-border hover:border-primary/50"
+                      : "bg-card text-foreground border-border hover:border-primary/50"
                   }`}
                 >
                   v{v.version_number}
@@ -127,23 +129,33 @@ export default function EditContractPage() {
               ))}
             </div>
             {selectedVersion && selectedVersion !== contract.current_version && (
-              <p className="mt-2 text-xs text-blue-700">
+              <p className="mt-2 text-xs text-primary-dark">
                 Editando versao {selectedVersion}. Ao salvar, uma nova versao sera criada com base nestes dados.
               </p>
             )}
           </div>
         )}
 
-        <div className="mt-2 mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+        <div className="mt-2 mb-4 p-3 rounded-lg bg-warning/[0.1] border border-warning text-sm text-warning">
           Editando contrato existente. Ao gerar, uma nova versao sera criada mantendo o historico anterior.
         </div>
       </div>
-      <ContractWizard
-        key={`${selectedVersion || "latest"}-${formData ? "loaded" : "empty"}`}
-        initialData={formData}
-        editContractId={contractId}
-        onSaveComplete={(contractId) => router.push(`/contracts/${contractId}`)}
-      />
+      {/* Cada tipo de contrato abre no seu proprio wizard. */}
+      {(formData as { tipo_contrato?: string }).tipo_contrato === TIPO_CONSUMIDOR_AEREO ? (
+        <ConsumidorWizard
+          key={`${selectedVersion || "latest"}-consumidor`}
+          initialData={formData as unknown as ConsumidorFormData}
+          editContractId={contractId}
+          onSaveComplete={(contractId) => router.push(`/contracts/${contractId}`)}
+        />
+      ) : (
+        <ContractWizard
+          key={`${selectedVersion || "latest"}-${formData ? "loaded" : "empty"}`}
+          initialData={formData}
+          editContractId={contractId}
+          onSaveComplete={(contractId) => router.push(`/contracts/${contractId}`)}
+        />
+      )}
     </div>
   );
 }

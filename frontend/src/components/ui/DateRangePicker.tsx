@@ -87,21 +87,23 @@ export default function DateRangePicker({
       </div>
 
       <div className="relative">
-        <label className="block text-sm font-semibold text-foreground mb-1">
-          Data de término{required && <span className="text-danger ml-1">*</span>}
-        </label>
-        {/* Prazo indeterminado e' o padrao: sem data de termino preenchida. */}
-        <label className="flex items-center gap-2 text-sm text-muted mb-1 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={!fim}
-            onChange={(e) => {
-              if (e.target.checked) onChange(dataInicio, undefined, undefined);
-              else setOpenFim(true);
-            }}
-          />
-          Prazo indeterminado
-        </label>
+        <div className="flex items-center justify-between mb-1 gap-2">
+          <label className="text-sm font-semibold text-foreground">
+            Data de término{required && <span className="text-danger ml-1">*</span>}
+          </label>
+          {/* Prazo indeterminado e' o padrao: sem data de termino preenchida. */}
+          <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={!fim}
+              onChange={(e) => {
+                if (e.target.checked) onChange(dataInicio, undefined, undefined);
+                else setOpenFim(true);
+              }}
+            />
+            Prazo indeterminado
+          </label>
+        </div>
         <button
           type="button"
           onClick={() => { setOpenFim((v) => !v); setOpenInicio(false); }}
@@ -136,7 +138,7 @@ export default function DateRangePicker({
           readOnly
           value={duracao ?? ""}
           placeholder="—"
-          className="w-full px-3 py-2 rounded-lg border border-border bg-gray-50 text-foreground text-sm cursor-not-allowed"
+          className="w-full px-3 py-2 rounded-lg border border-muted bg-border/35 text-muted text-sm cursor-not-allowed"
         />
       </div>
     </div>

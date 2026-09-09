@@ -253,7 +253,12 @@ class Acessorios(BaseModel):
 class ParticipacaoParticipante(BaseModel):
     nome: str
     natureza: str = ""
+    # Sobrescreve o valor geral da participacao so' para este advogado. Mesmo
+    # padrao de Participacao.valor_tipo: "percentual" | "valor" | "outro".
     percentual: Optional[str] = None
+    valor_tipo: Optional[str] = None
+    valor_monetario: Optional[float] = None
+    valor_outro: Optional[str] = None
 
 
 class Participacao(BaseModel):
