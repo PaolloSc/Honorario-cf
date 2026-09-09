@@ -99,7 +99,9 @@ export async function reviewContract(data: unknown) {
   }>("/api/contract/review", {
     method: "POST",
     body: JSON.stringify(data),
-    signal: AbortSignal.timeout(45000),
+    // Backend usa timeout=240s pra chamar a DeepSeek (thinking mode chegou a levar
+    // 211s em teste real) — fica acima disso pra nao abortar antes.
+    signal: AbortSignal.timeout(260000),
   });
 }
 

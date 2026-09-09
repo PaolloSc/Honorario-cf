@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
@@ -285,9 +285,15 @@ export default function Step7Envio({
       .catch(() => setColaboradores([]));
   }, []);
 
+  const reviewStarted = useRef(false);
+
   useEffect(() => {
     // Só faz sentido revisar o texto ainda não gerado (criação). Em edição o
     // conteúdo já existente pode ser revisado do mesmo jeito, então roda sempre.
+    // Guard contra o double-invoke do StrictMode em dev — cada chamada custa uma
+    // requisição real à DeepSeek.
+    if (reviewStarted.current) return;
+    reviewStarted.current = true;
     setReviewStatus("checking");
     reviewContract(data)
       .then((r) => {
