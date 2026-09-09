@@ -16,15 +16,6 @@ declare module "next-auth" {
   }
 }
 
-declare module "@auth/core/jwt" {
-  interface JWT {
-    accessToken?: string;
-    refreshToken?: string;
-    expiresAt?: number;
-    role?: string;
-  }
-}
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     MicrosoftEntraID({
@@ -60,7 +51,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       // Return token if not expired (with 60s buffer to avoid edge-case expiry during request)
-      if (token.expiresAt && Date.now() < (token.expiresAt * 1000 - 60000)) {
+      const expiresAt = typeof token.expiresAt === "number" ? token.expiresAt : undefined;
+      if (expiresAt && Date.now() < (expiresAt * 1000 - 60000)) {
         return token;
       }
 
