@@ -35,7 +35,7 @@ export default function StepIndicator({
                       ? "bg-primary text-white shadow-md"
                       : isCompleted
                         ? "bg-success text-white"
-                        : "bg-border/50 text-muted border border-muted"
+                        : "bg-card text-muted border-2 border-border"
                   }`}
                 >
                   {isCompleted ? (
