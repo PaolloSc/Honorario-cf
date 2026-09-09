@@ -265,7 +265,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                   />
                 </FormField>
 
-                <div className="grid grid-cols-2 gap-4 items-end">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField label="CPF do representante" required>
                     <Input
                       value={c.representante_cpf}
@@ -287,7 +287,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                   </FormField>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 items-end">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField label="Nacionalidade">
                     <Input
                       value={c.representante_nacionalidade}
@@ -321,7 +321,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                 />
               </FormField>
 
-              <div className="grid grid-cols-2 gap-4 items-end">
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   label="Gênero"
                   required
@@ -343,7 +343,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                 </FormField>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 items-end">
+              <div className="grid grid-cols-2 gap-4">
                 <FormField label="RG" hint="Opcional — sai do contrato se vazio">
                   <Input value={c.rg ?? ""} onChange={(e) => update(i, { rg: e.target.value })} />
                 </FormField>
@@ -359,8 +359,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                 </FormField>
               </div>
 
-              {/* items-end: as dicas tem alturas diferentes e desalinhariam os campos. */}
-              <div className="grid grid-cols-3 gap-4 items-end">
+              <div className="grid grid-cols-3 gap-4">
                 <FormField label="CEP" required hint="Monta o endereço">
                   <div className="flex gap-2">
                     <Input
@@ -395,7 +394,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
               {/* Bairro, cidade e UF vem do CEP e nao aparecem na tela.
                   Rua e bairro so' aparecem quando o CEP atende a cidade toda. */}
               {precisaRua[i] && (
-                <div className="grid grid-cols-2 gap-4 items-end">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField label="Logradouro" required hint="Este CEP atende a cidade toda">
                     <Input
                       value={c.logradouro ?? ""}
@@ -426,7 +425,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                 />
               </FormField>
 
-              <div className="grid grid-cols-2 gap-4 items-end">
+              <div className="grid grid-cols-2 gap-4">
                 <FormField label="E-mail" hint="Opcional — usado para envio e assinatura digital">
                   <Input
                     type="email"
