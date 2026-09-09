@@ -60,24 +60,24 @@ def extract_open_fields(data: dict) -> str:
             lines.append(f"{label}: {text}")
 
     for i, c in enumerate(data.get("contratantes") or [], 1):
-        add(f"Contratante {i} - profissao", c.get("profissao"))
+        add(f"Contratante {i} - profissão", c.get("profissao"))
 
     for i, escopo in enumerate(data.get("escopos") or [], 1):
         prefix = f"Escopo {i}"
-        add(f"{prefix} - descricao", escopo.get("descricao_custom"))
+        add(f"{prefix} - descrição", escopo.get("descricao_custom"))
         add(f"{prefix} - demandas", escopo.get("demandas"))
-        add(f"{prefix} - pessoas/patrimonios", escopo.get("pessoas_patrimonios"))
-        add(f"{prefix} - tipo de reestruturacao", escopo.get("tipo_reestruturacao"))
+        add(f"{prefix} - pessoas/patrimônios", escopo.get("pessoas_patrimonios"))
+        add(f"{prefix} - tipo de reestruturação", escopo.get("tipo_reestruturacao"))
         add(f"{prefix} - documentos", escopo.get("documentos"))
         add(f"{prefix} - consulta", escopo.get("consulta"))
         permuta = escopo.get("permuta") or {}
-        add(f"{prefix} - permuta: descricao", permuta.get("descricao"))
+        add(f"{prefix} - permuta: descrição", permuta.get("descricao"))
         add(f"{prefix} - permuta: forma de pagamento da torna", permuta.get("forma_pagamento_torna"))
 
     acessorios = data.get("acessorios") or {}
-    add("Limitacao do reembolso", acessorios.get("descricao_limitacao_reembolso"))
-    add("Criterio de extincao do exito", acessorios.get("criterio_extincao_exito"))
-    add("Clausulas adicionais", acessorios.get("clausulas_adicionais"))
+    add("Limitação do reembolso", acessorios.get("descricao_limitacao_reembolso"))
+    add("Critério de extinção do êxito", acessorios.get("criterio_extincao_exito"))
+    add("Cláusulas adicionais", acessorios.get("clausulas_adicionais"))
 
     return "\n".join(lines)
 
@@ -113,8 +113,8 @@ def review_text(document_text: str) -> list[dict]:
             f"{settings.deepseek_api_base}/v1/messages",
             json=body,
             headers=headers,
-            # deepseek-v4-pro (thinking mode) demora bem mais que o modelo padrao.
-            timeout=120.0,
+            # deepseek-v4-pro (thinking mode) chegou a levar 211s em teste real.
+            timeout=240.0,
         )
         resp.raise_for_status()
     except httpx.HTTPError as e:
