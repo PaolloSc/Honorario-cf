@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, type Testemunha } from "@/app/lib/api";
+import { ComboBox } from "@/components/ui/FormField";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -265,6 +266,8 @@ export default function Step7Envio({
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   // Colaboradores do escritorio: autopreenchimento de advogados e testemunhas.
   const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
+  // Só sócios assinam pelo escritório — advogados/associados não têm poder de representação.
+  const socios = colaboradores.filter((c) => c.role === "socio");
   const isEdit = !!editContractId;
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -805,11 +808,11 @@ export default function Step7Envio({
             {/* Additional lawyers section */}
             <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">
               <h4 className="text-sm font-medium text-purple-900 mb-2">
-                Advogados que assinarão pelo escritório (opcional)
+                Advogados que devem assinar pelo escritório (opcional)
               </h4>
               <p className="text-xs text-purple-700 mb-3">
                 O <strong>C&amp;F</strong> assina como CONTRATADO. Quem preenche este formulário{" "}
-                <strong>não</strong> é incluído automaticamente — selecione abaixo os advogados
+                <strong>não</strong> é incluído automaticamente — selecione abaixo os sócios
                 que devem assinar.
               </p>
               {additionalLawyers.length > 0 && (
@@ -828,25 +831,18 @@ export default function Step7Envio({
                 </div>
               )}
               <div className="flex flex-wrap gap-2">
-                <input
-                  type="text"
-                  value={newLawyerName}
-                  list="colaboradores-nomes"
-                  onChange={(e) => {
-                    setNewLawyerName(e.target.value);
-                    const c = colaboradores.find((x) => x.name === e.target.value);
-                    if (c?.email) setNewLawyerEmail(c.email);
-                  }}
-                  placeholder="Nome do advogado"
-                  className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-                />
-                <input
-                  type="email"
-                  value={newLawyerEmail}
-                  onChange={(e) => setNewLawyerEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-                />
+                <div className="flex-1 min-w-48">
+                  <ComboBox
+                    value={newLawyerEmail}
+                    onChange={(email) => {
+                      setNewLawyerEmail(email);
+                      const c = colaboradores.find((x) => x.email === email && x.role === "socio");
+                      setNewLawyerName(c?.name ?? "");
+                    }}
+                    placeholder="Busque o sócio por nome ou letra"
+                    options={socios.map((c) => ({ value: c.email, label: c.name }))}
+                  />
+                </div>
                 <button
                   onClick={handleAddLawyer}
                   disabled={!newLawyerEmail.trim()}
