@@ -2,7 +2,7 @@
  
 import type { ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
- 
+
 const HONORARIO_LABELS: Record<string, string> = {
   hora_trabalhada: "Hora Trabalhada",
   pro_labore: "Pró-labore",
@@ -157,7 +157,6 @@ export default function Step6Revisao({ data }: Step6Props) {
             <li>
               Captação: {data.participacao.responsavel_captacao}
             </li>
-            <li>Gestão: {data.participacao.responsavel_gestao}</li>
           </ul>
         </Section>
       )}
@@ -179,10 +178,11 @@ export default function Step6Revisao({ data }: Step6Props) {
         </Section>
       )}
 
-      {/* Contato financeiro — independe de participação */}
+      {/* Contato financeiro e responsável pela gestão — independem de participação */}
       {(data.participacao.contato_financeiro_nome ||
         data.participacao.contato_financeiro_email ||
-        data.participacao.contato_financeiro_telefone) && (
+        data.participacao.contato_financeiro_telefone ||
+        data.participacao.responsavel_gestao) && (
         <Section title="Contato do responsável financeiro do cliente">
           <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
             {data.participacao.contato_financeiro_nome && (
@@ -193,6 +193,9 @@ export default function Step6Revisao({ data }: Step6Props) {
             )}
             {data.participacao.contato_financeiro_telefone && (
               <li>Telefone: {data.participacao.contato_financeiro_telefone}</li>
+            )}
+            {data.participacao.responsavel_gestao && (
+              <li>Responsável pela gestão do contrato: {data.participacao.responsavel_gestao}</li>
             )}
           </ul>
         </Section>

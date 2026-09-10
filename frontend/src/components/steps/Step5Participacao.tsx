@@ -57,6 +57,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
   const objetoLines = buildObjetoLines(escopos);
   const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
   const [colabError, setColabError] = useState("");
+  const [novoParticipante, setNovoParticipante] = useState("");
   const [loadingColab, setLoadingColab] = useState(true);
   const [loOpcoes, setLoOpcoes] = useState<LegalOneOpcoes | null>(null);
   const [loError, setLoError] = useState("");
@@ -103,7 +104,9 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
     });
   });
 
-  const baseSelecionada = Boolean(participacao.base_label);
+  // Com um unico escopo nao ha o que escolher: a base e' o proprio escopo.
+  const escolherBase = escopos.length > 1;
+  const baseSelecionada = !escolherBase || Boolean(participacao.base_label);
 
   const setValorTipo = (tipo: ParticipacaoValorTipo) =>
     set({ valor_tipo: tipo, valor_percentual: "", valor_monetario: undefined, valor_outro: "" });
@@ -163,7 +166,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
 
   const nomesColab = colaboradores.map((c) => c.name);
   const nomesParaExibir = Array.from(
-    new Set([...nomesColab, ...(participacao.participantes ?? []).map((p) => p.nome)]),
+    new Set([...nomesColab, ...participantesSel.map((p) => p.nome)]),
   );
 
   return (
@@ -270,6 +273,17 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
             />
           </FormField>
         </div>
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <FormField label="Responsável pela gestão do contrato">
+            <Select
+              value={participacao.responsavel_gestao || ""}
+              onChange={(e) => set({ responsavel_gestao: e.target.value })}
+              placeholder="Selecione o advogado"
+              options={optionsComSalvo(participacao.responsavel_gestao)}
+            />
+          </FormField>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
@@ -281,7 +295,8 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
 
         {participacao.tem_participacao && (
           <div className="space-y-6 mt-4">
-            {/* Base da participação */}
+            {/* Base da participação (só faz sentido com mais de um escopo) */}
+            {escolherBase && (
             <div>
               <p className="text-sm font-semibold text-foreground mb-2">Base da participação</p>
               {escopos.length === 0 ? (
@@ -342,12 +357,13 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                 </>
               )}
             </div>
+            )}
 
             {baseSelecionada && (
               <>
-            {/* Valor da participação */}
+            {/* Critério da participação */}
             <div>
-              <p className="text-sm font-semibold text-foreground mb-2">Valor da participação</p>
+              <p className="text-sm font-semibold text-foreground mb-2">Critério da participação</p>
               <div className="flex flex-wrap gap-4 mb-3">
                 {VALOR_TIPOS.map((t) => (
                   <label key={t.value} className="flex items-center gap-2 cursor-pointer text-sm">
@@ -499,9 +515,31 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   );
                 })}
               </div>
+
+              {/* A participacao pode envolver terceiros que nao estao no cadastro. */}
+              <div className="flex gap-2 mt-3">
+                <Input
+                  value={novoParticipante}
+                  onChange={(e) => setNovoParticipante(e.target.value)}
+                  placeholder="Outro participante (fora do cadastro)"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nome = novoParticipante.trim();
+                    if (!nome || participantesSel.some((p) => p.nome === nome)) return;
+                    toggleParticipante(nome, true);
+                    setNovoParticipante("");
+                  }}
+                  disabled={!novoParticipante.trim()}
+                  className="px-3 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark disabled:opacity-50 transition whitespace-nowrap"
+                >
+                  Adicionar
+                </button>
+              </div>
             </div>
 
-            {/* Responsáveis */}
+            {/* Responsável */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Responsável pela captação">
                 <Select
@@ -509,15 +547,6 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   onChange={(e) => set({ responsavel_captacao: e.target.value })}
                   placeholder="Selecione o advogado"
                   options={optionsComSalvo(participacao.responsavel_captacao)}
-                />
-              </FormField>
-
-              <FormField label="Responsável pela gestão do contrato">
-                <Select
-                  value={participacao.responsavel_gestao || ""}
-                  onChange={(e) => set({ responsavel_gestao: e.target.value })}
-                  placeholder="Selecione o advogado"
-                  options={optionsComSalvo(participacao.responsavel_gestao)}
                 />
               </FormField>
             </div>

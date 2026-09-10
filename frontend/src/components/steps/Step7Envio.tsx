@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, previewContract, reviewContract, type Testemunha } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, type Testemunha } from "@/app/lib/api";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -30,10 +30,12 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
     categoria_cliente: p.categoria_cliente,
     etiquetas: p.etiquetas ?? [],
     listas_transmissao: p.listas_transmissao ?? [],
-    // Contato financeiro do cliente independe de haver participação.
+    // Contato financeiro do cliente e responsável pela gestão do contrato
+    // independem de haver participação.
     contato_financeiro_nome: p.contato_financeiro_nome,
     contato_financeiro_email: p.contato_financeiro_email,
     contato_financeiro_telefone: p.contato_financeiro_telefone,
+    responsavel_gestao: p.responsavel_gestao,
     ...(p.tem_participacao
       ? {
           valor_tipo: p.valor_tipo,
@@ -42,7 +44,6 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
           valor_outro: p.valor_outro,
           participantes: p.participantes ?? [],
           responsavel_captacao: p.responsavel_captacao,
-          responsavel_gestao: p.responsavel_gestao,
           base_tipo: p.base_tipo,
           base_escopo_index: p.base_escopo_index,
           base_honorario: p.base_honorario,
@@ -52,15 +53,21 @@ function buildFichaPayload(contractId: string, data: ContratoFormData) {
   };
 }
 
-// A ficha vai ao financeiro quando há participação ou quando o cadastro do
-// Legal One foi preenchido — contratos sem participação também precisam ser lançados.
+// A ficha vai ao financeiro quando há participação, cadastro do Legal One,
+// contato financeiro ou responsável pela gestão preenchidos — contratos sem
+// participação também precisam ser lançados, e esses campos agora independem
+// da participação.
 function temFichaParaFinanceiro(p?: Participacao): p is Participacao {
   if (!p) return false;
   return Boolean(
     p.tem_participacao ||
       p.categoria_cliente ||
       p.etiquetas?.length ||
-      p.listas_transmissao?.length
+      p.listas_transmissao?.length ||
+      p.contato_financeiro_nome ||
+      p.contato_financeiro_email ||
+      p.contato_financeiro_telefone ||
+      p.responsavel_gestao
   );
 }
 
@@ -256,6 +263,8 @@ export default function Step7Envio({
   const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
+  // Colaboradores do escritorio: autopreenchimento de advogados e testemunhas.
+  const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
   const isEdit = !!editContractId;
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -271,6 +280,9 @@ export default function Step7Envio({
     listTestemunhas()
       .then((r) => setRoster(r.testemunhas))
       .catch(() => setRoster([]));
+    listColaboradores()
+      .then((r) => setColaboradores(r.colaboradores))
+      .catch(() => setColaboradores([]));
   }, []);
 
   const reviewStarted = useRef(false);
@@ -472,11 +484,20 @@ export default function Step7Envio({
     setMessage("Enviando para assinatura digital...");
 
     try {
-      const signatarios = data.contratantes.map((c) => ({
-        email: c.email,
-        name: getContratanteNome(c),
-        role: "Contratante",
-      }));
+      // PJ com mais de um representante legal: cada administrador assina
+      // (ha empresas cuja assinatura so vale com dois administradores).
+      const signatarios = data.contratantes.flatMap((c) => {
+        const reps = c.tipo === "PJ" ? (c as ContratantePJ).representantes ?? [] : [];
+        const assinantes = reps.filter((r) => r.nome && r.email);
+        if (assinantes.length === 0) {
+          return [{ email: c.email, name: getContratanteNome(c), role: "Contratante" }];
+        }
+        return assinantes.map((r) => ({
+          email: r.email!,
+          name: `${r.nome} (${getContratanteNome(c)})`,
+          role: "Contratante",
+        }));
+      });
 
       // Add additional lawyers as "Advogado" role
       for (const lawyer of additionalLawyers) {
@@ -775,13 +796,21 @@ export default function Step7Envio({
         {/* After save/email success - show signature button */}
         {status === "sent_email" && contractId && (
           <>
+            <datalist id="colaboradores-nomes">
+              {colaboradores.map((c) => (
+                <option key={c.email || c.name} value={c.name} label={c.email} />
+              ))}
+            </datalist>
+
             {/* Additional lawyers section */}
             <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">
               <h4 className="text-sm font-medium text-purple-900 mb-2">
-                Advogados adicionais para assinatura (opcional)
+                Advogado(s) que assinarão pelo escritório (opcional)
               </h4>
               <p className="text-xs text-purple-700 mb-3">
-                O advogado logado já será incluído automaticamente. Adicione outros se necessário.
+                O <strong>C&amp;F</strong> assina como CONTRATADO. Quem preenche este formulário{" "}
+                <strong>não</strong> é incluído automaticamente — selecione abaixo o(s) advogado(s)
+                que devem assinar.
               </p>
               {additionalLawyers.length > 0 && (
                 <div className="space-y-1 mb-3">
@@ -802,7 +831,12 @@ export default function Step7Envio({
                 <input
                   type="text"
                   value={newLawyerName}
-                  onChange={(e) => setNewLawyerName(e.target.value)}
+                  list="colaboradores-nomes"
+                  onChange={(e) => {
+                    setNewLawyerName(e.target.value);
+                    const c = colaboradores.find((x) => x.name === e.target.value);
+                    if (c?.email) setNewLawyerEmail(c.email);
+                  }}
                   placeholder="Nome do advogado"
                   className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
                 />
@@ -869,7 +903,12 @@ export default function Step7Envio({
                 <input
                   type="text"
                   value={newTestemunhaNome}
-                  onChange={(e) => setNewTestemunhaNome(e.target.value)}
+                  list="colaboradores-nomes"
+                  onChange={(e) => {
+                    setNewTestemunhaNome(e.target.value);
+                    const c = colaboradores.find((x) => x.name === e.target.value);
+                    if (c?.email) setNewTestemunhaEmail(c.email);
+                  }}
                   placeholder="Nome da testemunha"
                   className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
                 />

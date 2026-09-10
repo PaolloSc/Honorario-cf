@@ -31,12 +31,23 @@ class ContratantePF(BaseModel):
     email: str
  
  
+class RepresentantePJ(BaseModel):
+    nome: str = ""
+    nacionalidade: Optional[str] = None
+    cpf: Optional[str] = None
+    profissao: Optional[str] = None
+    estado_civil: Optional[EstadoCivil] = None
+    email: Optional[str] = None
+
+
 class ContratantePJ(BaseModel):
     tipo: TipoPessoa = TipoPessoa.PJ
     cnpj: str
     razao_social: str = ""
     endereco: str = ""
     email: str
+    representantes: list[RepresentantePJ] = Field(default_factory=list)
+    # Legados (contratos salvos antes de representantes ser uma lista)
     representante_nome: Optional[str] = None
     representante_nacionalidade: Optional[str] = None
     representante_cpf: Optional[str] = None
@@ -44,10 +55,27 @@ class ContratantePJ(BaseModel):
     representante_estado_civil: Optional[EstadoCivil] = None
     representante_email: Optional[str] = None
     representante_endereco: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrar_representante_unico(cls, data):
+        if not isinstance(data, dict) or data.get("representantes"):
+            return data
+        if data.get("representante_nome"):
+            data["representantes"] = [{
+                "nome": data["representante_nome"],
+                "nacionalidade": data.get("representante_nacionalidade"),
+                "cpf": data.get("representante_cpf"),
+                "profissao": data.get("representante_profissao"),
+                "estado_civil": data.get("representante_estado_civil"),
+                "email": data.get("representante_email"),
+            }]
+        return data
  
  
 class TipoEscopo(str, Enum):
     CONSULTORIA_CONTENCIOSO_GERAL = "consultoria_contencioso_geral"
+    CONSULTORIA_AREAS_ATUACAO = "consultoria_areas_atuacao"
     CONTENCIOSO_REPRESENTACAO = "contencioso_representacao"
     CONTENCIOSO_MEMORIAIS = "contencioso_memoriais"
     CONTENCIOSO_TUTELA_URGENCIA = "contencioso_tutela_urgencia"
@@ -65,6 +93,7 @@ class TipoEscopo(str, Enum):
  
 ESCOPO_LABELS: dict[TipoEscopo, str] = {
     TipoEscopo.CONSULTORIA_CONTENCIOSO_GERAL: "Consultoria e contencioso nas áreas de atuação do C&F",
+    TipoEscopo.CONSULTORIA_AREAS_ATUACAO: "Consultoria nas áreas de atuação do C&F",
     TipoEscopo.CONTENCIOSO_REPRESENTACAO: "Contencioso para representação e atuação em autos específicos ou ajuizamento de demandas",
     TipoEscopo.CONTENCIOSO_MEMORIAIS: "Contencioso para análise processual, elaboração e despacho de Memoriais e sustentação oral",
     TipoEscopo.CONTENCIOSO_TUTELA_URGENCIA: "Contencioso para análise processual e despacho de tutela de urgência",
