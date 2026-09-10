@@ -58,7 +58,7 @@ export default function AdminPage() {
       const data = await res.json();
       setUsers(data.users);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar usuarios");
+      setError(e instanceof Error ? e.message : "Erro ao carregar usuários");
     } finally {
       setLoading(false);
     }
@@ -100,10 +100,10 @@ export default function AdminPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <h1 className="font-display text-2xl font-semibold text-primary-dark tracking-wide mb-2">
-        Administracao
+        Administração
       </h1>
       <p className="text-sm text-muted mb-4">
-        Gerencie usuarios e permissoes do sistema.
+        Gerencie usuários e permissões do sistema.
       </p>
 
       <h2 className="text-sm font-semibold text-foreground mb-3">Cadastros</h2>
@@ -150,7 +150,7 @@ export default function AdminPage() {
               <th className="text-left px-4 py-3 font-medium text-muted">Nome</th>
               <th className="text-left px-4 py-3 font-medium text-muted">E-mail</th>
               <th className="text-left px-4 py-3 font-medium text-muted">Perfil</th>
-              <th className="text-right px-4 py-3 font-medium text-muted">Acoes</th>
+              <th className="text-right px-4 py-3 font-medium text-muted">Ações</th>
             </tr>
           </thead>
           <tbody>

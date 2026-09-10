@@ -160,10 +160,10 @@ export default function ContractsPage() {
               <tr className="border-b border-border bg-background/60">
                 <th className="text-left px-4 py-3 font-medium text-muted">Cliente</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-muted hidden md:table-cell">Versao</th>
+                <th className="text-left px-4 py-3 font-medium text-muted hidden md:table-cell">Versão</th>
                 <th className="text-left px-4 py-3 font-medium text-muted hidden md:table-cell">Criado</th>
                 <th className="text-left px-4 py-3 font-medium text-muted hidden lg:table-cell">Atualizado</th>
-                <th className="text-right px-4 py-3 font-medium text-muted">Acoes</th>
+                <th className="text-right px-4 py-3 font-medium text-muted">Ações</th>
               </tr>
             </thead>
             <tbody>

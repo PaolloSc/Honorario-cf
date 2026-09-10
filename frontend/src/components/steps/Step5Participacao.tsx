@@ -200,23 +200,6 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
         </p>
         {loError && <p className="text-xs text-danger mb-2">{loError}</p>}
 
-        <FormField label="Categoria do cliente">
-          <Select
-            value={participacao.categoria_cliente || ""}
-            onChange={(e) => set({ categoria_cliente: e.target.value })}
-            placeholder="Selecione a categoria"
-            options={[
-              // O placeholder do Select é disabled; sem isto o campo, que é
-              // opcional, ficaria impossível de desmarcar depois de escolhido.
-              ...(participacao.categoria_cliente ? [{ value: "", label: "— nenhuma —" }] : []),
-              ...valoresLO(
-                "categoria_cliente",
-                participacao.categoria_cliente ? [participacao.categoria_cliente] : [],
-              ).map((v) => ({ value: v, label: v })),
-            ]}
-          />
-        </FormField>
-
         {(() => {
           const valores = valoresLO("lista_transmissao", listasSel);
           return (
