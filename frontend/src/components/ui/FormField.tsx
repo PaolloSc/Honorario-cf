@@ -157,8 +157,9 @@ interface ComboBoxProps {
   error?: boolean;
 }
 
-// Select com busca: digitar filtra as opcoes por trecho do nome (ex.: "G" lista
-// Gabriel, Gabriela...), em vez da lista suspensa nativa que exige rolar tudo.
+// Select com busca: digitar filtra as opcoes pelo INICIO do nome (ex.: "G" lista
+// Gabriel, Gabriela..., mas nao Chagas ou Carvalho), em vez da lista suspensa
+// nativa que exige rolar tudo.
 export function ComboBox({ value, onChange, options, placeholder, error }: ComboBoxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -169,7 +170,7 @@ export function ComboBox({ value, onChange, options, placeholder, error }: Combo
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q));
+    return options.filter((o) => o.label.toLowerCase().startsWith(q));
   }, [options, query]);
 
   return (
