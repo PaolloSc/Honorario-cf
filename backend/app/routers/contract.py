@@ -640,6 +640,7 @@ def _docx_to_html(filepath: Path) -> str:
         "line-height:1.5;color:#000;background:#fff;padding:0 1rem}"
         "h1{text-align:center;font-size:1.1rem}"
         "h3{font-size:1rem;margin-top:1.2rem}"
+        "p{text-align:justify}"
         "table{border-collapse:collapse;width:100%;margin:.5rem 0}"
         "td,th{border:1px solid #000;padding:6px;font-size:.9rem}"
         "th{text-align:center}"

@@ -294,7 +294,7 @@ class ContractGenerator:
         self._ensure_page_number_footer(doc)
 
         for paragraph in doc.paragraphs:
-            self._format_paragraph(paragraph)
+            self._format_paragraph(paragraph, justify_body=True)
 
         for table in doc.tables:
             # A grade de assinaturas e' a unica tabela sem borda; as demais sao
@@ -327,10 +327,15 @@ class ContractGenerator:
             style.paragraph_format.line_spacing = 1.15
             style.paragraph_format.space_after = Pt(6)
 
-    def _format_paragraph(self, paragraph, assinatura: bool = False) -> None:
+    def _format_paragraph(self, paragraph, assinatura: bool = False, justify_body: bool = False) -> None:
         is_heading = paragraph.style and paragraph.style.name.startswith("Heading")
         is_signature = self._is_signature_paragraph(paragraph.text) or assinatura
         is_tag = paragraph.text.strip().startswith("{{")
+
+        # Texto do corpo (clausulas) justificado — so' quando ninguem mais definiu
+        # o alinhamento (titulo e' centralizado, assinatura tem o seu proprio).
+        if justify_body and not is_heading and not is_signature and not is_tag and paragraph.alignment is None:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
         paragraph.paragraph_format.line_spacing = 1.0 if assinatura else 1.15
         paragraph.paragraph_format.space_after = Pt(0 if is_signature else 6)

@@ -1,6 +1,6 @@
 "use client";
- 
-import { ReactNode } from "react";
+
+import { ReactNode, useMemo, useRef, useState } from "react";
  
 interface FormFieldProps {
   label: string;
@@ -146,5 +146,78 @@ export function Toggle({ label, value, onChange }: ToggleProps) {
       </button>
       <span className="text-sm font-medium text-foreground">{label}</span>
     </label>
+  );
+}
+
+interface ComboBoxProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  placeholder?: string;
+  error?: boolean;
+}
+
+// Select com busca: digitar filtra as opcoes por trecho do nome (ex.: "G" lista
+// Gabriel, Gabriela...), em vez da lista suspensa nativa que exige rolar tudo.
+export function ComboBox({ value, onChange, options, placeholder, error }: ComboBoxProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const selected = options.find((o) => o.value === value);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={open ? query : selected?.label ?? ""}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          if (e.target.value === "") onChange("");
+        }}
+        onFocus={() => {
+          setOpen(true);
+          setQuery("");
+        }}
+        onBlur={() => {
+          blurTimeout.current = setTimeout(() => setOpen(false), 150);
+        }}
+        placeholder={placeholder}
+        className={`w-full px-3 py-2 rounded-lg border ${
+          error ? "border-danger" : "border-border"
+        } bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary-light transition`}
+      />
+      {open && (
+        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg text-sm">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-muted">Nenhum resultado</li>
+          ) : (
+            filtered.map((o) => (
+              <li
+                key={o.value}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  if (blurTimeout.current) clearTimeout(blurTimeout.current);
+                  onChange(o.value);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className={`px-3 py-2 cursor-pointer hover:bg-primary/10 ${
+                  o.value === value ? "bg-primary/[0.08] font-medium" : ""
+                }`}
+              >
+                {o.label}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -97,7 +97,11 @@ class ConsumidorGenerator(ContractGenerator):
             style.paragraph_format.line_spacing = self.ENTRELINHA
             style.paragraph_format.space_after = self.ESPACO_DEPOIS
 
-    def _format_paragraph(self, paragraph, assinatura: bool = False) -> None:
+    def _format_paragraph(self, paragraph, assinatura: bool = False, justify_body: bool = False) -> None:
+        # justify_body e' um parametro da classe base (ContractGenerator) — aqui o
+        # corpo ja e' sempre justificado (ver abaixo), entao so' aceita o argumento
+        # pra manter a assinatura compativel com a chamada de _apply_document_standard.
+        del justify_body
         is_heading = paragraph.style and paragraph.style.name.startswith("Heading")
         is_signature = self._is_signature_paragraph(paragraph.text) or assinatura
 
