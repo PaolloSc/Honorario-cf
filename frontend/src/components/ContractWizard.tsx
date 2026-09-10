@@ -221,7 +221,10 @@ function validateAcessorios(_data: ContratoFormData): string[] {
   return [];
 }
 
-function validateParticipacao(_data: ContratoFormData): string[] {
+function validateParticipacao(data: ContratoFormData): string[] {
+  if (!data.participacao.responsavel_gestao?.trim()) {
+    return ["Informe o responsável pela gestão do contrato."];
+  }
   return [];
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import FormField, { Checkbox, Input, Select, Toggle } from "@/components/ui/FormField";
+import FormField, { Checkbox, ComboBox, Input, Select, Toggle } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { EscopoItem, Participacao, ParticipacaoValorTipo, TipoHonorario } from "@/types/contract";
 import { ESCOPO_LABELS, HONORARIO_LABELS } from "@/types/contract";
@@ -275,11 +275,11 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
         </div>
 
         <div className="mt-4 pt-4 border-t border-border">
-          <FormField label="Responsável pela gestão do contrato">
-            <Select
+          <FormField label="Responsável pela gestão do contrato" required>
+            <ComboBox
               value={participacao.responsavel_gestao || ""}
-              onChange={(e) => set({ responsavel_gestao: e.target.value })}
-              placeholder="Selecione o advogado"
+              onChange={(v) => set({ responsavel_gestao: v })}
+              placeholder="Busque por nome ou letra"
               options={optionsComSalvo(participacao.responsavel_gestao)}
             />
           </FormField>
@@ -542,10 +542,10 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
             {/* Responsável */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Responsável pela captação">
-                <Select
+                <ComboBox
                   value={participacao.responsavel_captacao || ""}
-                  onChange={(e) => set({ responsavel_captacao: e.target.value })}
-                  placeholder="Selecione o advogado"
+                  onChange={(v) => set({ responsavel_captacao: v })}
+                  placeholder="Busque por nome ou letra"
                   options={optionsComSalvo(participacao.responsavel_captacao)}
                 />
               </FormField>
