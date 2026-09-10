@@ -203,13 +203,15 @@ def generate_contract(
             tipo = _infer_tipo_honorario(data)
             participacao_data = data.participacao
 
+            participantes_wizard = (participacao_data.participantes if participacao_data else None) or []
+
             # Parse valores da wizard
             pct = _parse_percentual(
                 participacao_data.percentual_ou_valor if participacao_data else None
             )
-            eh_cap, eh_perf = _map_natureza_wizard(
-                participacao_data.natureza if participacao_data else None
-            )
+            # Natureza vem agora por advogado; usa a do primeiro participante como base.
+            primeira_natureza = participantes_wizard[0].natureza if participantes_wizard else None
+            eh_cap, eh_perf = _map_natureza_wizard(primeira_natureza)
             pct_captacao = pct if eh_cap else 0.0
             pct_performance = pct if eh_perf else 0.0
 
@@ -219,9 +221,10 @@ def generate_contract(
                 participacao_data.contato_financeiro_cliente if participacao_data else None
             )
             beneficiario_email = email_wizard or user.email
-            # Nome: para_quem agora e' lista; junta nomes. Fallback user.name.
-            para_quem_nomes = (participacao_data.para_quem if participacao_data else None) or []
-            beneficiario_nome = ", ".join(para_quem_nomes) if para_quem_nomes else user.name
+            # Nome: junta os nomes de todos os participantes. Fallback user.name.
+            beneficiario_nome = (
+                ", ".join(p.nome for p in participantes_wizard) if participantes_wizard else user.name
+            )
 
             # Backend natureza = contratual/societario (campo legal, nao wizard)
             natureza_val = "contratual"
@@ -248,12 +251,16 @@ def generate_contract(
                     valor_str = participacao_data.valor_outro
                 else:
                     valor_str = participacao_data.percentual_ou_valor or "-"
+                participantes_str = "; ".join(
+                    f"{p.nome} ({p.natureza or '-'}{f', {p.percentual}%' if p.percentual else ''})"
+                    for p in participantes_wizard
+                ) or "-"
                 obs_extra = (
                     f"Rascunho automatico do wizard. "
                     f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
                     f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
                     f"Valor wizard: {valor_str} · "
-                    f"Natureza wizard: {participacao_data.natureza or '-'}"
+                    f"Participantes: {participantes_str}"
                 )
             else:
                 obs_extra = "Rascunho automatico do wizard."
@@ -536,7 +543,20 @@ def _contract_filename(
 
 
 def _clean_preview_text(text: str) -> str:
-    return _SIG_TAG.sub("_" * 40, text)
+    # A tag do DocuSeal e' invisivel no Word (texto branco) e o documento ja traz
+    # a linha de assinatura; deixa-la virar underscores duplicava a linha na previa.
+    return _SIG_TAG.sub("", text)
+
+
+def _clause_level(paragraph_el) -> int | None:
+    """Nível do parágrafo na lista de cláusulas, ou None se não for numerado."""
+    from docx.oxml.ns import qn
+
+    num_pr = paragraph_el.find(qn("w:pPr") + "/" + qn("w:numPr"))
+    if num_pr is None:
+        return None
+    ilvl = num_pr.find(qn("w:ilvl"))
+    return int(ilvl.get(qn("w:val"))) if ilvl is not None else 0
 
 
 def _inline_html(paragraph) -> str:
@@ -565,12 +585,19 @@ def _docx_to_html(filepath: Path) -> str:
 
     doc = Document(str(filepath))
     parts: list[str] = []
+    contadores = [0, 0, 0]  # niveis da lista de clausulas (o Word numera no .docx)
     for child in doc.element.body.iterchildren():
         if child.tag == qn("w:p"):
             p = Paragraph(child, doc)
             text = _inline_html(p)
             if not text.strip():
                 continue
+            ilvl = _clause_level(child)
+            if ilvl is not None:
+                contadores[ilvl] += 1
+                for abaixo in range(ilvl + 1, len(contadores)):
+                    contadores[abaixo] = 0
+                text = ".".join(str(n) for n in contadores[: ilvl + 1]) + ". " + text
             style = p.style.name if p.style else ""
             if style == "Heading 1":
                 parts.append(f"<h1>{text}</h1>")
@@ -587,9 +614,18 @@ def _docx_to_html(filepath: Path) -> str:
                 trPr = row._tr.trPr
                 return trPr is not None and trPr.find(qn("w:tblHeader")) is not None
 
+            def celula_html(cell) -> str:
+                # Cada paragrafo da celula e' uma linha. `cell.text` junta tudo num
+                # texto so e o HTML colapsa a quebra: o rotulo da assinatura acabava
+                # na mesma linha dos underscores.
+                linhas = [
+                    escape(_clean_preview_text(p.text)).strip() for p in cell.paragraphs
+                ]
+                return "<br>".join(linha for linha in linhas if linha)
+
             rows_html = "".join(
                 "<tr>" + "".join(
-                    f"<{'th' if _e_cabecalho(row) else 'td'}>{escape(_clean_preview_text(c.text))}"
+                    f"<{'th' if _e_cabecalho(row) else 'td'}>{celula_html(c)}"
                     f"</{'th' if _e_cabecalho(row) else 'td'}>"
                     for c in row.cells
                 ) + "</tr>"

@@ -97,9 +97,9 @@ class ConsumidorGenerator(ContractGenerator):
             style.paragraph_format.line_spacing = self.ENTRELINHA
             style.paragraph_format.space_after = self.ESPACO_DEPOIS
 
-    def _format_paragraph(self, paragraph) -> None:
+    def _format_paragraph(self, paragraph, assinatura: bool = False) -> None:
         is_heading = paragraph.style and paragraph.style.name.startswith("Heading")
-        is_signature = self._is_signature_paragraph(paragraph.text)
+        is_signature = self._is_signature_paragraph(paragraph.text) or assinatura
 
         paragraph.paragraph_format.line_spacing = self.ENTRELINHA
         paragraph.paragraph_format.space_after = (
@@ -108,6 +108,10 @@ class ConsumidorGenerator(ContractGenerator):
         paragraph.paragraph_format.keep_together = True
         if is_heading:
             paragraph.paragraph_format.keep_with_next = True
+        if is_signature:
+            paragraph.alignment = (
+                WD_ALIGN_PARAGRAPH.CENTER if assinatura else WD_ALIGN_PARAGRAPH.LEFT
+            )
         # Corpo justificado; titulo, assinaturas e celulas da grade nao.
         # Justificar texto curto na tabela de assinatura deforma o DocuSeal.
         parent = paragraph._element.getparent()

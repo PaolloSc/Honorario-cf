@@ -87,15 +87,29 @@ export default function DateRangePicker({
       </div>
 
       <div className="relative">
-        <label className="block text-sm font-semibold text-foreground mb-1">
-          Data de término{required && <span className="text-danger ml-1">*</span>}
-        </label>
+        <div className="flex items-center justify-between mb-1 gap-2">
+          <label className="text-sm font-semibold text-foreground">
+            Data de término{required && <span className="text-danger ml-1">*</span>}
+          </label>
+          {/* Prazo indeterminado e' o padrao: sem data de termino preenchida. */}
+          <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={!fim}
+              onChange={(e) => {
+                if (e.target.checked) onChange(dataInicio, undefined, undefined);
+                else setOpenFim(true);
+              }}
+            />
+            Prazo indeterminado
+          </label>
+        </div>
         <button
           type="button"
           onClick={() => { setOpenFim((v) => !v); setOpenInicio(false); }}
           className={inputClass + " text-left"}
         >
-          {formatBR(fim) || <span className="text-muted">Selecione...</span>}
+          {formatBR(fim) || <span className="text-muted">Prazo indeterminado</span>}
         </button>
         {openFim && (
           <div className="absolute z-50 mt-1 bg-card border border-border rounded-lg shadow-lg p-2">

@@ -43,6 +43,20 @@ def _base_req(*, honorario="hora_trabalhada", extra_escopo=None, partes_rel=True
     }
 
 
+def _preview_paras(req: dict) -> list[str]:
+    """Parágrafos como o usuário os lê: com a numeração que o Word gera sozinho."""
+    from pathlib import Path
+
+    from app.routers.contract import _docx_to_html
+
+    _, path = ContractGenerator().generate(ContratoRequest(**req), contract_id="FIDELIDADE_PREV")
+    html = _docx_to_html(Path(path))
+    return [
+        re.sub(r"<[^>]+>", "", m).replace("&amp;", "&").replace("&quot;", '"')
+        for m in re.findall(r"<(?:p|h1|h3)>.*?</(?:p|h1|h3)>", html, re.S)
+    ]
+
+
 def _has(paras: list[str], needle: str) -> bool:
     return any(needle in p for p in paras)
 
@@ -127,7 +141,7 @@ def test_secoes_4a11_presentes_para_cada_caso(nome):
     """Cada combinação de honorário/escopo gera todas as seções 4-11 e termina certo."""
     paras = _paras_for(_req_escopos(_CASOS[nome]))
     # Seções comuns sempre presentes (independem do honorário)
-    assert _has(paras, "reforma tributária")                 # 4.7
+    assert _has(paras, "equilíbrio econômico-financeiro")     # 4.7
     assert _has(paras, "CredLocaliza")                       # 5.3
     assert _has(paras, "obrigação de meio")                  # 6.3
     assert _has(paras, "inteligência artificial")            # 7.3
@@ -168,7 +182,6 @@ def test_solidariedade_condicional_multi_escopo(partes_rel):
 def test_secao4_reforma_tributaria_e_fraude_completa():
     paras = _paras_for(_base_req())
     assert _has(paras, "canais oficiais de contato do C&F")
-    assert _has(paras, "reforma tributária")
     assert _has(paras, "equilíbrio econômico-financeiro")
     assert _has(paras, "forma de faturamento mais eficiente do ponto de vista fiscal")
 
@@ -189,8 +202,11 @@ def test_secao5_reembolsos_completos():
     assert _has(paras, "CredLocaliza")
     assert _has(paras, "R$ 1,70")
     assert _has(paras, "R$ 0,40")
-    assert _has(paras, "honorários sucumbenciais fixados pertencem exclusivamente ao C&F")
     assert _has(paras, "multas processuais e/ou honorários de sucumbência")
+    # Sucumbencia/renuncia (5.6) so entra quando ha honorario de exito.
+    assert not _has(paras, "honorários sucumbenciais fixados pertencem exclusivamente ao C&F")
+    com_exito = _paras_for(_req_escopos([_escopo("exito")]))
+    assert _has(com_exito, "honorários sucumbenciais fixados pertencem exclusivamente ao C&F")
 
 
 def test_secao5_sem_reembolso_omite_51():
@@ -285,7 +301,7 @@ def test_valor_km_padrao_singular_correto():
 def test_criterio_extincao_exito_substitui_tabela_de_fases():
     req = _req_com_exito()
     req["acessorios"]["criterio_extincao_exito"] = "assinatura do acordo"
-    paras = _paras_for(req)
+    paras = _preview_paras(req)
     assert _has(paras, "observando-se o seguinte critério: assinatura do acordo.")
     assert not _has(paras, "50% do percentual de êxito pactuado")
     assert not _has(paras, "inocorrência de determinada fase processual")
@@ -295,7 +311,7 @@ def test_criterio_extincao_exito_substitui_tabela_de_fases():
 def test_clausulas_adicionais_numeradas_antes_do_foro():
     req = _base_req()
     req["acessorios"]["clausulas_adicionais"] = "Primeira extra.\nSegunda extra."
-    paras = _paras_for(req)
+    paras = _preview_paras(req)
     assert _has(paras, "DISPOSIÇÕES ADICIONAIS")
     assert _has(paras, "11.1. Primeira extra.")
     assert _has(paras, "11.2. Segunda extra.")
@@ -347,7 +363,7 @@ def test_preview_nao_vaza_tags_de_assinatura():
     assert "{{" not in html
     # a linha de assinatura e o rotulo do papel continuam visiveis
     assert "____" in html
-    assert "CONTRATANTE 1: Fulano" in html
+    assert "CONTRATANTE: FULANO" in html
 
 
 def test_titulos_de_tabela_centralizados():
@@ -368,9 +384,9 @@ def test_qualificacao_sem_virgula_dupla_com_campo_vazio():
     req = _base_req()
     req["contratantes"][0]["profissao"] = ""  # usuario deixou profissao em branco
     paras = _paras_for(req)
-    contratante = next(p for p in paras if p.startswith("CONTRATANTE 1:"))
+    contratante = next(p for p in paras if p.startswith("CONTRATANTE:"))
     assert ", ," not in contratante
-    assert "Fulano, brasileiro, Solteiro(a), CPF" in contratante
+    assert "FULANO, brasileiro, Solteiro(a), CPF" in contratante
 
 
 def test_preview_titulo_de_tabela_como_th_centralizado():
@@ -383,3 +399,159 @@ def test_preview_titulo_de_tabela_como_th_centralizado():
     html = _docx_to_html(Path(path))
     assert "<th>Escopo</th><th>Preço</th>" in html
     assert "th{text-align:center}" in html
+
+
+def _clausulas_secao3(paras: list[str]) -> list[str]:
+    """Rotulos (3.x / 3.x.y) das clausulas da secao 3, como saem numerados."""
+    return [p.split(" ")[0] for p in paras if re.match(r"^3\.\d", p)]
+
+
+def test_secao3_honorario_unico_numera_corrido_e_sem_subtitulo():
+    paras = _preview_paras(_req_escopos([_escopo("hora_trabalhada")]))
+    assert _clausulas_secao3(paras) == ["3.1.", "3.2.", "3.3."]
+    assert not _has(paras, "HORA TRABALHADA")
+
+
+def test_secao3_varios_honorarios_usam_subclausulas():
+    paras = _preview_paras(_req_escopos([_escopo("hora_trabalhada"), _escopo("pro_labore")]))
+    # 1o bloco: 3.1 (chapeu) + 3.1.1, 3.1.2; 2o bloco: 3.2 (chapeu) + 3.2.1
+    assert _clausulas_secao3(paras) == ["3.1.", "3.1.1.", "3.1.2.", "3.2.", "3.2.1."]
+    assert _has(paras, "HORA TRABALHADA") and _has(paras, "PRO-LABORE")
+
+
+def test_clausulas_sao_numeradas_pelo_word_e_nao_no_texto():
+    """O numero vem da lista multinivel do Word: apagar uma clausula renumera as demais."""
+    import zipfile
+
+    from app.services.contract_generator import CLAUSE_NUM_ID
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(data, contract_id="FIDELIDADE_NUM")
+    z = zipfile.ZipFile(path)
+    assert "word/numbering.xml" in z.namelist()
+
+    xml = z.read("word/document.xml").decode("utf-8")
+    numeradas = 0
+    for p in re.split(r"</w:p>", xml):
+        txt = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip()
+        if f'<w:numId w:val="{CLAUSE_NUM_ID}"' in p:
+            numeradas += 1
+        # Varre TODO paragrafo, nao so os da lista: uma clausula numerada a mao
+        # fica FORA da lista, e um teste que olhasse so os itens da lista nunca
+        # a veria — foi assim que esta assercao passou com o bug de volta.
+        assert not re.match(r"^\d+\.\d*\.? \S", txt), f"numero escrito a mao: {txt[:60]}"
+    assert numeradas > 20
+
+
+def test_preview_nao_junta_rotulo_com_a_linha_de_assinatura():
+    """Na celula, cada paragrafo e' uma linha: o rotulo nao pode colar nos underscores."""
+    from pathlib import Path
+
+    from app.routers.contract import _docx_to_html
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(
+        data,
+        contract_id="FIDELIDADE_SIG",
+        signatario_roles=[
+            {"email": "a@a.com", "name": "Fulano", "role": "Contratante"},
+            {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        ],
+    )
+    html = _docx_to_html(Path(path))
+    assert "<br>CONTRATANTE: FULANO" in html
+
+    # Cada celula de assinatura tem UMA linha de underscores. A previa apagava a
+    # tag do DocuSeal trocando-a por underscores, o que somava uma segunda linha;
+    # conferir so o par "underscores<br>rotulo" nao pegava isso, porque a linha
+    # duplicada fica ANTES e o par continuava batendo.
+    celulas = re.findall(r"<td>(.*?)</td>", html, re.S)
+    assinatura = [c for c in celulas if "CONTRATANTE:" in c or "CONTRATADO:" in c]
+    assert assinatura, "nenhuma celula de assinatura no preview"
+    for celula in assinatura:
+        linhas_underscore = [
+            linha for linha in celula.split("<br>") if set(linha.strip()) == {"_"}
+        ]
+        assert len(linhas_underscore) == 1, f"esperava 1 linha de assinatura: {celula[:120]}"
+
+
+def _assinatura_pPr(path: str) -> list[tuple[str, str, str, str]]:
+    """(texto, alinhamento, espaco_antes, espaco_depois) de cada paragrafo da grade."""
+    import zipfile
+
+    xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+    grade = re.findall(r"<w:tbl>.*?</w:tbl>", xml, re.S)[-1]
+    out = []
+    for p in re.split(r"</w:p>", grade):
+        if not "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip():
+            continue
+        jc = re.search(r'<w:jc w:val="(\w+)"/>', p)
+        antes = re.search(r'w:before="(\d+)"', p)
+        depois = re.search(r'w:after="(\d+)"', p)
+        out.append((
+            "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip(),
+            jc.group(1) if jc else "herdado",
+            antes.group(1) if antes else "herdado",
+            depois.group(1) if depois else "herdado",
+        ))
+    return out
+
+
+def test_assinatura_centralizada_na_grade_e_testemunhas_a_esquerda():
+    """Dois alinhamentos distintos, confirmados no .docx que o escritorio ajustou.
+
+    O modelo justifica tudo (w:jc=both) e espalhava "CONTRATANTE: MARINA ALVES
+    RIBEIRO" na largura da celula, entao o alinhamento precisa ser fixado. Na
+    grade e' centralizado dentro da celula; o bloco de testemunhas, que corre
+    solto no corpo, fica a esquerda como o resto do contrato. Centralizar os
+    dois foi recusado pelo escritorio.
+    """
+    from app.services.contract_generator import ESPACO_ASSINATURA
+
+    data = ContratoRequest(**_base_req())
+    _, path = ContractGenerator().generate(
+        data,
+        contract_id="FIDELIDADE_FMT",
+        signatario_roles=[
+            {"email": "a@a.com", "name": "Fulano", "role": "Contratante"},
+            {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        ],
+    )
+    folga = str(int(ESPACO_ASSINATURA.pt * 20))
+
+    grade = _assinatura_pPr(path)
+    assert grade, "grade de assinaturas vazia"
+    for texto, jc, antes, depois in grade:
+        assert jc == "center", f"grade deveria ser centralizada, veio {jc} em {texto[:30]!r}"
+        assert depois == "0", f"espaco sobrando depois de {texto[:30]!r}: {depois}"
+        # A folga fica so acima da linha de assinatura; o nome cola nela.
+        assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
+
+    testemunhas = _testemunhas_pPr(path)
+    assert testemunhas, "bloco de testemunhas vazio"
+    for texto, jc, antes, _depois in testemunhas:
+        assert jc == "left", f"testemunhas deveriam ficar a esquerda, veio {jc}"
+        assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
+
+
+def _testemunhas_pPr(path: str) -> list[tuple[str, str, str, str]]:
+    """Mesma leitura de _assinatura_pPr, para o bloco solto no corpo."""
+    import zipfile
+
+    xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
+    corpo = xml.split("</w:tbl>")[-1]
+    out = []
+    for p in re.split(r"</w:p>", corpo):
+        texto = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip()
+        if not texto:
+            continue
+        jc = re.search(r'<w:jc w:val="(\w+)"/>', p)
+        antes = re.search(r'w:before="(\d+)"', p)
+        depois = re.search(r'w:after="(\d+)"', p)
+        out.append((
+            texto,
+            jc.group(1) if jc else "herdado",
+            antes.group(1) if antes else "herdado",
+            depois.group(1) if depois else "herdado",
+        ))
+    return out

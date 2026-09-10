@@ -18,6 +18,7 @@ from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.routers.contract import _SIG_TAG, _contract_filename
 from app.services.azure_email import AzureEmailService
+from app.utils.participacao import linhas_participacao
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/email", tags=["Email"])
@@ -409,59 +410,19 @@ async def send_participacao_email(
         # A quebra de linha vira <br> no laco que monta a tabela, depois do escape.
         if objeto_contrato:
             rows.append(("Objeto do Contrato", objeto_contrato))
-        # Base da participacao (escopo ou honorario)
-        if data.base_tipo and data.base_label:
-            base_prefixo = "Escopo" if data.base_tipo == "escopo" else "Honorário"
-            rows.append(("Base", f"{base_prefixo} — {data.base_label}"))
-        # Valor (estruturado, com fallback legado)
-        if data.valor_tipo == "percentual" and data.valor_percentual:
-            rows.append(("Percentual", f"{data.valor_percentual}%"))
-        elif data.valor_tipo == "valor" and data.valor_monetario is not None:
-            rows.append(("Valor", f"R$ {data.valor_monetario:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")))
-        elif data.valor_tipo == "outro" and data.valor_outro:
-            rows.append(("Critério", data.valor_outro))
-        elif data.percentual_ou_valor:
-            rows.append(("Percentual/Valor", data.percentual_ou_valor))
-        # Para quem (lista, cada um com natureza e percentual próprios)
-        for participante in data.participantes:
-            nome = participante.get("nome", "")
-            if not nome:
-                continue
-            natureza = participante.get("natureza", "")
-            percentual = participante.get("percentual", "")
-            valor = ", ".join(v for v in (natureza, f"{percentual}%" if percentual else "") if v)
-            rows.append((f"Para quem — {nome}", valor or "—"))
-        if data.responsavel_captacao:
-            rows.append(("Resp. Captação", data.responsavel_captacao))
-        if data.responsavel_gestao:
-            rows.append(("Resp. Gestão", data.responsavel_gestao))
-        # Contato financeiro (3 campos, com fallback legado)
-        if data.contato_financeiro_nome or data.contato_financeiro_email or data.contato_financeiro_telefone:
-            if data.contato_financeiro_nome:
-                rows.append(("Contato — Nome", data.contato_financeiro_nome))
-            if data.contato_financeiro_email:
-                rows.append(("Contato — E-mail", data.contato_financeiro_email))
-            if data.contato_financeiro_telefone:
-                rows.append(("Contato — Telefone", data.contato_financeiro_telefone))
-        elif data.contato_financeiro_cliente:
-            rows.append(("Contato Financeiro Cliente", data.contato_financeiro_cliente))
-        # Cadastro no Legal One (pode vir sem participacao)
-        if data.categoria_cliente:
-            rows.append(("Categoria do cliente", data.categoria_cliente))
-        if data.listas_transmissao:
-            rows.append(("Lista de transmissão", ", ".join(data.listas_transmissao)))
+        rows.extend(linhas_participacao(data.model_dump()))
 
         # ponytail: participacao inferida dos proprios campos em vez de uma flag nova.
         # O wizard so manda estes campos quando o toggle esta ligado, mas a inferencia
         # cobre todos eles: uma ficha com apenas o responsavel preenchido ainda e
         # participacao, e rotula-la "Cadastro Legal One" seria mentira.
-        # Contato financeiro NAO entra aqui: ele e sempre enviado, com ou sem participacao.
+        # Contato financeiro e responsavel_gestao NAO entram aqui: sao sempre
+        # enviados, com ou sem participacao.
         tem_participacao = any((
             data.base_label,
             data.valor_tipo,
             data.participantes,
             data.responsavel_captacao,
-            data.responsavel_gestao,
             data.percentual_ou_valor,
         ))
         titulo = "Ficha de Participação" if tem_participacao else "Cadastro Legal One"
