@@ -264,6 +264,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
               onChange={(v) => set({ responsavel_gestao: v })}
               placeholder="Busque por nome ou letra"
               options={optionsComSalvo(participacao.responsavel_gestao)}
+              clearable
             />
           </FormField>
         </div>
@@ -434,9 +435,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                           {participantesSel.length > 1 ? (
                             // Só faz sentido escolher valor/outro por advogado quando há mais de
                             // um: com um só, o valor geral da participação já cobre o caso.
-                            // h-full+justify-end alinha o input com o Select de "Natureza" ao
-                            // lado, que não tem a linha extra de radios acima do campo.
-                            <div className="h-full flex flex-col justify-end">
+                            <div>
                               <p className="text-sm text-foreground mb-1">Valor (opcional, sobrescreve o geral)</p>
                               <div className="flex flex-wrap gap-3 mb-2">
                                 {VALOR_TIPOS.map((t) => (
@@ -530,6 +529,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                   onChange={(v) => set({ responsavel_captacao: v })}
                   placeholder="Busque por nome ou letra"
                   options={optionsComSalvo(participacao.responsavel_captacao)}
+                  clearable
                 />
               </FormField>
             </div>
