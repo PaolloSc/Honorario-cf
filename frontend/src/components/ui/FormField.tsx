@@ -155,21 +155,24 @@ interface ComboBoxProps {
   options: Array<{ value: string; label: string }>;
   placeholder?: string;
   error?: boolean;
+  // Mostra um botao "x" pra esvaziar a selecao explicitamente, sem precisar
+  // apagar o texto digitado na mao.
+  clearable?: boolean;
 }
 
-// Select com busca: digitar filtra as opcoes pelo INICIO do nome (ex.: "G" lista
-// Gabriel, Gabriela..., mas nao Chagas ou Carvalho), em vez da lista suspensa
-// nativa que exige rolar tudo.
-export function ComboBox({ value, onChange, options, placeholder, error }: ComboBoxProps) {
-  const [open, setOpen] = useState(false);
+// Select com busca: a lista so' abre depois que a pessoa comeca a digitar (nao
+// so' ao clicar no campo) e filtra pelo INICIO do nome (ex.: "G" lista Gabriel,
+// Gabriela..., mas nao Chagas ou Carvalho).
+export function ComboBox({ value, onChange, options, placeholder, error, clearable }: ComboBoxProps) {
+  const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = options.find((o) => o.value === value);
+  const showList = editing && query.trim().length > 0;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
     return options.filter((o) => o.label.toLowerCase().startsWith(q));
   }, [options, query]);
 
@@ -177,24 +180,39 @@ export function ComboBox({ value, onChange, options, placeholder, error }: Combo
     <div className="relative">
       <input
         type="text"
-        value={open ? query : selected?.label ?? ""}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          if (e.target.value === "") onChange("");
-        }}
+        value={editing ? query : selected?.label ?? ""}
+        onChange={(e) => setQuery(e.target.value)}
         onFocus={() => {
-          setOpen(true);
+          setEditing(true);
           setQuery("");
         }}
         onBlur={() => {
-          blurTimeout.current = setTimeout(() => setOpen(false), 150);
+          blurTimeout.current = setTimeout(() => setEditing(false), 150);
         }}
         placeholder={placeholder}
         className={`w-full px-3 py-2 rounded-lg border ${
           error ? "border-danger" : "border-border"
-        } bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary-light transition`}
+        } bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary-light transition ${
+          clearable && value ? "pr-8" : ""
+        }`}
       />
-      {open && (
+      {clearable && value && (
+        <button
+          type="button"
+          aria-label="Limpar seleção"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (blurTimeout.current) clearTimeout(blurTimeout.current);
+            onChange("");
+            setQuery("");
+            setEditing(false);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground text-sm leading-none"
+        >
+          ✕
+        </button>
+      )}
+      {showList && (
         <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg text-sm">
           {filtered.length === 0 ? (
             <li className="px-3 py-2 text-muted">Nenhum resultado</li>
@@ -207,7 +225,7 @@ export function ComboBox({ value, onChange, options, placeholder, error }: Combo
                   if (blurTimeout.current) clearTimeout(blurTimeout.current);
                   onChange(o.value);
                   setQuery("");
-                  setOpen(false);
+                  setEditing(false);
                 }}
                 className={`px-3 py-2 cursor-pointer hover:bg-primary/10 ${
                   o.value === value ? "bg-primary/[0.08] font-medium" : ""
