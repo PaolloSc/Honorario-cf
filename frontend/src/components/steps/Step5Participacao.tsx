@@ -418,7 +418,21 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                       />
                       {participante && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 ml-6">
-                          <FormField label="Natureza da participação">
+                          <div>
+                            <label className="block text-sm font-semibold text-foreground mb-1">
+                              Natureza da participação
+                            </label>
+                            {/* Espacador invisivel do mesmo tamanho da linha de radios do
+                                bloco "Valor" ao lado, pra o Select ficar na mesma altura
+                                do Input em vez de mais alto. */}
+                            <div className="flex flex-wrap gap-3 mb-2 invisible" aria-hidden="true">
+                              {VALOR_TIPOS.map((t) => (
+                                <span key={t.value} className="flex items-center gap-1.5 text-xs">
+                                  <span className="h-3.5 w-3.5 inline-block" />
+                                  {t.label}
+                                </span>
+                              ))}
+                            </div>
                             <Select
                               value={participante.natureza || ""}
                               onChange={(e) => setParticipante(nome, { natureza: e.target.value })}
@@ -431,55 +445,25 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                                 { value: "Outro", label: "Outro" },
                               ]}
                             />
-                          </FormField>
-                          {participantesSel.length > 1 ? (
-                            // Só faz sentido escolher valor/outro por advogado quando há mais de
-                            // um: com um só, o valor geral da participação já cobre o caso.
-                            <div>
-                              <p className="text-sm text-foreground mb-1">Valor (opcional, sobrescreve o geral)</p>
-                              <div className="flex flex-wrap gap-3 mb-2">
-                                {VALOR_TIPOS.map((t) => (
-                                  <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                                    <input
-                                      type="radio"
-                                      name={`participante-valor-tipo-${nome}`}
-                                      checked={(participante.valor_tipo || "percentual") === t.value}
-                                      onChange={() => setParticipanteValorTipo(nome, t.value)}
-                                      className="h-3.5 w-3.5 text-primary focus:ring-primary-light"
-                                    />
-                                    {t.label}
-                                  </label>
-                                ))}
-                              </div>
-
-                              {(participante.valor_tipo || "percentual") === "percentual" && (
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.01"
-                                  value={participante.percentual ?? ""}
-                                  onChange={(e) => setParticipante(nome, { percentual: e.target.value })}
-                                  placeholder="Ex: 10"
-                                />
-                              )}
-                              {participante.valor_tipo === "valor" && (
-                                <CurrencyInput
-                                  value={participante.valor_monetario}
-                                  onChange={(v) => setParticipante(nome, { valor_monetario: v })}
-                                  placeholder="0,00"
-                                />
-                              )}
-                              {participante.valor_tipo === "outro" && (
-                                <Input
-                                  value={participante.valor_outro ?? ""}
-                                  onChange={(e) => setParticipante(nome, { valor_outro: e.target.value })}
-                                  placeholder="Descreva o critério"
-                                />
-                              )}
+                          </div>
+                          <div>
+                            <p className="text-sm text-foreground mb-1">Valor (opcional, sobrescreve o geral)</p>
+                            <div className="flex flex-wrap gap-3 mb-2">
+                              {VALOR_TIPOS.map((t) => (
+                                <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                                  <input
+                                    type="radio"
+                                    name={`participante-valor-tipo-${nome}`}
+                                    checked={(participante.valor_tipo || "percentual") === t.value}
+                                    onChange={() => setParticipanteValorTipo(nome, t.value)}
+                                    className="h-3.5 w-3.5 text-primary focus:ring-primary-light"
+                                  />
+                                  {t.label}
+                                </label>
+                              ))}
                             </div>
-                          ) : (
-                            <FormField label="Percentual (opcional, sobrescreve o geral)">
+
+                            {(participante.valor_tipo || "percentual") === "percentual" && (
                               <Input
                                 type="number"
                                 min="0"
@@ -489,8 +473,22 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
                                 onChange={(e) => setParticipante(nome, { percentual: e.target.value })}
                                 placeholder="Ex: 10"
                               />
-                            </FormField>
-                          )}
+                            )}
+                            {participante.valor_tipo === "valor" && (
+                              <CurrencyInput
+                                value={participante.valor_monetario}
+                                onChange={(v) => setParticipante(nome, { valor_monetario: v })}
+                                placeholder="0,00"
+                              />
+                            )}
+                            {participante.valor_tipo === "outro" && (
+                              <Input
+                                value={participante.valor_outro ?? ""}
+                                onChange={(e) => setParticipante(nome, { valor_outro: e.target.value })}
+                                placeholder="Descreva o critério"
+                              />
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
