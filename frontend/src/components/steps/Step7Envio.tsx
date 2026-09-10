@@ -805,11 +805,11 @@ export default function Step7Envio({
             {/* Additional lawyers section */}
             <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">
               <h4 className="text-sm font-medium text-purple-900 mb-2">
-                Advogado(s) que assinarão pelo escritório (opcional)
+                Advogados que assinarão pelo escritório (opcional)
               </h4>
               <p className="text-xs text-purple-700 mb-3">
                 O <strong>C&amp;F</strong> assina como CONTRATADO. Quem preenche este formulário{" "}
-                <strong>não</strong> é incluído automaticamente — selecione abaixo o(s) advogado(s)
+                <strong>não</strong> é incluído automaticamente — selecione abaixo os advogados
                 que devem assinar.
               </p>
               {additionalLawyers.length > 0 && (

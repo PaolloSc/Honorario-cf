@@ -86,7 +86,7 @@ export default function EditContractPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12">
         <div className="rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
-          {error || "Dados nao encontrados"}
+          {error || "Dados não encontrados"}
         </div>
         <a href="/contracts" className="mt-4 inline-block text-sm text-primary hover:underline">
           Voltar para lista
