@@ -31,12 +31,12 @@ const ACTION_LABELS: Record<string, string> = {
   edicao: "Contrato editado",
   envio_email: "E-mail enviado",
   envio_assinatura: "Enviado p/ assinatura",
-  envio_copia_financeiro: "Copia enviada ao financeiro",
-  envio_participacao_assinatura: "Ficha de participacao enviada",
+  envio_copia_financeiro: "Cópia enviada ao financeiro",
+  envio_participacao_assinatura: "Ficha de participação enviada",
   envio_participacao_final: "Ficha enviada ao financeiro (assinado)",
-  envio_ficha_participacao: "Ficha de participacao enviada",
+  envio_ficha_participacao: "Ficha de participação enviada",
   mudanca_status: "Status alterado",
-  webhook_assinado: "Assinatura concluida",
+  webhook_assinado: "Assinatura concluída",
   webhook_recusado: "Assinatura recusada",
 };
 
@@ -166,7 +166,7 @@ export default function ContractDetailPage() {
     const signerName = contract.client_name;
 
     if (!signerEmail) {
-      setNotification({type: "error", message: "E-mail do contratante nao encontrado"});
+      setNotification({type: "error", message: "E-mail do contratante não encontrado"});
       return;
     }
 
@@ -216,7 +216,7 @@ export default function ContractDetailPage() {
     const recipientName = contract.client_name;
 
     if (!recipientEmail) {
-      setNotification({type: "error", message: "E-mail do contratante nao encontrado"});
+      setNotification({type: "error", message: "E-mail do contratante não encontrado"});
       return;
     }
 
@@ -258,7 +258,7 @@ export default function ContractDetailPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12">
         <div className="rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
-          {error || "Contrato nao encontrado"}
+          {error || "Contrato não encontrado"}
         </div>
         <a href="/contracts" className="mt-4 inline-block text-sm text-primary hover:underline">
           Voltar para lista
@@ -288,7 +288,7 @@ export default function ContractDetailPage() {
             {contract.client_name || "Contrato"}
           </h1>
           <p className="text-sm text-muted mt-1">
-            ID: {contract.contract_id.slice(0, 8)}... | Versao {contract.current_version}
+            ID: {contract.contract_id.slice(0, 8)}... | Versão {contract.current_version}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -578,7 +578,7 @@ export default function ContractDetailPage() {
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-card rounded-xl border border-border p-5">
-          <h3 className="font-display text-sm font-semibold text-primary-dark mb-3">Informacoes</h3>
+          <h3 className="font-display text-sm font-semibold text-primary-dark mb-3">Informações</h3>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted">Cliente</dt>
@@ -664,7 +664,7 @@ export default function ContractDetailPage() {
       {/* Audit Log */}
       <div className="bg-card rounded-xl border border-border p-5">
         <h3 className="font-display text-sm font-semibold text-primary-dark mb-4">
-          Historico de Acoes
+          Histórico de Ações
         </h3>
         <div className="relative">
           <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
@@ -691,7 +691,7 @@ export default function ContractDetailPage() {
               );
             })}
             {contract.audit_log.length === 0 && (
-              <p className="text-sm text-muted pl-10">Nenhuma acao registrada.</p>
+              <p className="text-sm text-muted pl-10">Nenhuma ação registrada.</p>
             )}
           </div>
         </div>
