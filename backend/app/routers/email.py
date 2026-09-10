@@ -81,7 +81,8 @@ class ParticipacaoEmailRequest(BaseModel):
                           "responsavel_gestao", "contato_financeiro_nome",
                           "contato_financeiro_email", "contato_financeiro_telefone",
                           "percentual_ou_valor", "contato_financeiro_cliente",
-                          "categoria_cliente"):
+                          "categoria_cliente", "base_tipo", "base_honorario",
+                          "base_label"):
                 if data.get(field) is None:
                     data[field] = ""
             for field in ("etiquetas", "listas_transmissao"):

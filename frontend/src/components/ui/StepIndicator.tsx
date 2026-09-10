@@ -36,7 +36,7 @@ export default function StepIndicator({
                       ? "bg-primary text-white shadow-md"
                       : isCompleted
                         ? "bg-success text-white"
-                        : "bg-gray-200 text-muted"
+                        : "bg-card text-muted border-2 border-border"
                   }`}
                 >
                   {isCompleted ? (
@@ -58,7 +58,7 @@ export default function StepIndicator({
               {idx < steps.length - 1 && (
                 <div
                   className={`flex-1 min-w-2 h-0.5 ${
-                    isCompleted ? "bg-success" : "bg-gray-200"
+                    isCompleted ? "bg-success" : "bg-border"
                   }`}
                 />
               )}
