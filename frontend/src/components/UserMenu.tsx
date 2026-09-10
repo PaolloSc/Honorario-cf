@@ -42,7 +42,7 @@ export default function UserMenu() {
               href="/admin"
               className="block px-4 py-2 text-sm text-foreground hover:bg-background transition"
             >
-              Administracao
+              Administração
             </a>
             <a
               href="/financeiro"
