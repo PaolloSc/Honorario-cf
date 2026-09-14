@@ -123,7 +123,7 @@ class DocuSealService:
             "message": f"Erro ao enviar para assinatura: {response.status_code} - {response.text}",
         }
  
-    async def get_submission_status(self, submission_id: int) -> dict:
+    async def get_submission_status(self, submission_id: int | str) -> dict:
         """Check the status of a submission."""
         async with httpx.AsyncClient() as client:
             response = await client.get(
