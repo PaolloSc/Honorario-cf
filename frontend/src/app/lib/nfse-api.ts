@@ -1,4 +1,4 @@
-import { getAuthHeaders } from "./api";
+import { fetchAutenticado } from "./api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
 
@@ -37,9 +37,11 @@ export interface HealthResponse {
 }
 
 async function _fetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${API_BASE}${path}`, {
+  // fetchAutenticado renova o id_token vencido e repete o request uma vez em
+  // caso de 401 — sem isso a tela quebrava com "401 Token expirado".
+  const r = await fetchAutenticado(`${API_BASE}${path}`, {
     ...init,
-    headers: { ...getAuthHeaders(), "Content-Type": "application/json", ...(init?.headers || {}) },
+    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
   if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
   return r.json();
