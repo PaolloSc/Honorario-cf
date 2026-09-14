@@ -155,8 +155,8 @@ def test_sincronizar_nao_conclui_com_assinatura_pendente(client, usuario_logado)
     _seed("sync-pend", "sub-sync-pend")
     email = _mock_email()
     pendente = {"submitters": [
-        {"role": "Contratante", "completed_at": "2026-09-14T11:00:00Z"},
-        {"role": "Contratado", "completed_at": None},
+        {"role": "Contratante", "name": "Cliente X", "email": "c@x.com", "completed_at": "2026-09-14T11:00:00Z"},
+        {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com", "completed_at": None},
     ]}
 
     with patch.object(docuseal_mod, "get_docuseal_service", return_value=_mock_docuseal(pendente)), \
@@ -164,9 +164,15 @@ def test_sincronizar_nao_conclui_com_assinatura_pendente(client, usuario_logado)
         r = client.post("/api/docuseal/sync-pend/sincronizar")
 
     assert r.status_code == 200
-    assert r.json()["alterado"] is False
+    body = r.json()
+    assert body["alterado"] is False
     assert _status_do_contrato("sync-pend") == "enviado"
     assert email.send_html_email.await_count == 0
+    # Quem assinou nao aparece; so quem falta, pra mostrar na tela do contrato.
+    assert body["pendentes"] == [
+        {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com"}
+    ]
+    assert "Carvalho & Furtado Advogados" in body["detalhe"]
 
 
 def test_sincronizar_registra_recusa(client, usuario_logado):

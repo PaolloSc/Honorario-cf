@@ -687,6 +687,20 @@ def _conclusao_docuseal(status_data: dict[str, Any]) -> str | None:
     return None
 
 
+def _pendentes_docuseal(status_data: dict[str, Any]) -> list[dict[str, str]]:
+    """Signatarios que ainda nao assinaram nem recusaram, pra mostrar na tela."""
+    submitters = status_data.get("submitters") or []
+    return [
+        {
+            "role": s.get("role", ""),
+            "name": s.get("name", ""),
+            "email": s.get("email", ""),
+        }
+        for s in submitters
+        if not s.get("completed_at") and not s.get("declined_at")
+    ]
+
+
 async def _aplicar_conclusao(
     contract: ContractDB,
     version: ContractVersionDB,
@@ -822,11 +836,18 @@ async def get_docuseal_status(
     )
 
 
+class PendenteSigner(BaseModel):
+    role: str
+    name: str
+    email: str
+
+
 class SincronizacaoResponse(BaseModel):
     contract_id: str
     status: str
     alterado: bool
     detalhe: str
+    pendentes: list[PendenteSigner] = []
 
 
 @router.post("/{contract_id}/sincronizar", response_model=SincronizacaoResponse)
@@ -867,11 +888,19 @@ async def sincronizar_status_assinatura(
 
     conclusao = _conclusao_docuseal(status_data)
     if not conclusao:
+        pendentes = _pendentes_docuseal(status_data)
+        nomes = ", ".join(f"{p['name']} ({p['role']})" for p in pendentes if p["name"])
+        detalhe = (
+            f"Ainda faltam assinar: {nomes}."
+            if nomes
+            else "Ainda há assinaturas pendentes no DocuSeal."
+        )
         return SincronizacaoResponse(
             contract_id=contract_id,
             status=contract.status,
             alterado=False,
-            detalhe="Ainda há assinaturas pendentes no DocuSeal.",
+            detalhe=detalhe,
+            pendentes=pendentes,
         )
 
     await _aplicar_conclusao(
