@@ -136,6 +136,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return marcarSeVencido(token, expiresAt, "sem_refresh_token");
       }
 
+      // Variavel faltando no ambiente vira client_secret="undefined" no corpo, e o
+      // Azure responde invalid_client — indistinguivel de segredo expirado. Sem
+      // esta checagem o diagnostico aponta para o lado errado.
+      if (
+        !process.env.AZURE_AD_TENANT_ID ||
+        !process.env.AZURE_AD_CLIENT_ID ||
+        !process.env.AZURE_AD_CLIENT_SECRET
+      ) {
+        console.error("[AUTH] Credenciais do Entra ausentes no ambiente");
+        return marcarSeVencido(token, expiresAt, "config_ausente");
+      }
+
       try {
         const url = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/token`;
         const body = new URLSearchParams({
@@ -150,12 +162,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!res.ok || !data.id_token) {
           const codigo = data?.error ?? `http_${res.status}`;
-          console.error(
-            "[AUTH] Falha ao renovar token:",
-            codigo,
-            data?.error_description ?? "",
+          const descricao = String(data?.error_description ?? "");
+          console.error("[AUTH] Falha ao renovar token:", codigo, descricao);
+          // O AADSTS diz qual das causas de invalid_client e' a real (segredo
+          // expirado, segredo errado, app nao encontrado). So' o numero vai para
+          // a tela — a descricao completa fica no log.
+          const aadsts = descricao.match(/AADSTS\d+/)?.[0];
+          return marcarSeVencido(
+            token,
+            expiresAt,
+            aadsts ? `${codigo}/${aadsts}` : String(codigo),
           );
-          return marcarSeVencido(token, expiresAt, String(codigo));
         }
 
         token.accessToken = data.id_token;
