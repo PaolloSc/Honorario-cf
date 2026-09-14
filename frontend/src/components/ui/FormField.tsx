@@ -160,9 +160,14 @@ interface ComboBoxProps {
   clearable?: boolean;
 }
 
+// Remove acentos pra busca "monica" achar "Mônica" tambem.
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 // Select com busca: a lista so' abre depois que a pessoa comeca a digitar (nao
-// so' ao clicar no campo) e filtra pelo INICIO do nome (ex.: "G" lista Gabriel,
-// Gabriela..., mas nao Chagas ou Carvalho).
+// so' ao clicar no campo) e filtra pelo INICIO do nome, ignorando acento (ex.:
+// "monica" ou "G" acham "Mônica"/"Gabriel", mas "G" nao acha "Chagas").
 export function ComboBox({ value, onChange, options, placeholder, error, clearable }: ComboBoxProps) {
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
@@ -172,8 +177,8 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
   const showList = editing && query.trim().length > 0;
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return options.filter((o) => o.label.toLowerCase().startsWith(q));
+    const q = semAcento(query.trim().toLowerCase());
+    return options.filter((o) => semAcento(o.label.toLowerCase()).startsWith(q));
   }, [options, query]);
 
   return (
