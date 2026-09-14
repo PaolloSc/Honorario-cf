@@ -347,6 +347,18 @@ export async function listColaboradores(opts?: { participavel?: boolean }) {
   );
 }
 
+// Pergunta ao DocuSeal se todos ja' assinaram e conclui o contrato. O webhook
+// e' o caminho normal, mas depende de configuracao externa; sem esta consulta o
+// contrato ficava preso em "Enviado p/ Assinatura" mesmo com tudo assinado.
+export async function sincronizarAssinatura(contractId: string) {
+  return request<{
+    contract_id: string;
+    status: string;
+    alterado: boolean;
+    detalhe: string;
+  }>(`/api/docuseal/${contractId}/sincronizar`, { method: "POST" });
+}
+
 export async function sendForSignature(data: {
   contract_id: string;
   signatarios: Array<{ email: string; name: string; role: string }>;

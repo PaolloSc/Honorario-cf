@@ -647,6 +647,72 @@ async def _send_participacao_to_financeiro(
 # ── Webhook (no auth — called externally by DocuSeal) ───────────
 
 
+def _conclusao_docuseal(status_data: dict[str, Any]) -> str | None:
+    """Traduz o estado de uma submissao do DocuSeal para o nosso status.
+
+    Devolve "assinado", "recusado" ou None (ainda em andamento). O DocuSeal
+    mudou o formato entre versoes — ora resume em `status`, ora so' marca
+    `completed_at` em cada signatario — entao olhamos os tres sinais.
+    """
+    submitters = status_data.get("submitters") or []
+    resumo = str(status_data.get("status") or "").lower()
+
+    if resumo == "declined" or any(s.get("declined_at") for s in submitters):
+        return "recusado"
+    if resumo == "completed" or status_data.get("completed_at"):
+        return "assinado"
+    if submitters and all(s.get("completed_at") for s in submitters):
+        return "assinado"
+    return None
+
+
+async def _aplicar_conclusao(
+    contract: ContractDB,
+    version: ContractVersionDB,
+    novo_status: str,
+    acao: str,
+    detalhe: str,
+    db: Session,
+) -> None:
+    """Grava o status final e, se assinado, manda a ficha ao financeiro.
+
+    Idempotente dos dois lados: o DocuSeal reentrega webhook, e a sincronizacao
+    pode rodar a cada abertura da pagina do contrato.
+    """
+    if contract.status != novo_status:
+        contract.status = novo_status
+        contract.updated_at = utcnow()
+        db.add(AuditLogDB(
+            contract_id=contract.contract_id,
+            action=acao,
+            detail=detalhe,
+            version_number=version.version_number,
+            created_at=utcnow(),
+        ))
+        db.commit()
+        logger.info("Contract %s updated to status '%s' (%s)", contract.contract_id, novo_status, acao)
+
+    if novo_status != "assinado":
+        return
+
+    ja_enviada = (
+        db.query(AuditLogDB)
+        .filter(
+            AuditLogDB.contract_id == contract.contract_id,
+            AuditLogDB.action == "envio_participacao_final",
+        )
+        .first()
+    )
+    if not ja_enviada:
+        await _send_participacao_to_financeiro(
+            contract.contract_id,
+            contract,
+            version,
+            db,
+            user_email=contract.created_by or "sistema",
+        )
+
+
 class DocuSealWebhookPayload(BaseModel):
     event_type: str
     data: dict[str, Any] = {}
@@ -686,37 +752,14 @@ async def docuseal_webhook(
 
     contract = db.query(ContractDB).filter(ContractDB.contract_id == version.contract_id).first()
     if contract:
-        contract.status = new_status
-        contract.updated_at = utcnow()
-        db.add(AuditLogDB(
-            contract_id=contract.contract_id,
-            action=f"webhook_{new_status}",
-            detail=f"DocuSeal webhook: {event_type} (submission {submission_id})",
-            version_number=version.version_number,
-            created_at=utcnow(),
-        ))
-        db.commit()
-        logger.info("Contract %s updated to status '%s'", contract.contract_id, new_status)
-
-        # Todas as partes assinaram -> enviar ficha de participacao ao financeiro.
-        # Idempotente: webhook pode ser reentregue pelo DocuSeal.
-        if event_type == "submission.completed":
-            ja_enviada = (
-                db.query(AuditLogDB)
-                .filter(
-                    AuditLogDB.contract_id == contract.contract_id,
-                    AuditLogDB.action == "envio_participacao_final",
-                )
-                .first()
-            )
-            if not ja_enviada:
-                await _send_participacao_to_financeiro(
-                    contract.contract_id,
-                    contract,
-                    version,
-                    db,
-                    user_email=contract.created_by or "sistema",
-                )
+        await _aplicar_conclusao(
+            contract,
+            version,
+            new_status,
+            f"webhook_{new_status}",
+            f"DocuSeal webhook: {event_type} (submission {submission_id})",
+            db,
+        )
 
     return {"status": "ok", "new_status": new_status}
 
@@ -749,10 +792,84 @@ async def get_docuseal_status(
 
     submission_id = latest_version.docuseal_submission_id
     service = get_docuseal_service()
-    status_data = await service.get_submission_status(int(submission_id))
+    status_data = await service.get_submission_status(submission_id)
 
     return DocuSealStatusResponse(
         contract_id=contract_id,
         submission_id=submission_id,
         status=status_data,
+    )
+
+
+class SincronizacaoResponse(BaseModel):
+    contract_id: str
+    status: str
+    alterado: bool
+    detalhe: str
+
+
+@router.post("/{contract_id}/sincronizar", response_model=SincronizacaoResponse)
+async def sincronizar_status_assinatura(
+    contract_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Le a submissao no DocuSeal e conclui o contrato se todos ja' assinaram.
+
+    O webhook e' o caminho normal, mas ele depende de configuracao externa
+    (DOCUSEAL_WEBHOOK_SECRET e o webhook cadastrado no DocuSeal) e de a chamada
+    chegar. Quando falta qualquer uma das duas pontas, o contrato ficava preso em
+    "enviado" para sempre, mesmo com todas as assinaturas colhidas — e so' dava
+    para destravar mudando o status na mao. Aqui o proprio sistema pergunta ao
+    DocuSeal em vez de esperar ser avisado.
+    """
+    contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contrato não encontrado")
+
+    version = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id)
+        .order_by(ContractVersionDB.version_number.desc())
+        .first()
+    )
+    if not version or not version.docuseal_submission_id:
+        raise HTTPException(status_code=404, detail="Contrato não foi enviado para assinatura")
+
+    status_anterior = contract.status
+    service = get_docuseal_service()
+    try:
+        status_data = await service.get_submission_status(version.docuseal_submission_id)
+    except Exception as e:
+        logger.warning("Falha ao consultar submissao %s: %s", version.docuseal_submission_id, e)
+        raise HTTPException(status_code=502, detail=f"Não foi possível consultar o DocuSeal: {e}")
+
+    conclusao = _conclusao_docuseal(status_data)
+    if not conclusao:
+        return SincronizacaoResponse(
+            contract_id=contract_id,
+            status=contract.status,
+            alterado=False,
+            detalhe="Ainda há assinaturas pendentes no DocuSeal.",
+        )
+
+    await _aplicar_conclusao(
+        contract,
+        version,
+        conclusao,
+        f"sync_{conclusao}",
+        f"Status confirmado junto ao DocuSeal (submission {version.docuseal_submission_id})",
+        db,
+    )
+
+    alterado = contract.status != status_anterior
+    return SincronizacaoResponse(
+        contract_id=contract_id,
+        status=contract.status,
+        alterado=alterado,
+        detalhe=(
+            "Todas as partes assinaram — contrato concluído."
+            if conclusao == "assinado"
+            else "Assinatura recusada no DocuSeal."
+        ) if alterado else "O status já estava atualizado.",
     )
