@@ -27,6 +27,11 @@ export default function AuthSync({ children }: { children: React.ReactNode }) {
           <span>
             Sua sessão expirou. Entre novamente para continuar salvando e
             enviando contratos.
+            {session?.errorCode && (
+              // Sem o motivo na tela nao da' pra distinguir sessao realmente
+              // vencida de problema de configuracao no Entra.
+              <code className="ml-2 opacity-70">({session.errorCode})</code>
+            )}
           </span>
           <button
             type="button"

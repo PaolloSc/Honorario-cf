@@ -11,6 +11,9 @@ declare module "next-auth" {
     // segue "logado" — mas todo request para a API volta 401 "Token expirado".
     // Este campo deixa o front perceber e pedir novo login em vez de travar.
     error?: "RefreshAccessTokenError";
+    // Codigo curto do motivo real da falha (ex. "invalid_grant"), so' para
+    // diagnostico: sem ele a faixa de erro nao diz nada acionavel.
+    errorCode?: string;
     expiresAt?: number;
     user: {
       id?: string;
@@ -35,15 +38,42 @@ function expDoJwt(jwtToken?: string | null): number | undefined {
   const payload = jwtToken.split(".")[1];
   if (!payload) return undefined;
   try {
-    const json = Buffer.from(
-      payload.replace(/-/g, "+").replace(/_/g, "/"),
-      "base64",
-    ).toString("utf8");
-    const exp = JSON.parse(json)?.exp;
+    // atob, nao Buffer: este modulo tambem e' empacotado para o middleware, que
+    // roda no Edge — la' Buffer nao existe e a leitura do exp falhava calada.
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const exp = JSON.parse(new TextDecoder().decode(bytes))?.exp;
     return typeof exp === "number" ? exp : undefined;
   } catch {
     return undefined;
   }
+}
+
+// Renova com esta antecedencia do vencimento. Nao adianta ser generoso: o que
+// garante token fresco na hora da chamada e' o garantirTokenValido() do cliente.
+// Margem larga so' alarga a janela em que varias abas tentam renovar juntas.
+const MARGEM_RENOVACAO_MS = 120_000;
+
+type TokenJWT = Record<string, unknown>;
+
+/**
+ * Falha de renovacao NAO e' o mesmo que sessao morta. Corrida entre abas, blip de
+ * rede ou refresh token ja' rotacionado pelo Entra sao transitorios: enquanto o
+ * id_token atual ainda vale, seguimos com ele e tentamos de novo depois. Marcar a
+ * sessao como expirada nesses casos foi o que pos a faixa vermelha na tela de
+ * quem tinha acabado de entrar.
+ */
+function marcarSeVencido(
+  token: TokenJWT,
+  expiresAt: number | undefined,
+  codigo: string,
+): TokenJWT {
+  const aindaVale = typeof expiresAt === "number" && Date.now() < expiresAt * 1000;
+  if (aindaVale) return token;
+  token.error = "RefreshAccessTokenError";
+  token.errorCode = codigo;
+  return token;
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -78,23 +108,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.refreshToken = account.refresh_token;
         token.expiresAt = expDoJwt(account.id_token) ?? account.expires_at;
         delete token.error;
+        delete token.errorCode;
         return token;
       }
 
-      // Margem de 5min: o refetch da sessao no cliente roda a cada 5min, entao o
-      // token precisa ser renovado antes de a janela seguinte comecar. Com os 60s
-      // de antes havia ate ~4min de buraco em que o front mandava token vencido.
       const expiresAt = typeof token.expiresAt === "number" ? token.expiresAt : undefined;
-      if (token.accessToken && expiresAt && Date.now() < expiresAt * 1000 - 300_000) {
+      if (
+        token.accessToken &&
+        expiresAt &&
+        Date.now() < expiresAt * 1000 - MARGEM_RENOVACAO_MS
+      ) {
         return token;
       }
+
+      // O middleware cobre quase toda rota e dispara este callback a cada
+      // requisicao, mas roda no Edge e nao persiste o cookie de forma confiavel.
+      // Renovar ali queima o refresh token — que o Entra rotaciona e invalida no
+      // primeiro uso — sem guardar o novo, e a requisicao seguinte levava
+      // invalid_grant. A renovacao fica só com o Node (/api/auth/session), que
+      // grava o resultado.
+      if (process.env.NEXT_RUNTIME === "edge") return token;
 
       if (!token.refreshToken) {
-        // Sem refresh token nao ha como renovar: marca a sessao para novo login
-        // em vez de devolver um accessToken vencido que so' gera 401.
-        delete token.accessToken;
-        token.error = "RefreshAccessTokenError";
-        return token;
+        // Pode ser que o Entra nao devolva refresh token (offline_access sem
+        // consentimento). Nao ha o que renovar, mas enquanto o id_token atual
+        // valer o usuario continua trabalhando.
+        return marcarSeVencido(token, expiresAt, "sem_refresh_token");
       }
 
       try {
@@ -107,15 +146,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           scope: "openid profile email User.Read offline_access",
         });
         const res = await fetch(url, { method: "POST", body, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
         if (!res.ok || !data.id_token) {
-          // AADSTS700082 (refresh token vencido por inatividade), consentimento
-          // revogado, senha trocada... Sem sinalizar, a sessao seguia "valida"
-          // com id_token morto e a API devolvia 401 ate' limpar cookie na mao.
-          throw new Error(
-            `${res.status} ${data?.error ?? "sem id_token"}: ${data?.error_description ?? ""}`,
+          const codigo = data?.error ?? `http_${res.status}`;
+          console.error(
+            "[AUTH] Falha ao renovar token:",
+            codigo,
+            data?.error_description ?? "",
           );
+          return marcarSeVencido(token, expiresAt, String(codigo));
         }
 
         token.accessToken = data.id_token;
@@ -124,10 +164,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           expDoJwt(data.id_token) ??
           Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600);
         delete token.error;
+        delete token.errorCode;
       } catch (e) {
-        console.error("[AUTH] Token refresh failed:", e);
-        delete token.accessToken;
-        token.error = "RefreshAccessTokenError";
+        // Rede/timeout: transitorio por definicao, nunca motivo pra derrubar
+        // uma sessao cujo token ainda esta' dentro da validade.
+        console.error("[AUTH] Erro de rede ao renovar token:", e);
+        return marcarSeVencido(token, expiresAt, "erro_de_rede");
       }
 
       return token;
@@ -136,6 +178,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.accessToken = token.accessToken as string | undefined;
       session.expiresAt = token.expiresAt as number | undefined;
       session.error = token.error as "RefreshAccessTokenError" | undefined;
+      session.errorCode = token.errorCode as string | undefined;
       if (token.sub) {
         session.user.id = token.sub;
       }

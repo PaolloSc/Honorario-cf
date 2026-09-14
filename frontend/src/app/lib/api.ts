@@ -71,11 +71,41 @@ async function renovarToken(): Promise<void> {
   }
 }
 
-/** Sessao acabou e nao da' para renovar sozinho — o usuario precisa logar de novo. */
+/**
+ * 401 que sobreviveu a uma renovacao. Nem todo 401 e' expiracao — o backend
+ * tambem recusa por audience errada, issuer divergente ou token sem e-mail.
+ * Chamar tudo de "sessao expirada" mandava o usuario relogar a toa; o motivo
+ * real vai junto para o erro dizer a verdade.
+ */
 export class SessaoExpiradaError extends Error {
-  constructor() {
-    super("Sua sessão expirou. Faça login novamente para continuar.");
+  readonly motivo: string;
+
+  constructor(motivo?: string) {
+    const expirou = !motivo || /expirado/i.test(motivo);
+    super(
+      expirou
+        ? "Sua sessão expirou. Faça login novamente para continuar."
+        : `A API recusou o acesso: ${motivo}`,
+    );
     this.name = "SessaoExpiradaError";
+    this.motivo = motivo ?? "";
+  }
+}
+
+/** `detail` do FastAPI, quando houver; senao o corpo cru. */
+async function motivoDaResposta(res: Response): Promise<string> {
+  try {
+    const texto = await res.clone().text();
+    try {
+      const json = JSON.parse(texto);
+      const detail = json?.detail;
+      if (typeof detail === "string") return detail;
+    } catch {
+      // corpo nao e' JSON — devolve como veio
+    }
+    return texto.slice(0, 200);
+  } catch {
+    return "";
   }
 }
 
@@ -124,11 +154,11 @@ export async function fetchAutenticado(
     // relogio do cliente estar adiantado. Renova uma vez e repete.
     const anterior = _accessToken;
     await renovarToken();
-    if (!_accessToken) throw new SessaoExpiradaError();
+    if (!_accessToken) throw new SessaoExpiradaError(await motivoDaResposta(res));
     if (_accessToken !== anterior) {
       res = await fetch(url, { ...init, headers: montarHeaders() });
     }
-    if (res.status === 401) throw new SessaoExpiradaError();
+    if (res.status === 401) throw new SessaoExpiradaError(await motivoDaResposta(res));
   }
 
   return res;
