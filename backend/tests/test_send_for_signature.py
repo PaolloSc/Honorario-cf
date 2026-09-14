@@ -708,8 +708,11 @@ class TestSendForSignatureEndpoint:
         advogado_roles = sorted(r for r in roles if r.startswith("Advogado"))
         assert advogado_roles == ["Advogado"]
 
-        # Contratado stays as-is (single)
-        assert "Contratado" in roles
+        # Contratado nao vira submitter proprio: o Advogado ja escolhido assina
+        # tambem por Carvalho & Furtado (uma so assinatura, sem convite duplicado).
+        assert "Contratado" not in roles
+        advogado_submitter = next(s for s in captured_signatarios if s["role"] == "Advogado")
+        assert advogado_submitter.get("also_contratado") is True
 
         # Cleanup
         if temp_file.exists():
