@@ -696,7 +696,7 @@ export default function Step7Envio({
         </div>
       )}
 
-      {(previewHtml || reviewPreviewHtml) && (
+      {(reviewPreviewHtml || previewHtml) && (
         <div>
           <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
             <h3 className="font-medium">Prévia do contrato (como ficará no Word/PDF)</h3>
@@ -709,7 +709,12 @@ export default function Step7Envio({
           </div>
           <div className="border border-border rounded-xl overflow-hidden bg-white">
             <iframe
-              srcDoc={highlightFindings(previewHtml || reviewPreviewHtml || "", reviewFindings)}
+              // reviewPreviewHtml reflete os dados que a IA de fato analisou (edicao
+              // atual, ainda nao salva); previewHtml e' o ultimo .docx SALVO no
+              // servidor (so' serve de fallback antes da revisao terminar ou apos
+              // gerar uma nova versao) — a prioridade errada mostrava o arquivo
+              // antigo como se fosse o que a IA revisou.
+              srcDoc={highlightFindings(reviewPreviewHtml || previewHtml || "", reviewFindings)}
               title="Prévia do contrato"
               sandbox=""
               className="w-full"
