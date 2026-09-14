@@ -37,61 +37,54 @@ def _enforce_readonly(request: Request, user: CurrentUser) -> CurrentUser:
     return user
 
 
-async def _get_jwks() -> dict:
-    global _jwks_cache
-    if _jwks_cache:
-        return _jwks_cache
+# Margem para desvio de relogio entre o Azure AD e este servidor. Sem ela, alguns
+# segundos de drift ja' derrubam um token recem-emitido com 401 "Token expirado".
+_CLOCK_SKEW_LEEWAY_S = 60
 
+
+def _fetch_jwks() -> dict:
+    """Busca as chaves publicas do tenant. Sincrono de proposito: _decode_token
+    inteiro e' sincrono e o FastAPI ja' o executa no threadpool."""
     tenant_id = settings.azure_tenant_id
     url = f"https://login.microsoftonline.com/{tenant_id}/discovery/v2.0/keys"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, timeout=10)
-        resp.raise_for_status()
-        _jwks_cache = resp.json()
+    resp = httpx.get(url, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _get_jwks(*, forcar: bool = False) -> dict:
+    global _jwks_cache
+    if _jwks_cache and not forcar:
         return _jwks_cache
+    _jwks_cache = _fetch_jwks()
+    return _jwks_cache
+
+
+def _rsa_key_do_kid(jwks: dict, kid: str | None):
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            return jwt.algorithms.RSAAlgorithm.from_jwk(key)
+    return None
 
 
 def _decode_token(token: str) -> dict:
     """Decode and validate Azure AD JWT token."""
-    global _jwks_cache
+    if not settings.azure_tenant_id:
+        raise HTTPException(503, "Autenticação não configurada")
+
     try:
         # First decode header to get kid
         header = jwt.get_unverified_header(token)
         kid = header.get("kid")
 
-        if not settings.azure_tenant_id:
-            raise HTTPException(503, "Autenticação não configurada")
+        jwks = _get_jwks()
+        rsa_key = _rsa_key_do_kid(jwks, kid)
 
-        # Production: validate with Azure AD JWKS
-        import asyncio
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            # We're in an async context but this is a sync function
-            # Use cached JWKS or fetch synchronously
-            jwks = _jwks_cache
-            if not jwks:
-                import httpx as httpx_sync
-
-                tenant_id = settings.azure_tenant_id
-                url = f"https://login.microsoftonline.com/{tenant_id}/discovery/v2.0/keys"
-                resp = httpx_sync.get(url, timeout=10)
-                resp.raise_for_status()
-                jwks = resp.json()
-                _jwks_cache = jwks
-        else:
-            jwks = asyncio.run(_get_jwks())
-
-        # Find the right key
-        rsa_key = None
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                rsa_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
-                break
+        if not rsa_key:
+            # O Azure rotaciona as chaves de assinatura. Com o cache eterno de
+            # antes, toda requisicao caia em 401 ate' alguem reiniciar o backend.
+            logger.info("kid %s ausente no JWKS em cache; recarregando", kid)
+            rsa_key = _rsa_key_do_kid(_get_jwks(forcar=True), kid)
 
         if not rsa_key:
             raise ValueError(f"Key {kid} not found in JWKS")
@@ -103,13 +96,22 @@ def _decode_token(token: str) -> dict:
             algorithms=["RS256"],
             audience=settings.azure_auth_client_id or settings.azure_client_id,
             issuer=f"https://login.microsoftonline.com/{tenant_id}/v2.0",
+            leeway=_CLOCK_SKEW_LEEWAY_S,
         )
         return payload
 
     except jwt.ExpiredSignatureError:
-        raise HTTPException(401, "Token expirado")
+        raise HTTPException(
+            401,
+            "Token expirado",
+            headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+        )
     except jwt.InvalidTokenError as e:
-        raise HTTPException(401, f"Token invalido: {e}")
+        raise HTTPException(
+            401,
+            f"Token invalido: {e}",
+            headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+        )
     except Exception as e:
         logger.error("Token decode error: %s", e)
         raise HTTPException(401, f"Erro de autenticacao: {e}")
