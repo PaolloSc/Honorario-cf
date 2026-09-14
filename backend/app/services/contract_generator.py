@@ -1200,6 +1200,7 @@ class ContractGenerator:
             # Generate signature fields matching the exact unique roles from signatarios
             # Group by base role for display ordering: Contratado first, then Advogado(s), then Contratante(s)
             contratado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratado")]
+            merged_contratado_sigs = [s for s in signatario_roles if s.get("also_contratado")]
             advogado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Advogado")]
             contratante_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratante")]
             testemunha_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Testemunha")]
@@ -1208,6 +1209,14 @@ class ContractGenerator:
             partes_entries: list[tuple[str, str]] = []
             for sig in contratado_sigs:
                 name = sig.get("name", "Contratado")
+                partes_entries.append((
+                    f"{{{{Assinatura {name};type=signature;role={sig['role']}}}}}",
+                    f"CONTRATADO: {name.upper()}",
+                ))
+            for sig in merged_contratado_sigs:
+                # Mesmo role do advogado abaixo: um campo a mais no doc, mas o mesmo
+                # submitter/assinatura do DocuSeal cobre os dois blocos.
+                name = sig.get("contratado_nome", "Carvalho & Furtado Advogados")
                 partes_entries.append((
                     f"{{{{Assinatura {name};type=signature;role={sig['role']}}}}}",
                     f"CONTRATADO: {name.upper()}",

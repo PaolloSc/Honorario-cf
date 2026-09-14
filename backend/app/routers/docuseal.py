@@ -210,12 +210,20 @@ def _patch_docx_with_signatures(
 
         # Add ALL signature fields to ensure consistency
         contratado_sigs = [s for s in signatarios if s.get("role", "").startswith("Contratado")]
+        merged_contratado_sigs = [s for s in signatarios if s.get("also_contratado")]
         advogado_sigs = [s for s in signatarios if s.get("role", "").startswith("Advogado")]
         contratante_sigs = [s for s in signatarios if s.get("role", "").startswith("Contratante")]
 
         for sig in contratado_sigs:
             role = sig["role"]
             name = sig.get("name", "Contratado")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
+            doc.add_paragraph(f"CONTRATADO: {name.upper()}")
+            doc.add_paragraph()
+
+        for sig in merged_contratado_sigs:
+            role = sig["role"]
+            name = sig.get("contratado_nome", "Carvalho & Furtado Advogados")
             doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATADO: {name.upper()}")
             doc.add_paragraph()
@@ -270,19 +278,32 @@ async def send_for_signature(
         # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
 
-        # Always include C&F as "Contratado" role (the firm). No contrato de
-        # consumidor a contratada e' a Monica — o e-mail segue o do escritorio,
-        # mas o nome no DocuSeal/documento nao pode ser o da sociedade.
+        # O escritorio (papel "Contratado") assina pelo mesmo advogado ja escolhido
+        # pra assinar como "Advogado", quando houver um — uma so assinatura cobre os
+        # dois blocos do documento (evita mandar 2 convites pra mesma pessoa e livra
+        # o e-mail generico contrato@... de ser destinatario de assinatura). So volta
+        # a criar um submitter proprio pro C&F quando nenhum advogado foi escolhido.
+        #
+        # NAO se aplica ao contrato de consumidor: ali "Contratado" e' sempre a Monica
+        # por nome/CPF/OAB (CONTRATADA_NOME/CPF/OAB fixos) — mesclar com um advogado
+        # diferente estamparia o CPF dela num bloco assinado por outra pessoa.
         cf_already_included = any(s.get("role") == "Contratado" for s in all_signatarios)
+        advogado_sig = (
+            next((s for s in all_signatarios if s.get("role", "").startswith("Advogado")), None)
+            if not eh_consumidor
+            else None
+        )
         if not cf_already_included:
-            all_signatarios.append({
-                "email": settings.cf_signer_email,
-                "name": CONTRATADA_NOME if eh_consumidor else "Carvalho & Furtado Advogados",
-                "role": "Contratado",
-            })
-
-        # O advogado que preenche o formulario NAO assina automaticamente: quem assina
-        # pelo escritorio e' o C&F (Contratado) + os advogados escolhidos no envio.
+            contratado_nome = CONTRATADA_NOME if eh_consumidor else "Carvalho & Furtado Advogados"
+            if advogado_sig is not None:
+                advogado_sig["also_contratado"] = True
+                advogado_sig["contratado_nome"] = contratado_nome
+            else:
+                all_signatarios.append({
+                    "email": settings.cf_signer_email,
+                    "name": contratado_nome,
+                    "role": "Contratado",
+                })
 
         # Testemunha 1 fixa (financeiro): injetada em toda submissao.
         # Inserida ANTES de eventuais testemunhas do payload p/ que a dedup a nomeie "Testemunha 1".
