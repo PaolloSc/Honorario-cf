@@ -22,9 +22,69 @@ function resolveApiBase(): string {
 const API_BASE = resolveApiBase();
 
 let _accessToken: string | null = null;
+let _expiresAt: number | null = null; // epoch em segundos, lido do proprio JWT
+
+/** `exp` do JWT sem validar assinatura — so' para saber quando renovar. */
+function expDoJwt(jwtToken: string): number | null {
+  const payload = jwtToken.split(".")[1];
+  if (!payload) return null;
+  try {
+    // base64url vem sem padding, e o id_token traz `name` acentuado: sem repor
+    // o "=" e sem decodificar UTF-8, o parse falha e a renovacao proativa some.
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const exp = JSON.parse(new TextDecoder().decode(bytes))?.exp;
+    return typeof exp === "number" ? exp : null;
+  } catch {
+    return null;
+  }
+}
 
 export function setAccessToken(token: string | null) {
   _accessToken = token;
+  _expiresAt = token ? expDoJwt(token) : null;
+}
+
+/** Token ausente ou a menos de 60s de vencer (margem pro tempo de rede). */
+function tokenVencido(): boolean {
+  if (!_accessToken) return true;
+  if (_expiresAt === null) return false; // sem exp legivel: deixa o backend julgar
+  return Date.now() >= _expiresAt * 1000 - 60_000;
+}
+
+/**
+ * Puxa a sessao do next-auth, o que dispara o callback `jwt` no servidor e
+ * renova o id_token junto ao Azure. O `refetchInterval` do SessionProvider so'
+ * roda com a aba viva e em foco — depois de uma reuniao, de o notebook dormir ou
+ * de a aba ficar horas no fundo, o token em memoria ja' venceu e a API responde
+ * 401 "Token expirado". Aqui a renovacao acontece na hora da chamada.
+ */
+async function renovarToken(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { getSession } = await import("next-auth/react");
+    const session = await getSession();
+    setAccessToken(session?.accessToken || null);
+  } catch (e) {
+    console.error("[AUTH] Falha ao renovar a sessao:", e);
+  }
+}
+
+/** Sessao acabou e nao da' para renovar sozinho — o usuario precisa logar de novo. */
+export class SessaoExpiradaError extends Error {
+  constructor() {
+    super("Sua sessão expirou. Faça login novamente para continuar.");
+    this.name = "SessaoExpiradaError";
+  }
+}
+
+function modoDev(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    process.env.NEXT_PUBLIC_DEV_MODE === "true" &&
+    !!localStorage.getItem("dev_user_email")
+  );
 }
 
 export function getAuthHeaders(): Record<string, string> {
@@ -32,6 +92,46 @@ export function getAuthHeaders(): Record<string, string> {
   if (_accessToken) h["Authorization"] = `Bearer ${_accessToken}`;
   Object.assign(h, getDevHeaders());
   return h;
+}
+
+/** Renova o id_token se ele ja' venceu, antes de qualquer chamada a API. */
+export async function garantirTokenValido(): Promise<void> {
+  if (!modoDev() && tokenVencido()) {
+    await renovarToken();
+  }
+}
+
+/**
+ * fetch autenticado com token sempre valido: renova antes de mandar se ja' venceu
+ * e, se mesmo assim voltar 401, renova e tenta uma unica vez mais. Recebe a URL ja'
+ * montada para cada cliente (api/nfse/finance) manter sua propria base.
+ */
+export async function fetchAutenticado(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  await garantirTokenValido();
+
+  const montarHeaders = (): Record<string, string> => ({
+    ...((init?.headers as Record<string, string>) || {}),
+    ...getAuthHeaders(),
+  });
+
+  let res = await fetch(url, { ...init, headers: montarHeaders() });
+
+  if (res.status === 401 && !modoDev()) {
+    // O token pode ter vencido entre a montagem e a chegada do request, ou o
+    // relogio do cliente estar adiantado. Renova uma vez e repete.
+    const anterior = _accessToken;
+    await renovarToken();
+    if (!_accessToken) throw new SessaoExpiradaError();
+    if (_accessToken !== anterior) {
+      res = await fetch(url, { ...init, headers: montarHeaders() });
+    }
+    if (res.status === 401) throw new SessaoExpiradaError();
+  }
+
+  return res;
 }
 
 function getDevHeaders(): Record<string, string> {
@@ -52,6 +152,11 @@ async function request<T>(
   options?: RequestInit
 ): Promise<T> {
   let res: Response;
+
+  // Renova antes de armar o timeout: a ida ate' o /api/auth/session nao pode
+  // consumir os 8s reservados para a chamada da API.
+  await garantirTokenValido();
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
@@ -59,18 +164,15 @@ async function request<T>(
     "Content-Type": "application/json",
     ...((options?.headers as Record<string, string>) || {}),
   };
-  if (_accessToken) {
-    headers["Authorization"] = `Bearer ${_accessToken}`;
-  }
-  Object.assign(headers, getDevHeaders());
 
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetchAutenticado(`${API_BASE}${path}`, {
       ...options,
       signal: options?.signal || controller.signal,
       headers,
     });
   } catch (err) {
+    if (err instanceof SessaoExpiradaError) throw err;
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error(`Tempo esgotado ao conectar na API (${API_BASE}).`);
     }
@@ -137,9 +239,9 @@ export async function podeUsarConsumidor() {
 
 // Previa do contrato de consumidor antes de gravar: nada e' persistido.
 export async function previewContratoConsumidor(data: unknown, signal?: AbortSignal) {
-  const res = await fetch(`${API_BASE}/api/contract/preview-consumidor`, {
+  const res = await fetchAutenticado(`${API_BASE}/api/contract/preview-consumidor`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
     signal,
   });
@@ -150,13 +252,8 @@ export async function previewContratoConsumidor(data: unknown, signal?: AbortSig
 }
 
 export async function downloadContract(contractId: string) {
-  const headers: Record<string, string> = {};
-  if (_accessToken) {
-    headers["Authorization"] = `Bearer ${_accessToken}`;
-  }
-  const res = await fetch(
-    `${API_BASE}/api/contract/${contractId}/download`,
-    { headers }
+  const res = await fetchAutenticado(
+    `${API_BASE}/api/contract/${contractId}/download`
   );
   if (!res.ok) {
     const body = await res.text();
@@ -166,9 +263,7 @@ export async function downloadContract(contractId: string) {
 }
 
 export async function previewContract(contractId: string) {
-  const res = await fetch(`${API_BASE}/api/contract/${contractId}/preview`, {
-    headers: getAuthHeaders(),
-  });
+  const res = await fetchAutenticado(`${API_BASE}/api/contract/${contractId}/preview`);
   if (!res.ok) {
     throw new Error(`Erro ao carregar visualização: ${res.status}`);
   }
