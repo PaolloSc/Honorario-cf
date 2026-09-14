@@ -95,6 +95,7 @@ export default function ContractDetailPage() {
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   const [sincronizando, setSincronizando] = useState(false);
+  const [pendentes, setPendentes] = useState<Array<{ role: string; name: string; email: string }>>([]);
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -124,7 +125,9 @@ export default function ContractDetailPage() {
     let cancelado = false;
     sincronizarAssinatura(contractId)
       .then((r) => {
-        if (!cancelado && r.alterado) fetchContract();
+        if (cancelado) return;
+        if (r.alterado) fetchContract();
+        else setPendentes(r.pendentes);
       })
       .catch(() => {
         // Silencioso: e' uma conferencia de fundo. A falha nao pode atrapalhar
@@ -180,6 +183,7 @@ export default function ContractDetailPage() {
     try {
       const r = await sincronizarAssinatura(contractId);
       if (r.alterado) fetchContract();
+      else setPendentes(r.pendentes);
       // O componente de notificacao so' tem sucesso/erro; consultar o DocuSeal e
       // descobrir que nada mudou nao e' erro. O texto do backend ja' diferencia.
       setNotification({ type: "success", message: r.detalhe });
@@ -416,6 +420,19 @@ export default function ContractDetailPage() {
           </>
         )}
       </div>
+
+      {contract.status === "enviado" && pendentes.length > 0 && (
+        <div className="mb-8 -mt-4 px-4 py-3 bg-warning/10 border border-warning/30 rounded-lg text-sm">
+          <p className="font-medium text-warning mb-1">Falta assinar:</p>
+          <ul className="space-y-0.5 text-foreground">
+            {pendentes.map((p, i) => (
+              <li key={i}>
+                {p.name || p.email} <span className="text-muted">({p.role})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Inline contract preview */}
       {showPreview && previewHtml && (

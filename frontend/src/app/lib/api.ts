@@ -356,6 +356,7 @@ export async function sincronizarAssinatura(contractId: string) {
     status: string;
     alterado: boolean;
     detalhe: string;
+    pendentes: Array<{ role: string; name: string; email: string }>;
   }>(`/api/docuseal/${contractId}/sincronizar`, { method: "POST" });
 }
 
