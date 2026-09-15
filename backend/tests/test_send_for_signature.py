@@ -15,7 +15,7 @@ from fastapi import HTTPException
 
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
-from app.database import ContractDB, ContractVersionDB, SessionLocal, utcnow
+from app.database import ColaboradorDB, ContractDB, ContractVersionDB, SessionLocal, utcnow
 from app.main import app
 from app.routers.docuseal import _resolve_contract_filepath
 
@@ -708,11 +708,10 @@ class TestSendForSignatureEndpoint:
         advogado_roles = sorted(r for r in roles if r.startswith("Advogado"))
         assert advogado_roles == ["Advogado"]
 
-        # Contratado nao vira submitter proprio: o Advogado ja escolhido assina
-        # tambem por Carvalho & Furtado (uma so assinatura, sem convite duplicado).
-        assert "Contratado" not in roles
-        advogado_submitter = next(s for s in captured_signatarios if s["role"] == "Advogado")
-        assert advogado_submitter.get("also_contratado") is True
+        # Sem socio identificado na participacao (form_data_json="{}"), o
+        # Contratado cai no e-mail generico do escritorio — comportamento coberto
+        # em detalhe por TestContratadoAssinaComoSocio.
+        assert "Contratado" in roles
 
         # Cleanup
         if temp_file.exists():
@@ -1067,3 +1066,118 @@ class TestSendForSignatureEndpoint:
 
         if temp_file.exists():
             temp_file.unlink()
+
+
+class TestContratadoAssinaComoSocio:
+    """Papel "Contratado" assina pelo socio responsavel pela participacao do
+    contrato — nao pelo e-mail generico do escritorio — e nao duplica convite
+    quando esse socio ja assina como "Advogado"."""
+
+    @pytest.fixture(autouse=True)
+    def override_auth(self):
+        app.dependency_overrides[get_current_user] = _fake_user
+        yield
+        app.dependency_overrides.pop(get_current_user, None)
+
+    def _seed_colaboradores(self):
+        db = SessionLocal()
+        try:
+            db.add(ColaboradorDB(nome="Monica Socia", email="monica@cf.com", papel="socio", ordem=1))
+            db.add(ColaboradorDB(nome="Bruno Advogado", email="bruno@cf.com", papel="advogado", ordem=2))
+            db.commit()
+        finally:
+            db.close()
+
+    def _send(self, client, contract_id, signatarios, participacao):
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        temp_file = output_dir / f"contrato_{contract_id}.docx"
+        temp_file.write_bytes(b"content with {{field|signature|req}} tags")
+
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(
+                db, contract_id, file_path=str(temp_file),
+                form_data_json=json.dumps({"participacao": participacao}),
+            )
+        finally:
+            db.close()
+
+        mock_service = MagicMock()
+        mock_service.create_template_from_docx = AsyncMock(
+            return_value={"id": 123, "name": "Template"}
+        )
+        captured_signatarios = []
+
+        async def capture_send(template_id, signatarios, send_email=True):
+            captured_signatarios.extend(signatarios)
+            return {
+                "success": True,
+                "submission": {"id": 789, "submitters": []},
+                "message": "ok",
+            }
+
+        mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
+
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
+             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={"contract_id": contract_id, "signatarios": signatarios},
+            )
+        assert response.status_code == 200, response.text
+        if temp_file.exists():
+            temp_file.unlink()
+        return captured_signatarios
+
+    def test_gestor_socio_ja_assinando_como_advogado_mescla(self, client):
+        """Responsavel pela gestao e' socio e ja foi escolhido como Advogado: uma so' assinatura."""
+        self._seed_colaboradores()
+        signatarios = self._send(
+            client, "sig-socio-001",
+            [{"email": "monica@cf.com", "name": "Monica Socia", "role": "Advogado"}],
+            {"responsavel_gestao": "Monica Socia"},
+        )
+        roles = [s["role"] for s in signatarios]
+        assert "Contratado" not in roles
+        monica = next(s for s in signatarios if s["role"] == "Advogado")
+        assert monica["email"] == "monica@cf.com"
+        assert monica.get("also_contratado") is True
+
+    def test_gestor_socio_nao_escolhido_como_advogado_ganha_submitter_proprio(self, client):
+        """Responsavel pela gestao e' socio mas ninguem foi escolhido como Advogado: ele assina so' o Contratado."""
+        self._seed_colaboradores()
+        signatarios = self._send(
+            client, "sig-socio-002",
+            [],
+            {"responsavel_gestao": "Monica Socia"},
+        )
+        contratado = next(s for s in signatarios if s["role"] == "Contratado")
+        assert contratado["email"] == "monica@cf.com"
+        assert not contratado.get("also_contratado")
+
+    def test_gestor_nao_socio_usa_participante_socio(self, client):
+        """Responsavel pela gestao nao e' socio: cai pro primeiro socio marcado pra receber participacao."""
+        self._seed_colaboradores()
+        signatarios = self._send(
+            client, "sig-socio-003",
+            [],
+            {
+                "responsavel_gestao": "Bruno Advogado",
+                "participantes": [{"nome": "Bruno Advogado"}, {"nome": "Monica Socia"}],
+            },
+        )
+        contratado = next(s for s in signatarios if s["role"] == "Contratado")
+        assert contratado["email"] == "monica@cf.com"
+
+    def test_sem_socio_identificado_usa_email_generico(self, client):
+        """Nem gestao nem participantes apontam pra um socio: mantem o e-mail generico do escritorio."""
+        self._seed_colaboradores()
+        signatarios = self._send(
+            client, "sig-socio-004",
+            [],
+            {"responsavel_gestao": "Bruno Advogado", "participantes": [{"nome": "Bruno Advogado"}]},
+        )
+        contratado = next(s for s in signatarios if s["role"] == "Contratado")
+        assert contratado["email"] == settings.cf_signer_email
