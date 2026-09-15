@@ -253,6 +253,42 @@ def _patch_docx_with_signatures(
     return output_path
 
 
+def _socio_para_assinar_pelo_escritorio(form_data_json: str | None, db: Session):
+    """Quem assina o papel 'Contratado' pelo Carvalho & Furtado.
+
+    Prioridade: o responsavel pela gestao do contrato, se for socio; senao,
+    o primeiro socio entre os advogados marcados pra receber participacao.
+    Nenhum dos dois precisa ter sido escolhido como "Advogado" no envio —
+    esta busca e' independente disso.
+    """
+    from app.database import ColaboradorDB
+    from app.models.contract import Participacao
+
+    if not form_data_json:
+        return None
+    try:
+        form_data = json.loads(form_data_json)
+        participacao = Participacao(**(form_data.get("participacao") or {}))
+    except Exception:
+        return None
+
+    nomes_candidatos = [participacao.responsavel_gestao] + [
+        p.nome for p in participacao.participantes
+    ]
+    for nome in nomes_candidatos:
+        nome = (nome or "").strip()
+        if not nome:
+            continue
+        colaborador = (
+            db.query(ColaboradorDB)
+            .filter(ColaboradorDB.nome == nome, ColaboradorDB.papel == "socio")
+            .first()
+        )
+        if colaborador and colaborador.email:
+            return colaborador
+    return None
+
+
 @router.post("/send-for-signature", response_model=DocuSealResponse)
 async def send_for_signature(
     data: DocuSealRequest,
@@ -278,26 +314,46 @@ async def send_for_signature(
         # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
 
-        # O escritorio (papel "Contratado") assina pelo mesmo advogado ja escolhido
-        # pra assinar como "Advogado", quando houver um — uma so assinatura cobre os
-        # dois blocos do documento (evita mandar 2 convites pra mesma pessoa e livra
-        # o e-mail generico contrato@... de ser destinatario de assinatura). So volta
-        # a criar um submitter proprio pro C&F quando nenhum advogado foi escolhido.
+        # O escritorio (papel "Contratado") assina pelo socio responsavel: o
+        # responsavel pela gestao do contrato, se for socio, senao o primeiro
+        # socio marcado pra receber participacao. Se essa pessoa ja estiver
+        # assinando como "Advogado" (mesmo e-mail), mescla numa unica assinatura
+        # — nao manda 2 convites pra mesma pessoa. Caso contrario ela ganha um
+        # submitter proprio so' pro papel "Contratado". So' cai no e-mail
+        # generico contrato@... quando nenhum socio e' identificado.
         #
         # NAO se aplica ao contrato de consumidor: ali "Contratado" e' sempre a Monica
-        # por nome/CPF/OAB (CONTRATADA_NOME/CPF/OAB fixos) — mesclar com um advogado
-        # diferente estamparia o CPF dela num bloco assinado por outra pessoa.
+        # por nome/CPF/OAB (CONTRATADA_NOME/CPF/OAB fixos) — trocar por outro socio
+        # estamparia o CPF dela num bloco assinado por outra pessoa.
         cf_already_included = any(s.get("role") == "Contratado" for s in all_signatarios)
-        advogado_sig = (
-            next((s for s in all_signatarios if s.get("role", "").startswith("Advogado")), None)
-            if not eh_consumidor
-            else None
+        socio_escritorio = (
+            None if eh_consumidor else _socio_para_assinar_pelo_escritorio(
+                latest_ver.form_data_json if latest_ver else None, db
+            )
         )
         if not cf_already_included:
             contratado_nome = CONTRATADA_NOME if eh_consumidor else "Carvalho & Furtado Advogados"
+            advogado_sig = (
+                next(
+                    (
+                        s for s in all_signatarios
+                        if s.get("role", "").startswith("Advogado")
+                        and s.get("email", "").lower() == socio_escritorio.email.lower()
+                    ),
+                    None,
+                )
+                if socio_escritorio
+                else None
+            )
             if advogado_sig is not None:
                 advogado_sig["also_contratado"] = True
                 advogado_sig["contratado_nome"] = contratado_nome
+            elif socio_escritorio is not None:
+                all_signatarios.append({
+                    "email": socio_escritorio.email,
+                    "name": contratado_nome,
+                    "role": "Contratado",
+                })
             else:
                 all_signatarios.append({
                     "email": settings.cf_signer_email,
