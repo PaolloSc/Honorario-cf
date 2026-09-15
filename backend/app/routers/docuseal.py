@@ -8,11 +8,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
-from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
+from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
 from app.services.docuseal import DocuSealService
 from app.utils.participacao import linhas_participacao
@@ -261,7 +262,6 @@ def _socio_para_assinar_pelo_escritorio(form_data_json: str | None, db: Session)
     Nenhum dos dois precisa ter sido escolhido como "Advogado" no envio —
     esta busca e' independente disso.
     """
-    from app.database import ColaboradorDB
     from app.models.contract import Participacao
 
     if not form_data_json:
@@ -287,6 +287,39 @@ def _socio_para_assinar_pelo_escritorio(form_data_json: str | None, db: Session)
         if colaborador and colaborador.email:
             return colaborador
     return None
+
+
+def _nome_testemunha1(db: Session) -> str:
+    """Nome da Testemunha 1 fixa, com o cadastro mandando na variavel de ambiente.
+
+    O nome vivia so' em TESTEMUNHA1_NOME e divergiu do roster de colaboradores:
+    o contrato saiu assinado com o sobrenome errado durante meses. Pior, corrigir
+    exigia deploy, e um valor velho no ambiente calava o default do codigo.
+
+    Agora o cadastro (editavel em /admin/colaboradores) e' a fonte, e a config
+    fica so' de reserva para quando a pessoa nao estiver no roster.
+    """
+    colaborador = (
+        db.query(ColaboradorDB)
+        .filter(
+            func.lower(ColaboradorDB.email) == settings.testemunha1_email.lower(),
+            ColaboradorDB.ativo.is_(True),
+        )
+        .first()
+    )
+    if not colaborador or not colaborador.nome:
+        return settings.testemunha1_nome
+
+    if colaborador.nome != settings.testemunha1_nome:
+        # Divergencia visivel em vez de silenciosa: o cadastro vence, mas fica
+        # registrado que TESTEMUNHA1_NOME esta' desatualizado no ambiente.
+        logger.warning(
+            "TESTEMUNHA1_NOME (%r) diverge do cadastro (%r) para %s; usando o cadastro",
+            settings.testemunha1_nome,
+            colaborador.nome,
+            settings.testemunha1_email,
+        )
+    return colaborador.nome
 
 
 @router.post("/send-for-signature", response_model=DocuSealResponse)
@@ -375,7 +408,7 @@ async def send_for_signature(
             )
             all_signatarios.insert(first_testemunha_idx, {
                 "email": settings.testemunha1_email,
-                "name": settings.testemunha1_nome,
+                "name": _nome_testemunha1(db),
                 "role": "Testemunha",
             })
 
