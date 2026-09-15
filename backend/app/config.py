@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # Testemunha 1 fixa (financeiro) injetada em toda submissao p/ assinatura.
     # Email unico (financeiro_email pode ser lista, nao serve p/ submitter DocuSeal).
-    testemunha1_nome: str = os.getenv("TESTEMUNHA1_NOME", "Lilian Siqueira")
+    testemunha1_nome: str = os.getenv("TESTEMUNHA1_NOME", "Lilian Silveira Correa")
     testemunha1_email: str = os.getenv("TESTEMUNHA1_EMAIL", "financeiro@carvalhofurtadoadv.com.br")
 
     bank_account_info: str = os.getenv(
