@@ -6,6 +6,28 @@ import Logo from "@/components/ui/Logo";
 
 export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
   const [pending, setPending] = useState(false);
+  const [falhou, setFalhou] = useState(false);
+
+  // signIn() era chamado sem tratar o retorno: quando a chamada morria no
+  // navegador (cookie de CSRF corrompido e' o caso comum), o botao ficava
+  // "Redirecionando…" para sempre, desabilitado e sem dizer nada. A pessoa
+  // ficava sem saida numa tela que parecia estar carregando.
+  const entrar = () => {
+    setPending(true);
+    setFalhou(false);
+
+    // Caminho feliz: a pagina navega para a Microsoft e este timer morre junto.
+    const semResposta = setTimeout(() => {
+      setPending(false);
+      setFalhou(true);
+    }, 8000);
+
+    Promise.resolve(signIn("microsoft-entra-id", { callbackUrl })).catch(() => {
+      clearTimeout(semResposta);
+      setPending(false);
+      setFalhou(true);
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -25,10 +47,7 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         <button
           type="button"
           disabled={pending}
-          onClick={() => {
-            setPending(true);
-            signIn("microsoft-entra-id", { callbackUrl });
-          }}
+          onClick={entrar}
           className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-primary-dark text-white rounded-lg font-medium hover:bg-primary-dark/90 transition shadow-sm disabled:opacity-60"
         >
           <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none">
@@ -39,6 +58,19 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           </svg>
           {pending ? "Redirecionando…" : "Entrar com Microsoft"}
         </button>
+
+        {falhou && (
+          <div
+            role="alert"
+            className="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
+          >
+            <p className="font-medium">Não conseguimos abrir o login da Microsoft.</p>
+            <p className="mt-1">
+              Costuma ser cookie antigo deste site. Abra uma janela anônima, ou
+              limpe os dados do site no navegador, e tente de novo.
+            </p>
+          </div>
+        )}
 
         <p className="text-xs text-muted text-center mt-6">
           Acesso restrito ao Carvalho &amp; Furtado Advogados.
