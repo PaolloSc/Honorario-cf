@@ -192,7 +192,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string | undefined;
+      // Token marcado como morto (passou do proprio exp e nao renovou) nao vai
+      // para o cliente. Manter o token quando a renovacao falha e' proposital
+      // enquanto ele ainda vale — mas depois de vencido ele so' gera erro cru na
+      // tela ("Key ... not found in JWKS" quando o Azure ja' rotacionou a chave
+      // que o assinou), em vez do aviso de sessao expirada que o usuario entende.
+      session.accessToken = token.error
+        ? undefined
+        : (token.accessToken as string | undefined);
       session.expiresAt = token.expiresAt as number | undefined;
       session.error = token.error as "RefreshAccessTokenError" | undefined;
       session.errorCode = token.errorCode as string | undefined;
