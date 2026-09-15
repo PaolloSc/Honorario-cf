@@ -4,7 +4,13 @@ import { signIn } from "next-auth/react";
 import { useState } from "react";
 import Logo from "@/components/ui/Logo";
 
-export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
+export default function LoginForm({
+  callbackUrl,
+  limpo = false,
+}: {
+  callbackUrl: string;
+  limpo?: boolean;
+}) {
   const [pending, setPending] = useState(false);
   const [falhou, setFalhou] = useState(false);
 
@@ -59,6 +65,12 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           {pending ? "Redirecionando…" : "Entrar com Microsoft"}
         </button>
 
+        {limpo && !falhou && (
+          <p className="mt-4 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary-dark">
+            Sessão anterior apagada. Pode entrar normalmente.
+          </p>
+        )}
+
         {falhou && (
           <div
             role="alert"
@@ -66,9 +78,20 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           >
             <p className="font-medium">Não conseguimos abrir o login da Microsoft.</p>
             <p className="mt-1">
-              Costuma ser cookie antigo deste site. Abra uma janela anônima, ou
-              limpe os dados do site no navegador, e tente de novo.
+              {limpo
+                ? "A sessão já foi apagada e mesmo assim não funcionou, então não é cookie. Avise o suporte."
+                : "Costuma ser resquício de uma sessão antiga deste site."}
             </p>
+            {!limpo && (
+              // Link, nao fetch: sao cookies HttpOnly, quem apaga e' o servidor
+              // na resposta da navegacao.
+              <a
+                href="/api/auth/limpar"
+                className="mt-3 inline-block rounded-md bg-danger px-3 py-1.5 font-medium text-white transition hover:opacity-90"
+              >
+                Limpar sessão e tentar de novo
+              </a>
+            )}
           </div>
         )}
 
