@@ -87,7 +87,18 @@ def _decode_token(token: str) -> dict:
             rsa_key = _rsa_key_do_kid(_get_jwks(forcar=True), kid)
 
         if not rsa_key:
-            raise ValueError(f"Key {kid} not found in JWKS")
+            # Recarregamos o JWKS e a chave continua ausente: o token foi
+            # assinado por uma chave que o Azure ja' aposentou, ou seja, e' bem
+            # mais velho que o proprio prazo de validade. Renovar nao resolve;
+            # so' um login novo. Mensagem no lugar do catch-all generico, que
+            # devolvia "Erro de autenticacao: Key ... not found in JWKS" para o
+            # advogado no meio do envio do contrato.
+            logger.warning("kid %s nao existe no JWKS do tenant; token obsoleto", kid)
+            raise HTTPException(
+                401,
+                "Sessão antiga: entre novamente para continuar",
+                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+            )
 
         tenant_id = settings.azure_tenant_id
         payload = jwt.decode(
@@ -100,6 +111,9 @@ def _decode_token(token: str) -> dict:
         )
         return payload
 
+    except HTTPException:
+        # 401 ja' formatado acima nao pode virar catch-all generico.
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             401,
