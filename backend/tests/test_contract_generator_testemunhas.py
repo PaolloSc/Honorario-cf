@@ -34,7 +34,7 @@ def test_digital_testemunha_fields_rendered():
     data = ContratoRequest(**_req())
     roles = [
         {"email": "c@a.com", "name": "Client", "role": "Contratante"},
-        {"email": "lilian@cf.com", "name": "Lilian Siqueira", "role": "Testemunha 1"},
+        {"email": "lilian@cf.com", "name": "Lilian Silveira Correa", "role": "Testemunha 1"},
         {"email": "outra@cf.com", "name": "Outra Pessoa", "role": "Testemunha 2"},
     ]
     gen = ContractGenerator()

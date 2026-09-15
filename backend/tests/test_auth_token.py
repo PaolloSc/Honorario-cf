@@ -95,3 +95,23 @@ def test_config_ausente_devolve_503_e_nao_401(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         auth_mod._decode_token("a.b.c")
     assert exc.value.status_code == 503
+
+
+def test_kid_aposentado_pede_login_novo_em_vez_de_erro_cru(monkeypatch, chave):
+    """Chave ausente mesmo apos recarregar o JWKS = token obsoleto.
+
+    Acontece quando o token fica parado tempo demais (renovacao quebrada) e o
+    Azure rotaciona a chave que o assinou. A assinatura e' conferida antes da
+    validade, entao o erro vinha como "Key ... not found in JWKS" pelo catch-all,
+    no meio da tela de envio do contrato.
+    """
+    outra = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    monkeypatch.setattr(auth_mod, "_fetch_jwks", lambda: _jwks(outra, "kid-atual"))
+
+    with pytest.raises(HTTPException) as exc:
+        auth_mod._decode_token(_token(chave, "kid-aposentado"))
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Sessão antiga: entre novamente para continuar"
+    assert "JWKS" not in exc.value.detail
+    assert exc.value.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
