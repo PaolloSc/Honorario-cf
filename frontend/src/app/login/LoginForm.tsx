@@ -86,7 +86,7 @@ export default function LoginForm({
               // Link, nao fetch: sao cookies HttpOnly, quem apaga e' o servidor
               // na resposta da navegacao.
               <a
-                href="/api/auth/limpar"
+                href="/api/limpar-sessao"
                 className="mt-3 inline-block rounded-md bg-danger px-3 py-1.5 font-medium text-white transition hover:opacity-90"
               >
                 Limpar sessão e tentar de novo
