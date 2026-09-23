@@ -15,6 +15,7 @@ import type {
   EscopoItem,
   Participacao,
 } from "@/types/contract";
+import { areasCadastradas, listColaboradores } from "@/app/lib/api";
 import { useCallback, useEffect, useState } from "react";
  
 const STEPS = [
@@ -112,6 +113,7 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       };
     })(),
     email_destinatario: data.email_destinatario,
+    area: data.area,
   };
 }
 
@@ -147,8 +149,11 @@ function isValidCPF(cpf: string): boolean {
   return true;
 }
 
-function validateContratantes(data: ContratoFormData): string[] {
+function validateContratantes(data: ContratoFormData, areas: string[]): string[] {
   const errors: string[] = [];
+
+  // Sem área cadastrada ainda, não há o que escolher — o sócio é escolhido no envio.
+  if (areas.length > 0 && !data.area) errors.push("Selecione a área do contrato.");
 
   if (data.contratantes.length === 0) {
     errors.push("Adicione pelo menos um contratante.");
@@ -228,10 +233,10 @@ function validateParticipacao(data: ContratoFormData): string[] {
   return [];
 }
 
-function validateStep(step: number, data: ContratoFormData): string[] {
+function validateStep(step: number, data: ContratoFormData, areas: string[] = []): string[] {
   switch (step) {
     case 1:
-      return validateContratantes(data);
+      return validateContratantes(data, areas);
     case 2:
       return validateEscopos(data);
     case 3:
@@ -245,12 +250,12 @@ function validateStep(step: number, data: ContratoFormData): string[] {
   }
 }
 
-function firstInvalidStepBefore(step: number, data: ContratoFormData): {
+function firstInvalidStepBefore(step: number, data: ContratoFormData, areas: string[] = []): {
   step: number;
   errors: string[];
 } | null {
   for (let candidate = 1; candidate < step; candidate += 1) {
-    const errors = validateStep(candidate, data);
+    const errors = validateStep(candidate, data, areas);
     if (errors.length > 0) {
       return { step: candidate, errors };
     }
@@ -273,16 +278,23 @@ export default function ContractWizard({
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<ContratoFormData>(normalizeFormData(initialData));
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const currentStepErrors = validateStep(currentStep, formData);
+  const [areas, setAreas] = useState<string[]>([]);
+  const currentStepErrors = validateStep(currentStep, formData, areas);
   const canGoNext = currentStepErrors.length === 0;
 
   useEffect(() => {
-    const invalidStep = firstInvalidStepBefore(currentStep, formData);
+    listColaboradores()
+      .then((r) => setAreas(areasCadastradas(r.colaboradores)))
+      .catch(() => setAreas([]));
+  }, []);
+
+  useEffect(() => {
+    const invalidStep = firstInvalidStepBefore(currentStep, formData, areas);
     if (!invalidStep) return;
 
     setValidationErrors(invalidStep.errors);
     setCurrentStep(invalidStep.step);
-  }, [currentStep, formData]);
+  }, [currentStep, formData, areas]);
  
   const updateContratantes = useCallback(
     (contratantes: Contratante[]) => {
@@ -321,14 +333,14 @@ export default function ContractWizard({
   }, []);
  
   const goNext = () => {
-    const invalidStep = firstInvalidStepBefore(currentStep + 1, formData);
+    const invalidStep = firstInvalidStepBefore(currentStep + 1, formData, areas);
     if (invalidStep) {
       setValidationErrors(invalidStep.errors);
       setCurrentStep(invalidStep.step);
       return;
     }
 
-    const errors = validateStep(currentStep, formData);
+    const errors = validateStep(currentStep, formData, areas);
     if (errors.length > 0) {
       setValidationErrors(errors);
       return;
@@ -361,7 +373,7 @@ export default function ContractWizard({
       </div>
  
       <StepIndicator steps={STEPS} currentStep={currentStep} onStepClick={(id) => {
-        const invalid = firstInvalidStepBefore(id, formData);
+        const invalid = firstInvalidStepBefore(id, formData, areas);
         if (invalid) {
           setValidationErrors(invalid.errors);
           setCurrentStep(invalid.step);
@@ -374,10 +386,36 @@ export default function ContractWizard({
       {/* Step Content */}
       <div className="mb-8">
         {currentStep === 1 && (
-          <Step1Contratante
-            contratantes={formData.contratantes}
-            onChange={updateContratantes}
-          />
+          <>
+            {areas.length > 0 && (
+              <div className="mb-6 p-4 rounded-lg bg-card border border-border">
+                <label className="block text-sm font-medium text-foreground mb-1" htmlFor="area-contrato">
+                  Área do contrato
+                </label>
+                <p className="text-xs text-muted mb-2">
+                  Define o sócio que vem sugerido para assinar pelo escritório no envio.
+                </p>
+                <select
+                  id="area-contrato"
+                  value={formData.area ?? ""}
+                  onChange={(e) => {
+                    setValidationErrors([]);
+                    setFormData((prev) => ({ ...prev, area: e.target.value || undefined }));
+                  }}
+                  className="w-full sm:w-72 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                >
+                  <option value="">Selecione...</option>
+                  {areas.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <Step1Contratante
+              contratantes={formData.contratantes}
+              onChange={updateContratantes}
+            />
+          </>
         )}
         {currentStep === 2 && (
           <Step2Escopo

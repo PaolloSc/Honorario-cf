@@ -22,6 +22,7 @@ class ColaboradorOut(BaseModel):
     nome: str
     email: str | None
     papel: str
+    areas: list[str]
     ativo: bool
     ordem: int
     participavel: bool
@@ -53,6 +54,7 @@ class CreateColaboradorRequest(BaseModel):
     nome: str
     email: str | None = None
     papel: str = "advogado"
+    areas: list[str] = []
     ordem: int = 0
 
     @field_validator("nome")
@@ -78,6 +80,7 @@ class UpdateColaboradorRequest(BaseModel):
     nome: str | None = None
     email: str | None = None
     papel: str | None = None
+    areas: list[str] | None = None
     ativo: bool | None = None
     ordem: int | None = None
 
@@ -94,12 +97,34 @@ class UpdateColaboradorRequest(BaseModel):
         return _validar_email_opcional(v)
 
 
+def _aplicar_areas(c: ColaboradorDB, areas: list[str], db: Session) -> None:
+    """So socio responde por area, e cada area tem um so socio responsavel."""
+    # Virgula e' o separador no banco, entao nao pode fazer parte do nome da area.
+    areas = list(dict.fromkeys(a.replace(",", " ").strip() for a in areas if a.strip()))
+    if areas and c.papel != "socio":
+        raise HTTPException(422, "Só sócio pode ser responsável por área")
+    outros = db.query(ColaboradorDB).filter(
+        ColaboradorDB.papel == "socio",
+        ColaboradorDB.ativo.is_(True),
+    )
+    for outro in outros:
+        if outro.id == c.id:
+            continue
+        repetidas = set(areas) & set(outro.lista_areas)
+        if repetidas:
+            raise HTTPException(
+                409, f"{', '.join(sorted(repetidas))} já tem sócio responsável: {outro.nome}"
+            )
+    c.areas = ",".join(areas) or None
+
+
 def _to_out(c: ColaboradorDB) -> ColaboradorOut:
     return ColaboradorOut(
         id=c.id,
         nome=c.nome,
         email=c.email,
         papel=c.papel,
+        areas=c.lista_areas,
         ativo=c.ativo,
         ordem=c.ordem,
         participavel=c.participavel,
@@ -137,6 +162,7 @@ def create_colaborador(
         created_at=utcnow(),
         updated_at=utcnow(),
     )
+    _aplicar_areas(c, body.areas, db)
     db.add(c)
     db.commit()
     db.refresh(c)
@@ -169,6 +195,11 @@ def update_colaborador(
         c.ativo = body.ativo
     if body.ordem is not None:
         c.ordem = body.ordem
+    if body.areas is not None:
+        _aplicar_areas(c, body.areas, db)
+    elif c.papel != "socio":
+        # Deixou de ser socio: perde as areas (senao a area fica presa a quem nao assina)
+        c.areas = None
 
     db.commit()
     db.refresh(c)

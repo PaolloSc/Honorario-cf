@@ -215,9 +215,27 @@ export async function sendParticipacao(data: {
   });
 }
 
+export interface ColaboradorWizard {
+  name: string;
+  email: string;
+  role: string;
+  areas: string[];
+}
+
+// Sócio responsável pela área do contrato — sugerido para assinar pelo escritório.
+export function socioDaArea(colaboradores: ColaboradorWizard[], area?: string) {
+  if (!area) return undefined;
+  return colaboradores.find((c) => c.role === "socio" && c.email && c.areas.includes(area));
+}
+
+// Áreas existentes = as que algum sócio assumiu no cadastro de colaboradores.
+export function areasCadastradas(colaboradores: ColaboradorWizard[]) {
+  return [...new Set(colaboradores.filter((c) => c.role === "socio").flatMap((c) => c.areas))].sort();
+}
+
 export async function listColaboradores(opts?: { participavel?: boolean }) {
   const qs = opts?.participavel ? "?participavel=true" : "";
-  return request<{ colaboradores: Array<{ name: string; email: string; role: string }> }>(
+  return request<{ colaboradores: ColaboradorWizard[] }>(
     `/api/users/colaboradores${qs}`
   );
 }
@@ -274,6 +292,7 @@ export interface Colaborador {
   nome: string;
   email: string | null;
   papel: string;
+  areas: string[];
   ativo: boolean;
   ordem: number;
   participavel: boolean;
@@ -308,7 +327,7 @@ export async function createColaborador(body: {
 
 export async function updateColaborador(
   id: number,
-  body: { nome?: string; email?: string | null; papel?: string; ativo?: boolean; ordem?: number }
+  body: { nome?: string; email?: string | null; papel?: string; areas?: string[]; ativo?: boolean; ordem?: number }
 ) {
   return request<Colaborador>(`/api/colaboradores/${id}`, {
     method: "PATCH",
@@ -419,6 +438,8 @@ export interface ContractDetail {
   updated_by?: string;
   created_at: string;
   updated_at: string;
+  tipo_contrato: string;
+  area?: string | null;
   versions: VersionSummary[];
   audit_log: AuditEntry[];
 }

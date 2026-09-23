@@ -15,12 +15,24 @@ from fastapi import HTTPException
 
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
-from app.database import ContractDB, ContractVersionDB, SessionLocal, utcnow
+from app.database import ColaboradorDB, ContractDB, ContractVersionDB, SessionLocal, utcnow
 from app.main import app
 from app.routers.docuseal import _resolve_contract_filepath
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+# Socia do roster que assina pelo escritorio (papel "Contratado").
+SOCIO = {"email": "socia@cf.com", "name": "Socia CF", "role": "Contratado"}
+
+
+def _cadastrar_colaborador(email: str, nome: str, papel: str = "socio") -> None:
+    db = SessionLocal()
+    try:
+        db.add(ColaboradorDB(nome=nome, email=email, papel=papel, ativo=True))
+        db.commit()
+    finally:
+        db.close()
 
 
 def _fake_user():
@@ -318,6 +330,7 @@ class TestSendForSignatureEndpoint:
     def override_auth(self):
         """Override auth dependency for all tests in this class."""
         app.dependency_overrides[get_current_user] = _fake_user
+        _cadastrar_colaborador(SOCIO["email"], SOCIO["name"])
         yield
         app.dependency_overrides.pop(get_current_user, None)
 
@@ -361,7 +374,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": "sig-db-001",
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -403,7 +416,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": "sig-recon-002",
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -441,7 +454,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -493,7 +506,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -507,7 +520,7 @@ class TestSendForSignatureEndpoint:
             temp_file.unlink()
 
     def test_send_for_signature_404_when_no_contract_file(self, client):
-        """No file anywhere; returns 500 with '404: Contract file not found' detail."""
+        """No file anywhere; returns 404 Contract file not found."""
         db = SessionLocal()
         try:
             _create_contract_in_db(
@@ -522,14 +535,13 @@ class TestSendForSignatureEndpoint:
             json={
                 "contract_id": "sig-notfound-005",
                 "signatarios": [
-                    {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                    {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                 ],
             },
         )
 
-        assert response.status_code == 500
-        data = response.json()
-        assert "404" in data["detail"] or "Contract file not found" in data["detail"]
+        assert response.status_code == 404
+        assert "Contract file not found" in response.json()["detail"]
 
     def test_send_for_signature_includes_logged_in_lawyer(self, client):
         """O advogado que preenche o formulario NAO e' injetado como signatario."""
@@ -572,7 +584,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -588,8 +600,8 @@ class TestSendForSignatureEndpoint:
         if temp_file.exists():
             temp_file.unlink()
 
-    def test_send_for_signature_includes_cf_as_contratado(self, client):
-        """C&F is auto-added as 'Contratado' role."""
+    def test_send_for_signature_socio_assina_pelo_escritorio(self, client):
+        """O socio escolhido assina como 'Contratado'; o bloco continua sendo do C&F."""
         output_dir = _get_output_dir()
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -628,18 +640,20 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
 
         assert response.status_code == 200
 
-        # Verify C&F was added as Contratado
         cf_entries = [s for s in captured_signatarios if s.get("role") == "Contratado"]
         assert len(cf_entries) == 1
-        assert cf_entries[0]["email"] == settings.cf_signer_email
-        assert cf_entries[0]["name"] == "Carvalho & Furtado Advogados"
+        assert cf_entries[0]["email"] == SOCIO["email"]
+        assert cf_entries[0]["name"] == SOCIO["name"]
+        assert cf_entries[0]["contratado_nome"] == "Carvalho & Furtado Advogados"
+        # O e-mail generico do escritorio nao assina mais nada
+        assert not any(s.get("email") == settings.cf_signer_email for s in captured_signatarios)
 
         # Cleanup
         if temp_file.exists():
@@ -688,6 +702,7 @@ class TestSendForSignatureEndpoint:
                         {"email": "client1@example.com", "name": "Client 1", "role": "Contratante"},
                         {"email": "client2@example.com", "name": "Client 2", "role": "Contratante"},
                         {"email": "extra_lawyer@example.com", "name": "Extra Lawyer", "role": "Advogado"},
+                        SOCIO,
                     ],
                 },
             )
@@ -708,11 +723,10 @@ class TestSendForSignatureEndpoint:
         advogado_roles = sorted(r for r in roles if r.startswith("Advogado"))
         assert advogado_roles == ["Advogado"]
 
-        # Contratado nao vira submitter proprio: o Advogado ja escolhido assina
-        # tambem por Carvalho & Furtado (uma so assinatura, sem convite duplicado).
-        assert "Contratado" not in roles
+        # Advogado nao-socio assina so como advogado; o escritorio e' a socia.
+        assert "Contratado" in roles
         advogado_submitter = next(s for s in captured_signatarios if s["role"] == "Advogado")
-        assert advogado_submitter.get("also_contratado") is True
+        assert not advogado_submitter.get("also_contratado")
 
         # Cleanup
         if temp_file.exists():
@@ -758,7 +772,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"},
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO,
                     ],
                 },
             )
@@ -805,7 +819,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -853,7 +867,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"},
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO,
                         {"email": "outra@example.com", "name": "Outra Testemunha", "role": "Testemunha"},
                     ],
                 },
@@ -919,7 +933,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -973,7 +987,7 @@ class TestSendForSignatureEndpoint:
                 json={
                     "contract_id": contract_id,
                     "signatarios": [
-                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+                        {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO
                     ],
                 },
             )
@@ -1067,3 +1081,79 @@ class TestSendForSignatureEndpoint:
 
         if temp_file.exists():
             temp_file.unlink()
+
+
+class TestAssinaturaPeloEscritorio:
+    """Todo contrato de honorarios tem uma assinatura pelo escritorio, dada por socio."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        app.dependency_overrides[get_current_user] = _fake_user
+        _cadastrar_colaborador(SOCIO["email"], SOCIO["name"])
+        _cadastrar_colaborador("marcelo@cf.com", "Marcelo Leite", papel="advogado")
+        output_dir = _get_output_dir()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self.contract_id = "sig-escritorio-001"
+        self.file = output_dir / f"contrato_{self.contract_id}.docx"
+        self.file.write_bytes(b"content with {{field|signature|req}} tags")
+        db = SessionLocal()
+        try:
+            _create_contract_in_db(db, self.contract_id, file_path=str(self.file))
+        finally:
+            db.close()
+        yield
+        app.dependency_overrides.pop(get_current_user, None)
+        if self.file.exists():
+            self.file.unlink()
+
+    def _enviar(self, client, signatarios):
+        captured: list = []
+
+        async def capture_send(template_id, signatarios, send_email=True):
+            captured.extend(signatarios)
+            return {"success": True, "submission": {"id": 1, "submitters": []}, "message": "ok"}
+
+        mock_service = MagicMock()
+        mock_service.create_template_from_docx = AsyncMock(return_value={"id": 1})
+        mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={"contract_id": self.contract_id, "signatarios": signatarios},
+            )
+        return response, captured
+
+    CLIENTE = {"email": "client@example.com", "name": "Client", "role": "Contratante"}
+
+    def test_sem_socio_nao_envia(self, client):
+        response, captured = self._enviar(client, [self.CLIENTE])
+        assert response.status_code == 400
+        assert captured == []
+
+    def test_advogado_nao_socio_nao_assina_pelo_escritorio(self, client):
+        marcelo = {"email": "marcelo@cf.com", "name": "Marcelo Leite", "role": "Contratado"}
+        response, captured = self._enviar(client, [self.CLIENTE, marcelo])
+        assert response.status_code == 400
+        assert captured == []
+
+    def test_advogada_faz_contrato_e_socia_assina_pelo_escritorio(self, client):
+        """Gabriela (nao-socia) + Marcelo como advogado: a socia recebe convite proprio."""
+        marcelo = {"email": "marcelo@cf.com", "name": "Marcelo Leite", "role": "Advogado"}
+        response, captured = self._enviar(client, [self.CLIENTE, marcelo, SOCIO])
+        assert response.status_code == 200
+        por_email = {s["email"]: s for s in captured}
+        assert por_email["marcelo@cf.com"]["role"] == "Advogado"
+        assert not por_email["marcelo@cf.com"].get("also_contratado")
+        assert por_email[SOCIO["email"]]["role"] == "Contratado"
+        # Socia assina depois do cliente e dos advogados
+        assert por_email[SOCIO["email"]]["order"] > por_email["marcelo@cf.com"]["order"]
+
+    def test_socio_que_tambem_e_advogado_recebe_um_convite_so(self, client):
+        socia_advogada = {**SOCIO, "role": "Advogado"}
+        response, captured = self._enviar(client, [self.CLIENTE, socia_advogada, SOCIO])
+        assert response.status_code == 200
+        da_socia = [s for s in captured if s["email"] == SOCIO["email"]]
+        assert len(da_socia) == 1
+        assert da_socia[0]["role"] == "Advogado"
+        assert da_socia[0]["also_contratado"] is True
+        assert "Contratado" not in [s["role"] for s in captured]

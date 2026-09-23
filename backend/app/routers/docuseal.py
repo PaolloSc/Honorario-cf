@@ -8,11 +8,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
-from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
+from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
 from app.services.docuseal import DocuSealService
 from app.utils.participacao import linhas_participacao
@@ -216,7 +217,7 @@ def _patch_docx_with_signatures(
 
         for sig in contratado_sigs:
             role = sig["role"]
-            name = sig.get("name", "Contratado")
+            name = sig.get("contratado_nome") or sig.get("name", "Contratado")
             doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATADO: {name.upper()}")
             doc.add_paragraph()
@@ -253,6 +254,43 @@ def _patch_docx_with_signatures(
     return output_path
 
 
+ESCRITORIO_NOME = "Carvalho & Furtado Advogados"
+
+
+def _resolver_assinatura_escritorio(signatarios: list[dict], db: Session) -> list[dict]:
+    """Todo contrato de honorarios tem exatamente uma assinatura pelo escritorio
+    (papel "Contratado"), dada por um socio ativo do roster — advogado nao-socio
+    nao representa o C&F. Se o socio tambem assina como "Advogado", um convite so
+    cobre os dois blocos do documento.
+    """
+    escritorio = [s for s in signatarios if s.get("role") == "Contratado"]
+    if len(escritorio) != 1:
+        raise HTTPException(400, "Escolha o sócio que assina pelo escritório.")
+    socio = escritorio[0]
+    email = (socio.get("email") or "").strip().lower()
+    eh_socio = email and db.query(ColaboradorDB).filter(
+        func.lower(ColaboradorDB.email) == email,
+        ColaboradorDB.papel == "socio",
+        ColaboradorDB.ativo.is_(True),
+    ).first()
+    if not eh_socio:
+        raise HTTPException(400, "Só um sócio ativo pode assinar pelo escritório.")
+
+    advogado = next(
+        (
+            s for s in signatarios
+            if s.get("role") == "Advogado" and (s.get("email") or "").strip().lower() == email
+        ),
+        None,
+    )
+    if advogado is None:
+        socio["contratado_nome"] = ESCRITORIO_NOME
+        return signatarios
+    advogado["also_contratado"] = True
+    advogado["contratado_nome"] = ESCRITORIO_NOME
+    return [s for s in signatarios if s is not socio]
+
+
 @router.post("/send-for-signature", response_model=DocuSealResponse)
 async def send_for_signature(
     data: DocuSealRequest,
@@ -278,32 +316,17 @@ async def send_for_signature(
         # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
 
-        # O escritorio (papel "Contratado") assina pelo mesmo advogado ja escolhido
-        # pra assinar como "Advogado", quando houver um — uma so assinatura cobre os
-        # dois blocos do documento (evita mandar 2 convites pra mesma pessoa e livra
-        # o e-mail generico contrato@... de ser destinatario de assinatura). So volta
-        # a criar um submitter proprio pro C&F quando nenhum advogado foi escolhido.
-        #
-        # NAO se aplica ao contrato de consumidor: ali "Contratado" e' sempre a Monica
-        # por nome/CPF/OAB (CONTRATADA_NOME/CPF/OAB fixos) — mesclar com um advogado
-        # diferente estamparia o CPF dela num bloco assinado por outra pessoa.
-        cf_already_included = any(s.get("role") == "Contratado" for s in all_signatarios)
-        advogado_sig = (
-            next((s for s in all_signatarios if s.get("role", "").startswith("Advogado")), None)
-            if not eh_consumidor
-            else None
-        )
-        if not cf_already_included:
-            contratado_nome = CONTRATADA_NOME if eh_consumidor else "Carvalho & Furtado Advogados"
-            if advogado_sig is not None:
-                advogado_sig["also_contratado"] = True
-                advogado_sig["contratado_nome"] = contratado_nome
-            else:
+        # Contrato de consumidor: "Contratado" e' sempre a Monica por nome/CPF/OAB
+        # (CONTRATADA_NOME/CPF/OAB fixos), entao segue com submitter proprio.
+        if eh_consumidor:
+            if not any(s.get("role") == "Contratado" for s in all_signatarios):
                 all_signatarios.append({
                     "email": settings.cf_signer_email,
-                    "name": contratado_nome,
+                    "name": CONTRATADA_NOME,
                     "role": "Contratado",
                 })
+        else:
+            all_signatarios = _resolver_assinatura_escritorio(all_signatarios, db)
 
         # Testemunha 1 fixa (financeiro): injetada em toda submissao.
         # Inserida ANTES de eventuais testemunhas do payload p/ que a dedup a nomeie "Testemunha 1".
@@ -441,6 +464,8 @@ async def send_for_signature(
                 message=sign_result.get("message", "Erro ao enviar para assinatura"),
             )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("DocuSeal error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
