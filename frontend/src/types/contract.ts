@@ -279,6 +279,8 @@ export interface ContratoFormData {
   acessorios: Acessorios;
   participacao: Participacao;
   email_destinatario?: string;
+  // Área do contrato: define o sócio sugerido para assinar pelo escritório.
+  area?: string;
 }
  
 export interface ContratoResponse {
