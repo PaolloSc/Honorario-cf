@@ -33,6 +33,8 @@ class DocuSealResponse(BaseModel):
     success: bool
     message: str
     submission_id: str | None = None
+    # Contratantes com link e WhatsApp: a tela abre o WhatsApp logo apos o envio.
+    whatsapp: list[dict[str, str]] = []
 
 
 _docuseal_service: DocuSealService | None = None
@@ -534,6 +536,11 @@ async def send_for_signature(
                 success=True,
                 message="Documento enviado para assinatura com sucesso",
                 submission_id=str(submission_id) if submission_id else None,
+                whatsapp=[
+                    _assinante_para_tela(s)
+                    for s in submission.get("submitters") or []
+                    if s.get("role", "").startswith("Contratante")
+                ],
             )
         else:
             return DocuSealResponse(
@@ -789,18 +796,23 @@ def _conclusao_docuseal(status_data: dict[str, Any]) -> str | None:
     return None
 
 
+def _assinante_para_tela(s: dict[str, Any]) -> dict[str, str]:
+    """Um signatario do DocuSeal com o link de assinatura e o WhatsApp dele."""
+    return {
+        "role": s.get("role", ""),
+        "name": s.get("name", ""),
+        "email": s.get("email", ""),
+        # A criacao traz embed_src; a consulta so' o slug.
+        "link": s.get("embed_src") or link_assinatura(settings.docuseal_base_url, s.get("slug") or ""),
+        "whatsapp": s.get("phone") or "",
+    }
+
+
 def _pendentes_docuseal(status_data: dict[str, Any]) -> list[dict[str, str]]:
     """Signatarios que ainda nao assinaram nem recusaram, pra mostrar na tela."""
     submitters = status_data.get("submitters") or []
     return [
-        {
-            "role": s.get("role", ""),
-            "name": s.get("name", ""),
-            "email": s.get("email", ""),
-            # Link de assinatura e WhatsApp: a tela oferece o envio pelo WhatsApp.
-            "link": s.get("embed_src") or link_assinatura(settings.docuseal_base_url, s.get("slug") or ""),
-            "whatsapp": s.get("phone") or "",
-        }
+        _assinante_para_tela(s)
         for s in submitters
         if not s.get("completed_at") and not s.get("declined_at")
     ]

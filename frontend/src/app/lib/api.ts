@@ -376,7 +376,12 @@ export async function sendForSignature(data: {
   contract_id: string;
   signatarios: Array<{ email: string; name: string; role: string; phone?: string }>;
 }) {
-  return request<{ success: boolean; message: string }>(
+  return request<{
+    success: boolean;
+    message: string;
+    // Contratantes com link e WhatsApp, para abrir o WhatsApp logo após o envio.
+    whatsapp?: Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>;
+  }>(
     "/api/docuseal/send-for-signature",
     {
       method: "POST",
