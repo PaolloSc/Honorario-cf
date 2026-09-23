@@ -29,6 +29,7 @@ class ContratantePF(BaseModel):
     estado_civil: EstadoCivil
     endereco: str
     email: str
+    whatsapp: Optional[str] = None
  
  
 class RepresentantePJ(BaseModel):
@@ -38,6 +39,7 @@ class RepresentantePJ(BaseModel):
     profissao: Optional[str] = None
     estado_civil: Optional[EstadoCivil] = None
     email: Optional[str] = None
+    whatsapp: Optional[str] = None
 
 
 class ContratantePJ(BaseModel):
@@ -46,6 +48,7 @@ class ContratantePJ(BaseModel):
     razao_social: str = ""
     endereco: str = ""
     email: str
+    whatsapp: Optional[str] = None
     representantes: list[RepresentantePJ] = Field(default_factory=list)
     # Legados (contratos salvos antes de representantes ser uma lista)
     representante_nome: Optional[str] = None

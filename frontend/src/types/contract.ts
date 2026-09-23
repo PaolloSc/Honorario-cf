@@ -17,6 +17,7 @@ export interface ContratantePF {
   estado_civil: EstadoCivil;
   endereco: string;
   email: string;
+  whatsapp?: string;
 }
  
 export interface RepresentantePJ {
@@ -26,6 +27,7 @@ export interface RepresentantePJ {
   profissao?: string;
   estado_civil?: EstadoCivil;
   email?: string;
+  whatsapp?: string;
 }
 
 export interface ContratantePJ {
@@ -34,6 +36,7 @@ export interface ContratantePJ {
   razao_social: string;
   endereco: string;
   email: string;
+  whatsapp?: string;
   representantes?: RepresentantePJ[];
   representante_nome?: string;
   representante_nacionalidade?: string;

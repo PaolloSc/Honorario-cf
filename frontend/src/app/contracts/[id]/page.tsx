@@ -21,6 +21,7 @@ import {
   type Testemunha,
 } from "@/app/lib/api";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
+import EnvioWhatsApp from "@/components/EnvioWhatsApp";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
@@ -100,7 +101,9 @@ export default function ContractDetailPage() {
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [socioEscritorio, setSocioEscritorio] = useState("");
   const [sincronizando, setSincronizando] = useState(false);
-  const [pendentes, setPendentes] = useState<Array<{ role: string; name: string; email: string }>>([]);
+  const [pendentes, setPendentes] = useState<
+    Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>
+  >([]);
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -443,10 +446,11 @@ export default function ContractDetailPage() {
       {contract.status === "enviado" && pendentes.length > 0 && (
         <div className="mb-8 -mt-4 px-4 py-3 bg-warning/10 border border-warning/30 rounded-lg text-sm">
           <p className="font-medium text-warning mb-1">Falta assinar:</p>
-          <ul className="space-y-0.5 text-foreground">
+          <ul className="space-y-3 text-foreground">
             {pendentes.map((p, i) => (
               <li key={i}>
                 {p.name || p.email} <span className="text-muted">({p.role})</span>
+                <EnvioWhatsApp nome={p.name || p.email} link={p.link} whatsapp={p.whatsapp} />
               </li>
             ))}
           </ul>

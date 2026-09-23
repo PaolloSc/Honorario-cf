@@ -2,6 +2,7 @@ from __future__ import annotations
  
 import base64
 import logging
+import re
 from pathlib import Path
  
 import httpx
@@ -69,17 +70,7 @@ class DocuSealService:
  
         signatarios: list of {"email": "...", "name": "...", "role": "..."}
         """
-        submitters = []
-        for sig in signatarios:
-            submitters.append(
-                {
-                    "email": sig["email"],
-                    "name": sig.get("name", ""),
-                    "role": sig.get("role", "Contratante"),
-                    "send_email": send_email,
-                    "order": sig.get("order", 1),
-                }
-            )
+        submitters = [_submitter(sig, send_email) for sig in signatarios]
  
         payload = {
             "template_id": template_id,
@@ -136,3 +127,33 @@ class DocuSealService:
             return response.json()
  
         raise RuntimeError(f"Failed to get submission: {response.status_code}")
+
+
+def telefone_e164(numero: str | None) -> str | None:
+    """Celular/telefone brasileiro no formato do DocuSeal e do wa.me (+55DDDNUMERO).
+
+    Aceita com ou sem mascara e com ou sem o 55. Numero incompleto vira None
+    em vez de ir errado para o DocuSeal.
+    """
+    digitos = re.sub(r"\D", "", numero or "")
+    if len(digitos) in (10, 11):
+        digitos = "55" + digitos
+    if len(digitos) not in (12, 13) or not digitos.startswith("55"):
+        return None
+    return "+" + digitos
+
+
+def _submitter(sig: dict, send_email: bool) -> dict:
+    """Um signatario da submissao. O WhatsApp vai como `phone` (o DocuSeal so
+    manda SMS quando pedido) e volta na consulta, para a tela montar o envio."""
+    submitter = {
+        "email": sig["email"],
+        "name": sig.get("name", ""),
+        "role": sig.get("role", "Contratante"),
+        "send_email": send_email,
+        "order": sig.get("order", 1),
+    }
+    telefone = telefone_e164(sig.get("phone"))
+    if telefone:
+        submitter["phone"] = telefone
+    return submitter
