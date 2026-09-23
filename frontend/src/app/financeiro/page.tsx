@@ -35,6 +35,7 @@ import {
   LABEL_TIPO_DOC,
   type TaxCode,
 } from "@/app/lib/finance-api";
+import { formatarData, hojeBrasilia } from "@/app/lib/datas";
 
 const TIPOS_HONORARIO = [
   { value: "hora", label: "Hora trabalhada (limite 3 anos)" },
@@ -323,7 +324,7 @@ function PendentesLista({
             </div>
             <div className="text-xs text-muted mt-1">
               {c.client_email} · Criado por {c.created_by || "—"} em{" "}
-              {new Date(c.created_at).toLocaleDateString("pt-BR")}
+              {formatarData(c.created_at)}
             </div>
             <div className="text-xs mt-1">
               {c.tem_rascunho ? (
@@ -832,7 +833,7 @@ function FormNovaParticipacao({
     motivo_performance: "",
     natureza: "contratual",
     cliente_cpf_cnpj: "",
-    data_inicio: new Date().toISOString().slice(0, 10),
+    data_inicio: hojeBrasilia(),
     aprovado_por: "",
     observacoes: "",
   });
@@ -1085,7 +1086,7 @@ function FormPagamento({
 }) {
   const [taxCodes, setTaxCodes] = useState<TaxCode[]>([]);
   const [form, setForm] = useState({
-    data_recebimento: new Date().toISOString().slice(0, 10),
+    data_recebimento: hojeBrasilia(),
     valor_bruto: 0,
     discriminado: true,
     valor_contratual: 0,
@@ -1326,7 +1327,7 @@ function Simulador() {
     percentual_captacao: 10,
     percentual_performance: 0,
     data_inicio_participacao: "2024-08-01",
-    data_recebimento: new Date().toISOString().slice(0, 10),
+    data_recebimento: hojeBrasilia(),
     valor_liquido_recebido: 10000,
     vinculo_ativo: true,
     data_fim_vinculo: "",

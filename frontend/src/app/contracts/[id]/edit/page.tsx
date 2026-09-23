@@ -8,16 +8,9 @@ import ContractWizard from "@/components/ContractWizard";
 import ConsumidorWizard from "@/components/ConsumidorWizard";
 import type { ContratoFormData } from "@/types/contract";
 import { TIPO_CONSUMIDOR_AEREO, type ConsumidorFormData } from "@/types/consumidor";
+import { formatarDataHora } from "@/app/lib/datas";
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const formatDate = formatarDataHora;
 
 export default function EditContractPage() {
   const sessionStatus = useAuthStatus();
