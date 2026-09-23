@@ -19,3 +19,13 @@ def test_submitter_leva_o_whatsapp_so_quando_existe():
     sem = _submitter({"email": "c@x.com", "name": "Cliente", "role": "Contratante"}, True)
     assert com["phone"] == "+5531999991234"
     assert "phone" not in sem
+
+
+def test_link_de_assinatura_vem_do_slug():
+    """A consulta da submissao nao traz embed_src, so' o slug: o link e' montado do endereco do DocuSeal."""
+    from app.services.docuseal import link_assinatura
+
+    assert link_assinatura("https://api.docuseal.com", "abc123") == "https://docuseal.com/s/abc123"
+    assert link_assinatura("https://api.docuseal.eu/", "abc123") == "https://docuseal.eu/s/abc123"
+    assert link_assinatura("https://assinar.cf.com.br/api", "abc123") == "https://assinar.cf.com.br/s/abc123"
+    assert link_assinatura("https://api.docuseal.com", "") == ""

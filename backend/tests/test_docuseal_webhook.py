@@ -157,7 +157,8 @@ def test_sincronizar_nao_conclui_com_assinatura_pendente(client, usuario_logado)
     pendente = {"submitters": [
         {"role": "Contratante", "name": "Cliente X", "email": "c@x.com", "completed_at": "2026-09-14T11:00:00Z"},
         {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com", "completed_at": None,
-         "phone": "+5531999991234", "embed_src": "https://docuseal.x/s/abc123"},
+         # formato real do GET /submissions/{id}: slug, sem embed_src
+         "phone": "+5531999991234", "slug": "abc123"},
     ]}
 
     with patch.object(docuseal_mod, "get_docuseal_service", return_value=_mock_docuseal(pendente)), \
@@ -173,7 +174,7 @@ def test_sincronizar_nao_conclui_com_assinatura_pendente(client, usuario_logado)
     assert body["pendentes"] == [
         # link e whatsapp alimentam as opcoes de envio pelo WhatsApp na tela
         {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com",
-         "link": "https://docuseal.x/s/abc123", "whatsapp": "+5531999991234"}
+         "link": "https://docuseal.com/s/abc123", "whatsapp": "+5531999991234"}
     ]
     assert "Carvalho & Furtado Advogados" in body["detalhe"]
 
