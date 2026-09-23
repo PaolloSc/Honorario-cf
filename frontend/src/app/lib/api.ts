@@ -368,13 +368,13 @@ export async function sincronizarAssinatura(contractId: string) {
     status: string;
     alterado: boolean;
     detalhe: string;
-    pendentes: Array<{ role: string; name: string; email: string }>;
+    pendentes: Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>;
   }>(`/api/docuseal/${contractId}/sincronizar`, { method: "POST" });
 }
 
 export async function sendForSignature(data: {
   contract_id: string;
-  signatarios: Array<{ email: string; name: string; role: string }>;
+  signatarios: Array<{ email: string; name: string; role: string; phone?: string }>;
 }) {
   return request<{ success: boolean; message: string }>(
     "/api/docuseal/send-for-signature",

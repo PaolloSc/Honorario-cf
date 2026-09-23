@@ -500,16 +500,19 @@ export default function Step7Envio({
     try {
       // PJ com mais de um representante legal: cada administrador assina
       // (ha empresas cuja assinatura so vale com dois administradores).
-      const signatarios = data.contratantes.flatMap((c) => {
+      // phone = WhatsApp: vai ao DocuSeal e volta na lista "Falta assinar" do contrato.
+      const signatarios: Array<{ email: string; name: string; role: string; phone?: string }> =
+        data.contratantes.flatMap((c) => {
         const reps = c.tipo === "PJ" ? (c as ContratantePJ).representantes ?? [] : [];
         const assinantes = reps.filter((r) => r.nome && r.email);
         if (assinantes.length === 0) {
-          return [{ email: c.email, name: getContratanteNome(c), role: "Contratante" }];
+          return [{ email: c.email, name: getContratanteNome(c), role: "Contratante", phone: c.whatsapp }];
         }
         return assinantes.map((r) => ({
           email: r.email!,
           name: `${r.nome} (${getContratanteNome(c)})`,
           role: "Contratante",
+          phone: r.whatsapp,
         }));
       });
 
