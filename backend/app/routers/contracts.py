@@ -68,6 +68,9 @@ class ContractDetail(BaseModel):
     updated_by: Optional[str] = None
     created_at: str
     updated_at: str
+    tipo_contrato: str = "honorarios"
+    # Socio pre-selecionado para assinar pelo escritorio (ver socio_sugerido)
+    socio_sugerido: Optional[str] = None
     versions: list[VersionSummary]
     audit_log: list[AuditEntry]
 
@@ -189,6 +192,11 @@ def get_contract(
 
     _check_access(contract, user)
 
+    from app.routers.docuseal import socio_sugerido
+
+    atual = next((v for v in contract.versions if v.version_number == contract.current_version), None)
+    sugerido = socio_sugerido(atual.form_data_json if atual else None, db)
+
     return ContractDetail(
         contract_id=contract.contract_id,
         status=contract.status,
@@ -199,6 +207,8 @@ def get_contract(
         updated_by=contract.updated_by,
         created_at=contract.created_at.isoformat(),
         updated_at=contract.updated_at.isoformat(),
+        tipo_contrato=contract.tipo_contrato or "honorarios",
+        socio_sugerido=sugerido.email if sugerido else None,
         versions=[
             VersionSummary(
                 version_number=v.version_number,

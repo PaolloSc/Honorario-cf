@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, type Testemunha } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, getContract, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
 import { ComboBox } from "@/components/ui/FormField";
+import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -265,9 +266,10 @@ export default function Step7Envio({
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   // Colaboradores do escritorio: autopreenchimento de advogados e testemunhas.
-  const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
-  // Só sócios assinam pelo escritório — advogados/associados não têm poder de representação.
-  const socios = colaboradores.filter((c) => c.role === "socio");
+  const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
+  // Assinam como advogado: sócios e advogados. Pelo escritório, só o sócio de socioEscritorio.
+  const advogadosSignatarios = colaboradores.filter((c) => c.role === "socio" || c.role === "advogado");
+  const [socioEscritorio, setSocioEscritorio] = useState("");
   const isEdit = !!editContractId;
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -287,6 +289,15 @@ export default function Step7Envio({
       .then((r) => setColaboradores(r.colaboradores))
       .catch(() => setColaboradores([]));
   }, []);
+
+  // Sugestão do backend (área do contrato; sem área, gestão/participação).
+  // Só existe depois de salvo, que é quando a seção de assinatura aparece.
+  useEffect(() => {
+    if (!contractId || status !== "sent_email") return;
+    getContract(contractId)
+      .then((c) => setSocioEscritorio((atual) => atual || c.socio_sugerido || ""))
+      .catch(() => {});
+  }, [contractId, status]);
 
   const reviewStarted = useRef(false);
 
@@ -518,6 +529,9 @@ export default function Step7Envio({
       for (const t of extraTestemunhas) {
         signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
       }
+
+      const socio = colaboradores.find((c) => c.email === socioEscritorio);
+      if (socio) signatarios.push({ email: socio.email, name: socio.name, role: "Contratado" });
 
       const result = await sendForSignature({
         contract_id: contractId,
@@ -810,15 +824,21 @@ export default function Step7Envio({
               ))}
             </datalist>
 
+            <SocioEscritorioSelect
+              colaboradores={colaboradores}
+              value={socioEscritorio}
+              onChange={setSocioEscritorio}
+            />
+
             {/* Additional lawyers section */}
             <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">
               <h4 className="text-sm font-medium text-purple-900 mb-2">
-                Advogados que devem assinar pelo escritório (opcional)
+                Advogados que assinam (opcional)
               </h4>
               <p className="text-xs text-purple-700 mb-3">
-                O <strong>C&amp;F</strong> assina como CONTRATADO. Quem preenche este formulário{" "}
-                <strong>não</strong> é incluído automaticamente — selecione abaixo os sócios
-                que devem assinar.
+                Sócios e advogados que assinam como <strong>ADVOGADO</strong>. Quem preenche este
+                formulário <strong>não</strong> é incluído automaticamente — adicione-se aqui se
+                for assinar.
               </p>
               {additionalLawyers.length > 0 && (
                 <div className="space-y-1 mb-3">
@@ -841,11 +861,11 @@ export default function Step7Envio({
                     value={newLawyerEmail}
                     onChange={(email) => {
                       setNewLawyerEmail(email);
-                      const c = colaboradores.find((x) => x.email === email && x.role === "socio");
+                      const c = advogadosSignatarios.find((x) => x.email === email);
                       setNewLawyerName(c?.name ?? "");
                     }}
-                    placeholder="Busque o sócio por nome ou letra"
-                    options={socios.map((c) => ({ value: c.email, label: c.name }))}
+                    placeholder="Busque o advogado por nome ou letra"
+                    options={advogadosSignatarios.map((c) => ({ value: c.email, label: c.name }))}
                   />
                 </div>
                 <button
@@ -937,7 +957,8 @@ export default function Step7Envio({
 
             <button
               onClick={handleSendForSignature}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !socioEscritorio}
+              title={!socioEscritorio ? "Escolha o sócio que assina pelo escritório" : undefined}
               className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition"
             >
               Enviar para Assinatura Digital

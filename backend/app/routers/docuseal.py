@@ -217,7 +217,14 @@ def _patch_docx_with_signatures(
 
         for sig in contratado_sigs:
             role = sig["role"]
-            name = sig.get("name", "Contratado")
+            name = sig.get("contratado_nome") or sig.get("name", "Contratado")
+            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
+            doc.add_paragraph(f"CONTRATADO: {name.upper()}")
+            doc.add_paragraph()
+
+        for sig in merged_contratado_sigs:
+            role = sig["role"]
+            name = sig.get("contratado_nome", "Carvalho & Furtado Advogados")
             doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATADO: {name.upper()}")
             doc.add_paragraph()
@@ -254,13 +261,50 @@ def _patch_docx_with_signatures(
     return output_path
 
 
-def _socio_para_assinar_pelo_escritorio(form_data_json: str | None, db: Session):
-    """Quem assina o papel 'Contratado' pelo Carvalho & Furtado.
+ESCRITORIO_NOME = "Carvalho & Furtado Advogados"
 
-    Prioridade: o responsavel pela gestao do contrato, se for socio; senao,
-    o primeiro socio entre os advogados marcados pra receber participacao.
-    Nenhum dos dois precisa ter sido escolhido como "Advogado" no envio —
-    esta busca e' independente disso.
+
+def _resolver_assinatura_escritorio(signatarios: list[dict], db: Session) -> list[dict]:
+    """Todo contrato de honorarios tem exatamente uma assinatura pelo escritorio
+    (papel "Contratado"), dada por um socio ativo do roster — advogado nao-socio
+    nao representa o C&F. Se o socio tambem assina como "Advogado", um convite so
+    cobre os dois blocos do documento.
+    """
+    escritorio = [s for s in signatarios if s.get("role") == "Contratado"]
+    if len(escritorio) != 1:
+        raise HTTPException(400, "Escolha o sócio que assina pelo escritório.")
+    socio = escritorio[0]
+    email = (socio.get("email") or "").strip().lower()
+    eh_socio = email and db.query(ColaboradorDB).filter(
+        func.lower(ColaboradorDB.email) == email,
+        ColaboradorDB.papel == "socio",
+        ColaboradorDB.ativo.is_(True),
+    ).first()
+    if not eh_socio:
+        raise HTTPException(400, "Só um sócio ativo pode assinar pelo escritório.")
+
+    advogado = next(
+        (
+            s for s in signatarios
+            if s.get("role") == "Advogado" and (s.get("email") or "").strip().lower() == email
+        ),
+        None,
+    )
+    if advogado is None:
+        socio["contratado_nome"] = ESCRITORIO_NOME
+        return signatarios
+    advogado["also_contratado"] = True
+    advogado["contratado_nome"] = ESCRITORIO_NOME
+    return [s for s in signatarios if s is not socio]
+
+
+def socio_sugerido(form_data_json: str | None, db: Session) -> ColaboradorDB | None:
+    """Socio pre-selecionado na tela para assinar pelo escritorio (o usuario pode trocar).
+
+    1. O socio responsavel pela area do contrato.
+    2. Sem area (contratos antigos) ou area sem responsavel: o responsavel pela
+       gestao, se for socio; senao o primeiro socio entre os que recebem
+       participacao (regra do PR #74).
     """
     from app.models.contract import Participacao
 
@@ -268,24 +312,33 @@ def _socio_para_assinar_pelo_escritorio(form_data_json: str | None, db: Session)
         return None
     try:
         form_data = json.loads(form_data_json)
+    except ValueError:
+        return None
+
+    socios = (
+        db.query(ColaboradorDB)
+        .filter(
+            ColaboradorDB.papel == "socio",
+            ColaboradorDB.ativo.is_(True),
+            ColaboradorDB.email.isnot(None),
+        )
+        .all()
+    )
+    area = form_data.get("area")
+    if area:
+        responsavel = next((s for s in socios if area in s.lista_areas), None)
+        if responsavel:
+            return responsavel
+
+    try:
         participacao = Participacao(**(form_data.get("participacao") or {}))
     except Exception:
         return None
-
-    nomes_candidatos = [participacao.responsavel_gestao] + [
-        p.nome for p in participacao.participantes
-    ]
-    for nome in nomes_candidatos:
-        nome = (nome or "").strip()
-        if not nome:
-            continue
-        colaborador = (
-            db.query(ColaboradorDB)
-            .filter(ColaboradorDB.nome == nome, ColaboradorDB.papel == "socio")
-            .first()
-        )
-        if colaborador and colaborador.email:
-            return colaborador
+    por_nome = {s.nome: s for s in socios}
+    for nome in [participacao.responsavel_gestao] + [p.nome for p in participacao.participantes]:
+        socio = por_nome.get((nome or "").strip())
+        if socio:
+            return socio
     return None
 
 
@@ -347,52 +400,17 @@ async def send_for_signature(
         # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
 
-        # O escritorio (papel "Contratado") assina pelo socio responsavel: o
-        # responsavel pela gestao do contrato, se for socio, senao o primeiro
-        # socio marcado pra receber participacao. Se essa pessoa ja estiver
-        # assinando como "Advogado" (mesmo e-mail), mescla numa unica assinatura
-        # — nao manda 2 convites pra mesma pessoa. Caso contrario ela ganha um
-        # submitter proprio so' pro papel "Contratado". So' cai no e-mail
-        # generico contrato@... quando nenhum socio e' identificado.
-        #
-        # NAO se aplica ao contrato de consumidor: ali "Contratado" e' sempre a Monica
-        # por nome/CPF/OAB (CONTRATADA_NOME/CPF/OAB fixos) — trocar por outro socio
-        # estamparia o CPF dela num bloco assinado por outra pessoa.
-        cf_already_included = any(s.get("role") == "Contratado" for s in all_signatarios)
-        socio_escritorio = (
-            None if eh_consumidor else _socio_para_assinar_pelo_escritorio(
-                latest_ver.form_data_json if latest_ver else None, db
-            )
-        )
-        if not cf_already_included:
-            contratado_nome = CONTRATADA_NOME if eh_consumidor else "Carvalho & Furtado Advogados"
-            advogado_sig = (
-                next(
-                    (
-                        s for s in all_signatarios
-                        if s.get("role", "").startswith("Advogado")
-                        and s.get("email", "").lower() == socio_escritorio.email.lower()
-                    ),
-                    None,
-                )
-                if socio_escritorio
-                else None
-            )
-            if advogado_sig is not None:
-                advogado_sig["also_contratado"] = True
-                advogado_sig["contratado_nome"] = contratado_nome
-            elif socio_escritorio is not None:
-                all_signatarios.append({
-                    "email": socio_escritorio.email,
-                    "name": contratado_nome,
-                    "role": "Contratado",
-                })
-            else:
+        # Contrato de consumidor: "Contratado" e' sempre a Monica por nome/CPF/OAB
+        # (CONTRATADA_NOME/CPF/OAB fixos), entao segue com submitter proprio.
+        if eh_consumidor:
+            if not any(s.get("role") == "Contratado" for s in all_signatarios):
                 all_signatarios.append({
                     "email": settings.cf_signer_email,
-                    "name": contratado_nome,
+                    "name": CONTRATADA_NOME,
                     "role": "Contratado",
                 })
+        else:
+            all_signatarios = _resolver_assinatura_escritorio(all_signatarios, db)
 
         # Testemunha 1 fixa (financeiro): injetada em toda submissao.
         # Inserida ANTES de eventuais testemunhas do payload p/ que a dedup a nomeie "Testemunha 1".
@@ -530,6 +548,8 @@ async def send_for_signature(
                 message=sign_result.get("message", "Erro ao enviar para assinatura"),
             )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("DocuSeal error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
