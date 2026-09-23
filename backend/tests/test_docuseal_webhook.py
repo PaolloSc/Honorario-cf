@@ -156,7 +156,8 @@ def test_sincronizar_nao_conclui_com_assinatura_pendente(client, usuario_logado)
     email = _mock_email()
     pendente = {"submitters": [
         {"role": "Contratante", "name": "Cliente X", "email": "c@x.com", "completed_at": "2026-09-14T11:00:00Z"},
-        {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com", "completed_at": None},
+        {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com", "completed_at": None,
+         "phone": "+5531999991234", "embed_src": "https://docuseal.x/s/abc123"},
     ]}
 
     with patch.object(docuseal_mod, "get_docuseal_service", return_value=_mock_docuseal(pendente)), \
@@ -170,7 +171,9 @@ def test_sincronizar_nao_conclui_com_assinatura_pendente(client, usuario_logado)
     assert email.send_html_email.await_count == 0
     # Quem assinou nao aparece; so quem falta, pra mostrar na tela do contrato.
     assert body["pendentes"] == [
-        {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com"}
+        # link e whatsapp alimentam as opcoes de envio pelo WhatsApp na tela
+        {"role": "Contratado", "name": "Carvalho & Furtado Advogados", "email": "contrato@x.com",
+         "link": "https://docuseal.x/s/abc123", "whatsapp": "+5531999991234"}
     ]
     assert "Carvalho & Furtado Advogados" in body["detalhe"]
 

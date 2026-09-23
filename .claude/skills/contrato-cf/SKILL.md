@@ -154,6 +154,12 @@ Siga esse padrão ao trocar um campo por uma lista.
   como `Advogado`. Quem preenche o formulário **não** é incluído
   automaticamente — foi removido de propósito, não reintroduza.
 - Termos (sócio, advogado, área, assinatura pelo escritório) em `CONTEXT.md`.
+- **WhatsApp**: o número do contratante ou representante (campo opcional no passo 1)
+  vai ao DocuSeal como `phone` do signatário (`services/docuseal.py`, `telefone_e164`)
+  e volta, junto com o link (`embed_src`), na lista "Falta assinar" da página do
+  contrato. Ali cada pendente tem as opções Enviar pelo WhatsApp (`wa.me`), Copiar
+  mensagem e QR code (`components/EnvioWhatsApp.tsx`). Não há gateway: sai do
+  WhatsApp de quem está usando o sistema. O e-mail do DocuSeal continua indo.
 - **Testemunha 1** (financeiro) é injetada em toda submissão e recebe por
   último (`order = 5`), depois que todos assinaram.
 - Papéis repetidos ganham sufixo ("Contratante 1", "Contratante 2") porque o

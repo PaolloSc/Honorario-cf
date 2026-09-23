@@ -35,6 +35,15 @@ function formatCEP(digits: string): string {
   return digits;
 }
 
+// (31) 9999-9999 e (31) 99999-9999 — o 9º digito muda a posicao do hifen.
+function formatTelefone(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d.replace(/^(\d{0,2})/, "($1");
+  if (d.length <= 6) return d.replace(/^(\d{2})(\d+)/, "($1) $2");
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
+  return d.replace(/^(\d{2})(\d{5})(\d+)/, "($1) $2-$3");
+}
+
 function formatCPF(value: string): string {
   return value
     .replace(/\D/g, "")
@@ -311,6 +320,15 @@ function PJForm({
         />
       </FormField>
 
+      <FormField label="WhatsApp" hint="Opcional. Para enviar o link de assinatura pelo WhatsApp">
+        <Input
+          type="tel"
+          value={data.whatsapp || ""}
+          onChange={(e) => onUpdate({ whatsapp: formatTelefone(e.target.value) })}
+          placeholder="(31) 99999-9999"
+        />
+      </FormField>
+
       {loaded && (
         <FormField label="Razão Social">
           <Input
@@ -397,6 +415,14 @@ function RepresentantesForm({
                 type="email"
                 value={rep.email || ""}
                 onChange={(e) => update(i, { email: e.target.value })}
+              />
+            </FormField>
+            <FormField label="WhatsApp do Representante" hint="Opcional">
+              <Input
+                type="tel"
+                value={rep.whatsapp || ""}
+                onChange={(e) => update(i, { whatsapp: formatTelefone(e.target.value) })}
+                placeholder="(31) 99999-9999"
               />
             </FormField>
             <FormField label="Nacionalidade">
@@ -567,6 +593,15 @@ function PFForm({
           onChange={(e) => onUpdate({ email: e.target.value })}
           placeholder="email@exemplo.com"
           required
+        />
+      </FormField>
+
+      <FormField label="WhatsApp" hint="Opcional. Para enviar o link de assinatura pelo WhatsApp">
+        <Input
+          type="tel"
+          value={data.whatsapp || ""}
+          onChange={(e) => onUpdate({ whatsapp: formatTelefone(e.target.value) })}
+          placeholder="(31) 99999-9999"
         />
       </FormField>
 
