@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { credencialApi, type CredencialPbhOut } from "@/app/lib/nfse-api";
+import { formatarDataHora } from "@/app/lib/datas";
 
 export function CredencialPbhPanel() {
   const [items, setItems] = useState<CredencialPbhOut[]>([]);
@@ -87,7 +88,7 @@ export function CredencialPbhPanel() {
                     </span>
                   </td>
                   <td className="py-2 text-xs">{c.criado_por}</td>
-                  <td className="py-2 text-xs">{new Date(c.criado_em).toLocaleString("pt-BR")}</td>
+                  <td className="py-2 text-xs">{formatarDataHora(c.criado_em)}</td>
                   <td className="py-2 text-right">
                     {c.ativo && (
                       <button
