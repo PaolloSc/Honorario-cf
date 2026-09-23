@@ -149,11 +149,8 @@ function isValidCPF(cpf: string): boolean {
   return true;
 }
 
-function validateContratantes(data: ContratoFormData, areas: string[]): string[] {
+function validateContratantes(data: ContratoFormData): string[] {
   const errors: string[] = [];
-
-  // Sem área cadastrada ainda, não há o que escolher — o sócio é escolhido no envio.
-  if (areas.length > 0 && !data.area) errors.push("Selecione a área do contrato.");
 
   if (data.contratantes.length === 0) {
     errors.push("Adicione pelo menos um contratante.");
@@ -226,17 +223,20 @@ function validateAcessorios(_data: ContratoFormData): string[] {
   return [];
 }
 
-function validateParticipacao(data: ContratoFormData): string[] {
+function validateParticipacao(data: ContratoFormData, areas: string[]): string[] {
+  const errors: string[] = [];
+  // Sem área cadastrada ainda, não há o que escolher — o sócio é escolhido no envio.
+  if (areas.length > 0 && !data.area) errors.push("Selecione a área do contrato.");
   if (!data.participacao.responsavel_gestao?.trim()) {
-    return ["Informe o responsável pela gestão do contrato."];
+    errors.push("Informe o responsável pela gestão do contrato.");
   }
-  return [];
+  return errors;
 }
 
 function validateStep(step: number, data: ContratoFormData, areas: string[] = []): string[] {
   switch (step) {
     case 1:
-      return validateContratantes(data, areas);
+      return validateContratantes(data);
     case 2:
       return validateEscopos(data);
     case 3:
@@ -244,7 +244,7 @@ function validateStep(step: number, data: ContratoFormData, areas: string[] = []
     case 4:
       return validateAcessorios(data);
     case 5:
-      return validateParticipacao(data);
+      return validateParticipacao(data, areas);
     default:
       return [];
   }
@@ -386,6 +386,32 @@ export default function ContractWizard({
       {/* Step Content */}
       <div className="mb-8">
         {currentStep === 1 && (
+          <Step1Contratante
+            contratantes={formData.contratantes}
+            onChange={updateContratantes}
+          />
+        )}
+        {currentStep === 2 && (
+          <Step2Escopo
+            escopos={formData.escopos}
+            onChange={updateEscopos}
+            incluirPartesRelacionadas={formData.incluir_partes_relacionadas}
+            onChangePartesRelacionadas={updatePartesRelacionadas}
+          />
+        )}
+        {currentStep === 3 && (
+          <Step3Honorarios
+            escopos={formData.escopos}
+            onChange={updateEscopos}
+          />
+        )}
+        {currentStep === 4 && (
+          <Step4Acessorios
+            acessorios={formData.acessorios}
+            onChange={updateAcessorios}
+          />
+        )}
+        {currentStep === 5 && (
           <>
             {areas.length > 0 && (
               <div className="mb-6 p-4 rounded-lg bg-card border border-border">
@@ -411,38 +437,12 @@ export default function ContractWizard({
                 </select>
               </div>
             )}
-            <Step1Contratante
-              contratantes={formData.contratantes}
-              onChange={updateContratantes}
+            <Step5Participacao
+              participacao={formData.participacao}
+              onChange={updateParticipacao}
+              escopos={formData.escopos}
             />
           </>
-        )}
-        {currentStep === 2 && (
-          <Step2Escopo
-            escopos={formData.escopos}
-            onChange={updateEscopos}
-            incluirPartesRelacionadas={formData.incluir_partes_relacionadas}
-            onChangePartesRelacionadas={updatePartesRelacionadas}
-          />
-        )}
-        {currentStep === 3 && (
-          <Step3Honorarios
-            escopos={formData.escopos}
-            onChange={updateEscopos}
-          />
-        )}
-        {currentStep === 4 && (
-          <Step4Acessorios
-            acessorios={formData.acessorios}
-            onChange={updateAcessorios}
-          />
-        )}
-        {currentStep === 5 && (
-          <Step5Participacao
-            participacao={formData.participacao}
-            onChange={updateParticipacao}
-            escopos={formData.escopos}
-          />
         )}
         {currentStep === 6 && <Step6Revisao data={formData} />}
         {currentStep === 7 && (

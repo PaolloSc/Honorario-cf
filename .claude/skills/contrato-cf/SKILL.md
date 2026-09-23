@@ -125,7 +125,7 @@ nos dois**.
 | 2 Escopo | `Step2Escopo.tsx` | `EscopoItem`, `TipoEscopo`, `ESCOPO_LABELS` |
 | 3 Honorários | `Step3Honorarios.tsx` | `HoraTrabalhada`, `ProLabore`, `Mensalidade`, `Exito`, `Permuta` |
 | 4 Acessórios | `Step4Acessorios.tsx` | `Acessorios` (inclui `valor_km`, `criterio_extincao_exito`, `clausulas_adicionais`) |
-| 5 Participações | `Step5Participacao.tsx` | `Participacao` — **ficha interna, não vai para o contrato** |
+| 5 Participações | `Step5Participacao.tsx` + campo Área em `ContractWizard.tsx` | `Participacao` e `area` — **ficha interna, não vai para o contrato** |
 | 6 Revisão | `Step6Revisao.tsx` | — |
 | 7 Envio | `Step7Envio.tsx` | monta signatários, testemunhas, e-mail |
 
