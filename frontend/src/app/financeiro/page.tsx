@@ -10,7 +10,8 @@ import {
   atualizarStatusPagamento,
   createParticipacao,
   encerrarVinculo,
-  getAuthHeaders,
+  fetchAutenticado,
+  SessaoExpiradaError,
   getRegrasParticipacao,
   getResumoParticipacao,
   listContratosPendentes,
@@ -102,7 +103,9 @@ export default function FinanceiroPage() {
     if (!token && !(devMode && hasDevSession)) return;
     const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
       (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}` : "");
-    fetch(`${apiBase}/api/users/me`, { headers: getAuthHeaders() })
+    // fetchAutenticado renova o token vencido antes de desistir: so' manda para o
+    // login quando a sessao realmente acabou, e nao a cada id_token de 1h vencido.
+    fetchAutenticado(`${apiBase}/api/users/me`)
       .then((r) => {
         if (r.status === 401) {
           window.location.href = "/financeiro/login";
@@ -115,7 +118,13 @@ export default function FinanceiroPage() {
         setRole(u.role);
         if (u.role !== "financeiro" && u.role !== "admin") setAccessDenied(true);
       })
-      .catch(() => setError("Falha ao verificar perfil"));
+      .catch((e) => {
+        if (e instanceof SessaoExpiradaError) {
+          window.location.href = "/financeiro/login";
+          return;
+        }
+        setError("Falha ao verificar perfil");
+      });
   }, [token, devMode, hasDevSession]);
 
   const refresh = useCallback(async () => {

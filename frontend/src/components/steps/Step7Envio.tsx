@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, socioDaArea, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, getContract, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
 import { ComboBox } from "@/components/ui/FormField";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 
@@ -286,13 +286,18 @@ export default function Step7Envio({
       .then((r) => setRoster(r.testemunhas))
       .catch(() => setRoster([]));
     listColaboradores()
-      .then((r) => {
-        setColaboradores(r.colaboradores);
-        // Sugere o sócio da área; contrato antigo (sem área) fica vazio pra escolha manual.
-        setSocioEscritorio((atual) => atual || socioDaArea(r.colaboradores, data.area)?.email || "");
-      })
+      .then((r) => setColaboradores(r.colaboradores))
       .catch(() => setColaboradores([]));
   }, []);
+
+  // Sugestão do backend (área do contrato; sem área, gestão/participação).
+  // Só existe depois de salvo, que é quando a seção de assinatura aparece.
+  useEffect(() => {
+    if (!contractId || status !== "sent_email") return;
+    getContract(contractId)
+      .then((c) => setSocioEscritorio((atual) => atual || c.socio_sugerido || ""))
+      .catch(() => {});
+  }, [contractId, status]);
 
   const reviewStarted = useRef(false);
 

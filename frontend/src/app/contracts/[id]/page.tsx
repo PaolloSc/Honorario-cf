@@ -9,11 +9,11 @@ import {
   previewContract,
   updateContractStatus,
   sendForSignature,
+  sincronizarAssinatura,
   sendEmail,
   rollbackContract,
   listTestemunhas,
   listColaboradores,
-  socioDaArea,
   type ColaboradorWizard,
   type ContractDetail,
   type AuditEntry,
@@ -41,6 +41,8 @@ const ACTION_LABELS: Record<string, string> = {
   envio_ficha_participacao: "Ficha de participação enviada",
   mudanca_status: "Status alterado",
   webhook_assinado: "Assinatura concluída",
+  sync_assinado: "Assinatura concluída (verificada no DocuSeal)",
+  sync_recusado: "Assinatura recusada (verificada no DocuSeal)",
   webhook_recusado: "Assinatura recusada",
 };
 
@@ -55,6 +57,8 @@ const ACTION_ICONS: Record<string, string> = {
   envio_ficha_participacao: "bg-teal-100 border-teal-300",
   mudanca_status: "bg-border/40 border-muted",
   webhook_assinado: "bg-green-100 border-green-300",
+  sync_assinado: "bg-green-100 border-green-300",
+  sync_recusado: "bg-red-100 border-red-300",
   webhook_recusado: "bg-red-100 border-red-300",
 };
 
@@ -95,6 +99,8 @@ export default function ContractDetailPage() {
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [socioEscritorio, setSocioEscritorio] = useState("");
+  const [sincronizando, setSincronizando] = useState(false);
+  const [pendentes, setPendentes] = useState<Array<{ role: string; name: string; email: string }>>([]);
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -114,6 +120,29 @@ export default function ContractDetailPage() {
     }
   }, [fetchContract, sessionStatus]);
 
+  // Contrato aguardando assinatura: confere com o DocuSeal ao abrir a pagina.
+  // Sem isto o status so' mudava se o webhook chegasse — e quando ele nao esta'
+  // configurado, ou a entrega falha, o contrato ficava em "Enviado p/
+  // Assinatura" para sempre mesmo com todas as partes tendo assinado.
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+    if (contract?.status !== "enviado") return;
+    let cancelado = false;
+    sincronizarAssinatura(contractId)
+      .then((r) => {
+        if (cancelado) return;
+        if (r.alterado) fetchContract();
+        else setPendentes(r.pendentes);
+      })
+      .catch(() => {
+        // Silencioso: e' uma conferencia de fundo. A falha nao pode atrapalhar
+        // quem so' queria ver o contrato, e o botao manual continua ali.
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [sessionStatus, contract?.status, contractId, fetchContract]);
+
   useEffect(() => {
     if (sessionStatus !== "authenticated" || !showSignaturePanel) return;
     listTestemunhas()
@@ -122,10 +151,10 @@ export default function ContractDetailPage() {
     listColaboradores()
       .then((r) => {
         setColaboradores(r.colaboradores);
-        setSocioEscritorio((atual) => atual || socioDaArea(r.colaboradores, contract?.area ?? undefined)?.email || "");
+        setSocioEscritorio((atual) => atual || contract?.socio_sugerido || "");
       })
       .catch(() => setColaboradores([]));
-  }, [sessionStatus, showSignaturePanel, contract?.area]);
+  }, [sessionStatus, showSignaturePanel, contract?.socio_sugerido]);
 
   const handlePreview = async () => {
     if (showPreview) {
@@ -157,6 +186,25 @@ export default function ContractDetailPage() {
       setNotification({type: "error", message: "Erro ao baixar contrato"});
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleSincronizar = async () => {
+    setSincronizando(true);
+    try {
+      const r = await sincronizarAssinatura(contractId);
+      if (r.alterado) fetchContract();
+      else setPendentes(r.pendentes);
+      // O componente de notificacao so' tem sucesso/erro; consultar o DocuSeal e
+      // descobrir que nada mudou nao e' erro. O texto do backend ja' diferencia.
+      setNotification({ type: "success", message: r.detalhe });
+    } catch (e) {
+      setNotification({
+        type: "error",
+        message: e instanceof Error ? e.message : "Erro ao consultar o DocuSeal",
+      });
+    } finally {
+      setSincronizando(false);
     }
   };
 
@@ -374,14 +422,36 @@ export default function ContractDetailPage() {
           </button>
         )}
         {contract.status === "enviado" && (
-          <button
-            onClick={() => handleStatusChange("assinado")}
-            className="px-5 py-2.5 border border-primary/40 text-primary-dark rounded-lg text-sm font-medium hover:bg-primary/10 transition"
-          >
-            Marcar como Assinado
-          </button>
+          <>
+            <button
+              onClick={handleSincronizar}
+              disabled={sincronizando}
+              className="px-5 py-2.5 border border-accent/40 text-accent rounded-lg text-sm font-medium hover:bg-accent/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sincronizando ? "Consultando..." : "Verificar Assinaturas"}
+            </button>
+            <button
+              onClick={() => handleStatusChange("assinado")}
+              className="px-5 py-2.5 border border-primary/40 text-primary-dark rounded-lg text-sm font-medium hover:bg-primary/10 transition"
+            >
+              Marcar como Assinado
+            </button>
+          </>
         )}
       </div>
+
+      {contract.status === "enviado" && pendentes.length > 0 && (
+        <div className="mb-8 -mt-4 px-4 py-3 bg-warning/10 border border-warning/30 rounded-lg text-sm">
+          <p className="font-medium text-warning mb-1">Falta assinar:</p>
+          <ul className="space-y-0.5 text-foreground">
+            {pendentes.map((p, i) => (
+              <li key={i}>
+                {p.name || p.email} <span className="text-muted">({p.role})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Inline contract preview */}
       {showPreview && previewHtml && (

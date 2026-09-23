@@ -4,7 +4,7 @@
 Escritório de advocacia → testemunhas são pessoas recorrentes. Fluxo:
 
 1. **Cadastro de testemunhas (roster)** — tabela no banco com testemunhas frequentes (nome+email, ativa). CRUD próprio.
-2. **No envio p/ assinatura** o advogado seleciona N testemunhas do roster (multi) e/ou adiciona avulsas. **Testemunha 1 = Lilian Siqueira (financeiro)** sempre injetada automaticamente. Sem teto de quantidade.
+2. **No envio p/ assinatura** o advogado seleciona N testemunhas do roster (multi) e/ou adiciona avulsas. **Testemunha 1 = Lilian Silveira Correa (financeiro)** sempre injetada automaticamente. Sem teto de quantidade.
 3. **Testemunhas assinam digitalmente** no DocuSeal (papéis `Testemunha 1..N`).
 4. **Financeiro não recebe email na geração nem no envio.** A **ficha de participação** vai ao financeiro **só no webhook `submission.completed`** (todos assinaram). Lilian recebe o contrato assinado via DocuSeal.
 
@@ -71,7 +71,7 @@ Task 8 (testes) ← 2,4,5,7
 ### Fase 2: Testemunhas no envio (backend)
 
 #### Task 3: Settings da testemunha fixa
-**Descrição:** `testemunha1_nome` ("Lilian Siqueira") + `testemunha1_email` (env `TESTEMUNHA1_EMAIL`, default financeiro@...) em `config.py`; doc no `.env.example`.
+**Descrição:** `testemunha1_nome` ("Lilian Silveira Correa") + `testemunha1_email` (env `TESTEMUNHA1_EMAIL`, default financeiro@...) em `config.py`; doc no `.env.example`.
 **Acceptance criteria:** [ ] settings existem e leem env.
 **Verification:** [ ] import imprime valores.
 **Dependencies:** None

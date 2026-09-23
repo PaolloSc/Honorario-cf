@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string }>;
+  searchParams: Promise<{ callbackUrl?: string; limpo?: string }>;
 }) {
   const params = await searchParams;
   const callbackUrl = callbackUrlSeguro(params.callbackUrl);
@@ -14,5 +14,5 @@ export default async function LoginPage({
   if (session?.user) {
     redirect(callbackUrl);
   }
-  return <LoginForm callbackUrl={callbackUrl} />;
+  return <LoginForm callbackUrl={callbackUrl} limpo={params.limpo === "1"} />;
 }

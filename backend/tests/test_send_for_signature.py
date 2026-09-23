@@ -1157,3 +1157,52 @@ class TestAssinaturaPeloEscritorio:
         assert da_socia[0]["role"] == "Advogado"
         assert da_socia[0]["also_contratado"] is True
         assert "Contratado" not in [s["role"] for s in captured]
+
+
+class TestSocioSugerido:
+    """Socio pre-selecionado para assinar pelo escritorio: area do contrato
+    primeiro; sem area, a regra do PR #74 (gestao socio, senao participante socio).
+    Sem nenhum, nao sugere — o e-mail generico nao assina mais."""
+
+    @pytest.fixture(autouse=True)
+    def seed(self):
+        db = SessionLocal()
+        try:
+            db.add(ColaboradorDB(nome="Monica Socia", email="monica@cf.com", papel="socio", areas="Trabalhista"))
+            db.add(ColaboradorDB(nome="Gabriel Socio", email="gabriel@cf.com", papel="socio", areas="Cível"))
+            db.add(ColaboradorDB(nome="Bruno Advogado", email="bruno@cf.com", papel="advogado"))
+            db.commit()
+        finally:
+            db.close()
+
+    def _sugerido(self, form_data):
+        from app.routers.docuseal import socio_sugerido
+
+        db = SessionLocal()
+        try:
+            s = socio_sugerido(json.dumps(form_data), db)
+            return s.email if s else None
+        finally:
+            db.close()
+
+    def test_area_vence_a_gestao(self):
+        form = {"area": "Trabalhista", "participacao": {"responsavel_gestao": "Gabriel Socio"}}
+        assert self._sugerido(form) == "monica@cf.com"
+
+    def test_sem_area_usa_gestor_socio(self):
+        assert self._sugerido({"participacao": {"responsavel_gestao": "Monica Socia"}}) == "monica@cf.com"
+
+    def test_area_sem_responsavel_cai_na_participacao(self):
+        form = {"area": "Tributário", "participacao": {"responsavel_gestao": "Gabriel Socio"}}
+        assert self._sugerido(form) == "gabriel@cf.com"
+
+    def test_gestor_nao_socio_usa_participante_socio(self):
+        form = {"participacao": {
+            "responsavel_gestao": "Bruno Advogado",
+            "participantes": [{"nome": "Bruno Advogado"}, {"nome": "Monica Socia"}],
+        }}
+        assert self._sugerido(form) == "monica@cf.com"
+
+    def test_sem_socio_identificado_nao_sugere(self):
+        form = {"participacao": {"responsavel_gestao": "Bruno Advogado", "participantes": [{"nome": "Bruno Advogado"}]}}
+        assert self._sugerido(form) is None
