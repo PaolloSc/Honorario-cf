@@ -229,13 +229,6 @@ def _patch_docx_with_signatures(
             doc.add_paragraph(f"CONTRATADO: {name.upper()}")
             doc.add_paragraph()
 
-        for sig in merged_contratado_sigs:
-            role = sig["role"]
-            name = sig.get("contratado_nome", "Carvalho & Furtado Advogados")
-            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
-            doc.add_paragraph(f"CONTRATADO: {name.upper()}")
-            doc.add_paragraph()
-
         for sig in advogado_sigs:
             role = sig["role"]
             name = sig.get("name", "Advogado")
