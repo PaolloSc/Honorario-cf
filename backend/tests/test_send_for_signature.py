@@ -1211,3 +1211,25 @@ class TestSocioSugerido:
     def test_sem_socio_identificado_nao_sugere(self):
         form = {"participacao": {"responsavel_gestao": "Bruno Advogado", "participantes": [{"nome": "Bruno Advogado"}]}}
         assert self._sugerido(form) is None
+
+
+def test_remendo_do_docx_tem_um_bloco_contratado_so(tmp_path):
+    """Caminho de reserva (docx remendado): socio advogado tambem sai com um bloco CONTRATADO so'."""
+    from docx import Document
+    from app.routers.docuseal import _patch_docx_with_signatures
+
+    origem = tmp_path / "vazio.docx"
+    Document().save(str(origem))
+    sigs = [
+        {"email": "c@a.com", "name": "Client", "role": "Contratante"},
+        {"email": "monica@cf.com", "name": "Monica", "role": "Advogado",
+         "also_contratado": True, "contratado_nome": "Carvalho & Furtado Advogados"},
+    ]
+    db = SessionLocal()
+    try:
+        with patch.object(settings, "output_dir", str(tmp_path)):
+            saida = _patch_docx_with_signatures(origem, sigs, "remendo-001", db, None)
+    finally:
+        db.close()
+    linhas = [p.text for p in Document(str(saida)).paragraphs]
+    assert linhas.count("CONTRATADO: CARVALHO & FURTADO ADVOGADOS") == 1

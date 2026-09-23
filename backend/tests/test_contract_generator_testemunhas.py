@@ -57,3 +57,17 @@ def test_initial_generation_keeps_physical_block():
     assert "TESTEMUNHAS:" in text
     assert "CPF:" in text
     assert "role=Testemunha" not in text
+
+
+def test_socio_que_tambem_e_advogado_tem_um_bloco_contratado_so():
+    """Sócio assina como advogado e pelo escritório: o bloco CONTRATADO sai uma vez (merge duplicou o laço)."""
+    data = ContratoRequest(**_req())
+    roles = [
+        {"email": "c@a.com", "name": "Client", "role": "Contratante"},
+        {"email": "monica@cf.com", "name": "Monica Socia", "role": "Advogado",
+         "also_contratado": True, "contratado_nome": "Carvalho & Furtado Advogados"},
+    ]
+    _, path = ContractGenerator().generate(data, contract_id="CONTRATADO_UNICO", signatario_roles=roles)
+    # A qualificacao das partes tambem comeca com "CONTRATADO:"; so' a linha exata e' assinatura.
+    blocos = [l for l in _text_of(path).splitlines() if l == "CONTRATADO: CARVALHO &amp; FURTADO ADVOGADOS"]
+    assert len(blocos) == 1
