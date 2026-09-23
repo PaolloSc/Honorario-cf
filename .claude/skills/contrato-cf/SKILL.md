@@ -141,9 +141,17 @@ Siga esse padrão ao trocar um campo por uma lista.
 
 `backend/app/routers/docuseal.py`, endpoint `send-for-signature`.
 
-- Assinam pelo escritório: **C&F como `Contratado`** (injetado sempre) mais os
-  advogados escolhidos na etapa 7. Quem preenche o formulário **não** é
-  incluído automaticamente — foi removido de propósito, não reintroduza.
+- O **Contratado é sempre o C&F**: o bloco no documento é "CARVALHO &
+  FURTADO ADVOGADOS" (`contratado_nome`). Quem assina por ele é um **sócio**
+  ativo do roster, obrigatório (`_resolver_assinatura_escritorio` recusa com
+  400 se faltar ou se não for sócio), sugerido pela **área** do contrato
+  (`colaboradores.areas`). Se esse sócio também assina como advogado, recebe
+  um convite só (`also_contratado`). Contrato de consumidor fica fora: lá a
+  contratada é fixa.
+- **Advogados que assinam**: sócios ou advogados escolhidos na etapa 7, só
+  como `Advogado`. Quem preenche o formulário **não** é incluído
+  automaticamente — foi removido de propósito, não reintroduza.
+- Termos (sócio, advogado, área, assinatura pelo escritório) em `CONTEXT.md`.
 - **Testemunha 1** (financeiro) é injetada em toda submissão e recebe por
   último (`order = 5`), depois que todos assinaram.
 - Papéis repetidos ganham sufixo ("Contratante 1", "Contratante 2") porque o

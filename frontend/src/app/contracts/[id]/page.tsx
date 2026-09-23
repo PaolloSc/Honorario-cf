@@ -12,11 +12,15 @@ import {
   sendEmail,
   rollbackContract,
   listTestemunhas,
+  listColaboradores,
+  socioDaArea,
+  type ColaboradorWizard,
   type ContractDetail,
   type AuditEntry,
   type VersionSummary,
   type Testemunha,
 } from "@/app/lib/api";
+import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
@@ -89,6 +93,8 @@ export default function ContractDetailPage() {
   const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
+  const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
+  const [socioEscritorio, setSocioEscritorio] = useState("");
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -113,7 +119,13 @@ export default function ContractDetailPage() {
     listTestemunhas()
       .then((r) => setRoster(r.testemunhas))
       .catch(() => setRoster([]));
-  }, [sessionStatus, showSignaturePanel]);
+    listColaboradores()
+      .then((r) => {
+        setColaboradores(r.colaboradores);
+        setSocioEscritorio((atual) => atual || socioDaArea(r.colaboradores, contract?.area ?? undefined)?.email || "");
+      })
+      .catch(() => setColaboradores([]));
+  }, [sessionStatus, showSignaturePanel, contract?.area]);
 
   const handlePreview = async () => {
     if (showPreview) {
@@ -181,6 +193,13 @@ export default function ContractDetailPage() {
       // Add additional lawyers
       for (const lawyer of additionalLawyers) {
         signatarios.push({ email: lawyer.email, name: lawyer.name, role: "Advogado" });
+      }
+
+      // Honorários: o sócio escolhido assina pelo escritório. No consumidor o backend
+      // injeta a contratada fixa.
+      const socio = colaboradores.find((c) => c.email === socioEscritorio);
+      if (ehHonorarios && socio) {
+        signatarios.push({ email: socio.email, name: socio.name, role: "Contratado" });
       }
 
       // Testemunhas: do roster (selecionadas) + avulsas. Lilian (Testemunha 1) e injetada no backend.
@@ -275,6 +294,7 @@ export default function ContractDetailPage() {
   );
   const lastSignatureEntry = signatureEntries.length > 0 ? signatureEntries[0] : null;
   const canSendForSignature = contract.status === "rascunho" || contract.status === "enviado";
+  const ehHonorarios = (contract.tipo_contrato ?? "honorarios") === "honorarios";
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -383,9 +403,17 @@ export default function ContractDetailPage() {
             Enviar para Assinatura Digital
           </h3>
           <p className="text-xs text-purple-700 mb-3">
-            O contratante ({contract.client_email}) e voce (advogado logado) serao incluidos automaticamente.
-            Adicione outros advogados se necessario.
+            O contratante ({contract.client_email}) é incluído automaticamente.
+            Adicione os advogados que assinam, se houver.
           </p>
+
+          {ehHonorarios && (
+            <SocioEscritorioSelect
+              colaboradores={colaboradores}
+              value={socioEscritorio}
+              onChange={setSocioEscritorio}
+            />
+          )}
 
           {/* Additional lawyers list */}
           {additionalLawyers.length > 0 && (
@@ -510,7 +538,7 @@ export default function ContractDetailPage() {
           <div className="flex gap-3">
             <button
               onClick={handleSendForSignature}
-              disabled={sendingSignature}
+              disabled={sendingSignature || (ehHonorarios && !socioEscritorio)}
               className="px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
             >
               {sendingSignature ? "Enviando..." : "Confirmar e Enviar"}
