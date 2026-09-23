@@ -1196,6 +1196,11 @@ class TestSocioSugerido:
         form = {"area": "Tributário", "participacao": {"responsavel_gestao": "Gabriel Socio"}}
         assert self._sugerido(form) == "gabriel@cf.com"
 
+    def test_outra_area_cai_no_gestor_socio(self):
+        """Contrato de area sem socio cadastrado (ex.: Ambiental): vale o gestor."""
+        form = {"area": "Outra área / não se aplica", "participacao": {"responsavel_gestao": "Monica Socia"}}
+        assert self._sugerido(form) == "monica@cf.com"
+
     def test_gestor_nao_socio_usa_participante_socio(self):
         form = {"participacao": {
             "responsavel_gestao": "Bruno Advogado",

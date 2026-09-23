@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import FormField, { Checkbox, ComboBox, Input, Select, Toggle } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import type { EscopoItem, Participacao, ParticipacaoValorTipo, TipoHonorario } from "@/types/contract";
@@ -51,9 +51,11 @@ interface Step5Props {
   participacao: Participacao;
   onChange: (participacao: Participacao) => void;
   escopos: EscopoItem[];
+  // Campos do wizard que moram no fim da Ficha Interna mas nao sao da participacao (ex.: Area).
+  children?: ReactNode;
 }
 
-export default function Step5Participacao({ participacao, onChange, escopos }: Step5Props) {
+export default function Step5Participacao({ participacao, onChange, escopos, children }: Step5Props) {
   const objetoLines = buildObjetoLines(escopos);
   const [colaboradores, setColaboradores] = useState<Array<{ name: string; email: string; role: string }>>([]);
   const [colabError, setColabError] = useState("");
@@ -536,6 +538,7 @@ export default function Step5Participacao({ participacao, onChange, escopos }: S
           </div>
         )}
       </div>
+      {children}
     </div>
   );
 }

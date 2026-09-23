@@ -33,6 +33,7 @@ from app.services.contract_dispatch import TIPO_HONORARIOS
 from app.services.contract_dispatch import get_generator as get_consumidor_gen
 from app.services.contract_dispatch import parse_form_data
 from app.services.contract_generator import ContractGenerator
+from app.utils.participacao import valor_participante
 
 
 def get_consumidor_generator():
@@ -252,7 +253,7 @@ def generate_contract(
                 else:
                     valor_str = participacao_data.percentual_ou_valor or "-"
                 participantes_str = "; ".join(
-                    f"{p.nome} ({p.natureza or '-'}{f', {p.percentual}%' if p.percentual else ''})"
+                    f"{p.nome} ({p.natureza or '-'}, {valor_participante(p.model_dump()) or 'geral'})"
                     for p in participantes_wizard
                 ) or "-"
                 obs_extra = (
