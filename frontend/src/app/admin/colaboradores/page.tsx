@@ -121,13 +121,13 @@ export default function ColaboradoresAdminPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8">
       <h1 className="font-display text-2xl font-semibold text-primary-dark tracking-wide mb-1">
         Colaboradores
       </h1>
       <p className="text-sm text-muted mb-6">
-        Roster do escritório. Advogados e sócios aparecem nas listas suspensas do
-        wizard (campo &quot;Para quem&quot; e responsáveis).
+        Cadastro do escritório. Advogados e sócios aparecem nas listas do formulário
+        de contrato (campo &quot;Para quem&quot;, responsáveis e assinaturas).
       </p>
       <p className="text-sm text-muted mb-6 -mt-4">
         <strong>Áreas</strong> (só sócios, separadas por vírgula): o sócio responsável pela área
@@ -183,11 +183,11 @@ export default function ColaboradoresAdminPage() {
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted">Nenhum colaborador cadastrado.</p>
       ) : (
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-background/60">
-                <th className="text-left px-4 py-3 font-medium text-muted">Nome</th>
+                <th className="text-left px-4 py-3 font-medium text-muted min-w-[16rem]">Nome</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">E-mail</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Papel</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Áreas</th>
@@ -200,13 +200,8 @@ export default function ColaboradoresAdminPage() {
                 <tr key={c.id} className="border-b border-border/50 hover:bg-background/60">
                   <td className="px-4 py-3 font-medium">
                     {c.nome}
-                    {c.participavel && (
-                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/[0.16] text-primary-dark">
-                        wizard
-                      </span>
-                    )}
                   </td>
-                  <td className="px-4 py-3 text-muted">{c.email || "—"}</td>
+                  <td className="px-4 py-3 text-muted whitespace-nowrap">{c.email || "—"}</td>
                   <td className="px-4 py-3">
                     <select
                       value={c.papel}
