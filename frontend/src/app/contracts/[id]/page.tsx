@@ -22,6 +22,7 @@ import {
 } from "@/app/lib/api";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp from "@/components/EnvioWhatsApp";
+import { formatarDataHora } from "@/app/lib/datas";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
@@ -63,15 +64,7 @@ const ACTION_ICONS: Record<string, string> = {
   webhook_recusado: "bg-red-100 border-red-300",
 };
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const formatDate = formatarDataHora;
 
 export default function ContractDetailPage() {
   const sessionStatus = useAuthStatus();
