@@ -160,3 +160,15 @@ def test_so_socio_responde_por_area(client, as_admin):
     socio = client.post("/api/colaboradores", json={"nome": "Ex", "papel": "socio", "areas": ["Cível"]}).json()
     rebaixado = client.patch(f"/api/colaboradores/{socio['id']}", json={"papel": "advogado"})
     assert rebaixado.json()["areas"] == []
+
+
+def test_reativar_socio_nao_deixa_area_com_dois_responsaveis(client, as_admin):
+    """Mônica desativada, Gabriel assume Trabalhista, Mônica reativada: a reativação é recusada."""
+    monica = client.post("/api/colaboradores", json={"nome": "Monica", "papel": "socio", "areas": ["Trabalhista"]}).json()
+    gabriel = client.post("/api/colaboradores", json={"nome": "Gabriel", "papel": "socio"}).json()
+    client.delete(f"/api/colaboradores/{monica['id']}")
+    assert client.patch(f"/api/colaboradores/{gabriel['id']}", json={"areas": ["Trabalhista"]}).status_code == 200
+
+    r = client.patch(f"/api/colaboradores/{monica['id']}", json={"ativo": True})
+    assert r.status_code == 409
+    assert "Trabalhista" in r.json()["detail"]
