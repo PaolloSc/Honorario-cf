@@ -69,10 +69,13 @@ def linhas_participacao(p: Mapping[str, Any]) -> list[tuple[str, str]]:
             if not nome:
                 continue
             natureza = participante.get("natureza", "")
-            # Sem valor proprio vale o geral — dito por extenso pra ninguem deduzir.
-            valor = valor_participante(participante) or (
-                f"{valor_geral[1]} (geral)" if valor_geral else ""
-            )
+            # Dito por extenso pra ninguem deduzir: sem valor proprio vale o geral;
+            # com valor proprio, ele fica no lugar do geral (10% nao e' 10% do geral).
+            proprio = valor_participante(participante)
+            if proprio:
+                valor = f"{proprio} (no lugar do geral)" if valor_geral else proprio
+            else:
+                valor = f"{valor_geral[1]} (geral)" if valor_geral else ""
             texto = ", ".join(v for v in (natureza, valor) if v)
             linhas.append((f"Para quem — {nome}", texto or "—"))
     else:

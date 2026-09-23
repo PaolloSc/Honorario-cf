@@ -197,6 +197,9 @@ def update_colaborador(
         c.ordem = body.ordem
     if body.areas is not None:
         _aplicar_areas(c, body.areas, db)
+    elif body.ativo and c.papel == "socio" and c.lista_areas:
+        # Reativado: outro socio pode ter assumido a area nesse meio tempo.
+        _aplicar_areas(c, c.lista_areas, db)
     elif c.papel != "socio":
         # Deixou de ser socio: perde as areas (senao a area fica presa a quem nao assina)
         c.areas = None
