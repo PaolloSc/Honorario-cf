@@ -1222,6 +1222,14 @@ class ContractGenerator:
                     f"{{{{Assinatura {name};type=signature;role={sig['role']}}}}}",
                     f"CONTRATADO: {name.upper()}",
                 ))
+            for sig in merged_contratado_sigs:
+                # Mesmo role do advogado abaixo: um campo a mais no doc, mas o mesmo
+                # submitter/assinatura do DocuSeal cobre os dois blocos.
+                name = sig.get("contratado_nome", "Carvalho & Furtado Advogados")
+                partes_entries.append((
+                    f"{{{{Assinatura {name};type=signature;role={sig['role']}}}}}",
+                    f"CONTRATADO: {name.upper()}",
+                ))
             for sig in advogado_sigs:
                 name = sig.get("name", "Advogado")
                 partes_entries.append((

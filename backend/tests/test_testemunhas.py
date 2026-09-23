@@ -24,11 +24,11 @@ def override_auth():
 def test_create_and_list(client):
     resp = client.post(
         "/api/testemunhas",
-        json={"nome": "Lilian Siqueira", "email": "lilian@cf.com.br"},
+        json={"nome": "Lilian Silveira Correa", "email": "lilian@cf.com.br"},
     )
     assert resp.status_code == 201
     created = resp.json()
-    assert created["nome"] == "Lilian Siqueira"
+    assert created["nome"] == "Lilian Silveira Correa"
     assert created["ativo"] is True
 
     listed = client.get("/api/testemunhas").json()["testemunhas"]
