@@ -146,6 +146,8 @@ export default function Step6Revisao({ data }: Step6Props) {
                   ? ` (${p.valor_outro})`
                   : p.percentual
                   ? ` (${p.percentual}%)`
+                  : data.participacao.valor_tipo
+                  ? " (geral)"
                   : "";
               return (
                 <li key={i}>

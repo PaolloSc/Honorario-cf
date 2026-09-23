@@ -149,6 +149,10 @@ function isValidCPF(cpf: string): boolean {
   return true;
 }
 
+// Contrato de área sem sócio cadastrado. Não pertence a nenhum sócio, então o
+// backend cai no responsável pela gestão ao sugerir quem assina.
+const AREA_OUTRA = "Outra área / não se aplica";
+
 function validateContratantes(data: ContratoFormData): string[] {
   const errors: string[] = [];
 
@@ -223,12 +227,37 @@ function validateAcessorios(_data: ContratoFormData): string[] {
   return [];
 }
 
+// Mesmo critério da ficha (backend/app/utils/participacao.py): sem valor_tipo,
+// o wizard mostra "percentual" marcado.
+function temValor(tipo: string | undefined, pct?: string, valor?: number, outro?: string): boolean {
+  const t = tipo || "percentual";
+  if (t === "percentual") return Boolean(pct?.toString().trim());
+  if (t === "valor") return valor != null;
+  return Boolean(outro?.trim());
+}
+
 function validateParticipacao(data: ContratoFormData, areas: string[]): string[] {
   const errors: string[] = [];
   // Sem área cadastrada ainda, não há o que escolher — o sócio é escolhido no envio.
   if (areas.length > 0 && !data.area) errors.push("Selecione a área do contrato.");
   if (!data.participacao.responsavel_gestao?.trim()) {
     errors.push("Informe o responsável pela gestão do contrato.");
+  }
+
+  // Cada advogado marcado precisa de valor próprio ou de um valor geral — senão a
+  // ficha chega ao financeiro sem valor nenhum.
+  const p = data.participacao;
+  if (p.tem_participacao) {
+    const temGeral =
+      (p.valor_tipo != null && temValor(p.valor_tipo, p.valor_percentual, p.valor_monetario, p.valor_outro)) ||
+      Boolean(p.percentual_ou_valor?.trim());
+    if (!temGeral) {
+      for (const part of p.participantes ?? []) {
+        if (!temValor(part.valor_tipo, part.percentual, part.valor_monetario, part.valor_outro)) {
+          errors.push(`Informe o valor de ${part.nome} ou o critério geral da participação.`);
+        }
+      }
+    }
   }
   return errors;
 }
@@ -412,15 +441,22 @@ export default function ContractWizard({
           />
         )}
         {currentStep === 5 && (
-          <>
+          <Step5Participacao
+            participacao={formData.participacao}
+            onChange={updateParticipacao}
+            escopos={formData.escopos}
+          >
             {areas.length > 0 && (
-              <div className="mb-6 p-4 rounded-lg bg-card border border-border">
-                <label className="block text-sm font-medium text-foreground mb-1" htmlFor="area-contrato">
-                  Área do contrato
-                </label>
-                <p className="text-xs text-muted mb-2">
-                  Define o sócio que vem sugerido para assinar pelo escritório no envio.
+              <div className="bg-card border border-border rounded-xl p-6 shadow-sm mt-6">
+                <p className="text-sm font-semibold text-foreground mb-1">Assinatura pelo escritório</p>
+                <p className="text-xs text-muted mb-4">
+                  O sócio responsável pela área vem sugerido para assinar pelo escritório no envio.
+                  A área não muda o responsável pela gestão nem a participação. Sem área definida,
+                  a sugestão é o responsável pela gestão, se for sócio.
                 </p>
+                <label className="block text-sm font-medium text-foreground mb-1" htmlFor="area-contrato">
+                  Área do contrato <span className="text-danger">*</span>
+                </label>
                 <select
                   id="area-contrato"
                   value={formData.area ?? ""}
@@ -434,15 +470,12 @@ export default function ContractWizard({
                   {areas.map((a) => (
                     <option key={a} value={a}>{a}</option>
                   ))}
+                  {/* Nenhum sócio tem esta área: a sugestão cai na gestão (socio_sugerido). */}
+                  <option value={AREA_OUTRA}>{AREA_OUTRA}</option>
                 </select>
               </div>
             )}
-            <Step5Participacao
-              participacao={formData.participacao}
-              onChange={updateParticipacao}
-              escopos={formData.escopos}
-            />
-          </>
+          </Step5Participacao>
         )}
         {currentStep === 6 && <Step6Revisao data={formData} />}
         {currentStep === 7 && (

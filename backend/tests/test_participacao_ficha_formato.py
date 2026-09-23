@@ -70,3 +70,27 @@ def test_ficha_completa_na_ordem_da_leitura():
         "Base", "Percentual", "Para quem — Ana", "Para quem — Bruno",
         "Resp. Captação", "Resp. Gestão", "Contato — Nome", "Contato — E-mail",
     ]
+
+
+def test_participante_com_valor_proprio_em_reais_ou_outro():
+    """O wizard deixa cada advogado escolher R$ ou outro critério; a ficha lia só o percentual."""
+    linhas = _dict(linhas_participacao({
+        "participantes": [
+            {"nome": "Ana Souza", "natureza": "Captação", "valor_tipo": "valor", "valor_monetario": 5000},
+            {"nome": "Bruno Lima", "natureza": "Performance", "valor_tipo": "outro", "valor_outro": "metade do êxito"},
+            {"nome": "Caio", "natureza": "Projeto", "valor_tipo": "percentual", "percentual": "15"},
+        ]
+    }))
+    assert linhas["Para quem — Ana Souza"] == "Captação, R$ 5.000,00"
+    assert linhas["Para quem — Bruno Lima"] == "Performance, metade do êxito"
+    assert linhas["Para quem — Caio"] == "Projeto, 15%"
+
+
+def test_participante_sem_valor_proprio_mostra_que_vale_o_geral():
+    """Mônica marcada sem percentual: vale o geral, e a ficha diz isso por extenso."""
+    linhas = _dict(linhas_participacao({
+        "valor_tipo": "percentual",
+        "valor_percentual": "20",
+        "participantes": [{"nome": "Mônica", "natureza": "Captação"}],
+    }))
+    assert linhas["Para quem — Mônica"] == "Captação, 20% (geral)"
