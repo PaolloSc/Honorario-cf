@@ -511,6 +511,20 @@ async def send_for_signature(
             submission = sign_result.get("submission", {})
             submission_id = submission.get("id")
 
+            # Reenvio: arquiva as submissoes anteriores ainda abertas, senao o
+            # cliente fica com dois links validos e pode assinar a versao velha.
+            if contract and contract.status in ("enviado", "recusado"):
+                anteriores = {
+                    v.docuseal_submission_id
+                    for v in contract.versions
+                    if v.docuseal_submission_id and v.docuseal_submission_id != str(submission_id)
+                }
+                for antiga in sorted(anteriores):
+                    try:
+                        await service.archive_submission(antiga)
+                    except Exception as e:  # nao impede o envio novo
+                        logger.warning("Nao arquivou a submissao antiga %s: %s", antiga, e)
+
             # Update DB: status + audit log
             if contract:
                 contract.status = "enviado"
