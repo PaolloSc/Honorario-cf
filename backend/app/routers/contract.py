@@ -33,7 +33,7 @@ from app.services.contract_dispatch import TIPO_HONORARIOS
 from app.services.contract_dispatch import get_generator as get_consumidor_gen
 from app.services.contract_dispatch import parse_form_data
 from app.services.contract_generator import ContractGenerator
-from app.utils.participacao import valor_participante
+from app.utils.participacao import valor_participacao, valor_participante
 
 
 def get_consumidor_generator():
@@ -244,14 +244,9 @@ def generate_contract(
 
             obs_extra = ""
             if participacao_data:
-                if participacao_data.valor_tipo == "percentual" and participacao_data.valor_percentual:
-                    valor_str = f"{participacao_data.valor_percentual}%"
-                elif participacao_data.valor_tipo == "valor" and participacao_data.valor_monetario is not None:
-                    valor_str = f"R$ {participacao_data.valor_monetario:.2f}"
-                elif participacao_data.valor_tipo == "outro" and participacao_data.valor_outro:
-                    valor_str = participacao_data.valor_outro
-                else:
-                    valor_str = participacao_data.percentual_ou_valor or "-"
+                # Mesma formatacao da ficha (R$ 5.000,00, nao R$ 5000.00).
+                valor_geral = valor_participacao(participacao_data.model_dump())
+                valor_str = valor_geral[1] if valor_geral else "-"
                 participantes_str = "; ".join(
                     f"{p.nome} ({p.natureza or '-'}, {valor_participante(p.model_dump()) or 'geral'})"
                     for p in participantes_wizard

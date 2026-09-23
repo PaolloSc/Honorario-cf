@@ -177,6 +177,13 @@ function validateContratantes(data: ContratoFormData): string[] {
     if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
     if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ para preencher a Razão Social.`);
     if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ para preencher o endereço.`);
+    // Quem tem nome aqui assina o contrato: sem e-mail, ficava fora da assinatura
+    // sem aviso — e empresa que exige dois administradores saía com um só.
+    (contratante.representantes ?? []).forEach((rep) => {
+      if (text(rep.nome) && !isEmail(rep.email)) {
+        errors.push(`${label}: informe o e-mail do representante ${text(rep.nome)} (ele assina o contrato).`);
+      }
+    });
   });
 
   return errors;

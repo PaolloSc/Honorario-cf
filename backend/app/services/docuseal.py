@@ -114,6 +114,16 @@ class DocuSealService:
             "message": f"Erro ao enviar para assinatura: {response.status_code} - {response.text}",
         }
  
+    async def archive_submission(self, submission_id: int | str) -> bool:
+        """Arquiva a submissao: o link de assinatura dela deixa de valer."""
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{self.base_url}/submissions/{submission_id}",
+                headers=self._headers(),
+                timeout=30.0,
+            )
+        return response.status_code in (200, 204)
+
     async def get_submission_status(self, submission_id: int | str) -> dict:
         """Check the status of a submission."""
         async with httpx.AsyncClient() as client:

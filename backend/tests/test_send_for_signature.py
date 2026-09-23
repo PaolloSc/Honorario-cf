@@ -1153,6 +1153,35 @@ class TestAssinaturaPeloEscritorio:
             "link": "https://docuseal.com/s/cli123", "whatsapp": "+5531999991234",
         }]
 
+    def test_reenvio_arquiva_o_link_antigo(self, client):
+        """Reenviar o contrato cria outra submissao: a anterior e' arquivada para o link velho nao valer mais."""
+        db = SessionLocal()
+        try:
+            antiga = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == self.contract_id).first()
+            antiga.docuseal_submission_id = "111"
+            db.add(ContractVersionDB(contract_id=self.contract_id, version_number=2,
+                                     form_data_json="{}", file_path=str(self.file), created_at=utcnow()))
+            contrato = db.query(ContractDB).filter(ContractDB.contract_id == self.contract_id).first()
+            contrato.current_version = 2
+            contrato.status = "enviado"
+            db.commit()
+        finally:
+            db.close()
+
+        async def send(template_id, signatarios, send_email=True):
+            return {"success": True, "submission": {"id": 222, "submitters": []}, "message": "ok"}
+
+        mock_service = MagicMock()
+        mock_service.create_template_from_docx = AsyncMock(return_value={"id": 1})
+        mock_service.send_for_signature = AsyncMock(side_effect=send)
+        mock_service.archive_submission = AsyncMock(return_value=True)
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service):
+            r = client.post("/api/docuseal/send-for-signature",
+                            json={"contract_id": self.contract_id, "signatarios": [self.CLIENTE, SOCIO]})
+
+        assert r.status_code == 200, r.text
+        mock_service.archive_submission.assert_awaited_once_with("111")
+
     def test_sem_socio_nao_envia(self, client):
         response, captured = self._enviar(client, [self.CLIENTE])
         assert response.status_code == 400
