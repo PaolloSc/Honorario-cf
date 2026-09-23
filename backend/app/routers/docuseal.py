@@ -797,6 +797,9 @@ def _pendentes_docuseal(status_data: dict[str, Any]) -> list[dict[str, str]]:
             "role": s.get("role", ""),
             "name": s.get("name", ""),
             "email": s.get("email", ""),
+            # Link de assinatura e WhatsApp: a tela oferece o envio pelo WhatsApp.
+            "link": s.get("embed_src") or "",
+            "whatsapp": s.get("phone") or "",
         }
         for s in submitters
         if not s.get("completed_at") and not s.get("declined_at")
@@ -942,6 +945,8 @@ class PendenteSigner(BaseModel):
     role: str
     name: str
     email: str
+    link: str = ""
+    whatsapp: str = ""
 
 
 class SincronizacaoResponse(BaseModel):
