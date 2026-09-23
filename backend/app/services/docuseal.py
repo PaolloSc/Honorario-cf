@@ -129,6 +129,22 @@ class DocuSealService:
         raise RuntimeError(f"Failed to get submission: {response.status_code}")
 
 
+def link_assinatura(base_url: str, slug: str) -> str:
+    """Link da tela de assinatura de um signatario.
+
+    O GET /submissions/{id} traz so' o `slug` (o `embed_src` vem apenas na
+    criacao). A tela fica no mesmo servidor da API, sem o "api." do DocuSeal
+    em nuvem (api.docuseal.com -> docuseal.com) ou sem o "/api" do auto-hospedado.
+    """
+    if not slug:
+        return ""
+    base = base_url.rstrip("/")
+    if base.endswith("/api"):
+        base = base[: -len("/api")]
+    base = base.replace("://api.", "://", 1)
+    return f"{base}/s/{slug}"
+
+
 def telefone_e164(numero: str | None) -> str | None:
     """Celular/telefone brasileiro no formato do DocuSeal e do wa.me (+55DDDNUMERO).
 
