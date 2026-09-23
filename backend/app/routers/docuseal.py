@@ -15,7 +15,7 @@ from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.services.azure_email import AzureEmailService
-from app.services.docuseal import DocuSealService
+from app.services.docuseal import DocuSealService, link_assinatura
 from app.utils.participacao import linhas_participacao
 
 logger = logging.getLogger(__name__)
@@ -798,7 +798,7 @@ def _pendentes_docuseal(status_data: dict[str, Any]) -> list[dict[str, str]]:
             "name": s.get("name", ""),
             "email": s.get("email", ""),
             # Link de assinatura e WhatsApp: a tela oferece o envio pelo WhatsApp.
-            "link": s.get("embed_src") or "",
+            "link": s.get("embed_src") or link_assinatura(settings.docuseal_base_url, s.get("slug") or ""),
             "whatsapp": s.get("phone") or "",
         }
         for s in submitters
