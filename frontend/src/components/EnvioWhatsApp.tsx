@@ -8,6 +8,20 @@ import QRCode from "qrcode";
 // mensagem pronta. O QR cobre quem não tem WhatsApp conectado no computador:
 // a câmera do celular abre a mesma conversa. O QR é gerado aqui no navegador
 // para o link de assinatura não passar por serviço de terceiros.
+
+function mensagemAssinatura(nome: string, link: string): string {
+  return (
+    `Olá, ${nome}! Segue o link para assinar o contrato de honorários com o ` +
+    `Carvalho & Furtado Advogados: ${link}`
+  );
+}
+
+// Link wa.me com a mensagem pronta. Sem número, o WhatsApp abre para escolher o contato.
+export function urlWhatsApp(nome: string, link: string, whatsapp: string): string {
+  const mensagem = mensagemAssinatura(nome, link);
+  return `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(mensagem)}`;
+}
+
 export default function EnvioWhatsApp({
   nome,
   link,
@@ -22,11 +36,8 @@ export default function EnvioWhatsApp({
 
   if (!link) return null;
 
-  const mensagem =
-    `Olá, ${nome}! Segue o link para assinar o contrato de honorários com o ` +
-    `Carvalho & Furtado Advogados: ${link}`;
-  // Sem número cadastrado, o wa.me abre o WhatsApp para escolher o contato.
-  const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(mensagem)}`;
+  const url = urlWhatsApp(nome, link, whatsapp);
+  const mensagem = mensagemAssinatura(nome, link);
 
   const copiar = async () => {
     try {

@@ -1125,6 +1125,34 @@ class TestAssinaturaPeloEscritorio:
 
     CLIENTE = {"email": "client@example.com", "name": "Client", "role": "Contratante"}
 
+    def test_envio_devolve_link_do_contratante_para_o_whatsapp(self, client):
+        """Logo apos enviar, a tela abre o WhatsApp do contratante: a resposta traz link e numero dele."""
+        criados = [
+            {"role": "Contratante", "name": "Client", "email": "client@example.com",
+             "phone": "+5531999991234", "embed_src": "https://docuseal.com/s/cli123", "submission_id": 9},
+            {"role": "Contratado", "name": SOCIO["name"], "email": SOCIO["email"],
+             "embed_src": "https://docuseal.com/s/soc456", "submission_id": 9},
+        ]
+
+        async def send(template_id, signatarios, send_email=True):
+            return {"success": True, "submission": {"id": 9, "submitters": criados}, "message": "ok"}
+
+        mock_service = MagicMock()
+        mock_service.create_template_from_docx = AsyncMock(return_value={"id": 1})
+        mock_service.send_for_signature = AsyncMock(side_effect=send)
+        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service):
+            response = client.post(
+                "/api/docuseal/send-for-signature",
+                json={"contract_id": self.contract_id, "signatarios": [{**self.CLIENTE, "phone": "(31) 99999-1234"}, SOCIO]},
+            )
+
+        assert response.status_code == 200, response.text
+        # So' o contratante: socio e testemunhas sao do escritorio.
+        assert response.json()["whatsapp"] == [{
+            "role": "Contratante", "name": "Client", "email": "client@example.com",
+            "link": "https://docuseal.com/s/cli123", "whatsapp": "+5531999991234",
+        }]
+
     def test_sem_socio_nao_envia(self, client):
         response, captured = self._enviar(client, [self.CLIENTE])
         assert response.status_code == 400

@@ -7,6 +7,7 @@ import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, getContract, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
 import { ComboBox } from "@/components/ui/FormField";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
+import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -256,6 +257,10 @@ export default function Step7Envio({
     () => data.contratantes.map((c) => ({ email: c.email || "", nome: getContratanteNome(c) }))
   );
   const [signatureSent, setSignatureSent] = useState(false);
+  // Contratantes que podem receber o link também pelo WhatsApp, logo após o envio.
+  const [whatsappEnvio, setWhatsappEnvio] = useState<
+    Array<{ name: string; link: string; whatsapp: string }>
+  >([]);
   const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
   const [newLawyerEmail, setNewLawyerEmail] = useState("");
   const [newLawyerName, setNewLawyerName] = useState("");
@@ -549,8 +554,18 @@ export default function Step7Envio({
       setStatus("success");
       setMessage("Documento enviado para assinatura digital com sucesso!");
 
+      // Com WhatsApp cadastrado, abre a conversa do contratante com a mensagem
+      // pronta — só falta apertar enviar. Se o navegador bloquear a janela, os
+      // botões abaixo ficam na tela e a página não sai sozinha.
+      const paraWhatsApp = (result.whatsapp ?? []).filter((w) => w.link);
+      setWhatsappEnvio(paraWhatsApp);
+      const primeiro = paraWhatsApp.find((w) => w.whatsapp);
+      if (primeiro) {
+        window.open(urlWhatsApp(primeiro.name, primeiro.link, primeiro.whatsapp), "_blank", "noopener");
+      }
+
       // Navigate to detail page after signature is sent
-      if (onSaveComplete) {
+      if (onSaveComplete && paraWhatsApp.length === 0) {
         setTimeout(() => onSaveComplete(contractId), 2000);
       }
     } catch (error) {
@@ -977,6 +992,21 @@ export default function Step7Envio({
         )}
 
         {/* After signature sent or final success */}
+        {status === "success" && whatsappEnvio.length > 0 && (
+          <div className="w-full p-4 rounded-lg bg-card border border-border">
+            <p className="text-sm font-medium text-foreground">Enviar o link também pelo WhatsApp</p>
+            <p className="text-xs text-muted mb-2">
+              O e-mail já foi enviado. Se o WhatsApp não abriu sozinho, use os botões.
+            </p>
+            {whatsappEnvio.map((w) => (
+              <div key={w.link} className="mt-2">
+                <span className="text-sm text-foreground">{w.name}</span>
+                <EnvioWhatsApp nome={w.name} link={w.link} whatsapp={w.whatsapp} />
+              </div>
+            ))}
+          </div>
+        )}
+
         {status === "success" && contractId && (
           <button
             onClick={handleGoToContract}

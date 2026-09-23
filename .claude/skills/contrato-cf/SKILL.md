@@ -160,6 +160,10 @@ Siga esse padrão ao trocar um campo por uma lista.
   contrato. Ali cada pendente tem as opções Enviar pelo WhatsApp (`wa.me`), Copiar
   mensagem e QR code (`components/EnvioWhatsApp.tsx`). Não há gateway: sai do
   WhatsApp de quem está usando o sistema. O e-mail do DocuSeal continua indo.
+  Logo após "Enviar para Assinatura Digital", o passo 7 abre sozinho o WhatsApp do
+  contratante (a resposta do envio traz `whatsapp` com link + número; o link vem
+  de `embed_src` na criação e do `slug` na consulta). Pop-up bloqueado → os botões
+  ficam na tela e a página não navega sozinha.
 - **Testemunha 1** (financeiro) é injetada em toda submissão e recebe por
   último (`order = 5`), depois que todos assinaram.
 - Papéis repetidos ganham sufixo ("Contratante 1", "Contratante 2") porque o
