@@ -7,6 +7,7 @@ import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
+import { ComboBox } from "@/components/ui/FormField";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -263,6 +264,7 @@ export default function Step7Envio({
   // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
   const [roster, setRoster] = useState<Testemunha[]>([]);
   const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
+  const [rosterTestemunhaPick, setRosterTestemunhaPick] = useState("");
   const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
@@ -625,24 +627,47 @@ export default function Step7Envio({
           <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
         </p>
 
-        {roster.length > 0 && (
+        {roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 && (
           <div className="space-y-1 mb-3">
-            {roster.map((t) => (
-              <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedTestemunhaIds.includes(t.id)}
-                  onChange={(e) =>
-                    setSelectedTestemunhaIds((prev) =>
-                      e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
-                    )
-                  }
-                />
-                <span className="flex-1">{t.nome} ({t.email})</span>
-              </label>
-            ))}
+            {roster
+              .filter((t) => selectedTestemunhaIds.includes(t.id))
+              .map((t) => (
+                <div key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
+                  <span className="flex-1">{t.nome} ({t.email})</span>
+                  <button
+                    onClick={() => setSelectedTestemunhaIds((prev) => prev.filter((id) => id !== t.id))}
+                    className="text-danger hover:opacity-80 text-xs font-medium"
+                  >
+                    Remover
+                  </button>
+                </div>
+              ))}
           </div>
         )}
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex-1 min-w-48">
+            <ComboBox
+              value={rosterTestemunhaPick}
+              onChange={setRosterTestemunhaPick}
+              placeholder="Busque a testemunha por nome ou letra"
+              options={roster
+                .filter((t) => !selectedTestemunhaIds.includes(t.id))
+                .map((t) => ({ value: String(t.id), label: t.nome }))}
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!rosterTestemunhaPick) return;
+              setSelectedTestemunhaIds((prev) => [...prev, Number(rosterTestemunhaPick)]);
+              setRosterTestemunhaPick("");
+            }}
+            disabled={!rosterTestemunhaPick}
+            className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
+          >
+            Adicionar
+          </button>
+        </div>
 
         {extraTestemunhas.length > 0 && (
           <div className="space-y-1 mb-3">
