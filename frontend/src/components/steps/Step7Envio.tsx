@@ -612,6 +612,89 @@ export default function Step7Envio({
         </div>
       </div>
 
+      <datalist id="colaboradores-nomes">
+        {colaboradores.map((c) => (
+          <option key={c.email || c.name} value={c.name} label={c.email} />
+        ))}
+      </datalist>
+
+      {/* Testemunhas section */}
+      <div className="w-full mb-2 p-4 rounded-lg bg-card border border-border">
+        <h4 className="text-sm font-semibold text-foreground mb-2">Testemunhas</h4>
+        <p className="text-xs text-muted mb-3">
+          <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
+        </p>
+
+        {roster.length > 0 && (
+          <div className="space-y-1 mb-3">
+            {roster.map((t) => (
+              <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedTestemunhaIds.includes(t.id)}
+                  onChange={(e) =>
+                    setSelectedTestemunhaIds((prev) =>
+                      e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                    )
+                  }
+                />
+                <span className="flex-1">{t.nome} ({t.email})</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {extraTestemunhas.length > 0 && (
+          <div className="space-y-1 mb-3">
+            {extraTestemunhas.map((t, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
+                <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
+                <button
+                  onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="text-danger hover:opacity-80 text-xs font-medium"
+                >
+                  Remover
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="text"
+            value={newTestemunhaNome}
+            list="colaboradores-nomes"
+            onChange={(e) => {
+              setNewTestemunhaNome(e.target.value);
+              const c = colaboradores.find((x) => x.name === e.target.value);
+              if (c?.email) setNewTestemunhaEmail(c.email);
+            }}
+            placeholder="Nome da testemunha"
+            className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+          />
+          <input
+            type="email"
+            value={newTestemunhaEmail}
+            onChange={(e) => setNewTestemunhaEmail(e.target.value)}
+            placeholder="email@exemplo.com"
+            className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+          />
+          <button
+            onClick={() => {
+              if (!newTestemunhaEmail.trim()) return;
+              setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
+              setNewTestemunhaEmail("");
+              setNewTestemunhaNome("");
+            }}
+            disabled={!newTestemunhaEmail.trim()}
+            className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
+          >
+            Adicionar
+          </button>
+        </div>
+      </div>
+
       {reviewStatus === "checking" && (
         <div className="bg-card border border-border rounded-lg p-4 text-sm text-muted">
           Verificando português e padrão do contrato com IA...
@@ -827,89 +910,6 @@ export default function Step7Envio({
         {/* After save/email success - show signature button */}
         {status === "sent_email" && contractId && (
           <>
-            <datalist id="colaboradores-nomes">
-              {colaboradores.map((c) => (
-                <option key={c.email || c.name} value={c.name} label={c.email} />
-              ))}
-            </datalist>
-
-            {/* Testemunhas section */}
-            <div className="w-full mb-2 p-4 rounded-lg bg-card border border-border">
-              <h4 className="text-sm font-semibold text-foreground mb-2">Testemunhas</h4>
-              <p className="text-xs text-muted mb-3">
-                <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
-              </p>
-
-              {roster.length > 0 && (
-                <div className="space-y-1 mb-3">
-                  {roster.map((t) => (
-                    <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedTestemunhaIds.includes(t.id)}
-                        onChange={(e) =>
-                          setSelectedTestemunhaIds((prev) =>
-                            e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
-                          )
-                        }
-                      />
-                      <span className="flex-1">{t.nome} ({t.email})</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {extraTestemunhas.length > 0 && (
-                <div className="space-y-1 mb-3">
-                  {extraTestemunhas.map((t, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
-                      <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
-                      <button
-                        onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
-                        className="text-danger hover:opacity-80 text-xs font-medium"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                <input
-                  type="text"
-                  value={newTestemunhaNome}
-                  list="colaboradores-nomes"
-                  onChange={(e) => {
-                    setNewTestemunhaNome(e.target.value);
-                    const c = colaboradores.find((x) => x.name === e.target.value);
-                    if (c?.email) setNewTestemunhaEmail(c.email);
-                  }}
-                  placeholder="Nome da testemunha"
-                  className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-                />
-                <input
-                  type="email"
-                  value={newTestemunhaEmail}
-                  onChange={(e) => setNewTestemunhaEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-                />
-                <button
-                  onClick={() => {
-                    if (!newTestemunhaEmail.trim()) return;
-                    setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
-                    setNewTestemunhaEmail("");
-                    setNewTestemunhaNome("");
-                  }}
-                  disabled={!newTestemunhaEmail.trim()}
-                  className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
-                >
-                  Adicionar
-                </button>
-              </div>
-            </div>
-
             <button
               onClick={handleSendForSignature}
               disabled={isSubmitting || !socioEscritorio}
