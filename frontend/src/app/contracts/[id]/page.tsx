@@ -22,6 +22,7 @@ import {
 } from "@/app/lib/api";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp from "@/components/EnvioWhatsApp";
+import { ComboBox } from "@/components/ui/FormField";
 import { formatarDataHora } from "@/app/lib/datas";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -85,6 +86,7 @@ export default function ContractDetailPage() {
   // Testemunhas: roster + selecionadas (do roster) + avulsas
   const [roster, setRoster] = useState<Testemunha[]>([]);
   const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
+  const [rosterTestemunhaPick, setRosterTestemunhaPick] = useState("");
   const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
@@ -480,24 +482,47 @@ export default function ContractDetailPage() {
               <strong>Testemunha 1 (financeiro)</strong> e incluida automaticamente. Selecione outras do cadastro ou adicione avulsas.
             </p>
 
-            {roster.length > 0 && (
+            {roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 && (
               <div className="space-y-1 mb-2">
-                {roster.map((t) => (
-                  <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedTestemunhaIds.includes(t.id)}
-                      onChange={(e) =>
-                        setSelectedTestemunhaIds((prev) =>
-                          e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
-                        )
-                      }
-                    />
-                    <span className="flex-1">{t.nome} ({t.email})</span>
-                  </label>
-                ))}
+                {roster
+                  .filter((t) => selectedTestemunhaIds.includes(t.id))
+                  .map((t) => (
+                    <div key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
+                      <span className="flex-1">{t.nome} ({t.email})</span>
+                      <button
+                        onClick={() => setSelectedTestemunhaIds((prev) => prev.filter((id) => id !== t.id))}
+                        className="text-danger hover:opacity-80 text-xs font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
               </div>
             )}
+
+            <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex-1 min-w-48">
+                <ComboBox
+                  value={rosterTestemunhaPick}
+                  onChange={setRosterTestemunhaPick}
+                  placeholder="Busque a testemunha por nome ou letra"
+                  options={roster
+                    .filter((t) => !selectedTestemunhaIds.includes(t.id))
+                    .map((t) => ({ value: String(t.id), label: t.nome }))}
+                />
+              </div>
+              <button
+                onClick={() => {
+                  if (!rosterTestemunhaPick) return;
+                  setSelectedTestemunhaIds((prev) => [...prev, Number(rosterTestemunhaPick)]);
+                  setRosterTestemunhaPick("");
+                }}
+                disabled={!rosterTestemunhaPick}
+                className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
+              >
+                Adicionar
+              </button>
+            </div>
 
             {extraTestemunhas.length > 0 && (
               <div className="space-y-1 mb-2">
