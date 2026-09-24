@@ -15,18 +15,18 @@ export default function SocioEscritorioSelect({
 }) {
   const socios = colaboradores.filter((c) => c.role === "socio" && c.email);
   return (
-    <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">
-      <label htmlFor="socio-escritorio" className="block text-sm font-medium text-purple-900 mb-1">
+    <div className="w-full mb-2 p-4 rounded-lg bg-card border border-border">
+      <label htmlFor="socio-escritorio" className="block text-sm font-semibold text-foreground mb-1">
         Assinatura pelo escritório
       </label>
-      <p className="text-xs text-purple-700 mb-3">
+      <p className="text-xs text-muted mb-3">
         Indique o sócio que assinará pelo escritório.
       </p>
       <select
         id="socio-escritorio"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full sm:w-80 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+        className="w-full sm:w-80 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
       >
         <option value="">Selecione o sócio...</option>
         {socios.map((s) => (

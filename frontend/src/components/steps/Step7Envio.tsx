@@ -834,16 +834,16 @@ export default function Step7Envio({
             </datalist>
 
             {/* Testemunhas section */}
-            <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">
-              <h4 className="text-sm font-medium text-purple-900 mb-2">Testemunhas</h4>
-              <p className="text-xs text-purple-700 mb-3">
+            <div className="w-full mb-2 p-4 rounded-lg bg-card border border-border">
+              <h4 className="text-sm font-semibold text-foreground mb-2">Testemunhas</h4>
+              <p className="text-xs text-muted mb-3">
                 <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
               </p>
 
               {roster.length > 0 && (
                 <div className="space-y-1 mb-3">
                   {roster.map((t) => (
-                    <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40 cursor-pointer">
+                    <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedTestemunhaIds.includes(t.id)}
@@ -862,7 +862,7 @@ export default function Step7Envio({
               {extraTestemunhas.length > 0 && (
                 <div className="space-y-1 mb-3">
                   {extraTestemunhas.map((t, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40">
+                    <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
                       <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
                       <button
                         onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
@@ -886,14 +886,14 @@ export default function Step7Envio({
                     if (c?.email) setNewTestemunhaEmail(c.email);
                   }}
                   placeholder="Nome da testemunha"
-                  className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                  className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
                 />
                 <input
                   type="email"
                   value={newTestemunhaEmail}
                   onChange={(e) => setNewTestemunhaEmail(e.target.value)}
                   placeholder="email@exemplo.com"
-                  className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                  className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
                 />
                 <button
                   onClick={() => {
@@ -903,7 +903,7 @@ export default function Step7Envio({
                     setNewTestemunhaNome("");
                   }}
                   disabled={!newTestemunhaEmail.trim()}
-                  className="shrink-0 px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                  className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
                 >
                   Adicionar
                 </button>
