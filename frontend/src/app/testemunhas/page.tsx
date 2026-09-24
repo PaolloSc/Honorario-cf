@@ -9,12 +9,18 @@ import {
   type Testemunha,
 } from "@/app/lib/api";
 
+// Remove acentos pra busca "monica" achar "Mônica" tambem.
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 export default function TestemunhasPage() {
   const sessionStatus = useAuthStatus();
   const [rows, setRows] = useState<Testemunha[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [busca, setBusca] = useState("");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
@@ -60,6 +66,11 @@ export default function TestemunhasPage() {
     }
   };
 
+  const buscaNormalizada = semAcento(busca.trim().toLowerCase());
+  const filteredRows = buscaNormalizada
+    ? rows.filter((t) => semAcento(t.nome.toLowerCase()).includes(buscaNormalizada))
+    : rows;
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="font-display text-xl font-semibold text-foreground mb-1">
@@ -103,22 +114,33 @@ export default function TestemunhasPage() {
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-muted mb-3 cursor-pointer">
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         <input
-          type="checkbox"
-          checked={showInactive}
-          onChange={(e) => setShowInactive(e.target.checked)}
+          type="text"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome..."
+          className="flex-1 min-w-48 px-3 py-2 border border-border bg-card text-foreground rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
         />
-        Mostrar inativas
-      </label>
+        <label className="flex items-center gap-2 text-sm text-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
+          Mostrar inativas
+        </label>
+      </div>
 
       {loading ? (
         <p className="text-sm text-muted">Carregando...</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted">Nenhuma testemunha cadastrada.</p>
+      ) : filteredRows.length === 0 ? (
+        <p className="text-sm text-muted">Nenhuma testemunha encontrada para &quot;{busca}&quot;.</p>
       ) : (
         <div className="space-y-2">
-          {rows.map((t) => (
+          {filteredRows.map((t) => (
             <div
               key={t.id}
               className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card"
