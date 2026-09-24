@@ -125,7 +125,7 @@ nos dois**.
 | 2 Escopo | `Step2Escopo.tsx` | `EscopoItem`, `TipoEscopo`, `ESCOPO_LABELS` |
 | 3 Honorários | `Step3Honorarios.tsx` | `HoraTrabalhada`, `ProLabore`, `Mensalidade`, `Exito`, `Permuta` |
 | 4 Acessórios | `Step4Acessorios.tsx` | `Acessorios` (inclui `valor_km`, `criterio_extincao_exito`, `clausulas_adicionais`) |
-| 5 Participações | `Step5Participacao.tsx` + campo Área em `ContractWizard.tsx` | `Participacao` e `area` — **ficha interna, não vai para o contrato** |
+| 5 Participações | `Step5Participacao.tsx` | `Participacao` — **ficha interna, não vai para o contrato** |
 | 6 Revisão | `Step6Revisao.tsx` | — |
 | 7 Envio | `Step7Envio.tsx` | monta signatários, testemunhas, e-mail |
 
@@ -145,15 +145,13 @@ Siga esse padrão ao trocar um campo por uma lista.
   FURTADO ADVOGADOS" (`contratado_nome`). Quem assina por ele é um **sócio**
   ativo do roster, obrigatório (`_resolver_assinatura_escritorio` recusa com
   400 se faltar ou se não for sócio). A tela pré-seleciona `socio_sugerido`
-  (detalhe do contrato): o sócio da **área** (`colaboradores.areas`); sem
-  área, o responsável pela gestão se for sócio, senão o primeiro sócio da
-  participação. Se esse sócio também assina como advogado, recebe
-  um convite só (`also_contratado`). Contrato de consumidor fica fora: lá a
-  contratada é fixa.
-- **Advogados que assinam**: sócios ou advogados escolhidos na etapa 7, só
-  como `Advogado`. Quem preenche o formulário **não** é incluído
-  automaticamente — foi removido de propósito, não reintroduza.
-- Termos (sócio, advogado, área, assinatura pelo escritório) em `CONTEXT.md`.
+  (detalhe do contrato, `socio_sugerido` em `routers/docuseal.py`): o
+  responsável pela gestão se for sócio, senão o primeiro sócio da
+  participação. Contrato de consumidor fica fora: lá a contratada é fixa.
+- Não existe mais o papel "Advogado" nem uma etapa para "advogados que
+  assinam" — só o sócio escolhido assina pelo escritório. Quem preenche o
+  formulário **não** é incluído automaticamente. Não reintroduza esse papel.
+- Termos (sócio, advogado, assinatura pelo escritório) em `CONTEXT.md`.
 - **WhatsApp**: o número do contratante ou representante (campo opcional no passo 1)
   vai ao DocuSeal como `phone` do signatário (`services/docuseal.py`, `telefone_e164`)
   e volta, junto com o link (`embed_src`), na lista "Falta assinar" da página do

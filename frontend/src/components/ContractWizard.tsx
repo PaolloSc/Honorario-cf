@@ -15,7 +15,6 @@ import type {
   EscopoItem,
   Participacao,
 } from "@/types/contract";
-import { areasCadastradas, listColaboradores } from "@/app/lib/api";
 import { useCallback, useEffect, useState } from "react";
  
 const STEPS = [
@@ -113,7 +112,6 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       };
     })(),
     email_destinatario: data.email_destinatario,
-    area: data.area,
   };
 }
 
@@ -148,10 +146,6 @@ function isValidCPF(cpf: string): boolean {
   if (parseInt(d[10]) !== check) return false;
   return true;
 }
-
-// Contrato de área sem sócio cadastrado. Não pertence a nenhum sócio, então o
-// backend cai no responsável pela gestão ao sugerir quem assina.
-const AREA_OUTRA = "Outra área / não se aplica";
 
 function validateContratantes(data: ContratoFormData): string[] {
   const errors: string[] = [];
@@ -243,10 +237,8 @@ function temValor(tipo: string | undefined, pct?: string, valor?: number, outro?
   return Boolean(outro?.trim());
 }
 
-function validateParticipacao(data: ContratoFormData, areas: string[]): string[] {
+function validateParticipacao(data: ContratoFormData): string[] {
   const errors: string[] = [];
-  // Sem área cadastrada ainda, não há o que escolher — o sócio é escolhido no envio.
-  if (areas.length > 0 && !data.area) errors.push("Selecione a área do contrato.");
   if (!data.participacao.responsavel_gestao?.trim()) {
     errors.push("Informe o responsável pela gestão do contrato.");
   }
@@ -269,7 +261,7 @@ function validateParticipacao(data: ContratoFormData, areas: string[]): string[]
   return errors;
 }
 
-function validateStep(step: number, data: ContratoFormData, areas: string[] = []): string[] {
+function validateStep(step: number, data: ContratoFormData): string[] {
   switch (step) {
     case 1:
       return validateContratantes(data);
@@ -280,18 +272,18 @@ function validateStep(step: number, data: ContratoFormData, areas: string[] = []
     case 4:
       return validateAcessorios(data);
     case 5:
-      return validateParticipacao(data, areas);
+      return validateParticipacao(data);
     default:
       return [];
   }
 }
 
-function firstInvalidStepBefore(step: number, data: ContratoFormData, areas: string[] = []): {
+function firstInvalidStepBefore(step: number, data: ContratoFormData): {
   step: number;
   errors: string[];
 } | null {
   for (let candidate = 1; candidate < step; candidate += 1) {
-    const errors = validateStep(candidate, data, areas);
+    const errors = validateStep(candidate, data);
     if (errors.length > 0) {
       return { step: candidate, errors };
     }
@@ -314,23 +306,16 @@ export default function ContractWizard({
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<ContratoFormData>(normalizeFormData(initialData));
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [areas, setAreas] = useState<string[]>([]);
-  const currentStepErrors = validateStep(currentStep, formData, areas);
+  const currentStepErrors = validateStep(currentStep, formData);
   const canGoNext = currentStepErrors.length === 0;
 
   useEffect(() => {
-    listColaboradores()
-      .then((r) => setAreas(areasCadastradas(r.colaboradores)))
-      .catch(() => setAreas([]));
-  }, []);
-
-  useEffect(() => {
-    const invalidStep = firstInvalidStepBefore(currentStep, formData, areas);
+    const invalidStep = firstInvalidStepBefore(currentStep, formData);
     if (!invalidStep) return;
 
     setValidationErrors(invalidStep.errors);
     setCurrentStep(invalidStep.step);
-  }, [currentStep, formData, areas]);
+  }, [currentStep, formData]);
  
   const updateContratantes = useCallback(
     (contratantes: Contratante[]) => {
@@ -369,14 +354,14 @@ export default function ContractWizard({
   }, []);
  
   const goNext = () => {
-    const invalidStep = firstInvalidStepBefore(currentStep + 1, formData, areas);
+    const invalidStep = firstInvalidStepBefore(currentStep + 1, formData);
     if (invalidStep) {
       setValidationErrors(invalidStep.errors);
       setCurrentStep(invalidStep.step);
       return;
     }
 
-    const errors = validateStep(currentStep, formData, areas);
+    const errors = validateStep(currentStep, formData);
     if (errors.length > 0) {
       setValidationErrors(errors);
       return;
@@ -409,7 +394,7 @@ export default function ContractWizard({
       </div>
  
       <StepIndicator steps={STEPS} currentStep={currentStep} onStepClick={(id) => {
-        const invalid = firstInvalidStepBefore(id, formData, areas);
+        const invalid = firstInvalidStepBefore(id, formData);
         if (invalid) {
           setValidationErrors(invalid.errors);
           setCurrentStep(invalid.step);
@@ -452,37 +437,7 @@ export default function ContractWizard({
             participacao={formData.participacao}
             onChange={updateParticipacao}
             escopos={formData.escopos}
-          >
-            {areas.length > 0 && (
-              <div className="bg-card border border-border rounded-xl p-6 shadow-sm mt-6">
-                <p className="text-sm font-semibold text-foreground mb-1">Assinatura pelo escritório</p>
-                <p className="text-xs text-muted mb-4">
-                  O sócio responsável pela área vem sugerido para assinar pelo escritório no envio.
-                  A área não muda o responsável pela gestão nem a participação. Sem área definida,
-                  a sugestão é o responsável pela gestão, se for sócio.
-                </p>
-                <label className="block text-sm font-medium text-foreground mb-1" htmlFor="area-contrato">
-                  Área do contrato <span className="text-danger">*</span>
-                </label>
-                <select
-                  id="area-contrato"
-                  value={formData.area ?? ""}
-                  onChange={(e) => {
-                    setValidationErrors([]);
-                    setFormData((prev) => ({ ...prev, area: e.target.value || undefined }));
-                  }}
-                  className="w-full sm:w-72 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-                >
-                  <option value="">Selecione...</option>
-                  {areas.map((a) => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                  {/* Nenhum sócio tem esta área: a sugestão cai na gestão (socio_sugerido). */}
-                  <option value={AREA_OUTRA}>{AREA_OUTRA}</option>
-                </select>
-              </div>
-            )}
-          </Step5Participacao>
+          />
         )}
         {currentStep === 6 && <Step6Revisao data={formData} />}
         {currentStep === 7 && (

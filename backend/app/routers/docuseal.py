@@ -213,8 +213,6 @@ def _patch_docx_with_signatures(
 
         # Add ALL signature fields to ensure consistency
         contratado_sigs = [s for s in signatarios if s.get("role", "").startswith("Contratado")]
-        merged_contratado_sigs = [s for s in signatarios if s.get("also_contratado")]
-        advogado_sigs = [s for s in signatarios if s.get("role", "").startswith("Advogado")]
         contratante_sigs = [s for s in signatarios if s.get("role", "").startswith("Contratante")]
 
         for sig in contratado_sigs:
@@ -222,20 +220,6 @@ def _patch_docx_with_signatures(
             name = sig.get("contratado_nome") or sig.get("name", "Contratado")
             doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
             doc.add_paragraph(f"CONTRATADO: {name.upper()}")
-            doc.add_paragraph()
-
-        for sig in merged_contratado_sigs:
-            role = sig["role"]
-            name = sig.get("contratado_nome", "Carvalho & Furtado Advogados")
-            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
-            doc.add_paragraph(f"CONTRATADO: {name.upper()}")
-            doc.add_paragraph()
-
-        for sig in advogado_sigs:
-            role = sig["role"]
-            name = sig.get("name", "Advogado")
-            doc.add_paragraph(f"{{{{Assinatura {name};type=signature;role={role}}}}}")
-            doc.add_paragraph(f"ADVOGADO: {name.upper()}")
             doc.add_paragraph()
 
         for sig in contratante_sigs:
@@ -262,8 +246,7 @@ ESCRITORIO_NOME = "Carvalho & Furtado Advogados"
 def _resolver_assinatura_escritorio(signatarios: list[dict], db: Session) -> list[dict]:
     """Todo contrato de honorarios tem exatamente uma assinatura pelo escritorio
     (papel "Contratado"), dada por um socio ativo do roster — advogado nao-socio
-    nao representa o C&F. Se o socio tambem assina como "Advogado", um convite so
-    cobre os dois blocos do documento.
+    nao representa o C&F.
     """
     escritorio = [s for s in signatarios if s.get("role") == "Contratado"]
     if len(escritorio) != 1:
@@ -278,28 +261,15 @@ def _resolver_assinatura_escritorio(signatarios: list[dict], db: Session) -> lis
     if not eh_socio:
         raise HTTPException(400, "Só um sócio ativo pode assinar pelo escritório.")
 
-    advogado = next(
-        (
-            s for s in signatarios
-            if s.get("role") == "Advogado" and (s.get("email") or "").strip().lower() == email
-        ),
-        None,
-    )
-    if advogado is None:
-        socio["contratado_nome"] = ESCRITORIO_NOME
-        return signatarios
-    advogado["also_contratado"] = True
-    advogado["contratado_nome"] = ESCRITORIO_NOME
-    return [s for s in signatarios if s is not socio]
+    socio["contratado_nome"] = ESCRITORIO_NOME
+    return signatarios
 
 
 def socio_sugerido(form_data_json: str | None, db: Session) -> ColaboradorDB | None:
     """Socio pre-selecionado na tela para assinar pelo escritorio (o usuario pode trocar).
 
-    1. O socio responsavel pela area do contrato.
-    2. Sem area (contratos antigos) ou area sem responsavel: o responsavel pela
-       gestao, se for socio; senao o primeiro socio entre os que recebem
-       participacao (regra do PR #74).
+    O responsavel pela gestao, se for socio; senao o primeiro socio entre os que
+    recebem participacao (regra do PR #74).
     """
     from app.models.contract import Participacao
 
@@ -319,11 +289,6 @@ def socio_sugerido(form_data_json: str | None, db: Session) -> ColaboradorDB | N
         )
         .all()
     )
-    area = form_data.get("area")
-    if area:
-        responsavel = next((s for s in socios if area in s.lista_areas), None)
-        if responsavel:
-            return responsavel
 
     try:
         participacao = Participacao(**(form_data.get("participacao") or {}))
@@ -437,8 +402,8 @@ async def send_for_signature(
                 sig["role"] = f"{role} {role_indices[role]}"
 
         # Assign order for sequential signing:
-        # Contratante(s) -> Advogado -> Contratado (C&F) -> Testemunha(s) -> Lilian por ultimo
-        _ROLE_ORDER = {"Contratante": 1, "Advogado": 2, "Contratado": 3, "Testemunha": 4}
+        # Contratante(s) -> Contratado (C&F) -> Testemunha(s) -> Lilian por ultimo
+        _ROLE_ORDER = {"Contratante": 1, "Contratado": 3, "Testemunha": 4}
         for sig in all_signatarios:
             # Extract base role (without number suffix) for order lookup
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")

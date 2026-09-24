@@ -1205,28 +1205,18 @@ class TestAssinaturaPeloEscritorio:
         # Socia assina depois do cliente e dos advogados
         assert por_email[SOCIO["email"]]["order"] > por_email["marcelo@cf.com"]["order"]
 
-    def test_socio_que_tambem_e_advogado_recebe_um_convite_so(self, client):
-        socia_advogada = {**SOCIO, "role": "Advogado"}
-        response, captured = self._enviar(client, [self.CLIENTE, socia_advogada, SOCIO])
-        assert response.status_code == 200
-        da_socia = [s for s in captured if s["email"] == SOCIO["email"]]
-        assert len(da_socia) == 1
-        assert da_socia[0]["role"] == "Advogado"
-        assert da_socia[0]["also_contratado"] is True
-        assert "Contratado" not in [s["role"] for s in captured]
-
 
 class TestSocioSugerido:
-    """Socio pre-selecionado para assinar pelo escritorio: area do contrato
-    primeiro; sem area, a regra do PR #74 (gestao socio, senao participante socio).
-    Sem nenhum, nao sugere — o e-mail generico nao assina mais."""
+    """Socio pre-selecionado para assinar pelo escritorio: a regra do PR #74
+    (gestao socio, senao participante socio). Sem nenhum, nao sugere — o
+    e-mail generico nao assina mais."""
 
     @pytest.fixture(autouse=True)
     def seed(self):
         db = SessionLocal()
         try:
-            db.add(ColaboradorDB(nome="Monica Socia", email="monica@cf.com", papel="socio", areas="Trabalhista"))
-            db.add(ColaboradorDB(nome="Gabriel Socio", email="gabriel@cf.com", papel="socio", areas="Cível"))
+            db.add(ColaboradorDB(nome="Monica Socia", email="monica@cf.com", papel="socio"))
+            db.add(ColaboradorDB(nome="Gabriel Socio", email="gabriel@cf.com", papel="socio"))
             db.add(ColaboradorDB(nome="Bruno Advogado", email="bruno@cf.com", papel="advogado"))
             db.commit()
         finally:
@@ -1242,21 +1232,8 @@ class TestSocioSugerido:
         finally:
             db.close()
 
-    def test_area_vence_a_gestao(self):
-        form = {"area": "Trabalhista", "participacao": {"responsavel_gestao": "Gabriel Socio"}}
-        assert self._sugerido(form) == "monica@cf.com"
-
-    def test_sem_area_usa_gestor_socio(self):
+    def test_usa_gestor_socio(self):
         assert self._sugerido({"participacao": {"responsavel_gestao": "Monica Socia"}}) == "monica@cf.com"
-
-    def test_area_sem_responsavel_cai_na_participacao(self):
-        form = {"area": "Tributário", "participacao": {"responsavel_gestao": "Gabriel Socio"}}
-        assert self._sugerido(form) == "gabriel@cf.com"
-
-    def test_outra_area_cai_no_gestor_socio(self):
-        """Contrato de area sem socio cadastrado (ex.: Ambiental): vale o gestor."""
-        form = {"area": "Outra área / não se aplica", "participacao": {"responsavel_gestao": "Monica Socia"}}
-        assert self._sugerido(form) == "monica@cf.com"
 
     def test_gestor_nao_socio_usa_participante_socio(self):
         form = {"participacao": {
@@ -1268,25 +1245,3 @@ class TestSocioSugerido:
     def test_sem_socio_identificado_nao_sugere(self):
         form = {"participacao": {"responsavel_gestao": "Bruno Advogado", "participantes": [{"nome": "Bruno Advogado"}]}}
         assert self._sugerido(form) is None
-
-
-def test_remendo_do_docx_tem_um_bloco_contratado_so(tmp_path):
-    """Caminho de reserva (docx remendado): socio advogado tambem sai com um bloco CONTRATADO so'."""
-    from docx import Document
-    from app.routers.docuseal import _patch_docx_with_signatures
-
-    origem = tmp_path / "vazio.docx"
-    Document().save(str(origem))
-    sigs = [
-        {"email": "c@a.com", "name": "Client", "role": "Contratante"},
-        {"email": "monica@cf.com", "name": "Monica", "role": "Advogado",
-         "also_contratado": True, "contratado_nome": "Carvalho & Furtado Advogados"},
-    ]
-    db = SessionLocal()
-    try:
-        with patch.object(settings, "output_dir", str(tmp_path)):
-            saida = _patch_docx_with_signatures(origem, sigs, "remendo-001", db, None)
-    finally:
-        db.close()
-    linhas = [p.text for p in Document(str(saida)).paragraphs]
-    assert linhas.count("CONTRATADO: CARVALHO & FURTADO ADVOGADOS") == 1
