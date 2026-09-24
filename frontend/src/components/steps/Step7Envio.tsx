@@ -914,7 +914,7 @@ export default function Step7Envio({
               onClick={handleSendForSignature}
               disabled={isSubmitting || !socioEscritorio}
               title={!socioEscritorio ? "Escolha o sócio que assina pelo escritório" : undefined}
-              className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition"
             >
               Enviar para Assinatura Digital
             </button>
