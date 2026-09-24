@@ -479,10 +479,16 @@ export default function ContractDetailPage() {
           <div className="mb-4 pt-3 border-t border-border">
             <p className="text-xs font-semibold text-foreground mb-1">Testemunhas</p>
             <p className="text-xs text-muted mb-2">
-              <strong>Testemunha 1 (financeiro)</strong> e incluida automaticamente. Selecione outras do cadastro ou adicione avulsas.
+              <strong>Testemunha 1 (financeiro)</strong> e incluida automaticamente. Busque pelo nome (cadastro) ou digite uma avulsa.
             </p>
 
-            {roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 && (
+            <datalist id="testemunhas-nomes">
+              {roster.map((t) => (
+                <option key={t.id} value={t.nome} label={t.email} />
+              ))}
+            </datalist>
+
+            {(roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 || extraTestemunhas.length > 0) && (
               <div className="space-y-1 mb-2">
                 {roster
                   .filter((t) => selectedTestemunhaIds.includes(t.id))
@@ -497,35 +503,6 @@ export default function ContractDetailPage() {
                       </button>
                     </div>
                   ))}
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2 mb-2">
-              <div className="flex-1 min-w-48">
-                <ComboBox
-                  value={rosterTestemunhaPick}
-                  onChange={setRosterTestemunhaPick}
-                  placeholder="Busque a testemunha por nome ou letra"
-                  options={roster
-                    .filter((t) => !selectedTestemunhaIds.includes(t.id))
-                    .map((t) => ({ value: String(t.id), label: t.nome }))}
-                />
-              </div>
-              <button
-                onClick={() => {
-                  if (!rosterTestemunhaPick) return;
-                  setSelectedTestemunhaIds((prev) => [...prev, Number(rosterTestemunhaPick)]);
-                  setRosterTestemunhaPick("");
-                }}
-                disabled={!rosterTestemunhaPick}
-                className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
-              >
-                Adicionar
-              </button>
-            </div>
-
-            {extraTestemunhas.length > 0 && (
-              <div className="space-y-1 mb-2">
                 {extraTestemunhas.map((t, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
                     <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
@@ -544,8 +521,13 @@ export default function ContractDetailPage() {
               <input
                 type="text"
                 value={newTestemunhaNome}
-                onChange={(e) => setNewTestemunhaNome(e.target.value)}
-                placeholder="Nome da testemunha"
+                list="testemunhas-nomes"
+                onChange={(e) => {
+                  setNewTestemunhaNome(e.target.value);
+                  const t = roster.find((x) => x.nome === e.target.value);
+                  if (t) setNewTestemunhaEmail(t.email);
+                }}
+                placeholder="Busque por nome ou digite uma testemunha avulsa"
                 className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
               <input
@@ -557,12 +539,19 @@ export default function ContractDetailPage() {
               />
               <button
                 onClick={() => {
-                  if (!newTestemunhaEmail.trim()) return;
-                  setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
-                  setNewTestemunhaEmail("");
+                  const nome = newTestemunhaNome.trim();
+                  const email = newTestemunhaEmail.trim();
+                  if (!nome || !email) return;
+                  const match = roster.find((t) => t.nome.trim().toLowerCase() === nome.toLowerCase());
+                  if (match) {
+                    setSelectedTestemunhaIds((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));
+                  } else {
+                    setExtraTestemunhas((prev) => [...prev, { email, name: nome }]);
+                  }
                   setNewTestemunhaNome("");
+                  setNewTestemunhaEmail("");
                 }}
-                disabled={!newTestemunhaEmail.trim()}
+                disabled={!newTestemunhaNome.trim() || !newTestemunhaEmail.trim()}
                 className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
               >
                 Adicionar
@@ -571,17 +560,28 @@ export default function ContractDetailPage() {
           </div>
 
           {/* Send button */}
-          <div className="flex gap-3">
-            <button
-              onClick={handleSendForSignature}
-              disabled={sendingSignature || (ehHonorarios && !socioEscritorio)}
-              className="px-5 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark disabled:opacity-50 transition"
-            >
-              {sendingSignature ? "Enviando..." : "Confirmar e Enviar"}
-            </button>
+          <div className="flex gap-3 items-start">
+            <div>
+              <button
+                onClick={handleSendForSignature}
+                disabled={sendingSignature || (ehHonorarios && !socioEscritorio)}
+                className={`px-5 py-2 rounded-lg text-sm font-medium transition ${
+                  ehHonorarios && !socioEscritorio
+                    ? "bg-border/40 text-muted cursor-not-allowed"
+                    : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
+                }`}
+              >
+                {sendingSignature ? "Enviando..." : "Confirmar e Enviar"}
+              </button>
+              {ehHonorarios && !socioEscritorio && (
+                <p className="text-xs text-warning mt-1 max-w-64">
+                  Escolha o sócio que assina pelo escritório (acima) para habilitar o envio.
+                </p>
+              )}
+            </div>
             <button
               onClick={() => setShowSignaturePanel(false)}
-              className="px-5 py-2 border border-border text-foreground rounded-lg text-sm hover:bg-background transition"
+              className="px-5 py-2 border border-border text-foreground rounded-lg text-sm hover:bg-background transition self-start"
             >
               Cancelar
             </button>
