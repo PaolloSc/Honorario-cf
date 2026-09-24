@@ -42,7 +42,6 @@ class ColaboradorOut(BaseModel):
     name: str
     email: str
     role: str
-    areas: list[str] = []
 
 
 class ColaboradoresResponse(BaseModel):
@@ -86,7 +85,7 @@ def list_colaboradores(
     rows = q.order_by(ColaboradorDB.ordem, ColaboradorDB.nome).all()
     return ColaboradoresResponse(
         colaboradores=[
-            ColaboradorOut(name=c.nome, email=c.email or "", role=c.papel, areas=c.lista_areas)
+            ColaboradorOut(name=c.nome, email=c.email or "", role=c.papel)
             for c in rows
         ]
     )

@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, getContract, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
-import { ComboBox } from "@/components/ui/FormField";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
 
@@ -261,19 +260,14 @@ export default function Step7Envio({
   const [whatsappEnvio, setWhatsappEnvio] = useState<
     Array<{ name: string; link: string; whatsapp: string }>
   >([]);
-  const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
-  const [newLawyerEmail, setNewLawyerEmail] = useState("");
-  const [newLawyerName, setNewLawyerName] = useState("");
   // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
   const [roster, setRoster] = useState<Testemunha[]>([]);
   const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
   const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
-  // Colaboradores do escritorio: autopreenchimento de advogados e testemunhas.
+  // Colaboradores do escritorio: autopreenchimento de testemunhas.
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
-  // Assinam como advogado: sócios e advogados. Pelo escritório, só o sócio de socioEscritorio.
-  const advogadosSignatarios = colaboradores.filter((c) => c.role === "socio" || c.role === "advogado");
   const [socioEscritorio, setSocioEscritorio] = useState("");
   const isEdit = !!editContractId;
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
@@ -295,14 +289,25 @@ export default function Step7Envio({
       .catch(() => setColaboradores([]));
   }, []);
 
-  // Sugestão do backend (área do contrato; sem área, gestão/participação).
-  // Só existe depois de salvo, que é quando a seção de assinatura aparece.
+  // Sugestão de quem assina pelo escritório: o responsável pela gestão, se for
+  // sócio; senão o primeiro sócio entre os que recebem participação (regra do PR #74).
   useEffect(() => {
-    if (!contractId || status !== "sent_email") return;
-    getContract(contractId)
-      .then((c) => setSocioEscritorio((atual) => atual || c.socio_sugerido || ""))
-      .catch(() => {});
-  }, [contractId, status]);
+    if (socioEscritorio || colaboradores.length === 0) return;
+    const socios = colaboradores.filter((c) => c.role === "socio");
+    const porNome = new Map(socios.map((s) => [s.name, s]));
+    const candidatos = [
+      data.participacao.responsavel_gestao,
+      ...(data.participacao.participantes ?? []).map((p) => p.nome),
+    ];
+    for (const nome of candidatos) {
+      const socio = porNome.get((nome ?? "").trim());
+      if (socio) {
+        setSocioEscritorio(socio.email);
+        return;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colaboradores, data.participacao.responsavel_gestao, data.participacao.participantes]);
 
   const reviewStarted = useRef(false);
 
@@ -358,17 +363,6 @@ export default function Step7Envio({
     if (!contractId || status === "generating" || status === "sending") return;
     previewContract(contractId).then(setPreviewHtml).catch(() => setPreviewHtml(null));
   }, [contractId, status]);
-
-  const handleAddLawyer = () => {
-    if (!newLawyerEmail.trim()) return;
-    setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
-    setNewLawyerEmail("");
-    setNewLawyerName("");
-  };
-
-  const handleRemoveLawyer = (index: number) => {
-    setAdditionalLawyers((prev) => prev.filter((_, i) => i !== index));
-  };
 
   const updateRecipient = (index: number, email: string) => {
     setRecipients((prev) => prev.map((r, i) => (i === index ? { ...r, email } : r)));
@@ -521,15 +515,6 @@ export default function Step7Envio({
         }));
       });
 
-      // Add additional lawyers as "Advogado" role
-      for (const lawyer of additionalLawyers) {
-        signatarios.push({
-          email: lawyer.email,
-          name: lawyer.name,
-          role: "Advogado",
-        });
-      }
-
       // Testemunhas: do roster + avulsas (Testemunha 1 = financeiro e' injetada no backend)
       for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
         signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
@@ -588,6 +573,12 @@ export default function Step7Envio({
       <h2 className="text-xl font-semibold">
         {isEdit ? "Salvar Nova Versão" : "Revisão e Envio"}
       </h2>
+
+      <SocioEscritorioSelect
+        colaboradores={colaboradores}
+        value={socioEscritorio}
+        onChange={setSocioEscritorio}
+      />
 
       <div className="bg-primary/[0.08] border border-primary rounded-lg p-4">
         <h3 className="font-medium text-primary-dark mb-2">Resumo do Contrato</h3>
@@ -841,60 +832,6 @@ export default function Step7Envio({
                 <option key={c.email || c.name} value={c.name} label={c.email} />
               ))}
             </datalist>
-
-            <SocioEscritorioSelect
-              colaboradores={colaboradores}
-              value={socioEscritorio}
-              onChange={setSocioEscritorio}
-            />
-
-            {/* Additional lawyers section */}
-            <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">
-              <h4 className="text-sm font-medium text-purple-900 mb-2">
-                Advogados que assinam (opcional)
-              </h4>
-              <p className="text-xs text-purple-700 mb-3">
-                Sócios e advogados que assinam como <strong>ADVOGADO</strong>. Quem preenche este
-                formulário <strong>não</strong> é incluído automaticamente — adicione-se aqui se
-                for assinar.
-              </p>
-              {additionalLawyers.length > 0 && (
-                <div className="space-y-1 mb-3">
-                  {additionalLawyers.map((lawyer, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40">
-                      <span className="flex-1">{lawyer.name} ({lawyer.email})</span>
-                      <button
-                        onClick={() => handleRemoveLawyer(i)}
-                        className="text-danger hover:opacity-80 text-xs font-medium"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <div className="flex-1 min-w-48">
-                  <ComboBox
-                    value={newLawyerEmail}
-                    onChange={(email) => {
-                      setNewLawyerEmail(email);
-                      const c = advogadosSignatarios.find((x) => x.email === email);
-                      setNewLawyerName(c?.name ?? "");
-                    }}
-                    placeholder="Busque o advogado por nome ou letra"
-                    options={advogadosSignatarios.map((c) => ({ value: c.email, label: c.name }))}
-                  />
-                </div>
-                <button
-                  onClick={handleAddLawyer}
-                  disabled={!newLawyerEmail.trim()}
-                  className="shrink-0 px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
-                >
-                  Adicionar
-                </button>
-              </div>
-            </div>
 
             {/* Testemunhas section */}
             <div className="w-full mb-2 p-4 rounded-lg bg-card border border-purple-300/40">

@@ -82,9 +82,6 @@ export default function ContractDetailPage() {
   const [sendingSignature, setSendingSignature] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [showSignaturePanel, setShowSignaturePanel] = useState(false);
-  const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
-  const [newLawyerEmail, setNewLawyerEmail] = useState("");
-  const [newLawyerName, setNewLawyerName] = useState("");
   // Testemunhas: roster + selecionadas (do roster) + avulsas
   const [roster, setRoster] = useState<Testemunha[]>([]);
   const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
@@ -233,11 +230,6 @@ export default function ContractDetailPage() {
       const signatarios: Array<{email: string; name: string; role: string}> = [
         { email: signerEmail, name: signerName, role: "Contratante" },
       ];
-
-      // Add additional lawyers
-      for (const lawyer of additionalLawyers) {
-        signatarios.push({ email: lawyer.email, name: lawyer.name, role: "Advogado" });
-      }
 
       // Honorários: o sócio escolhido assina pelo escritório. No consumidor o backend
       // injeta a contratada fixa.
@@ -463,7 +455,7 @@ export default function ContractDetailPage() {
         </div>
       )}
 
-      {/* Signature Panel - Additional Lawyers */}
+      {/* Signature Panel */}
       {showSignaturePanel && canSendForSignature && (
         <div className="mb-8 p-5 bg-card border border-purple-300/40 rounded-xl">
           <h3 className="font-display text-sm font-semibold text-purple-900 mb-3">
@@ -471,7 +463,6 @@ export default function ContractDetailPage() {
           </h3>
           <p className="text-xs text-purple-700 mb-3">
             O contratante ({contract.client_email}) é incluído automaticamente.
-            Adicione os advogados que assinam, se houver.
           </p>
 
           {ehHonorarios && (
@@ -481,53 +472,6 @@ export default function ContractDetailPage() {
               onChange={setSocioEscritorio}
             />
           )}
-
-          {/* Additional lawyers list */}
-          {additionalLawyers.length > 0 && (
-            <div className="space-y-1 mb-3">
-              {additionalLawyers.map((lawyer, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40">
-                  <span className="flex-1">{lawyer.name} ({lawyer.email})</span>
-                  <button
-                    onClick={() => setAdditionalLawyers((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="text-danger hover:opacity-80 text-xs font-medium"
-                  >
-                    Remover
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add lawyer form */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <input
-              type="text"
-              value={newLawyerName}
-              onChange={(e) => setNewLawyerName(e.target.value)}
-              placeholder="Nome do advogado"
-              className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-            />
-            <input
-              type="email"
-              value={newLawyerEmail}
-              onChange={(e) => setNewLawyerEmail(e.target.value)}
-              placeholder="email@exemplo.com"
-              className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-            />
-            <button
-              onClick={() => {
-                if (!newLawyerEmail.trim()) return;
-                setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
-                setNewLawyerEmail("");
-                setNewLawyerName("");
-              }}
-              disabled={!newLawyerEmail.trim()}
-              className="shrink-0 px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
-            >
-              Adicionar
-            </button>
-          </div>
 
           {/* Testemunhas */}
           <div className="mb-4 pt-3 border-t border-purple-200">

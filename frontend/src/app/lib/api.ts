@@ -344,12 +344,6 @@ export interface ColaboradorWizard {
   name: string;
   email: string;
   role: string;
-  areas: string[];
-}
-
-// Áreas existentes = as que algum sócio assumiu no cadastro de colaboradores.
-export function areasCadastradas(colaboradores: ColaboradorWizard[]) {
-  return [...new Set(colaboradores.filter((c) => c.role === "socio").flatMap((c) => c.areas))].sort();
 }
 
 export async function listColaboradores(opts?: { participavel?: boolean }) {
@@ -429,7 +423,6 @@ export interface Colaborador {
   nome: string;
   email: string | null;
   papel: string;
-  areas: string[];
   ativo: boolean;
   ordem: number;
   participavel: boolean;
@@ -464,7 +457,7 @@ export async function createColaborador(body: {
 
 export async function updateColaborador(
   id: number,
-  body: { nome?: string; email?: string | null; papel?: string; areas?: string[]; ativo?: boolean; ordem?: number }
+  body: { nome?: string; email?: string | null; papel?: string; ativo?: boolean; ordem?: number }
 ) {
   return request<Colaborador>(`/api/colaboradores/${id}`, {
     method: "PATCH",

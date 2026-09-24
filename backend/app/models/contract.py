@@ -336,9 +336,6 @@ class ContratoRequest(BaseModel):
     acessorios: Acessorios
     participacao: Participacao
     email_destinatario: Optional[str] = None
-    # Area do contrato (Cível, Trabalhista...): define o socio sugerido para
-    # assinar pelo escritorio. Contratos antigos nao tem.
-    area: Optional[str] = None
  
  
 class ContratoResponse(BaseModel):
