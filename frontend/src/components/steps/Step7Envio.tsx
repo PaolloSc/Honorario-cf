@@ -7,7 +7,6 @@ import { ESCOPO_LABELS } from "@/types/contract";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
-import { ComboBox } from "@/components/ui/FormField";
 
 interface Step7EnvioProps {
   data: ContratoFormData;
@@ -264,7 +263,6 @@ export default function Step7Envio({
   // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
   const [roster, setRoster] = useState<Testemunha[]>([]);
   const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
-  const [rosterTestemunhaPick, setRosterTestemunhaPick] = useState("");
   const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
@@ -614,9 +612,9 @@ export default function Step7Envio({
         </div>
       </div>
 
-      <datalist id="colaboradores-nomes">
-        {colaboradores.map((c) => (
-          <option key={c.email || c.name} value={c.name} label={c.email} />
+      <datalist id="testemunhas-nomes">
+        {roster.map((t) => (
+          <option key={t.id} value={t.nome} label={t.email} />
         ))}
       </datalist>
 
@@ -624,10 +622,10 @@ export default function Step7Envio({
       <div className="w-full mb-2 p-4 rounded-lg bg-card border border-border">
         <h4 className="text-sm font-semibold text-foreground mb-2">Testemunhas</h4>
         <p className="text-xs text-muted mb-3">
-          <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Selecione outras do cadastro ou adicione avulsas.
+          <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Busque pelo nome (cadastro) ou digite uma avulsa.
         </p>
 
-        {roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 && (
+        {(roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 || extraTestemunhas.length > 0) && (
           <div className="space-y-1 mb-3">
             {roster
               .filter((t) => selectedTestemunhaIds.includes(t.id))
@@ -642,35 +640,6 @@ export default function Step7Envio({
                   </button>
                 </div>
               ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          <div className="flex-1 min-w-48">
-            <ComboBox
-              value={rosterTestemunhaPick}
-              onChange={setRosterTestemunhaPick}
-              placeholder="Busque a testemunha por nome ou letra"
-              options={roster
-                .filter((t) => !selectedTestemunhaIds.includes(t.id))
-                .map((t) => ({ value: String(t.id), label: t.nome }))}
-            />
-          </div>
-          <button
-            onClick={() => {
-              if (!rosterTestemunhaPick) return;
-              setSelectedTestemunhaIds((prev) => [...prev, Number(rosterTestemunhaPick)]);
-              setRosterTestemunhaPick("");
-            }}
-            disabled={!rosterTestemunhaPick}
-            className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
-          >
-            Adicionar
-          </button>
-        </div>
-
-        {extraTestemunhas.length > 0 && (
-          <div className="space-y-1 mb-3">
             {extraTestemunhas.map((t, i) => (
               <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
                 <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
@@ -689,13 +658,13 @@ export default function Step7Envio({
           <input
             type="text"
             value={newTestemunhaNome}
-            list="colaboradores-nomes"
+            list="testemunhas-nomes"
             onChange={(e) => {
               setNewTestemunhaNome(e.target.value);
-              const c = colaboradores.find((x) => x.name === e.target.value);
-              if (c?.email) setNewTestemunhaEmail(c.email);
+              const t = roster.find((x) => x.nome === e.target.value);
+              if (t) setNewTestemunhaEmail(t.email);
             }}
-            placeholder="Nome da testemunha"
+            placeholder="Busque por nome ou digite uma testemunha avulsa"
             className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
           <input
@@ -707,12 +676,19 @@ export default function Step7Envio({
           />
           <button
             onClick={() => {
-              if (!newTestemunhaEmail.trim()) return;
-              setExtraTestemunhas((prev) => [...prev, { email: newTestemunhaEmail.trim(), name: newTestemunhaNome.trim() || newTestemunhaEmail.trim() }]);
-              setNewTestemunhaEmail("");
+              const nome = newTestemunhaNome.trim();
+              const email = newTestemunhaEmail.trim();
+              if (!nome || !email) return;
+              const match = roster.find((t) => t.nome.trim().toLowerCase() === nome.toLowerCase());
+              if (match) {
+                setSelectedTestemunhaIds((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));
+              } else {
+                setExtraTestemunhas((prev) => [...prev, { email, name: nome }]);
+              }
               setNewTestemunhaNome("");
+              setNewTestemunhaEmail("");
             }}
-            disabled={!newTestemunhaEmail.trim()}
+            disabled={!newTestemunhaNome.trim() || !newTestemunhaEmail.trim()}
             className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
           >
             Adicionar
@@ -903,7 +879,7 @@ export default function Step7Envio({
         </div>
       )}
 
-      <div className="flex gap-4 flex-wrap">
+      <div className="flex gap-4 flex-wrap items-start">
         {/* Initial actions - before save */}
         {status === "idle" && (
           <>
@@ -935,18 +911,28 @@ export default function Step7Envio({
         {/* After save/email success - show signature button */}
         {status === "sent_email" && contractId && (
           <>
-            <button
-              onClick={handleSendForSignature}
-              disabled={isSubmitting || !socioEscritorio}
-              title={!socioEscritorio ? "Escolha o sócio que assina pelo escritório" : undefined}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition"
-            >
-              Enviar para Assinatura Digital
-            </button>
+            <div>
+              <button
+                onClick={handleSendForSignature}
+                disabled={isSubmitting || !socioEscritorio}
+                className={`px-4 py-2 rounded-lg transition ${
+                  !socioEscritorio
+                    ? "bg-border/40 text-muted cursor-not-allowed"
+                    : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
+                }`}
+              >
+                Enviar para Assinatura Digital
+              </button>
+              {!socioEscritorio && (
+                <p className="text-xs text-warning mt-1 max-w-64">
+                  Escolha o sócio que assina pelo escritório (acima) para habilitar o envio.
+                </p>
+              )}
+            </div>
 
             <button
               onClick={handleGoToContract}
-              className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background transition"
+              className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background transition self-start"
             >
               Ir para o Contrato
             </button>
