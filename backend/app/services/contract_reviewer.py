@@ -79,6 +79,9 @@ def extract_open_fields(data: dict) -> str:
 
     for i, c in enumerate(data.get("contratantes") or [], 1):
         add(f"Contratante {i} - profissão", c.get("profissao"))
+        add(f"Contratante {i} - endereço", c.get("endereco"))
+        for j, rep in enumerate(c.get("representantes") or [], 1):
+            add(f"Contratante {i} - representante {j} - profissão", rep.get("profissao"))
 
     for i, escopo in enumerate(data.get("escopos") or [], 1):
         prefix = f"Escopo {i}"
@@ -91,6 +94,18 @@ def extract_open_fields(data: dict) -> str:
         permuta = escopo.get("permuta") or {}
         add(f"{prefix} - permuta: descrição", permuta.get("descricao"))
         add(f"{prefix} - permuta: forma de pagamento da torna", permuta.get("forma_pagamento_torna"))
+
+        exito = escopo.get("exito") or {}
+        add(f"{prefix} - êxito: base de cálculo", exito.get("base_calculo"))
+        add(f"{prefix} - êxito: observação de vencimento", exito.get("vencimento_obs"))
+        add(f"{prefix} - êxito: honorário deduzido", exito.get("honorario_deduzido"))
+
+        pro_labore = escopo.get("pro_labore") or {}
+        add(f"{prefix} - pró-labore: observação de vencimento", pro_labore.get("vencimento_obs"))
+        add(f"{prefix} - pró-labore: observação de vencimento (parcelas)", pro_labore.get("vencimento_parcelas_obs"))
+
+        mensalidade = escopo.get("mensalidade") or {}
+        add(f"{prefix} - mensalidade: observação de vencimento", mensalidade.get("dia_vencimento_obs"))
 
     acessorios = data.get("acessorios") or {}
     add("Limitação do reembolso", acessorios.get("descricao_limitacao_reembolso"))
