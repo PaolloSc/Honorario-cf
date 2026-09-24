@@ -155,3 +155,37 @@ def test_extract_open_fields_empty_when_no_free_text_filled():
     data = {"contratantes": [{"nome": "Maria"}], "escopos": [], "acessorios": {}}
 
     assert contract_reviewer.extract_open_fields(data) == ""
+
+
+def test_extract_open_fields_inclui_endereco_e_observacoes_de_vencimento():
+    """Endereço e observações de vencimento também são texto livre que vai pro contrato,
+    mas a revisão só olhava escopo/acessórios — passavam batido erros de digitação neles."""
+    data = {
+        "contratantes": [
+            {"tipo": "PF", "endereco": "Rua das Aacacias, 100, apartameto 302"},
+            {"tipo": "PJ", "endereco": "Av. Contorno, 500, sla 10"},
+        ],
+        "escopos": [
+            {
+                "honorarios": ["exito"],
+                "exito": {"base_calculo": "o valor da causa atulizado"},
+            },
+            {
+                "honorarios": ["pro_labore"],
+                "pro_labore": {"vencimento_obs": "apos a homologacao do acôrdo"},
+            },
+            {
+                "honorarios": ["mensalidade"],
+                "mensalidade": {"dia_vencimento_obs": "excto em mes de recesso"},
+            },
+        ],
+        "acessorios": {},
+    }
+
+    text = contract_reviewer.extract_open_fields(data)
+
+    assert "Rua das Aacacias, 100, apartameto 302" in text
+    assert "Av. Contorno, 500, sla 10" in text
+    assert "o valor da causa atulizado" in text
+    assert "apos a homologacao do acôrdo" in text
+    assert "excto em mes de recesso" in text
