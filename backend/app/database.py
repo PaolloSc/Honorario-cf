@@ -119,9 +119,6 @@ class ColaboradorDB(Base):
     nome = Column(String(256), nullable=False)
     email = Column(String(256), nullable=True)
     papel = Column(String(32), nullable=False, default="advogado")  # ver PAPEIS_VALIDOS
-    # Areas pelas quais o socio responde ("Cível,Trabalhista"): o wizard sugere
-    # esse socio para assinar pelo escritorio nos contratos da area.
-    areas = Column(String(512), nullable=True)
     ativo = Column(Boolean, nullable=False, default=True)
     ordem = Column(Integer, nullable=False, default=0)
     created_by = Column(String(256), nullable=True)  # user email
@@ -131,10 +128,6 @@ class ColaboradorDB(Base):
     @property
     def participavel(self) -> bool:
         return self.papel in PAPEIS_PARTICIPAVEIS
-
-    @property
-    def lista_areas(self) -> list[str]:
-        return [a.strip() for a in (self.areas or "").split(",") if a.strip()]
 
 
 LEGALONE_TIPOS_VALIDOS = ("categoria_cliente", "etiqueta", "lista_transmissao")

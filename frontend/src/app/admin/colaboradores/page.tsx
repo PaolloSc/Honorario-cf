@@ -87,18 +87,6 @@ export default function ColaboradoresAdminPage() {
     }
   };
 
-  const changeAreas = async (c: Colaborador, texto: string) => {
-    const areas = texto.split(",").map((a) => a.trim()).filter(Boolean);
-    if (areas.join(",") === c.areas.join(",")) return;
-    try {
-      await updateColaborador(c.id, { areas });
-      setError("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao atualizar áreas");
-    }
-    fetchRows();
-  };
-
   const changePapel = async (c: Colaborador, novoPapel: string) => {
     try {
       await updateColaborador(c.id, { papel: novoPapel });
@@ -129,11 +117,6 @@ export default function ColaboradoresAdminPage() {
         Cadastro do escritório. Advogados e sócios aparecem nas listas do formulário
         de contrato (campo &quot;Para quem&quot;, responsáveis e assinaturas).
       </p>
-      <p className="text-sm text-muted mb-6 -mt-4">
-        <strong>Áreas</strong> (só sócios, separadas por vírgula): o sócio responsável pela área
-        vem sugerido para assinar pelo escritório. Cada área tem um só sócio.
-      </p>
-
       {error && !accessDenied && (
         <div className="mb-4 p-3 rounded-lg bg-danger/[0.08] border border-danger text-sm text-danger">
           {error}
@@ -190,7 +173,6 @@ export default function ColaboradoresAdminPage() {
                 <th className="text-left px-4 py-3 font-medium text-muted min-w-[16rem]">Nome</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">E-mail</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Papel</th>
-                <th className="text-left px-4 py-3 font-medium text-muted">Áreas</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
                 <th className="text-right px-4 py-3 font-medium text-muted">Ações</th>
               </tr>
@@ -214,21 +196,6 @@ export default function ColaboradoresAdminPage() {
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.papel === "socio" ? (
-                      <input
-                        key={c.areas.join(",")}
-                        type="text"
-                        defaultValue={c.areas.join(", ")}
-                        onBlur={(e) => changeAreas(c, e.target.value)}
-                        placeholder="Ex.: Cível, Tributário"
-                        aria-label={`Áreas de ${c.nome}`}
-                        className="w-40 text-xs border border-border bg-card text-foreground rounded px-2 py-1"
-                      />
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span
