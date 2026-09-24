@@ -17,7 +17,7 @@ export default function SocioEscritorioSelect({
   return (
     <div className="w-full mb-2 p-4 rounded-lg bg-card border border-border">
       <label htmlFor="socio-escritorio" className="block text-sm font-semibold text-foreground mb-1">
-        Assinatura pelo escritório
+        Assinatura pelo escritório<span className="text-danger ml-1">*</span>
       </label>
       <p className="text-xs text-muted mb-3">
         Indique o sócio que assinará pelo escritório.
