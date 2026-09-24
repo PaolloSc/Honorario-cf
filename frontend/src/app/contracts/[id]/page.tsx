@@ -82,9 +82,6 @@ export default function ContractDetailPage() {
   const [sendingSignature, setSendingSignature] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [showSignaturePanel, setShowSignaturePanel] = useState(false);
-  const [additionalLawyers, setAdditionalLawyers] = useState<Array<{email: string; name: string}>>([]);
-  const [newLawyerEmail, setNewLawyerEmail] = useState("");
-  const [newLawyerName, setNewLawyerName] = useState("");
   // Testemunhas: roster + selecionadas (do roster) + avulsas
   const [roster, setRoster] = useState<Testemunha[]>([]);
   const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
@@ -233,11 +230,6 @@ export default function ContractDetailPage() {
       const signatarios: Array<{email: string; name: string; role: string}> = [
         { email: signerEmail, name: signerName, role: "Contratante" },
       ];
-
-      // Add additional lawyers
-      for (const lawyer of additionalLawyers) {
-        signatarios.push({ email: lawyer.email, name: lawyer.name, role: "Advogado" });
-      }
 
       // Honorários: o sócio escolhido assina pelo escritório. No consumidor o backend
       // injeta a contratada fixa.
@@ -463,15 +455,14 @@ export default function ContractDetailPage() {
         </div>
       )}
 
-      {/* Signature Panel - Additional Lawyers */}
+      {/* Signature Panel */}
       {showSignaturePanel && canSendForSignature && (
-        <div className="mb-8 p-5 bg-card border border-purple-300/40 rounded-xl">
-          <h3 className="font-display text-sm font-semibold text-purple-900 mb-3">
+        <div className="mb-8 p-5 bg-card border border-border rounded-xl">
+          <h3 className="text-sm font-semibold text-foreground mb-3">
             Enviar para Assinatura Digital
           </h3>
-          <p className="text-xs text-purple-700 mb-3">
+          <p className="text-xs text-muted mb-3">
             O contratante ({contract.client_email}) é incluído automaticamente.
-            Adicione os advogados que assinam, se houver.
           </p>
 
           {ehHonorarios && (
@@ -482,64 +473,17 @@ export default function ContractDetailPage() {
             />
           )}
 
-          {/* Additional lawyers list */}
-          {additionalLawyers.length > 0 && (
-            <div className="space-y-1 mb-3">
-              {additionalLawyers.map((lawyer, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40">
-                  <span className="flex-1">{lawyer.name} ({lawyer.email})</span>
-                  <button
-                    onClick={() => setAdditionalLawyers((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="text-danger hover:opacity-80 text-xs font-medium"
-                  >
-                    Remover
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add lawyer form */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <input
-              type="text"
-              value={newLawyerName}
-              onChange={(e) => setNewLawyerName(e.target.value)}
-              placeholder="Nome do advogado"
-              className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-            />
-            <input
-              type="email"
-              value={newLawyerEmail}
-              onChange={(e) => setNewLawyerEmail(e.target.value)}
-              placeholder="email@exemplo.com"
-              className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
-            />
-            <button
-              onClick={() => {
-                if (!newLawyerEmail.trim()) return;
-                setAdditionalLawyers((prev) => [...prev, { email: newLawyerEmail.trim(), name: newLawyerName.trim() || newLawyerEmail.trim() }]);
-                setNewLawyerEmail("");
-                setNewLawyerName("");
-              }}
-              disabled={!newLawyerEmail.trim()}
-              className="shrink-0 px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
-            >
-              Adicionar
-            </button>
-          </div>
-
           {/* Testemunhas */}
-          <div className="mb-4 pt-3 border-t border-purple-200">
-            <p className="text-xs font-semibold text-purple-900 mb-1">Testemunhas</p>
-            <p className="text-xs text-purple-700 mb-2">
+          <div className="mb-4 pt-3 border-t border-border">
+            <p className="text-xs font-semibold text-foreground mb-1">Testemunhas</p>
+            <p className="text-xs text-muted mb-2">
               <strong>Testemunha 1 (financeiro)</strong> e incluida automaticamente. Selecione outras do cadastro ou adicione avulsas.
             </p>
 
             {roster.length > 0 && (
               <div className="space-y-1 mb-2">
                 {roster.map((t) => (
-                  <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40 cursor-pointer">
+                  <label key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selectedTestemunhaIds.includes(t.id)}
@@ -558,7 +502,7 @@ export default function ContractDetailPage() {
             {extraTestemunhas.length > 0 && (
               <div className="space-y-1 mb-2">
                 {extraTestemunhas.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-purple-300/40">
+                  <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
                     <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
                     <button
                       onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
@@ -577,14 +521,14 @@ export default function ContractDetailPage() {
                 value={newTestemunhaNome}
                 onChange={(e) => setNewTestemunhaNome(e.target.value)}
                 placeholder="Nome da testemunha"
-                className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
               <input
                 type="email"
                 value={newTestemunhaEmail}
                 onChange={(e) => setNewTestemunhaEmail(e.target.value)}
                 placeholder="email@exemplo.com"
-                className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+                className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
               <button
                 onClick={() => {
@@ -594,7 +538,7 @@ export default function ContractDetailPage() {
                   setNewTestemunhaNome("");
                 }}
                 disabled={!newTestemunhaEmail.trim()}
-                className="shrink-0 px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 transition"
+                className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
               >
                 Adicionar
               </button>
@@ -606,7 +550,7 @@ export default function ContractDetailPage() {
             <button
               onClick={handleSendForSignature}
               disabled={sendingSignature || (ehHonorarios && !socioEscritorio)}
-              className="px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
+              className="px-5 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark disabled:opacity-50 transition"
             >
               {sendingSignature ? "Enviando..." : "Confirmar e Enviar"}
             </button>
