@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -24,6 +25,9 @@ class CurrentUser:
     name: str
     role: str  # "advogado" | "admin" | "financeiro" | "leitor"
 
+
+CONVITE_AZURE_ID = "convite::link"
+CONVITE_EMAIL = "convidado@convite.local"
 
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -186,6 +190,13 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
         raise HTTPException(401, "Token de autenticacao ausente")
 
     token = auth_header[7:]
+
+    if settings.convite_token and hmac.compare_digest(token, settings.convite_token):
+        user = _get_or_create_user(db, CONVITE_AZURE_ID, CONVITE_EMAIL, "Convidado (link)")
+        return _enforce_readonly(request, CurrentUser(
+            azure_id=user.azure_id, email=user.email, name=user.name, role=user.role,
+        ))
+
     payload = _decode_token(token)
 
     azure_id = payload.get("oid") or payload.get("sub", "")
