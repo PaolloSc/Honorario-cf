@@ -158,6 +158,10 @@ interface ComboBoxProps {
   // Mostra um botao "x" pra esvaziar a selecao explicitamente, sem precisar
   // apagar o texto digitado na mao.
   clearable?: boolean;
+  // Aceita texto livre alem das opcoes: o que for digitado ja' vira o valor
+  // (ex.: testemunha avulsa que nao esta' no cadastro).
+  livre?: boolean;
+  className?: string;
 }
 
 // Remove acentos pra busca "monica" achar "Mônica" tambem.
@@ -168,7 +172,7 @@ function semAcento(s: string): string {
 // Select com busca: a lista so' abre depois que a pessoa comeca a digitar (nao
 // so' ao clicar no campo) e filtra pelo INICIO do nome, ignorando acento (ex.:
 // "monica" ou "G" acham "Mônica"/"Gabriel", mas "G" nao acha "Chagas").
-export function ComboBox({ value, onChange, options, placeholder, error, clearable }: ComboBoxProps) {
+export function ComboBox({ value, onChange, options, placeholder, error, clearable, livre, className = "" }: ComboBoxProps) {
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,14 +186,17 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
   }, [options, query]);
 
   return (
-    <div className="relative">
+    <div className={`relative ${className}`}>
       <input
         type="text"
-        value={editing ? query : selected?.label ?? ""}
-        onChange={(e) => setQuery(e.target.value)}
+        value={editing ? query : selected?.label ?? (livre ? value : "")}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          if (livre) onChange(e.target.value);
+        }}
         onFocus={() => {
           setEditing(true);
-          setQuery("");
+          setQuery(livre ? value : "");
         }}
         onBlur={() => {
           blurTimeout.current = setTimeout(() => setEditing(false), 150);
@@ -217,7 +224,7 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
           ✕
         </button>
       )}
-      {showList && (
+      {showList && !(livre && filtered.length === 0) && (
         <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg text-sm">
           {filtered.length === 0 ? (
             <li className="px-3 py-2 text-muted">Nenhum resultado</li>
