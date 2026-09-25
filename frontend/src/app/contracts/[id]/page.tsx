@@ -482,12 +482,6 @@ export default function ContractDetailPage() {
               <strong>Testemunha 1 (financeiro)</strong> e incluida automaticamente. Busque pelo nome (cadastro) ou digite uma avulsa.
             </p>
 
-            <datalist id="testemunhas-nomes">
-              {roster.map((t) => (
-                <option key={t.id} value={t.nome} label={t.email} />
-              ))}
-            </datalist>
-
             {(roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 || extraTestemunhas.length > 0) && (
               <div className="space-y-1 mb-2">
                 {roster
@@ -518,17 +512,17 @@ export default function ContractDetailPage() {
             )}
 
             <div className="flex flex-wrap gap-2">
-              <input
-                type="text"
+              <ComboBox
+                livre
+                className="flex-1 min-w-40"
                 value={newTestemunhaNome}
-                list="testemunhas-nomes"
-                onChange={(e) => {
-                  setNewTestemunhaNome(e.target.value);
-                  const t = roster.find((x) => x.nome === e.target.value);
+                options={roster.map((t) => ({ value: t.nome, label: t.nome }))}
+                onChange={(v) => {
+                  setNewTestemunhaNome(v);
+                  const t = roster.find((x) => x.nome === v);
                   if (t) setNewTestemunhaEmail(t.email);
                 }}
                 placeholder="Busque por nome ou digite uma testemunha avulsa"
-                className="flex-1 min-w-40 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
               <input
                 type="email"
