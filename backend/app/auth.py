@@ -193,6 +193,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
 
     if settings.convite_token and hmac.compare_digest(token, settings.convite_token):
         user = _get_or_create_user(db, CONVITE_AZURE_ID, CONVITE_EMAIL, "Convidado (link)")
+        if user.role != settings.convite_role:
+            user.role = settings.convite_role
+            db.commit()
         return _enforce_readonly(request, CurrentUser(
             azure_id=user.azure_id, email=user.email, name=user.name, role=user.role,
         ))
