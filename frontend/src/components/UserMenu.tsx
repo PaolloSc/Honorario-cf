@@ -11,6 +11,8 @@ export default function UserMenu() {
 
   const initials = (session.user.name || session.user.email || "?")
     .split(" ")
+    .map((w) => w.replace(/[^A-Za-zÀ-ÿ]/g, ""))
+    .filter(Boolean)
     .map((w) => w[0])
     .slice(0, 2)
     .join("")

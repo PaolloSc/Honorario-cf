@@ -1,4 +1,4 @@
-"""Link de convidado: token certo entra como advogado, errado cai no 401 do Azure."""
+"""Link de convidado: token certo entra com o perfil de CONVITE_ROLE (admin), errado cai no 401 do Azure."""
 
 from types import SimpleNamespace
 
@@ -22,7 +22,10 @@ def test_convite(monkeypatch):
         db.add(auth_mod.UserDB(azure_id="a", email="a@e", name="A", role="admin", created_at=auth_mod.utcnow()))
         db.commit()
         u = auth_mod.get_current_user(_req("segredo-convite"), db)
-        assert (u.email, u.role) == (auth_mod.CONVITE_EMAIL, "advogado")
+        assert (u.email, u.role) == (auth_mod.CONVITE_EMAIL, "admin")
+
+        monkeypatch.setattr(settings, "convite_role", "advogado")  # troca pela env, sem mexer no banco
+        assert auth_mod.get_current_user(_req("segredo-convite"), db).role == "advogado"
 
         with pytest.raises(HTTPException) as e:
             auth_mod.get_current_user(_req("segredo-errado"), db)

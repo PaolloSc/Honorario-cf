@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     # Link de convidado sem login: /convite/<token> no frontend. Mesmo valor nos
     # dois projetos Vercel. Vazio = desligado; trocar o valor revoga o link.
     convite_token: str = ""
+    # Perfil de quem entra pelo link (admin | advogado | financeiro | leitor).
+    convite_role: str = "admin"
 
     # NFS-e BH (financeiro)
     nfse_enabled: bool = False
