@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # NUNCA habilitar em produção.
     dev_mode: bool = False
 
+    # Link de convidado sem login: /convite/<token> no frontend. Mesmo valor nos
+    # dois projetos Vercel. Vazio = desligado; trocar o valor revoga o link.
+    convite_token: str = ""
+
     # NFS-e BH (financeiro)
     nfse_enabled: bool = False
     nfse_kek: str = ""                       # base64 32 bytes (AES-GCM)

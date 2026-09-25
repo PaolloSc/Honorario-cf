@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import Credentials from "next-auth/providers/credentials";
 import { NextResponse } from "next/server";
 import { callbackUrlSeguro } from "@/lib/callback-url";
 
@@ -88,6 +89,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
       },
     }),
+    // Link de convidado (/convite/<token>): entra sem conta Microsoft. O backend
+    // aceita o mesmo CONVITE_TOKEN como Bearer. Trocar o valor revoga o link.
+    Credentials({
+      id: "convite",
+      credentials: { token: {} },
+      authorize: ({ token }) =>
+        process.env.CONVITE_TOKEN && token === process.env.CONVITE_TOKEN
+          ? { id: "convite", name: "Convidado (link)", email: "convidado@convite.local" }
+          : null,
+    }),
   ],
   callbacks: {
     authorized({ auth, request }) {
@@ -103,6 +114,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return NextResponse.redirect(login);
     },
     async jwt({ token, account }) {
+      if (account?.provider === "convite") {
+        token.accessToken = process.env.CONVITE_TOKEN;
+        token.convite = true;
+        return token;
+      }
+      if (token.convite) {
+        // Token trocado no Vercel = link revogado: derruba sessoes antigas.
+        return token.accessToken === process.env.CONVITE_TOKEN ? token : null;
+      }
       if (account) {
         token.accessToken = account.id_token;
         token.refreshToken = account.refresh_token;
