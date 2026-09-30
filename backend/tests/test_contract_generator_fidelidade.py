@@ -145,7 +145,7 @@ def test_secoes_4a11_presentes_para_cada_caso(nome):
     assert _has(paras, "CredLocaliza")                       # 5.3
     assert _has(paras, "obrigação de meio")                  # 6.3
     assert _has(paras, "inteligência artificial")            # 7.3
-    assert _has(paras, "art. 112, §1º, do Código de Processo Civil")  # 8.2.1
+    assert _has(paras, "arts. 112, § 1º, do Código de Processo Civil")  # 8.2.1
     assert _has(paras, "utilizar seu nome, marca e logotipo")  # 9.4
     assert _has(paras, "título executivo extrajudicial")     # 10.7
     assert _has(paras, "por mais privilegiado que seja")     # 11.1
@@ -242,8 +242,10 @@ def _req_com_exito() -> dict:
 
 def test_secao8_rescisao_cpc_e_extincao():
     paras = _paras_for(_base_req())
-    assert _has(paras, "art. 112, §1º, do Código de Processo Civil")
+    assert _has(paras, "arts. 112, § 1º, do Código de Processo Civil")
     assert _has(paras, "honorários vencidos serão devidos integralmente")
+    # Virgula com elementos normativos: ordem hibrida fecha com virgula antes do diploma.
+    assert _has(paras, "artigo 10, § 2º, da MP 2200-2/2001")
 
 
 def test_secao8_tabela_exito_presente_com_exito():
