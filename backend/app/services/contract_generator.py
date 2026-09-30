@@ -1036,7 +1036,7 @@ class ContractGenerator:
         self._add_clausula(
             doc,
             "Este prazo de antecedência não substitui nem prejudica o disposto nos "
-            "art. 112, §1º, do Código de Processo Civil e 5º, §3º, do Estatuto da OAB, de "
+            "arts. 112, § 1º, do Código de Processo Civil e 5º, § 3º, do Estatuto da OAB, de "
             "modo que, no caso de demandas judiciais, arbitrais ou administrativas, o C&F e "
             "seus advogados permanecerão representando a CONTRATANTE durante os dez dias "
             "seguintes à notificação, salvo se forem substituídos antes do término desse "
@@ -1157,7 +1157,7 @@ class ContractGenerator:
             "e formação de legítima confiança.",
             "O presente contrato é título executivo extrajudicial, podendo ser utilizado "
             "para a execução judicial de quaisquer obrigações nele constantes.",
-            "Nos termos do artigo 10, § 2º da MP 2200-2/2001, § 4º do artigo 784 do Código "
+            "Nos termos do artigo 10, § 2º, da MP 2200-2/2001, § 4º do artigo 784 do Código "
             "de Processo Civil e legislação correlata, as Partes e as testemunhas aqui "
             "envolvidas reconhecem a validade de assinaturas eletrônicas ainda que não "
             "utilizem de certificado digital emitido pelo padrão ICP-Brasil.",
