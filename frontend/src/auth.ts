@@ -235,6 +235,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return `${baseUrl}${path}`;
     },
   },
+  // Cookie de sessão de 90 dias (o padrão do next-auth é 30). O limite real é o
+  // refresh token do Entra: se ele vencer antes, a sessão cai em RefreshAccessTokenError.
+  session: { strategy: "jwt", maxAge: 90 * 24 * 60 * 60 },
   pages: {
     signIn: "/login",
   },
