@@ -15,7 +15,13 @@ import type {
   EscopoItem,
   Participacao,
 } from "@/types/contract";
-import { useCallback, useEffect, useState } from "react";
+import RascunhosPendentes from "@/components/RascunhosPendentes";
+import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
+import { getDraft } from "@/app/lib/api";
+import { dataDaApi } from "@/app/lib/datas";
+import { lerLocal } from "@/app/lib/rascunhoLocal";
+import { useAuthStatus } from "@/app/lib/useAuthStatus";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  
 const STEPS = [
   { id: 1, title: "Contratante" },
@@ -51,6 +57,17 @@ const INITIAL_DATA: ContratoFormData = {
     tem_participacao: false,
   },
 };
+
+const INITIAL_JSON = JSON.stringify(INITIAL_DATA);
+
+function novoIdRascunho(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function horaBrasilia(d: Date): string {
+  return d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+}
 
 function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): ContratoFormData {
   if (!data) return { ...INITIAL_DATA };
@@ -309,6 +326,71 @@ export default function ContractWizard({
   const currentStepErrors = validateStep(currentStep, formData);
   const canGoNext = currentStepErrors.length === 0;
 
+  // ── Rascunho (autosave) — só ao criar; editar contrato já gera versão própria ──
+  const authStatus = useAuthStatus();
+  const [draftId, setDraftId] = useState(novoIdRascunho);
+  const [restaurando, setRestaurando] = useState(false);
+  const [avisoRetomada, setAvisoRetomada] = useState("");
+  const retomadaFeita = useRef(false);
+  const temConteudo = useMemo(() => JSON.stringify(formData) !== INITIAL_JSON, [formData]);
+  const autosave = useRascunhoAutosave({
+    ativo: !editContractId && !restaurando,
+    draftId,
+    formData: formData as unknown as Record<string, unknown>,
+    step: currentStep,
+    temConteudo,
+  });
+  const retomarAutosave = autosave.retomar;
+
+  useEffect(() => {
+    if (editContractId || retomadaFeita.current) return;
+    const id = new URLSearchParams(window.location.search).get("rascunho");
+    if (!id) {
+      retomadaFeita.current = true;
+      return;
+    }
+    setRestaurando(true);
+    if (authStatus !== "authenticated") return; // espera a sessão para chamar a API
+    retomadaFeita.current = true;
+
+    const aplicar = (dados: Record<string, unknown>, passo: number) => {
+      setDraftId(id);
+      setFormData(normalizeFormData(dados as Partial<ContratoFormData>));
+      setCurrentStep(Math.min(Math.max(passo, 1), 5)); // 6/7 dependem de revisar de novo
+      retomarAutosave();
+      setAvisoRetomada("Rascunho retomado — confira os dados e continue de onde parou.");
+    };
+
+    (async () => {
+      const local = lerLocal(id);
+      try {
+        const servidor = await getDraft(id);
+        // cópia local mais nova = o último salvamento no servidor falhou
+        if (local && dataDaApi(local.updated_at) > dataDaApi(servidor.updated_at)) {
+          aplicar(local.form_data, local.current_step);
+        } else {
+          aplicar(servidor.form_data, servidor.current_step);
+        }
+      } catch {
+        if (local) aplicar(local.form_data, local.current_step);
+        else setAvisoRetomada("Rascunho não encontrado — pode já ter virado contrato ou ter sido descartado.");
+      } finally {
+        setRestaurando(false);
+      }
+    })();
+  }, [authStatus, editContractId, retomarAutosave]);
+
+  const descartarRascunho = async () => {
+    if (!window.confirm("Descartar este rascunho e começar do zero? Não dá para desfazer.")) return;
+    await autosave.descartar();
+    setFormData(normalizeFormData(null));
+    setCurrentStep(1);
+    setDraftId(novoIdRascunho());
+    setAvisoRetomada("");
+    autosave.retomar();
+    window.history.replaceState(null, "", window.location.pathname);
+  };
+
   useEffect(() => {
     const invalidStep = firstInvalidStepBefore(currentStep, formData);
     if (!invalidStep) return;
@@ -391,8 +473,37 @@ export default function ContractWizard({
             ? "Altere os dados e gere uma nova versão."
             : "Preencha as etapas abaixo para gerar o contrato."}
         </p>
+        {!editContractId && (
+          <div className="mt-2 text-xs" aria-live="polite">
+            {autosave.estado === "salvando" && <span className="text-muted">Salvando rascunho…</span>}
+            {autosave.estado === "salvo" && autosave.salvoEm && (
+              <span className="text-primary-dark">
+                Rascunho salvo às {horaBrasilia(autosave.salvoEm)} — você pode sair e retomar depois.{" "}
+                <button type="button" onClick={() => void descartarRascunho()} className="underline text-muted hover:text-danger">
+                  Descartar
+                </button>
+              </span>
+            )}
+            {autosave.estado === "falhou" && (
+              <span className="text-danger">
+                Não foi possível salvar o rascunho no servidor — não feche esta página.{" "}
+                <button type="button" onClick={() => void autosave.salvarAgora()} className="underline">
+                  Tentar de novo
+                </button>
+              </span>
+            )}
+          </div>
+        )}
       </div>
- 
+
+      {restaurando && <p className="mb-6 text-center text-sm text-muted">Carregando rascunho…</p>}
+      {avisoRetomada && (
+        <div className="mb-6 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary-dark">
+          {avisoRetomada}
+        </div>
+      )}
+      {!editContractId && !restaurando && !temConteudo && <RascunhosPendentes />}
+
       <StepIndicator steps={STEPS} currentStep={currentStep} onStepClick={(id) => {
         const invalid = firstInvalidStepBefore(id, formData);
         if (invalid) {
@@ -446,6 +557,7 @@ export default function ContractWizard({
             editContractId={editContractId}
             onSaveComplete={onSaveComplete}
             onDataChange={setFormData}
+            onContractGenerated={() => void autosave.descartar()}
             correcoesAplicadas={correcoesAplicadas}
             onCorrecoesAplicadasChange={setCorrecoesAplicadas}
           />
