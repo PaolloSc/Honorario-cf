@@ -214,6 +214,26 @@ class ContractVersionDB(Base):
     contract = relationship("ContractDB", back_populates="versions")
 
 
+class ContractDraftDB(Base):
+    """Rascunho do wizard (autosave): o que a pessoa já preencheu antes de gerar o contrato.
+
+    Não é um contrato — não tem versão, DOCX nem status. ``draft_id`` nasce no
+    navegador (UUID) para o autosave poder gravar antes de qualquer resposta do
+    servidor. Só o dono enxerga o seu rascunho; some quando o contrato é gerado.
+    """
+
+    __tablename__ = "contract_drafts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    draft_id = Column(String(64), unique=True, nullable=False, index=True)
+    owner_email = Column(String(256), nullable=False, index=True)
+    client_name = Column(String(256), nullable=False, default="")
+    current_step = Column(Integer, nullable=False, default=1)
+    form_data_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class AuditLogDB(Base):
     __tablename__ = "audit_logs"
 

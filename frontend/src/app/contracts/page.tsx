@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { useAcessoConsumidor } from "@/components/AcessoConsumidor";
 import { formatarDataHora } from "@/app/lib/datas";
+import RascunhosPendentes from "@/components/RascunhosPendentes";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; dot: string }> = {
   rascunho: { label: "Rascunho", color: "border-muted/30 bg-muted/10 text-muted", dot: "bg-muted" },
@@ -110,6 +111,8 @@ export default function ContractsPage() {
           )}
         </div>
       </div>
+
+      <RascunhosPendentes />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
