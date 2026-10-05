@@ -624,6 +624,49 @@ export async function updateContractStatus(contractId: string, status: string) {
   );
 }
 
+// ── Rascunhos do wizard (autosave) ───────────────────────────────
+
+export interface DraftSummary {
+  draft_id: string;
+  client_name: string;
+  current_step: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DraftDetail extends DraftSummary {
+  form_data: Record<string, unknown>;
+}
+
+export async function listDrafts() {
+  return request<{ drafts: DraftSummary[] }>("/api/drafts");
+}
+
+export async function getDraft(draftId: string) {
+  return request<DraftDetail>(`/api/drafts/${encodeURIComponent(draftId)}`);
+}
+
+// keepalive deixa o PUT terminar mesmo se a aba fechar logo em seguida (limite ~64KB
+// do navegador; acima disso o fetch falha e o salvamento normal já cobriu).
+export async function saveDraft(
+  draftId: string,
+  formData: Record<string, unknown>,
+  currentStep: number,
+  opts?: { keepalive?: boolean }
+) {
+  return request<DraftSummary>(`/api/drafts/${encodeURIComponent(draftId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ form_data: formData, current_step: currentStep }),
+    keepalive: opts?.keepalive,
+  });
+}
+
+export async function deleteDraft(draftId: string) {
+  return request<{ success: boolean }>(`/api/drafts/${encodeURIComponent(draftId)}`, {
+    method: "DELETE",
+  });
+}
+
 // ── Participações (Setor Financeiro) ─────────────────────────────
 
 export interface Participacao {
