@@ -16,6 +16,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # O app cria as tabelas novas sozinho na subida (init_db → create_all): se o deploy
+    # veio antes desta migração, a tabela já existe e não há o que fazer.
+    if sa.inspect(op.get_bind()).has_table("contract_drafts"):
+        return
     op.create_table(
         "contract_drafts",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -32,6 +36,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if not sa.inspect(op.get_bind()).has_table("contract_drafts"):
+        return
     op.drop_index("ix_contract_drafts_owner_email", table_name="contract_drafts")
     op.drop_index("ix_contract_drafts_draft_id", table_name="contract_drafts")
     op.drop_table("contract_drafts")
