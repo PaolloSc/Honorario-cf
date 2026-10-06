@@ -5,7 +5,7 @@ import FormField, {
   Input,
   Select,
 } from "@/components/ui/FormField";
-import { lookupCNPJ, sugerirClientes, type SugestaoCliente } from "@/app/lib/api";
+import { lookupCNPJ, sugerirClientes, type SocioReceita, type SugestaoCliente } from "@/app/lib/api";
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import type {
   Contratante,
@@ -103,6 +103,10 @@ export default function Step1Contratante({
   const [cnpjError, setCNPJError] = useState<string | null>(null);
   // Card preenchido com cliente já atendido -> data do contrato de origem (aviso "confira").
   const [origem, setOrigem] = useState<Record<number, string>>({});
+  // Dados da Receita que não vão para o contrato: chaveado pelo CNPJ, some sozinho se ele mudar.
+  const [receita, setReceita] = useState<
+    Record<string, { situacao: string; socios: SocioReceita[] }>
+  >({});
 
   const updateContratante = useCallback(
     (index: number, partial: Partial<Contratante>) => {
@@ -192,6 +196,10 @@ export default function Step1Contratante({
       setCNPJError(null);
       try {
         const data = await lookupCNPJ(cnpj);
+        setReceita((prev) => ({
+          ...prev,
+          [limparCNPJ(cnpj)]: { situacao: data.situacao_cadastral || "", socios: data.socios ?? [] },
+        }));
         updateContratante(index, {
           razao_social: data.razao_social,
           endereco: data.endereco,
@@ -292,6 +300,7 @@ export default function Step1Contratante({
               // Só trava o que a Receita acabou de devolver; rascunho/edição trazem o
               // valor salvo (que pode ter sido digitado) e precisam continuar editáveis.
               editavel={!cnpjLoaded.has(idx)}
+              receita={receita[c.cnpj]}
               onUpdate={(partial) => updateContratante(idx, partial)}
               onCNPJLookup={(cnpj) => handleCNPJLookup(idx, cnpj)}
             />
@@ -385,6 +394,7 @@ function PJForm({
   loadingCNPJ,
   loaded,
   editavel,
+  receita,
   onUpdate,
   onCNPJLookup,
 }: {
@@ -392,6 +402,7 @@ function PJForm({
   loadingCNPJ: boolean;
   loaded: boolean;
   editavel: boolean;
+  receita?: { situacao: string; socios: SocioReceita[] };
   onUpdate: (partial: Partial<ContratantePJ>) => void;
   onCNPJLookup: (cnpj: string) => void;
 }) {
@@ -450,6 +461,13 @@ function PJForm({
         />
       </FormField>
 
+      {receita?.situacao && receita.situacao.toUpperCase() !== "ATIVA" && (
+        <p className="md:col-span-2 text-sm rounded-lg border border-warning/30 bg-warning/10 text-warning px-3 py-2">
+          Situação cadastral na Receita: <strong>{receita.situacao}</strong>. Confirme com o
+          cliente antes de seguir com o contrato.
+        </p>
+      )}
+
       {loaded && (
         <FormField label="Razão Social" required>
           <Input
@@ -477,6 +495,7 @@ function PJForm({
       <div className="md:col-span-2">
         <RepresentantesForm
           representantes={reps}
+          socios={receita?.socios ?? []}
           onChange={(representantes) => onUpdate({ representantes })}
         />
       </div>
@@ -490,13 +509,24 @@ function emptyRepresentante(): RepresentantePJ {
 
 function RepresentantesForm({
   representantes,
+  socios,
   onChange,
 }: {
   representantes: RepresentantePJ[];
+  socios: SocioReceita[];
   onChange: (reps: RepresentantePJ[]) => void;
 }) {
   const update = (i: number, partial: Partial<RepresentantePJ>) =>
     onChange(representantes.map((r, idx) => (idx === i ? { ...r, ...partial } : r)));
+
+  const jaUsados = new Set(representantes.map((r) => r.nome.trim().toLowerCase()));
+  const sugestoes = socios.filter((s) => !jaUsados.has(s.nome.trim().toLowerCase()));
+  // Só preenche o nome, e só no clique: o QSA não prova poder de representação.
+  const preencher = (nome: string) => {
+    const vazio = representantes.findIndex((r) => !r.nome.trim());
+    if (vazio >= 0) update(vazio, { nome });
+    else onChange([...representantes, { ...emptyRepresentante(), nome }]);
+  };
 
   return (
     <>
@@ -505,6 +535,28 @@ function RepresentantesForm({
         checked={representantes.length > 0}
         onChange={(checked) => onChange(checked ? [emptyRepresentante()] : [])}
       />
+
+      {sugestoes.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs text-muted mb-2">
+            Sócios na Receita (QSA). Confira o contrato social: ser sócio-administrador não
+            garante poder de assinar sozinho.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {sugestoes.map((s) => (
+              <button
+                key={s.nome}
+                type="button"
+                onClick={() => preencher(s.nome)}
+                className="px-3 py-1 rounded-full border border-primary-light text-primary text-xs font-medium hover:bg-primary-light/20 transition"
+              >
+                Preencher: {s.nome}
+                {s.qualificacao && ` (${s.qualificacao})`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {representantes.map((rep, i) => (
         <div key={i} className="mt-4 border-l-2 border-primary-light pl-4">

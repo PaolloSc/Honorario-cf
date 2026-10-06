@@ -95,6 +95,14 @@ export class SessaoExpiradaError extends Error {
   }
 }
 
+/** 409: outra aba/computador gravou antes (ex.: rascunho com `known_updated_at` velho). */
+export class ConflitoError extends Error {
+  constructor(mensagem: string) {
+    super(mensagem);
+    this.name = "ConflitoError";
+  }
+}
+
 /** `detail` do FastAPI, quando houver; senao o corpo cru. */
 async function motivoDaResposta(res: Response): Promise<string> {
   try {
@@ -217,6 +225,7 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 409) throw new ConflitoError(`API error ${res.status}: ${body}`);
     throw new Error(`API error ${res.status}: ${body}`);
   }
 
@@ -513,6 +522,12 @@ export async function updateLegalOneOpcao(id: number, ativo: boolean) {
   });
 }
 
+// QSA da Receita (só a BrasilAPI traz). Sugestão: não prova poder de representação.
+export interface SocioReceita {
+  nome: string;
+  qualificacao: string;
+}
+
 export async function lookupCNPJ(cnpj: string) {
   const cnpjClean = limparCNPJ(cnpj);
   return request<{
@@ -521,6 +536,7 @@ export async function lookupCNPJ(cnpj: string) {
     nome_fantasia: string;
     endereco: string;
     situacao_cadastral: string;
+    socios?: SocioReceita[];
   }>(`/api/cnpj/${cnpjClean}`);
 }
 
@@ -635,6 +651,7 @@ export interface DraftSummary {
   current_step: number;
   created_at: string;
   updated_at: string;
+  expires_at: string; // quando a limpeza automática apaga, se ninguém mexer
 }
 
 export interface DraftDetail extends DraftSummary {
@@ -670,11 +687,16 @@ export async function saveDraft(
   draftId: string,
   formData: Record<string, unknown>,
   currentStep: number,
-  opts?: { keepalive?: boolean }
+  opts?: { keepalive?: boolean; knownUpdatedAt?: string | null }
 ) {
+  // knownUpdatedAt: versão que esta aba conhece; se outra gravou depois, vem ConflitoError
   return request<DraftSummary>(`/api/drafts/${encodeURIComponent(draftId)}`, {
     method: "PUT",
-    body: JSON.stringify({ form_data: formData, current_step: currentStep }),
+    body: JSON.stringify({
+      form_data: formData,
+      current_step: currentStep,
+      known_updated_at: opts?.knownUpdatedAt ?? null,
+    }),
     keepalive: opts?.keepalive,
   });
 }
