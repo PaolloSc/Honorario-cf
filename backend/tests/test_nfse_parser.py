@@ -57,3 +57,13 @@ def test_parse_malformado_levanta():
 def test_xxe_bloqueado():
     with pytest.raises(NFSeParseError):
         parse_nfse_xml(_load("xxe_attack.xml"))
+
+
+def test_parse_tomador_cnpj_alfanumerico_casa_com_cliente_docs():
+    # Contrato e NFSe precisam normalizar igual, senão o matcher não casa o cliente.
+    from app.database import derive_cliente_docs
+
+    xml = _load("abrasf_minimo.xml").replace(b"98765432000100", b"12.ABC.345/01DE-35")
+    nf = parse_nfse_xml(xml)
+    assert nf.tomador_doc == "12ABC34501DE35"
+    assert nf.tomador_doc in derive_cliente_docs({"contratantes": [{"cnpj": "12.ABC.345/01DE-35"}]})

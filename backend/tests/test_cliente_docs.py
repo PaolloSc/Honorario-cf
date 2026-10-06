@@ -24,3 +24,10 @@ def test_serialize_cliente_docs_returns_json_array():
     serialized = database.serialize_cliente_docs(data)
 
     assert json.loads(serialized) == ["98765432000110"]
+
+
+def test_derive_cliente_docs_mantem_letras_do_cnpj_alfanumerico():
+    # CNPJ alfanumérico (Receita, jul/2026): tirar só os não-dígitos apagaria as letras.
+    data = {"contratantes": [{"cnpj": "12.abc.345/01de-35"}]}
+
+    assert database.derive_cliente_docs(data) == ["12ABC34501DE35"]
