@@ -35,3 +35,17 @@ def formatar_valor(valor: float) -> str:
 def valor_com_extenso(valor: float) -> str:
     """Format value as 'R$ 1.500,50 (mil e quinhentos reais e cinquenta centavos)'"""
     return f"{formatar_valor(valor)} ({valor_por_extenso(valor)})"
+
+def formatar_percentual(value) -> str:
+    """10 -> '10%', 10.5 -> '10,5%'. Aceita numero ou texto ('10.0', '10,5').
+
+    Texto que nao e' numero volta como veio (so' acrescenta '%' se faltar).
+    """
+    try:
+        num = float(str(value).strip().replace(",", ".")) if isinstance(value, str) else float(value)
+    except (TypeError, ValueError):
+        texto = str(value).strip()
+        return texto if texto.endswith("%") else f"{texto}%"
+    if num.is_integer():
+        return f"{int(num)}%"
+    return f"{num:.2f}".rstrip("0").rstrip(".").replace(".", ",") + "%"

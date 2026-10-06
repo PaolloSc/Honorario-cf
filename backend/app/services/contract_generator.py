@@ -33,7 +33,7 @@ from app.models.contract import (
     TipoPessoa,
     VariacaoPrecoMensalidade,
 )
-from app.utils.currency import formatar_valor, valor_com_extenso, valor_por_extenso
+from app.utils.currency import formatar_percentual, formatar_valor, valor_com_extenso, valor_por_extenso
  
 
 INCIDENCIA_EXITO_LABELS = {
@@ -446,9 +446,7 @@ class ContractGenerator:
         return self._format_vencimento(legacy, recorrente=recorrente)
 
     def _format_percentual(self, value: float) -> str:
-        if float(value).is_integer():
-            return f"{int(value)}%"
-        return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",") + "%"
+        return formatar_percentual(value)
 
     def _label_from_map(self, value: str | None, labels: dict[str, str]) -> str:
         raw = (value or "").strip()

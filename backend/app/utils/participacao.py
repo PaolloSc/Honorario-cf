@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from app.utils.currency import formatar_percentual
+
 
 def _reais(valor: float) -> str:
     texto = f"R$ {valor:,.2f}"
@@ -22,7 +24,7 @@ def valor_participante(participante: Mapping[str, Any]) -> str | None:
     """
     tipo = participante.get("valor_tipo") or "percentual"
     if tipo == "percentual" and participante.get("percentual"):
-        return f"{participante['percentual']}%"
+        return formatar_percentual(participante["percentual"])
     if tipo == "valor" and participante.get("valor_monetario") is not None:
         return _reais(participante["valor_monetario"])
     if tipo == "outro" and participante.get("valor_outro"):
@@ -38,7 +40,7 @@ def valor_participacao(p: Mapping[str, Any]) -> tuple[str, str] | None:
     """
     tipo = p.get("valor_tipo")
     if tipo == "percentual" and p.get("valor_percentual"):
-        return ("Percentual", f"{p['valor_percentual']}%")
+        return ("Percentual", formatar_percentual(p["valor_percentual"]))
     if tipo == "valor" and p.get("valor_monetario") is not None:
         return ("Valor", _reais(p["valor_monetario"]))
     if tipo == "outro" and p.get("valor_outro"):
