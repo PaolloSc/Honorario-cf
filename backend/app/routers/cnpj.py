@@ -63,6 +63,15 @@ def _parse_brasilapi(data: dict, cnpj_clean: str) -> dict:
         ),
         "situacao_cadastral": data.get("descricao_situacao_cadastral", "") or "",
         "natureza_juridica": data.get("natureza_juridica", "") or "",
+        # Só a BrasilAPI traz o QSA; o CPF do sócio vem mascarado, por isso fica de fora.
+        "socios": [
+            {
+                "nome": _title_case(s.get("nome_socio", "") or ""),
+                "qualificacao": s.get("qualificacao_socio", "") or "",
+            }
+            for s in (data.get("qsa") or [])
+            if s.get("nome_socio")
+        ],
     }
 
 
@@ -167,16 +176,33 @@ async def lookup_cnpj(cnpj: str) -> dict:
             asyncio.create_task(_try_source(client, url, parser, cnpj_clean))
             for url, parser in sources
         ]
+        brasilapi = tasks[0]
+        fallback: dict | None = None
+        pending = set(tasks)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 7.0
         try:
-            for task in asyncio.as_completed(tasks, timeout=7.0):
-                result = await task
-                if result and result.get("razao_social"):
-                    for pending in tasks:
-                        if not pending.done():
-                            pending.cancel()
-                    return result
-        except TimeoutError:
-            pass
+            # A BrasilAPI é a única com QSA: se ela responder dentro do prazo, ganha
+            # mesmo chegando depois das outras; senão os sócios apareceriam só às vezes.
+            while pending:
+                done, pending = await asyncio.wait(
+                    pending,
+                    timeout=max(deadline - loop.time(), 0),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    break
+                for task in done:
+                    result = task.result()
+                    if not (result and result.get("razao_social")):
+                        continue
+                    if task is brasilapi:
+                        return result
+                    fallback = fallback or result
+                if fallback and brasilapi.done():
+                    return fallback
+            if fallback:
+                return fallback
         finally:
             for task in tasks:
                 if not task.done():
