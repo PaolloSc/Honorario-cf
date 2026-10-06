@@ -300,7 +300,7 @@ export default function Step1Contratante({
               // Só trava o que a Receita acabou de devolver; rascunho/edição trazem o
               // valor salvo (que pode ter sido digitado) e precisam continuar editáveis.
               editavel={!cnpjLoaded.has(idx)}
-              receita={receita[c.cnpj]}
+              receita={receita[limparCNPJ(c.cnpj)]}
               onUpdate={(partial) => updateContratante(idx, partial)}
               onCNPJLookup={(cnpj) => handleCNPJLookup(idx, cnpj)}
             />
