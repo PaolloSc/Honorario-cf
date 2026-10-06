@@ -14,6 +14,7 @@ interface Opcoes {
   formData: Record<string, unknown>;
   step: number;
   temConteudo: boolean; // não grava formulário em branco
+  dono: string; // e-mail de quem está logado — marca a cópia local
 }
 
 /**
@@ -21,18 +22,18 @@ interface Opcoes {
  * aba. Se o servidor falhar, a cópia local fica de buffer e o aviso na tela diz que
  * o rascunho ainda NÃO está seguro.
  */
-export function useRascunhoAutosave({ ativo, draftId, formData, step, temConteudo }: Opcoes) {
+export function useRascunhoAutosave({ ativo, draftId, formData, step, temConteudo, dono }: Opcoes) {
   const [estado, setEstado] = useState<EstadoRascunho>("ocioso");
   const [salvoEm, setSalvoEm] = useState<Date | null>(null);
   const pendente = useRef(false); // há alteração ainda não confirmada pelo servidor
   const parado = useRef(false); // contrato gerado ou rascunho descartado
-  const ultimo = useRef({ draftId, formData, step });
-  ultimo.current = { draftId, formData, step };
+  const ultimo = useRef({ draftId, formData, step, dono });
+  ultimo.current = { draftId, formData, step, dono };
 
   const enviar = useCallback(async (keepalive = false) => {
     if (parado.current) return;
-    const { draftId: id, formData: dados, step: passo } = ultimo.current;
-    gravarLocal(id, dados, passo);
+    const { draftId: id, formData: dados, step: passo, dono: email } = ultimo.current;
+    gravarLocal(id, dados, passo, email);
     setEstado("salvando");
     try {
       await saveDraft(id, dados, passo, { keepalive });

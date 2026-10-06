@@ -20,7 +20,7 @@ import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
 import { getDraft } from "@/app/lib/api";
 import { cnpjValido } from "@/app/lib/cnpj";
 import { dataDaApi } from "@/app/lib/datas";
-import { lerLocal } from "@/app/lib/rascunhoLocal";
+import { lerLocal, useDonoRascunho } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  
@@ -325,6 +325,7 @@ export default function ContractWizard({
 
   // ── Rascunho (autosave) — só ao criar; editar contrato já gera versão própria ──
   const authStatus = useAuthStatus();
+  const dono = useDonoRascunho();
   const [draftId, setDraftId] = useState(novoIdRascunho);
   const [restaurando, setRestaurando] = useState(false);
   const [avisoRetomada, setAvisoRetomada] = useState("");
@@ -336,6 +337,7 @@ export default function ContractWizard({
     formData: formData as unknown as Record<string, unknown>,
     step: currentStep,
     temConteudo,
+    dono,
   });
   const retomarAutosave = autosave.retomar;
 
@@ -359,7 +361,9 @@ export default function ContractWizard({
     };
 
     (async () => {
-      const local = lerLocal(id);
+      // só a cópia de quem está logado: a de outra pessoa nunca é aplicada, nem
+      // quando o servidor responde 404 (rascunho alheio)
+      const local = lerLocal(id, dono);
       try {
         const servidor = await getDraft(id);
         // cópia local mais nova = o último salvamento no servidor falhou
@@ -375,7 +379,7 @@ export default function ContractWizard({
         setRestaurando(false);
       }
     })();
-  }, [authStatus, editContractId, retomarAutosave]);
+  }, [authStatus, dono, editContractId, retomarAutosave]);
 
   const descartarRascunho = async () => {
     if (!window.confirm("Descartar este rascunho e começar do zero? Não dá para desfazer.")) return;
