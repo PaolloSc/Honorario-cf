@@ -330,7 +330,7 @@ class ConsumidorGenerator(ContractGenerator):
         self._alinhado_a_esquerda(doc.add_paragraph("Telefone fixo: (31) 3311-2783"))
         self._alinhado_a_esquerda(
             doc.add_paragraph(
-                "Telefone celular: (31) 9.9991-9661 - Monica e (31) 9.8496-7833 – Gabriela"
+                "Telefone celular: (31) 9.9991-9661 - Mônica e (31) 9.8496-7833 – Gabriela"
             )
         )
         doc.add_paragraph(
