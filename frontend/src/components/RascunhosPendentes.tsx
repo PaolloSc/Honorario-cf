@@ -1,13 +1,21 @@
 "use client";
 
 import { deleteDraft, listDrafts, type DraftSummary } from "@/app/lib/api";
-import { formatarDataHora } from "@/app/lib/datas";
-import { listarLocais, removerLocal, useDonoRascunho } from "@/app/lib/rascunhoLocal";
+import { formatarData, formatarDataHora } from "@/app/lib/datas";
+import { listarLocais, removerLocal, useDonoRascunho, VALIDADE_MS } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { useCallback, useEffect, useState } from "react";
 
 interface Item extends DraftSummary {
   soLocal: boolean;
+}
+
+const PREFIXO_EDICAO = "edit-"; // rascunho de edição: id = "edit-<contrato>" (ContractWizard)
+
+function linkRetomar(draftId: string): string {
+  return draftId.startsWith(PREFIXO_EDICAO)
+    ? `/contracts/${encodeURIComponent(draftId.slice(PREFIXO_EDICAO.length))}/edit`
+    : `/?rascunho=${encodeURIComponent(draftId)}`;
 }
 
 const ETAPAS = ["Contratante", "Escopo", "Honorários", "Acessórios", "Ficha Interna", "Revisão", "Envio"];
@@ -39,6 +47,7 @@ export default function RascunhosPendentes({ titulo = "Rascunhos em andamento" }
         current_step: l.current_step,
         created_at: l.updated_at,
         updated_at: l.updated_at,
+        expires_at: new Date(Date.parse(l.updated_at) + VALIDADE_MS).toISOString(),
         soLocal: true,
       }));
     setItens([...doServidor.map((d) => ({ ...d, soLocal: false })), ...locais]);
@@ -66,16 +75,18 @@ export default function RascunhosPendentes({ titulo = "Rascunhos em andamento" }
           <li key={item.draft_id} className="flex flex-wrap items-center justify-between gap-3 py-2">
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground truncate">
+                {item.draft_id.startsWith(PREFIXO_EDICAO) && "Edição: "}
                 {item.client_name || "Sem nome de cliente"}
               </p>
               <p className="text-xs text-muted">
                 Parou na etapa {item.current_step} ({ETAPAS[item.current_step - 1]}) · {formatarDataHora(item.updated_at)}
                 {item.soLocal && " · só neste navegador"}
+                {" · "}apagado automaticamente em {formatarData(item.expires_at)}
               </p>
             </div>
             <div className="flex gap-2">
               <a
-                href={`/?rascunho=${encodeURIComponent(item.draft_id)}`}
+                href={linkRetomar(item.draft_id)}
                 className="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition"
               >
                 Retomar
