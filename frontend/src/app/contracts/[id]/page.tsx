@@ -373,6 +373,25 @@ export default function ContractDetailPage() {
         >
           Editar Contrato
         </a>
+        {/* Só honorários: o wizard da home não abre contrato de consumidor. */}
+        {ehHonorarios && (
+          <>
+            <a
+              href={`/?modelo=${contractId}&modo=cliente`}
+              title="Novo contrato com os mesmos contratantes; escopos e honorários em branco"
+              className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition"
+            >
+              Usar como modelo: mesmo cliente
+            </a>
+            <a
+              href={`/?modelo=${contractId}&modo=escopo`}
+              title="Novo contrato com os mesmos escopos e honorários; contratantes em branco"
+              className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition"
+            >
+              Usar como modelo: mesmo escopo
+            </a>
+          </>
+        )}
         <button
           onClick={handlePreview}
           disabled={loadingPreview}
