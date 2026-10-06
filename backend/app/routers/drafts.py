@@ -16,7 +16,7 @@ from app.database import ContractDraftDB, get_db, utcnow
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/drafts", tags=["Drafts"])
 
-# Rascunho esquecido por mais que isso é apagado na próxima listagem.
+# Rascunho parado por mais que isso é apagado no próximo GET/PUT de qualquer pessoa.
 RETENCAO_DIAS = 90
 # O form é só texto; passar disso é bug do cliente, não rascunho de verdade.
 MAX_FORM_BYTES = 512 * 1024
@@ -29,6 +29,7 @@ class DraftSummary(BaseModel):
     current_step: int
     created_at: str
     updated_at: str
+    expires_at: str  # quando a limpeza automática apaga, se ninguém mexer
 
 
 class DraftListResponse(BaseModel):
@@ -42,6 +43,9 @@ class DraftDetail(DraftSummary):
 class SaveDraftRequest(BaseModel):
     form_data: dict
     current_step: int = Field(1, ge=1, le=7)
+    # updated_at que o cliente conhece; se o servidor tiver outro, outra aba gravou
+    # depois (409). None = primeiro salvamento desta aba.
+    known_updated_at: Optional[str] = None
 
 
 def _client_name(form_data: dict) -> str:
@@ -59,6 +63,7 @@ def _summary(d: ContractDraftDB) -> DraftSummary:
         current_step=d.current_step,
         created_at=d.created_at.isoformat(),
         updated_at=d.updated_at.isoformat(),
+        expires_at=(d.updated_at + timedelta(days=RETENCAO_DIAS)).isoformat(),
     )
 
 
@@ -70,15 +75,18 @@ def _get_own(db: Session, draft_id: str, user: CurrentUser) -> ContractDraftDB:
     return draft
 
 
+def _purgar_vencidos(db: Session) -> None:
+    limite = utcnow().replace(tzinfo=None) - timedelta(days=RETENCAO_DIAS)
+    db.query(ContractDraftDB).filter(ContractDraftDB.updated_at < limite).delete()
+    db.commit()
+
+
 @router.get("", response_model=DraftListResponse)
 def list_drafts(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    limite = utcnow().replace(tzinfo=None) - timedelta(days=RETENCAO_DIAS)
-    db.query(ContractDraftDB).filter(ContractDraftDB.updated_at < limite).delete()
-    db.commit()
-
+    _purgar_vencidos(db)
     rows = (
         db.query(ContractDraftDB)
         .filter(ContractDraftDB.owner_email == user.email)
@@ -105,7 +113,11 @@ def save_draft(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Cria o rascunho ou sobrescreve o existente (upsert) — o id vem do navegador."""
+    """Cria o rascunho ou sobrescreve o existente (upsert) — o id vem do navegador.
+
+    Concorrência otimista: com ``known_updated_at`` diferente do atual, responde 409
+    em vez de sobrescrever o que outra aba gravou.
+    """
     if not _DRAFT_ID_RE.match(draft_id):
         raise HTTPException(422, "draft_id invalido")
 
@@ -113,9 +125,15 @@ def save_draft(
     if len(payload.encode("utf-8")) > MAX_FORM_BYTES:
         raise HTTPException(413, "Rascunho grande demais")
 
+    # Também no PUT: se ninguém abrir a lista, a retenção ainda vale.
+    _purgar_vencidos(db)
+
     draft = db.query(ContractDraftDB).filter(ContractDraftDB.draft_id == draft_id).first()
     if draft and draft.owner_email != user.email:
         raise HTTPException(404, "Rascunho nao encontrado")
+    if draft and body.known_updated_at and draft.updated_at.isoformat() != body.known_updated_at:
+        # Compara a string que o próprio servidor devolveu — sem parse, sem fuso.
+        raise HTTPException(409, "Rascunho alterado em outra aba ou computador")
 
     now = utcnow()
     if draft is None:
