@@ -1,6 +1,7 @@
 "use client";
  
 import type { ContratoFormData, EscopoItem } from "@/types/contract";
+import { formatPercentual } from "@/lib/format";
 import { ESCOPO_LABELS } from "@/types/contract";
 
 const HONORARIO_LABELS: Record<string, string> = {
@@ -130,7 +131,7 @@ export default function Step6Revisao({ data }: Step6Props) {
               </li>
             )}
             {data.participacao.valor_tipo === "percentual" && data.participacao.valor_percentual && (
-              <li>Percentual geral: {data.participacao.valor_percentual}%</li>
+              <li>Percentual geral: {formatPercentual(data.participacao.valor_percentual)}</li>
             )}
             {data.participacao.valor_tipo === "valor" && data.participacao.valor_monetario != null && (
               <li>Valor: {formatCurrency(data.participacao.valor_monetario)}</li>
@@ -145,7 +146,7 @@ export default function Step6Revisao({ data }: Step6Props) {
                   : p.valor_tipo === "outro" && p.valor_outro
                   ? ` (${p.valor_outro})`
                   : p.percentual
-                  ? ` (${p.percentual}%)`
+                  ? ` (${formatPercentual(p.percentual)})`
                   : data.participacao.valor_tipo
                   ? " (geral)"
                   : "";
@@ -246,7 +247,7 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
       if (escopo.mensalidade.duracao_meses) s += ` · ${escopo.mensalidade.duracao_meses} meses`;
       parts.push(s);
     } else if (tipo === "exito" && escopo.exito?.percentual) {
-      let s = `${escopo.exito.percentual}% êxito`;
+      let s = `${formatPercentual(escopo.exito.percentual)} êxito`;
       if (escopo.exito.duracao_meses) s += ` · ${escopo.exito.duracao_meses} meses`;
       parts.push(s);
     } else if (tipo === "permuta" && escopo.permuta) {

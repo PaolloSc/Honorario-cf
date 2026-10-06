@@ -33,7 +33,7 @@ from app.models.contract import (
     TipoPessoa,
     VariacaoPrecoMensalidade,
 )
-from app.utils.currency import formatar_valor, valor_com_extenso, valor_por_extenso
+from app.utils.currency import formatar_percentual, formatar_valor, valor_com_extenso, valor_por_extenso
  
 
 INCIDENCIA_EXITO_LABELS = {
@@ -446,9 +446,7 @@ class ContractGenerator:
         return self._format_vencimento(legacy, recorrente=recorrente)
 
     def _format_percentual(self, value: float) -> str:
-        if float(value).is_integer():
-            return f"{int(value)}%"
-        return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",") + "%"
+        return formatar_percentual(value)
 
     def _label_from_map(self, value: str | None, labels: dict[str, str]) -> str:
         raw = (value or "").strip()
@@ -717,7 +715,7 @@ class ContractGenerator:
  
     def _add_pro_labore(self, doc: Document, pl: "ProLabore", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
-            doc.add_heading("PRO-LABORE", level=3)
+            doc.add_heading("PRÓ-LABORE", level=3)
         num(
             f"Em relação ao honorário pró-labore, será observada a seguinte forma de pagamento:"
         )
@@ -1311,7 +1309,7 @@ class ContractGenerator:
         if escopo.demandas:
             extras.append(f"para ajuizamento: {escopo.demandas}")
         if escopo.pessoas_patrimonios:
-            extras.append(f"pessoas/patrimonios: {escopo.pessoas_patrimonios}")
+            extras.append(f"pessoas/patrimônios: {escopo.pessoas_patrimonios}")
         if escopo.tipo_reestruturacao:
             extras.append(f"tipo: {escopo.tipo_reestruturacao}")
         if escopo.documentos:
@@ -1330,11 +1328,11 @@ class ContractGenerator:
             if tipo == TipoHonorario.HORA_TRABALHADA and escopo.hora_trabalhada:
                 parts.append(f"{valor_com_extenso(escopo.hora_trabalhada.valor_hora)} por hora trabalhada")
             elif tipo == TipoHonorario.PRO_LABORE and escopo.pro_labore:
-                parts.append(f"{valor_com_extenso(escopo.pro_labore.valor_total)} pro-labore")
+                parts.append(f"{valor_com_extenso(escopo.pro_labore.valor_total)} pró-labore")
             elif tipo == TipoHonorario.MENSALIDADE and escopo.mensalidade:
                 parts.append(f"{valor_com_extenso(escopo.mensalidade.valor)} de mensalidade")
             elif tipo == TipoHonorario.EXITO and escopo.exito and escopo.exito.percentual:
-                parts.append(f"{escopo.exito.percentual}% de exito")
+                parts.append(f"{self._format_percentual(escopo.exito.percentual)} de êxito")
             elif tipo == TipoHonorario.PERMUTA and escopo.permuta:
                 parts.append(f"Permuta: {escopo.permuta.objeto_permuta}")
         return " + ".join(parts) if parts else "A definir"
