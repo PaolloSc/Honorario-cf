@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
+import { limparLocais } from "@/app/lib/rascunhoLocal";
 
 export default function UserMenu() {
   const { data: session } = useSession();
@@ -53,7 +54,11 @@ export default function UserMenu() {
               Setor Financeiro
             </a>
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => {
+                // cópia local de rascunho tem dados de cliente: não fica para o próximo
+                limparLocais();
+                void signOut({ callbackUrl: "/login" });
+              }}
               className="w-full text-left px-4 py-2 text-sm text-danger hover:bg-danger/10 transition"
             >
               Sair

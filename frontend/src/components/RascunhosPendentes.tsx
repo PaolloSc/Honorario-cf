@@ -2,7 +2,7 @@
 
 import { deleteDraft, listDrafts, type DraftSummary } from "@/app/lib/api";
 import { formatarDataHora } from "@/app/lib/datas";
-import { listarLocais, removerLocal } from "@/app/lib/rascunhoLocal";
+import { listarLocais, removerLocal, useDonoRascunho } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { useCallback, useEffect, useState } from "react";
 
@@ -18,6 +18,7 @@ const ETAPAS = ["Contratante", "Escopo", "Honorários", "Acessórios", "Ficha In
  */
 export default function RascunhosPendentes({ titulo = "Rascunhos em andamento" }: { titulo?: string }) {
   const status = useAuthStatus();
+  const dono = useDonoRascunho();
   const [itens, setItens] = useState<Item[]>([]);
   const [erro, setErro] = useState("");
 
@@ -30,7 +31,7 @@ export default function RascunhosPendentes({ titulo = "Rascunhos em andamento" }
       setErro("Não foi possível consultar os rascunhos salvos no servidor.");
     }
     const ids = new Set(doServidor.map((d) => d.draft_id));
-    const locais: Item[] = listarLocais()
+    const locais: Item[] = listarLocais(dono)
       .filter((l) => !ids.has(l.draft_id))
       .map((l) => ({
         draft_id: l.draft_id,
@@ -41,11 +42,11 @@ export default function RascunhosPendentes({ titulo = "Rascunhos em andamento" }
         soLocal: true,
       }));
     setItens([...doServidor.map((d) => ({ ...d, soLocal: false })), ...locais]);
-  }, []);
+  }, [dono]);
 
   useEffect(() => {
     if (status === "authenticated") void carregar();
-  }, [status, carregar]);
+  }, [status, dono, carregar]);
 
   const descartar = async (item: Item) => {
     if (!window.confirm(`Descartar o rascunho${item.client_name ? ` de ${item.client_name}` : ""}? Não dá para desfazer.`)) return;
