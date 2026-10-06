@@ -418,7 +418,7 @@ def test_secao3_varios_honorarios_usam_subclausulas():
     paras = _preview_paras(_req_escopos([_escopo("hora_trabalhada"), _escopo("pro_labore")]))
     # 1o bloco: 3.1 (chapeu) + 3.1.1, 3.1.2; 2o bloco: 3.2 (chapeu) + 3.2.1
     assert _clausulas_secao3(paras) == ["3.1.", "3.1.1.", "3.1.2.", "3.2.", "3.2.1."]
-    assert _has(paras, "HORA TRABALHADA") and _has(paras, "PRO-LABORE")
+    assert _has(paras, "HORA TRABALHADA") and _has(paras, "PRÓ-LABORE")
 
 
 def test_clausulas_sao_numeradas_pelo_word_e_nao_no_texto():
@@ -557,3 +557,18 @@ def _testemunhas_pPr(path: str) -> list[tuple[str, str, str, str]]:
             depois.group(1) if depois else "herdado",
         ))
     return out
+
+
+def _preco_tabela(percentual: float) -> list[str]:
+    e = _escopo("pro_labore")
+    e["honorarios"] = ["pro_labore", "exito"]
+    e["pro_labore"]["valor_total"] = 2000
+    e["exito"] = {**_escopo("exito")["exito"], "percentual": percentual}
+    return _paras_for(_req_escopos([e]))
+
+
+def test_tabela_preco_pro_labore_e_exito_com_acento_e_percentual_pt_br():
+    paras = _preco_tabela(10.0)
+    assert _has(paras, "R$ 2.000,00 (dois mil reais) pró-labore + 10% de êxito")
+    assert not _has(paras, "10.0%")
+    assert _has(_preco_tabela(10.5), "pró-labore + 10,5% de êxito")
