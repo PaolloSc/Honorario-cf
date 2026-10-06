@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.database import init_db
-from app.routers import admin_credenciais, cnpj, colaboradores, contract, contracts, docuseal, drafts, email, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
+from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, drafts, email, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
 
 init_db()
 
@@ -61,6 +61,7 @@ app.add_middleware(
 app.include_router(contract.router)
 app.include_router(contracts.router)
 app.include_router(drafts.router)
+app.include_router(clientes.router)
 app.include_router(email.router)
 app.include_router(docuseal.router)
 app.include_router(cnpj.router)
