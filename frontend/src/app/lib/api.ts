@@ -1,3 +1,5 @@
+import { limparCNPJ } from "./cnpj";
+
 function resolveApiBase(): string {
   // 1. Vercel environment variable takes priority
   const envBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
@@ -511,7 +513,7 @@ export async function updateLegalOneOpcao(id: number, ativo: boolean) {
 }
 
 export async function lookupCNPJ(cnpj: string) {
-  const cnpjClean = cnpj.replace(/\D/g, "");
+  const cnpjClean = limparCNPJ(cnpj);
   return request<{
     cnpj: string;
     razao_social: string;

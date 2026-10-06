@@ -6,6 +6,7 @@ import FormField, {
   Select,
 } from "@/components/ui/FormField";
 import { lookupCNPJ } from "@/app/lib/api";
+import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import type {
   Contratante,
   ContratantePF,
@@ -20,14 +21,6 @@ function toTitleCase(str: string): string {
   return str
     .toLowerCase()
     .replace(/(^|\s)\S/g, (char) => char.toUpperCase());
-}
-
-function formatCNPJ(digits: string): string {
-  return digits
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2}\.\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{2}\.\d{3}\.\d{3})(\d)/, "$1/$2")
-    .replace(/^(\d{2}\.\d{3}\.\d{3}\/\d{4})(\d)/, "$1-$2");
 }
 
 function formatCEP(digits: string): string {
@@ -96,6 +89,8 @@ export default function Step1Contratante({
 }: Step1Props) {
   const [loadingCNPJ, setLoadingCNPJ] = useState<number | null>(null);
   const [cnpjLoaded, setCnpjLoaded] = useState<Set<number>>(new Set());
+  // Consulta falhou (API fora, CNPJ novo/alfanumérico ainda não indexado): libera a digitação.
+  const [cnpjManual, setCnpjManual] = useState<Set<number>>(new Set());
   const [cnpjError, setCNPJError] = useState<string | null>(null);
 
   const updateContratante = useCallback(
@@ -114,14 +109,16 @@ export default function Step1Contratante({
   const removeContratante = useCallback(
     (index: number) => {
       if (contratantes.length <= 1) return;
-      setCnpjLoaded((prev) => {
+      const reindexar = (prev: Set<number>) => {
         const next = new Set<number>();
         prev.forEach((i) => {
           if (i < index) next.add(i);
           else if (i > index) next.add(i - 1);
         });
         return next;
-      });
+      };
+      setCnpjLoaded(reindexar);
+      setCnpjManual(reindexar);
       onChange(contratantes.filter((_, i) => i !== index));
     },
     [contratantes, onChange]
@@ -129,11 +126,13 @@ export default function Step1Contratante({
 
   const switchTipo = useCallback(
     (index: number, tipo: TipoPessoa) => {
-      setCnpjLoaded((prev) => {
+      const remover = (prev: Set<number>) => {
         const next = new Set(prev);
         next.delete(index);
         return next;
-      });
+      };
+      setCnpjLoaded(remover);
+      setCnpjManual(remover);
       setCNPJError(null);
       const updated = [...contratantes];
       updated[index] = tipo === "PF" ? emptyPF() : emptyPJ();
@@ -144,11 +143,8 @@ export default function Step1Contratante({
 
   const handleCNPJLookup = useCallback(
     async (index: number, cnpj: string) => {
-      const digits = cnpj.replace(/\D/g, "");
-      if (digits.length !== 14) {
-        setCNPJError(
-          `CNPJ deve ter 14 dígitos (informados: ${digits.length}).`
-        );
+      if (!cnpjValido(cnpj)) {
+        setCNPJError("CNPJ inválido: confira os 14 caracteres e os dígitos verificadores.");
         return;
       }
       setLoadingCNPJ(index);
@@ -160,15 +156,29 @@ export default function Step1Contratante({
           endereco: data.endereco,
         });
         setCnpjLoaded((prev) => new Set(prev).add(index));
+        setCnpjManual((prev) => {
+          const next = new Set(prev);
+          next.delete(index);
+          return next;
+        });
       } catch (err) {
         console.error("[CNPJ Lookup] Error:", err);
         const msg = err instanceof Error ? err.message : "erro desconhecido";
-        setCNPJError(`CNPJ não encontrado ou erro na consulta: ${msg}. Preencha manualmente.`);
+        setCNPJError(`CNPJ não encontrado ou erro na consulta: ${msg}. Preencha a razão social e o endereço manualmente.`);
+        setCnpjManual((prev) => new Set(prev).add(index));
+        // Razão social/endereço de OUTRO CNPJ (consulta anterior) não podem sobrar no
+        // contrato do novo; o que foi digitado à mão fica.
+        if (cnpjLoaded.has(index)) updateContratante(index, { razao_social: "", endereco: "" });
+        setCnpjLoaded((prev) => {
+          const next = new Set(prev);
+          next.delete(index);
+          return next;
+        });
       } finally {
         setLoadingCNPJ(null);
       }
     },
-    [updateContratante]
+    [updateContratante, cnpjLoaded]
   );
 
   return (
@@ -230,7 +240,10 @@ export default function Step1Contratante({
             <PJForm
               data={c}
               loadingCNPJ={loadingCNPJ === idx}
-              loaded={cnpjLoaded.has(idx) || (c.tipo === "PJ" && !!c.razao_social)}
+              loaded={cnpjLoaded.has(idx) || cnpjManual.has(idx) || (c.tipo === "PJ" && !!c.razao_social)}
+              // Só trava o que a Receita acabou de devolver; rascunho/edição trazem o
+              // valor salvo (que pode ter sido digitado) e precisam continuar editáveis.
+              editavel={!cnpjLoaded.has(idx)}
               onUpdate={(partial) => updateContratante(idx, partial)}
               onCNPJLookup={(cnpj) => handleCNPJLookup(idx, cnpj)}
             />
@@ -262,12 +275,14 @@ function PJForm({
   data,
   loadingCNPJ,
   loaded,
+  editavel,
   onUpdate,
   onCNPJLookup,
 }: {
   data: ContratantePJ;
   loadingCNPJ: boolean;
   loaded: boolean;
+  editavel: boolean;
   onUpdate: (partial: Partial<ContratantePJ>) => void;
   onCNPJLookup: (cnpj: string) => void;
 }) {
@@ -290,12 +305,9 @@ function PJForm({
       <FormField label="CNPJ" required hint="Digite o CNPJ para buscar dados automaticamente">
         <div className="flex gap-2">
           <Input
-            value={formatCNPJ(data.cnpj)}
-            onChange={(e) => {
-              const digits = e.target.value.replace(/\D/g, "").slice(0, 14);
-              onUpdate({ cnpj: digits });
-            }}
-            placeholder="00.000.000/0000-00"
+            value={formatarCNPJ(data.cnpj)}
+            onChange={(e) => onUpdate({ cnpj: limparCNPJ(e.target.value) })}
+            placeholder="00.000.000/0000-00 ou 12.ABC.345/01DE-35"
             maxLength={18}
             required
           />
@@ -330,23 +342,25 @@ function PJForm({
       </FormField>
 
       {loaded && (
-        <FormField label="Razão Social">
+        <FormField label="Razão Social" required>
           <Input
             value={data.razao_social}
-            readOnly
-            placeholder="Preenchido automaticamente pelo CNPJ"
-            className="bg-border/35 border-muted text-muted cursor-not-allowed"
+            onChange={(e) => onUpdate({ razao_social: e.target.value })}
+            readOnly={!editavel}
+            placeholder={editavel ? "Digite a razão social" : "Preenchido automaticamente pelo CNPJ"}
+            className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
           />
         </FormField>
       )}
 
       {loaded && (
-        <FormField label="Endereço">
+        <FormField label="Endereço" required>
           <Input
             value={data.endereco}
-            readOnly
-            placeholder="Preenchido automaticamente pelo CNPJ"
-            className="bg-border/35 border-muted text-muted cursor-not-allowed"
+            onChange={(e) => onUpdate({ endereco: e.target.value })}
+            readOnly={!editavel}
+            placeholder={editavel ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CNPJ"}
+            className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
           />
         </FormField>
       )}
@@ -513,14 +527,16 @@ function PFForm({
       const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const result = await res.json();
       if (result.erro) {
-        setCepError("CEP não encontrado.");
+        setCepData(null);
+        setCepError("CEP não encontrado. Digite o endereço completo abaixo.");
         return;
       }
       const cData = { logradouro: result.logradouro, bairro: result.bairro, localidade: result.localidade, uf: result.uf };
       setCepData(cData);
       buildEndereco(cData, numero, complemento, formatCEP(digits));
     } catch {
-      setCepError("Erro ao buscar CEP.");
+      setCepData(null);
+      setCepError("Erro ao buscar CEP. Digite o endereço completo abaixo.");
     } finally {
       setLoadingCEP(false);
     }
@@ -536,7 +552,10 @@ function PFForm({
     buildEndereco(cepData, numero, value);
   };
 
-  const enderecoRevelado = cepData != null || (data.endereco?.trim().length ?? 0) > 0;
+  // CEP que falhou (não achado, ViaCEP fora) libera a digitação do endereço inteiro.
+  const enderecoRevelado = cepData != null || cepError != null || (data.endereco?.trim().length ?? 0) > 0;
+  // Montado do CEP nesta sessão: trava, senão número/complemento sobrescreveriam a digitação.
+  const enderecoEditavel = cepData == null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -642,9 +661,10 @@ function PFForm({
         <FormField label="Endereço completo" required>
           <Input
             value={data.endereco}
-            readOnly
-            placeholder="Preenchido automaticamente pelo CEP"
-            className="bg-border/35 border-muted text-muted cursor-not-allowed"
+            onChange={(e) => onUpdate({ endereco: e.target.value })}
+            readOnly={!enderecoEditavel}
+            placeholder={enderecoEditavel ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CEP"}
+            className={enderecoEditavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
             required
           />
         </FormField>
