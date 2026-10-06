@@ -1,6 +1,7 @@
 "use client";
 
 import { lookupCNPJ } from "@/app/lib/api";
+import { formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import FormField, { Checkbox, Input, Select } from "@/components/ui/FormField";
 import {
   detectarCompanhia,
@@ -12,15 +13,6 @@ import {
 } from "@/types/consumidor";
 import { useRef, useState } from "react";
 
-function formatCNPJ(value: string): string {
-  return value
-    .replace(/\D/g, "")
-    .slice(0, 14)
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2}\.\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{2}\.\d{3}\.\d{3})(\d)/, "$1/$2")
-    .replace(/^(\d{2}\.\d{3}\.\d{3}\/\d{4})(\d)/, "$1-$2");
-}
 
 const COMPANHIAS = Object.keys(MILHEIRO_POR_COMPANHIA).map((nome) => ({
   value: nome,
@@ -59,9 +51,9 @@ export default function StepCaso({ data, onChange }: Props) {
   };
 
   const buscarCNPJ = async (i: number, valor: string) => {
-    const cnpj = formatCNPJ(valor);
+    const cnpj = formatarCNPJ(valor);
     update(i, { cnpj });
-    if (cnpj.replace(/\D/g, "").length !== 14) return;
+    if (limparCNPJ(cnpj).length !== 14) return;
 
     setBuscando(i);
     setErroCNPJ((prev) => ({ ...prev, [i]: "" }));

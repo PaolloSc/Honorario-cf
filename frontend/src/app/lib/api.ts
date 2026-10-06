@@ -1,3 +1,5 @@
+import { limparCNPJ } from "./cnpj";
+
 function resolveApiBase(): string {
   // 1. Vercel environment variable takes priority
   const envBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
@@ -89,6 +91,14 @@ export class SessaoExpiradaError extends Error {
     );
     this.name = "SessaoExpiradaError";
     this.motivo = motivo ?? "";
+  }
+}
+
+/** 409: outra aba/computador gravou antes (ex.: rascunho com `known_updated_at` velho). */
+export class ConflitoError extends Error {
+  constructor(mensagem: string) {
+    super(mensagem);
+    this.name = "ConflitoError";
   }
 }
 
@@ -214,6 +224,7 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 409) throw new ConflitoError(`API error ${res.status}: ${body}`);
     throw new Error(`API error ${res.status}: ${body}`);
   }
 
@@ -510,14 +521,21 @@ export async function updateLegalOneOpcao(id: number, ativo: boolean) {
   });
 }
 
+// QSA da Receita (só a BrasilAPI traz). Sugestão: não prova poder de representação.
+export interface SocioReceita {
+  nome: string;
+  qualificacao: string;
+}
+
 export async function lookupCNPJ(cnpj: string) {
-  const cnpjClean = cnpj.replace(/\D/g, "");
+  const cnpjClean = limparCNPJ(cnpj);
   return request<{
     cnpj: string;
     razao_social: string;
     nome_fantasia: string;
     endereco: string;
     situacao_cadastral: string;
+    socios?: SocioReceita[];
   }>(`/api/cnpj/${cnpjClean}`);
 }
 
@@ -632,6 +650,7 @@ export interface DraftSummary {
   current_step: number;
   created_at: string;
   updated_at: string;
+  expires_at: string; // quando a limpeza automática apaga, se ninguém mexer
 }
 
 export interface DraftDetail extends DraftSummary {
@@ -652,11 +671,16 @@ export async function saveDraft(
   draftId: string,
   formData: Record<string, unknown>,
   currentStep: number,
-  opts?: { keepalive?: boolean }
+  opts?: { keepalive?: boolean; knownUpdatedAt?: string | null }
 ) {
+  // knownUpdatedAt: versão que esta aba conhece; se outra gravou depois, vem ConflitoError
   return request<DraftSummary>(`/api/drafts/${encodeURIComponent(draftId)}`, {
     method: "PUT",
-    body: JSON.stringify({ form_data: formData, current_step: currentStep }),
+    body: JSON.stringify({
+      form_data: formData,
+      current_step: currentStep,
+      known_updated_at: opts?.knownUpdatedAt ?? null,
+    }),
     keepalive: opts?.keepalive,
   });
 }

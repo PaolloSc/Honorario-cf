@@ -14,7 +14,7 @@ interface Step7EnvioProps {
   editContractId?: string;
   onSaveComplete?: (contractId: string) => void;
   onDataChange?: (data: ContratoFormData) => void;
-  // Chamado quando o contrato novo é gravado — o wizard descarta o rascunho.
+  // Chamado quando o contrato (novo ou nova versão) é gravado — o wizard descarta o rascunho.
   onContractGenerated?: () => void;
   // Levantado pro ContractWizard (que não desmonta ao trocar de passo) — sem isso,
   // sair do Step 7 e voltar reseta o histórico de "Aplicar correção" pra vazio,
@@ -384,6 +384,7 @@ export default function Step7Envio({
         const result = await updateContract(editContractId, data as unknown as Record<string, unknown>);
         if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
         resultContractId = result.contract_id;
+        onContractGenerated?.();
       } else {
         const result = await generateContract(data);
         if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
@@ -462,6 +463,7 @@ export default function Step7Envio({
         const result = await updateContract(editContractId, data as unknown as Record<string, unknown>);
         if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
         resultContractId = result.contract_id;
+        onContractGenerated?.();
       } else {
         const result = await generateContract(data);
         if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");

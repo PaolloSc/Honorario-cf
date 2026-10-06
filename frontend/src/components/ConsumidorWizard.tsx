@@ -1,5 +1,6 @@
 "use client";
 
+import { cnpjValido } from "@/app/lib/cnpj";
 import StepCaso from "@/components/consumidor/StepCaso";
 import StepEnvio from "@/components/consumidor/StepEnvio";
 import StepPartes from "@/components/consumidor/StepPartes";
@@ -56,7 +57,7 @@ function validar(step: number, data: ConsumidorFormData): string[] {
       const label = `Contratante ${i + 1}`;
 
       if (c.tipo === "PJ") {
-        if (c.cnpj.replace(/\D/g, "").length !== 14) erros.push(`${label}: CNPJ inválido.`);
+        if (!cnpjValido(c.cnpj)) erros.push(`${label}: CNPJ inválido.`);
         if (!c.razao_social.trim()) erros.push(`${label}: informe a razão social.`);
         if (!c.endereco.trim()) erros.push(`${label}: informe o endereço da sede.`);
         if (!c.representante_nome.trim()) {
@@ -90,7 +91,7 @@ function validar(step: number, data: ConsumidorFormData): string[] {
       const milheiro = valorMilheiro(re);
       if (!milheiro || milheiro <= 0) erros.push(`${label}: informe o valor do milheiro.`);
       if (!re.razao_social.trim()) erros.push(`${label}: informe a razão social da Ré.`);
-      if (re.cnpj.replace(/\D/g, "").length !== 14) {
+      if (!cnpjValido(re.cnpj)) {
         erros.push(`${label}: informe um CNPJ válido.`);
       }
     });

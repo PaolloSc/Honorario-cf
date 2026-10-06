@@ -9,6 +9,8 @@ from xml.etree.ElementTree import Element
 from defusedxml.ElementTree import ParseError, fromstring
 from defusedxml.common import DefusedXmlException
 
+from app.utils.documento import normalizar_doc
+
 
 class NFSeParseError(Exception):
     pass
@@ -89,7 +91,7 @@ def parse_nfse_xml(xml: bytes) -> "NFSeData":
     if len(cnpj_prest) != 14:
         raise NFSeParseError(f"CNPJ prestador invalido: {cnpj_prest!r}")
 
-    tomador_cnpj = _digits(_txt(inf, "a:TomadorServico/a:IdentificacaoTomador/a:CpfCnpj/a:Cnpj"))
+    tomador_cnpj = normalizar_doc(_txt(inf, "a:TomadorServico/a:IdentificacaoTomador/a:CpfCnpj/a:Cnpj"))
     tomador_cpf = _digits(_txt(inf, "a:TomadorServico/a:IdentificacaoTomador/a:CpfCnpj/a:Cpf"))
     tomador_doc = tomador_cnpj or tomador_cpf
     if not tomador_doc:
