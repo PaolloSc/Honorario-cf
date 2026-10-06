@@ -6,6 +6,8 @@ import re as _re
 from pathlib import Path
 from datetime import datetime, timezone
 
+from app.utils.documento import normalizar_doc
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -186,7 +188,7 @@ def derive_cliente_docs(form_data: dict) -> list[str]:
     docs: set[str] = set()
     for contratante in form_data.get("contratantes", []) or []:
         raw = contratante.get("cnpj") or contratante.get("cpf") or ""
-        doc = _re.sub(r"\D", "", raw)
+        doc = normalizar_doc(raw)
         if doc:
             docs.add(doc)
     return sorted(docs)
