@@ -191,6 +191,9 @@ function validateContratantes(data: ContratoFormData): string[] {
       if (text(rep.nome) && !isEmail(rep.email)) {
         errors.push(`${label}: informe o e-mail do representante ${text(rep.nome)} (ele assina o contrato).`);
       }
+      if (text(rep.cpf) && !isValidCPF(rep.cpf!)) {
+        errors.push(`${label}: CPF inválido do representante ${text(rep.nome) || "sem nome"}.`);
+      }
     });
   });
 
