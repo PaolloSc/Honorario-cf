@@ -17,7 +17,8 @@ import type {
 } from "@/types/contract";
 import RascunhosPendentes from "@/components/RascunhosPendentes";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
-import { getDraft } from "@/app/lib/api";
+import { getContractFormData, getDraft } from "@/app/lib/api";
+import { prepararModelo, type ModoModelo } from "@/app/lib/modeloContrato";
 import { dataDaApi } from "@/app/lib/datas";
 import { lerLocal } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
@@ -379,6 +380,38 @@ export default function ContractWizard({
       }
     })();
   }, [authStatus, editContractId, retomarAutosave]);
+
+  // "Usar como modelo" (/?modelo=<id>&modo=cliente|escopo): contrato novo, rascunho novo.
+  const modeloFeito = useRef(false);
+  useEffect(() => {
+    if (editContractId || modeloFeito.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const modeloId = params.get("modelo");
+    if (!modeloId || params.get("rascunho")) {
+      modeloFeito.current = true;
+      return;
+    }
+    setRestaurando(true); // segura o autosave até o modelo entrar
+    if (authStatus !== "authenticated") return;
+    modeloFeito.current = true;
+    const modo: ModoModelo = params.get("modo") === "escopo" ? "escopo" : "cliente";
+
+    (async () => {
+      try {
+        const { form_data } = await getContractFormData(modeloId);
+        const contratantes = form_data.contratantes as Array<{ nome?: string }> | undefined;
+        const origem = contratantes?.map((c) => c.nome?.trim()).filter(Boolean).join(", ") || "contrato anterior";
+        setFormData(normalizeFormData(prepararModelo(form_data, modo) as Partial<ContratoFormData>));
+        setAvisoRetomada(`Copiado de ${origem}, confira valores e datas.`);
+        // recarregar a página não deve criar outro rascunho a partir do mesmo modelo
+        window.history.replaceState(null, "", window.location.pathname);
+      } catch (e) {
+        setAvisoRetomada(`Não foi possível carregar o modelo: ${e instanceof Error ? e.message : "erro desconhecido"}`);
+      } finally {
+        setRestaurando(false);
+      }
+    })();
+  }, [authStatus, editContractId]);
 
   const descartarRascunho = async () => {
     if (!window.confirm("Descartar este rascunho e começar do zero? Não dá para desfazer.")) return;
