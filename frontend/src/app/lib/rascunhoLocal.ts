@@ -9,7 +9,7 @@
 import { useSession } from "next-auth/react";
 
 const PREFIXO = "cf:rascunho:";
-const VALIDADE_MS = 7 * 24 * 60 * 60 * 1000;
+export const VALIDADE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface RascunhoLocal {
   draft_id: string;
