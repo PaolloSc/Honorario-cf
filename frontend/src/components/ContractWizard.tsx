@@ -18,6 +18,7 @@ import type {
 import RascunhosPendentes from "@/components/RascunhosPendentes";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
 import { getDraft } from "@/app/lib/api";
+import { cnpjValido } from "@/app/lib/cnpj";
 import { dataDaApi } from "@/app/lib/datas";
 import { lerLocal } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
@@ -136,10 +137,6 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function digits(value: string | undefined): string {
-  return (value || "").replace(/\D/g, "");
-}
-
 function isEmail(value: string | undefined): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text(value));
 }
@@ -184,10 +181,10 @@ function validateContratantes(data: ContratoFormData): string[] {
       return;
     }
 
-    if (digits(contratante.cnpj).length !== 14) errors.push(`${label}: informe um CNPJ com 14 dígitos.`);
+    if (!cnpjValido(contratante.cnpj)) errors.push(`${label}: CNPJ inválido.`);
     if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
-    if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ para preencher a Razão Social.`);
-    if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ para preencher o endereço.`);
+    if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ ou informe a Razão Social.`);
+    if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ ou informe o endereço.`);
     // Quem tem nome aqui assina o contrato: sem e-mail, ficava fora da assinatura
     // sem aviso — e empresa que exige dois administradores saía com um só.
     (contratante.representantes ?? []).forEach((rep) => {

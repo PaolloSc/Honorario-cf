@@ -1,6 +1,7 @@
 "use client";
 
 import { lookupCNPJ } from "@/app/lib/api";
+import { formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import FormField, { Input, Select } from "@/components/ui/FormField";
 import {
   contratantePJVazio,
@@ -21,15 +22,6 @@ function formatCPF(value: string): string {
     .replace(/^(\d{3}\.\d{3}\.\d{3})(\d)/, "$1-$2");
 }
 
-function formatCNPJ(value: string): string {
-  return value
-    .replace(/\D/g, "")
-    .slice(0, 14)
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2}\.\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{2}\.\d{3}\.\d{3})(\d)/, "$1/$2")
-    .replace(/^(\d{2}\.\d{3}\.\d{3}\/\d{4})(\d)/, "$1-$2");
-}
 
 function formatCEP(value: string): string {
   const d = value.replace(/\D/g, "").slice(0, 8);
@@ -79,6 +71,8 @@ export default function StepPartes({ contratantes, onChange }: Props) {
   // Marcado quando o ViaCEP nao devolve rua (CEP unico de cidade). Fica ligado
   // enquanto o usuario digita — se dependesse do valor, o campo sumiria na 1a letra.
   const [precisaRua, setPrecisaRua] = useState<Record<number, boolean>>({});
+  // CEP que falhou (não achado, ViaCEP fora): rua, bairro, cidade e UF são digitados.
+  const [cepManual, setCepManual] = useState<Record<number, boolean>>({});
 
   // A lista mais recente: as consultas sao assincronas e o estado muda no meio.
   const atual = useRef(contratantes);
@@ -99,6 +93,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
   const trocarTipo = (i: number, tipo: "PF" | "PJ") => {
     if (contratantes[i].tipo === tipo) return;
     setPrecisaRua((prev) => ({ ...prev, [i]: false }));
+    setCepManual((prev) => ({ ...prev, [i]: false }));
     setErroCep((prev) => ({ ...prev, [i]: "" }));
     setErroCnpj((prev) => ({ ...prev, [i]: "" }));
     onChange(
@@ -106,6 +101,14 @@ export default function StepPartes({ contratantes, onChange }: Props) {
         idx === i ? (tipo === "PF" ? contratanteVazio() : contratantePJVazio()) : c
       )
     );
+  };
+
+  // Rua/cidade de um CEP anterior não podem sobrar no endereço do novo.
+  const falhouCEP = (i: number, msg: string) => {
+    setErroCep((prev) => ({ ...prev, [i]: msg }));
+    setPrecisaRua((prev) => ({ ...prev, [i]: true }));
+    setCepManual((prev) => ({ ...prev, [i]: true }));
+    update(i, { logradouro: "", bairro: "", cidade: "", uf: "" });
   };
 
   const buscarCEP = async (i: number, valor: string) => {
@@ -120,7 +123,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
       const res = await fetch(`https://viacep.com.br/ws/${digitos}/json/`);
       const data = await res.json();
       if (data.erro) {
-        setErroCep((prev) => ({ ...prev, [i]: "CEP não encontrado." }));
+        falhouCEP(i, "CEP não encontrado. Preencha o endereço abaixo.");
         return;
       }
       update(i, {
@@ -132,17 +135,18 @@ export default function StepPartes({ contratantes, onChange }: Props) {
       });
       // CEP unico de cidade pequena vem sem rua/bairro — os campos ficam editaveis.
       setPrecisaRua((prev) => ({ ...prev, [i]: !data.logradouro }));
+      setCepManual((prev) => ({ ...prev, [i]: false }));
     } catch {
-      setErroCep((prev) => ({ ...prev, [i]: "Erro ao buscar CEP." }));
+      falhouCEP(i, "Erro ao buscar CEP. Preencha o endereço abaixo.");
     } finally {
       setBuscando(null);
     }
   };
 
   const buscarCNPJ = async (i: number, valor: string) => {
-    const cnpj = formatCNPJ(valor);
+    const cnpj = formatarCNPJ(valor);
     update(i, { cnpj });
-    if (cnpj.replace(/\D/g, "").length !== 14) return;
+    if (limparCNPJ(cnpj).length !== 14) return;
 
     setBuscando(i);
     setErroCnpj((prev) => ({ ...prev, [i]: "" }));
@@ -395,20 +399,38 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                   Rua e bairro so' aparecem quando o CEP atende a cidade toda. */}
               {precisaRua[i] && (
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField label="Logradouro" required hint="Este CEP atende a cidade toda">
+                  <FormField label="Logradouro" required hint={cepManual[i] ? "CEP não consultado" : "Este CEP atende a cidade toda"}>
                     <Input
                       value={c.logradouro ?? ""}
                       onChange={(e) => update(i, { logradouro: e.target.value })}
                       placeholder="Rua Major Egido Luiz Cerqueira"
                     />
                   </FormField>
-                  <FormField label="Bairro" hint="Também não vem neste CEP">
+                  <FormField label="Bairro" hint={cepManual[i] ? undefined : "Também não vem neste CEP"}>
                     <Input
                       value={c.bairro ?? ""}
                       onChange={(e) => update(i, { bairro: e.target.value })}
                       placeholder="Centro"
                     />
                   </FormField>
+                  {cepManual[i] && (
+                    <>
+                      <FormField label="Cidade" required>
+                        <Input
+                          value={c.cidade ?? ""}
+                          onChange={(e) => update(i, { cidade: e.target.value })}
+                          placeholder="Belo Horizonte"
+                        />
+                      </FormField>
+                      <FormField label="UF" required>
+                        <Input
+                          value={c.uf ?? ""}
+                          onChange={(e) => update(i, { uf: e.target.value.toUpperCase().slice(0, 2) })}
+                          placeholder="MG"
+                        />
+                      </FormField>
+                    </>
+                  )}
                 </div>
               )}
 
