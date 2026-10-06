@@ -1,4 +1,5 @@
 import { limparCNPJ } from "./cnpj";
+import type { Contratante, TipoPessoa } from "@/types/contract";
 
 function resolveApiBase(): string {
   // 1. Vercel environment variable takes priority
@@ -655,6 +656,21 @@ export interface DraftSummary {
 
 export interface DraftDetail extends DraftSummary {
   form_data: Record<string, unknown>;
+}
+
+export interface SugestaoCliente {
+  documento: string;
+  nome: string;
+  data_contrato: string;
+  contratante: Partial<Contratante> & { tipo: TipoPessoa };
+}
+
+// Clientes de contratos já gerados por qualquer advogado (só a qualificação).
+export async function sugerirClientes(q: string, signal?: AbortSignal) {
+  return request<{ sugestoes: SugestaoCliente[] }>(
+    `/api/clientes/sugestoes?q=${encodeURIComponent(q)}`,
+    { signal }
+  );
 }
 
 export async function listDrafts() {
