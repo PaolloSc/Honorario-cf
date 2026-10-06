@@ -521,6 +521,12 @@ export async function updateLegalOneOpcao(id: number, ativo: boolean) {
   });
 }
 
+// QSA da Receita (só a BrasilAPI traz). Sugestão: não prova poder de representação.
+export interface SocioReceita {
+  nome: string;
+  qualificacao: string;
+}
+
 export async function lookupCNPJ(cnpj: string) {
   const cnpjClean = limparCNPJ(cnpj);
   return request<{
@@ -529,6 +535,7 @@ export async function lookupCNPJ(cnpj: string) {
     nome_fantasia: string;
     endereco: string;
     situacao_cadastral: string;
+    socios?: SocioReceita[];
   }>(`/api/cnpj/${cnpjClean}`);
 }
 
