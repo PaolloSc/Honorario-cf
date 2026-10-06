@@ -5,7 +5,7 @@ import FormField, {
   Input,
   Select,
 } from "@/components/ui/FormField";
-import { lookupCNPJ, type SocioReceita } from "@/app/lib/api";
+import { lookupCNPJ, sugerirClientes, type SocioReceita, type SugestaoCliente } from "@/app/lib/api";
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import type {
   Contratante,
@@ -15,7 +15,7 @@ import type {
   RepresentantePJ,
   TipoPessoa,
 } from "@/types/contract";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 function toTitleCase(str: string): string {
   return str
@@ -78,6 +78,15 @@ function emptyPJ(): ContratantePJ {
   };
 }
 
+// "2026-03-05T12:00:00" -> "05/03/2026" (sem passar por Date: evita virar o dia no fuso).
+function dataBR(iso: string): string {
+  return iso.slice(0, 10).split("-").reverse().join("/");
+}
+
+function formatDoc(doc: string): string {
+  return doc.length === 11 ? formatCPF(doc) : formatarCNPJ(doc);
+}
+
 interface Step1Props {
   contratantes: Contratante[];
   onChange: (contratantes: Contratante[]) => void;
@@ -92,6 +101,8 @@ export default function Step1Contratante({
   // Consulta falhou (API fora, CNPJ novo/alfanumérico ainda não indexado): libera a digitação.
   const [cnpjManual, setCnpjManual] = useState<Set<number>>(new Set());
   const [cnpjError, setCNPJError] = useState<string | null>(null);
+  // Card preenchido com cliente já atendido -> data do contrato de origem (aviso "confira").
+  const [origem, setOrigem] = useState<Record<number, string>>({});
   // Dados da Receita que não vão para o contrato: chaveado pelo CNPJ, some sozinho se ele mudar.
   const [receita, setReceita] = useState<
     Record<string, { situacao: string; socios: SocioReceita[] }>
@@ -123,6 +134,15 @@ export default function Step1Contratante({
       };
       setCnpjLoaded(reindexar);
       setCnpjManual(reindexar);
+      setOrigem((prev) => {
+        const next: Record<number, string> = {};
+        for (const [k, v] of Object.entries(prev)) {
+          const i = Number(k);
+          if (i < index) next[i] = v;
+          else if (i > index) next[i - 1] = v;
+        }
+        return next;
+      });
       onChange(contratantes.filter((_, i) => i !== index));
     },
     [contratantes, onChange]
@@ -138,8 +158,29 @@ export default function Step1Contratante({
       setCnpjLoaded(remover);
       setCnpjManual(remover);
       setCNPJError(null);
+      setOrigem(({ [index]: _, ...resto }) => resto);
       const updated = [...contratantes];
       updated[index] = tipo === "PF" ? emptyPF() : emptyPJ();
+      onChange(updated);
+    },
+    [contratantes, onChange]
+  );
+
+  const usarSugestao = useCallback(
+    (index: number, s: SugestaoCliente) => {
+      const remover = (prev: Set<number>) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      };
+      // Sem "travado pela Receita": o dado veio de contrato antigo e precisa ficar editável.
+      setCnpjLoaded(remover);
+      setCnpjManual(remover);
+      setCNPJError(null);
+      setOrigem((prev) => ({ ...prev, [index]: dataBR(s.data_contrato) }));
+      const base = s.contratante.tipo === "PJ" ? emptyPJ() : emptyPF();
+      const updated = [...contratantes];
+      updated[index] = { ...base, ...s.contratante } as Contratante;
       onChange(updated);
     },
     [contratantes, onChange]
@@ -219,6 +260,13 @@ export default function Step1Contratante({
             )}
           </div>
 
+          <ClienteRecorrente onEscolher={(s) => usarSugestao(idx, s)} />
+          {origem[idx] && (
+            <p className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg px-3 py-2 mb-4">
+              Dados de {origem[idx]}, de um contrato anterior: confira endereço, estado civil e contatos.
+            </p>
+          )}
+
           <div className="flex gap-4 mb-4">
             <button
               type="button"
@@ -275,6 +323,67 @@ export default function Step1Contratante({
 
       {cnpjError && (
         <p className="text-sm text-danger mb-4">{cnpjError}</p>
+      )}
+    </div>
+  );
+}
+
+// Busca nos contratos já gerados (de qualquer advogado); traz só a qualificação.
+function ClienteRecorrente({ onEscolher }: { onEscolher: (s: SugestaoCliente) => void }) {
+  const [q, setQ] = useState("");
+  const [lista, setLista] = useState<SugestaoCliente[]>([]);
+  const [aberto, setAberto] = useState(false);
+
+  useEffect(() => {
+    const termo = q.trim();
+    if (termo.length < 3) {
+      setLista([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      sugerirClientes(termo, ctrl.signal)
+        .then((r) => !ctrl.signal.aborted && setLista(r.sugestoes))
+        .catch(() => !ctrl.signal.aborted && setLista([]));
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [q]);
+
+  return (
+    <div className="relative mb-4">
+      <label className="block text-sm font-semibold text-foreground mb-1">
+        Cliente já atendido?
+      </label>
+      <Input
+        type="search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onFocus={() => setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 150)}
+        placeholder="Busque por nome, CPF ou CNPJ (mín. 3 caracteres)"
+      />
+      {aberto && lista.length > 0 && (
+        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg text-sm">
+          {lista.map((s) => (
+            <li
+              key={s.documento}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onEscolher(s);
+                setQ("");
+                setLista([]);
+                setAberto(false);
+              }}
+              className="px-3 py-2 cursor-pointer hover:bg-primary/10"
+            >
+              {s.nome}
+              <span className="text-muted"> · {formatDoc(s.documento)} · dados de {dataBR(s.data_contrato)}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
