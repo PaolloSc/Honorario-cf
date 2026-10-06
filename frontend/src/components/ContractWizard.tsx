@@ -66,6 +66,11 @@ function novoIdRascunho(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
 }
 
+// Edição salva rascunho num id fixo por contrato: reabrir a edição acha o que ficou.
+function idRascunhoEdicao(contractId: string): string {
+  return `edit-${contractId}`;
+}
+
 function horaBrasilia(d: Date): string {
   return d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 }
@@ -323,16 +328,18 @@ export default function ContractWizard({
   const currentStepErrors = validateStep(currentStep, formData);
   const canGoNext = currentStepErrors.length === 0;
 
-  // ── Rascunho (autosave) — só ao criar; editar contrato já gera versão própria ──
+  // ── Rascunho (autosave) — ao criar e ao editar (id fixo "edit-<contrato>") ──
   const authStatus = useAuthStatus();
   const dono = useDonoRascunho();
-  const [draftId, setDraftId] = useState(novoIdRascunho);
+  const [draftId, setDraftId] = useState(() => (editContractId ? idRascunhoEdicao(editContractId) : novoIdRascunho()));
+  // Na edição o formulário já nasce cheio: só há o que salvar depois de mudar algo.
+  const [jsonInicial] = useState(() => (editContractId ? JSON.stringify(normalizeFormData(initialData)) : INITIAL_JSON));
   const [restaurando, setRestaurando] = useState(false);
   const [avisoRetomada, setAvisoRetomada] = useState("");
   const retomadaFeita = useRef(false);
-  const temConteudo = useMemo(() => JSON.stringify(formData) !== INITIAL_JSON, [formData]);
+  const temConteudo = useMemo(() => JSON.stringify(formData) !== jsonInicial, [formData, jsonInicial]);
   const autosave = useRascunhoAutosave({
-    ativo: !editContractId && !restaurando,
+    ativo: !restaurando,
     draftId,
     formData: formData as unknown as Record<string, unknown>,
     step: currentStep,
@@ -342,8 +349,10 @@ export default function ContractWizard({
   const retomarAutosave = autosave.retomar;
 
   useEffect(() => {
-    if (editContractId || retomadaFeita.current) return;
-    const id = new URLSearchParams(window.location.search).get("rascunho");
+    if (retomadaFeita.current) return;
+    const id = editContractId
+      ? idRascunhoEdicao(editContractId)
+      : new URLSearchParams(window.location.search).get("rascunho");
     if (!id) {
       retomadaFeita.current = true;
       return;
@@ -352,12 +361,17 @@ export default function ContractWizard({
     if (authStatus !== "authenticated") return; // espera a sessão para chamar a API
     retomadaFeita.current = true;
 
-    const aplicar = (dados: Record<string, unknown>, passo: number) => {
+    // versaoServidor = updated_at do servidor, base da concorrência otimista do autosave
+    const aplicar = (dados: Record<string, unknown>, passo: number, versaoServidor: string | null) => {
       setDraftId(id);
       setFormData(normalizeFormData(dados as Partial<ContratoFormData>));
       setCurrentStep(Math.min(Math.max(passo, 1), 5)); // 6/7 dependem de revisar de novo
-      retomarAutosave();
-      setAvisoRetomada("Rascunho retomado — confira os dados e continue de onde parou.");
+      retomarAutosave(versaoServidor);
+      setAvisoRetomada(
+        editContractId
+          ? "Havia alterações desta edição que não viraram versão — foram retomadas. Confira, ou descarte para voltar ao contrato salvo."
+          : "Rascunho retomado — confira os dados e continue de onde parou.",
+      );
     };
 
     (async () => {
@@ -368,13 +382,14 @@ export default function ContractWizard({
         const servidor = await getDraft(id);
         // cópia local mais nova = o último salvamento no servidor falhou
         if (local && dataDaApi(local.updated_at) > dataDaApi(servidor.updated_at)) {
-          aplicar(local.form_data, local.current_step);
+          aplicar(local.form_data, local.current_step, servidor.updated_at);
         } else {
-          aplicar(servidor.form_data, servidor.current_step);
+          aplicar(servidor.form_data, servidor.current_step, servidor.updated_at);
         }
       } catch {
-        if (local) aplicar(local.form_data, local.current_step);
-        else setAvisoRetomada("Rascunho não encontrado — pode já ter virado contrato ou ter sido descartado.");
+        if (local) aplicar(local.form_data, local.current_step, null);
+        // edição sem rascunho é o caso normal: nada a avisar
+        else if (!editContractId) setAvisoRetomada("Rascunho não encontrado — pode já ter virado contrato ou ter sido descartado.");
       } finally {
         setRestaurando(false);
       }
@@ -382,14 +397,17 @@ export default function ContractWizard({
   }, [authStatus, dono, editContractId, retomarAutosave]);
 
   const descartarRascunho = async () => {
-    if (!window.confirm("Descartar este rascunho e começar do zero? Não dá para desfazer.")) return;
+    const pergunta = editContractId
+      ? "Descartar as alterações não salvas e voltar ao contrato salvo? Não dá para desfazer."
+      : "Descartar este rascunho e começar do zero? Não dá para desfazer.";
+    if (!window.confirm(pergunta)) return;
     await autosave.descartar();
-    setFormData(normalizeFormData(null));
+    setFormData(normalizeFormData(editContractId ? initialData : null));
     setCurrentStep(1);
-    setDraftId(novoIdRascunho());
+    setDraftId(editContractId ? idRascunhoEdicao(editContractId) : novoIdRascunho());
     setAvisoRetomada("");
     autosave.retomar();
-    window.history.replaceState(null, "", window.location.pathname);
+    if (!editContractId) window.history.replaceState(null, "", window.location.pathname);
   };
 
   useEffect(() => {
@@ -474,33 +492,57 @@ export default function ContractWizard({
             ? "Altere os dados e gere uma nova versão."
             : "Preencha as etapas abaixo para gerar o contrato."}
         </p>
-        {!editContractId && (
-          <div className="mt-2 text-xs" aria-live="polite">
-            {autosave.estado === "salvando" && <span className="text-muted">Salvando rascunho…</span>}
-            {autosave.estado === "salvo" && autosave.salvoEm && (
-              <span className="text-primary-dark">
-                Rascunho salvo às {horaBrasilia(autosave.salvoEm)} — você pode sair e retomar depois.{" "}
-                <button type="button" onClick={() => void descartarRascunho()} className="underline text-muted hover:text-danger">
-                  Descartar
-                </button>
-              </span>
-            )}
-            {autosave.estado === "falhou" && (
-              <span className="text-danger">
-                Não foi possível salvar o rascunho no servidor — não feche esta página.{" "}
-                <button type="button" onClick={() => void autosave.salvarAgora()} className="underline">
-                  Tentar de novo
-                </button>
-              </span>
-            )}
-          </div>
-        )}
+        <div className="mt-2 text-xs" aria-live="polite">
+          {autosave.estado === "salvando" && <span className="text-muted">Salvando rascunho…</span>}
+          {autosave.estado === "salvo" && autosave.salvoEm && (
+            <span className="text-primary-dark">
+              {editContractId
+                ? `Alterações guardadas como rascunho às ${horaBrasilia(autosave.salvoEm)} — ainda não são uma nova versão.`
+                : `Rascunho salvo às ${horaBrasilia(autosave.salvoEm)} — você pode sair e retomar depois.`}{" "}
+              <button type="button" onClick={() => void descartarRascunho()} className="underline text-muted hover:text-danger">
+                Descartar
+              </button>
+            </span>
+          )}
+          {autosave.estado === "falhou" && (
+            <span className="text-danger">
+              Não foi possível salvar o rascunho no servidor — não feche esta página.{" "}
+              <button type="button" onClick={() => void autosave.salvarAgora()} className="underline">
+                Tentar de novo
+              </button>
+            </span>
+          )}
+          {autosave.estado === "conflito" && (
+            <span className="text-danger">
+              Este rascunho foi alterado em outra aba ou computador. O que você mudou aqui não está sendo salvo.{" "}
+              <button
+                type="button"
+                onClick={() =>
+                  editContractId
+                    ? window.location.reload()
+                    : window.location.assign(`/?rascunho=${encodeURIComponent(draftId)}`)
+                }
+                className="underline"
+              >
+                Abrir a versão mais recente
+              </button>
+            </span>
+          )}
+        </div>
       </div>
 
       {restaurando && <p className="mb-6 text-center text-sm text-muted">Carregando rascunho…</p>}
       {avisoRetomada && (
         <div className="mb-6 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary-dark">
           {avisoRetomada}
+          {editContractId && (
+            <>
+              {" "}
+              <button type="button" onClick={() => void descartarRascunho()} className="underline text-muted hover:text-danger">
+                Descartar alterações
+              </button>
+            </>
+          )}
         </div>
       )}
       {!editContractId && !restaurando && !temConteudo && <RascunhosPendentes />}
