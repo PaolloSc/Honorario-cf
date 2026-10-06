@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatPercentual } from "@/lib/format";
 import { useSession } from "next-auth/react";
 import {
   Participacao,
@@ -629,8 +630,8 @@ function ListaParticipacoes({
                 <span className="ml-2 text-xs text-muted">#{p.contract_id}</span>
               </div>
               <div className="text-xs text-muted mt-1">
-                {p.tipo_honorario.toUpperCase()} · Captação {p.percentual_captacao}% · Performance{" "}
-                {p.percentual_performance}% · Total {p.percentual_total}%
+                {p.tipo_honorario.toUpperCase()} · Captação {formatPercentual(p.percentual_captacao)} · Performance{" "}
+                {formatPercentual(p.percentual_performance)} · Total {formatPercentual(p.percentual_total)}
               </div>
             </div>
             <div className="text-right">
@@ -1471,7 +1472,7 @@ function Simulador() {
             Participação: {brl(result.valor_participacao)}
           </p>
           <p className="text-xs text-muted mt-1">
-            Percentual aplicado: {result.percentual_aplicado}% · Dentro limite temporal:{" "}
+            Percentual aplicado: {formatPercentual(result.percentual_aplicado)} · Dentro limite temporal:{" "}
             {result.dentro_limite_temporal ? "sim" : "não"} · Vínculo:{" "}
             {result.vinculo_ativo ? "ativo" : "encerrado"}
           </p>
