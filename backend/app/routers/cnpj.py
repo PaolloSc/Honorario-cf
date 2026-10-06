@@ -6,6 +6,8 @@ import asyncio
 import httpx
 from fastapi import APIRouter, HTTPException
 
+from app.utils.documento import normalizar_doc
+
 router = APIRouter(prefix="/api/cnpj", tags=["cnpj"])
 
 
@@ -139,7 +141,7 @@ async def lookup_cnpj(cnpj: str) -> dict:
 
     Returns razao_social, endereco and other available data.
     """
-    cnpj_clean = re.sub(r"\D", "", cnpj)
+    cnpj_clean = normalizar_doc(cnpj)
 
     if len(cnpj_clean) != 14:
         raise HTTPException(status_code=400, detail="CNPJ invalido")
