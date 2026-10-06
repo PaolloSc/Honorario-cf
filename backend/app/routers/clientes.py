@@ -48,6 +48,9 @@ def _qualificacao(c: dict) -> dict:
     """Lista branca: só o que vai no card do contratante."""
     if c.get("tipo") == "PJ":
         out = _pegar(c, CAMPOS_PJ)
+        if "cnpj" in out:
+            # Contrato legado guardou com máscara; o form (e o mapa da Receita/QSA) usa sem.
+            out["cnpj"] = normalizar_doc(out["cnpj"])
         reps = c.get("representantes")
         if not reps and c.get("representante_nome"):
             # Legado: representante único em campos soltos.

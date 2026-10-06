@@ -68,6 +68,8 @@ def test_outro_advogado_acha_cliente_sem_vazar_contrato(client):
     assert r.status_code == 200
     [s] = r.json()["sugestoes"]
     assert s["documento"] == "12345678000190" and s["nome"] == "Padaria São João Ltda"
+    # Contrato legado com CNPJ mascarado: o form usa sem máscara (chave do QSA da Receita).
+    assert s["contratante"]["cnpj"] == "12345678000190"
     assert s["contratante"]["representantes"] == [{"nome": "José", "cpf": "111.444.777-35", "estado_civil": "Casado(a)"}]
 
     # Busca por CPF formatado acha o 2º contratante (via cliente_docs).
