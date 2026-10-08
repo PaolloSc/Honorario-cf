@@ -448,21 +448,36 @@ class ContractGenerator:
                     base = f"em {dt.day:02d}/{dt.month:02d}/{dt.year}"
             except Exception:
                 base = self._format_vencimento(data, recorrente=recorrente)
-            obs_clean = (obs or "").strip()
+            obs_clean = self._texto_livre(obs)
             if obs_clean:
                 return f"{base} ({obs_clean})"
             return base
-        if obs and obs.strip():
-            return obs.strip()
-        return self._format_vencimento(legacy, recorrente=recorrente)
+        if self._texto_livre(obs):
+            return self._texto_livre(obs)
+        return self._texto_livre(self._format_vencimento(legacy, recorrente=recorrente))
+
+    def _percentual_digitado(self, value: str) -> str:
+        """'7,5' ou '7,5%' -> '7,5% (sete vírgula cinco por cento)'; texto que não é
+        número (ex.: 'a combinar') fica como foi digitado."""
+        try:
+            return percentual_com_extenso(float(str(value).strip().rstrip("%").strip().replace(",", ".")))
+        except ValueError:
+            return str(value)
 
     def _format_percentual(self, value: float) -> str:
         return formatar_percentual(value)
 
     @staticmethod
     def _texto_livre(value: str | None) -> str:
-        """Texto digitado no wizard, sem a pontuação final (a frase põe a sua)."""
-        return (value or "").strip().rstrip(".;, ").strip()
+        """Texto digitado no wizard para entrar no meio de uma frase do contrato:
+        sem a pontuação final (a frase põe a sua) e com a inicial minúscula
+        ("Todo dia 10." -> "todo dia 10"). Sigla e "R$" ficam como estão."""
+        texto = (value or "").strip().rstrip(".;, ").strip()
+        # ponytail: palavra capitalizada vira minúscula — nome próprio no início
+        # do campo ("Ana") também desce; se incomodar, lista de exceções aqui.
+        if re.match(r"[A-ZÀ-Ý][a-zà-ÿ]+\b", texto):
+            texto = texto[0].lower() + texto[1:]
+        return texto
 
     def _frase_desconto(self, h) -> str | None:
         """Desconto opcional de qualquer tipo de honorário; None se não há o que dizer."""
@@ -842,7 +857,7 @@ class ContractGenerator:
             f"o {incidencia}, corrigido monetariamente, aproveitável à CONTRATANTE "
             "(Benefício), ainda que parcial"
         )
-        base = (ex.base_calculo or "").strip()
+        base = self._texto_livre(ex.base_calculo)
         base = f", tendo como base de cálculo {base}" if base else ""
         if ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
             num(
@@ -855,7 +870,7 @@ class ContractGenerator:
             for faixa in ex.faixas_percentual:
                 row = table.add_row().cells
                 row[0].text = faixa.get("faixa", "")
-                row[1].text = faixa.get("percentual", "")
+                row[1].text = self._percentual_digitado(faixa.get("percentual", ""))
         elif ex.percentual:
             num(
                 f"Os honorários de êxito corresponderão a {percentual_com_extenso(ex.percentual)} "
@@ -868,20 +883,23 @@ class ContractGenerator:
         venc = ""
         if ex.vencimento or ex.vencimento_data or ex.vencimento_obs:
             venc = self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)
+        parcelamento = self._texto_livre(ex.forma_parcelamento)
         if forma:
             if forma == "parcelado" and ex.numero_parcelas:
                 parcela = f" de {valor_com_extenso(ex.valor_parcela)}" if ex.valor_parcela else ""
                 forma_txt = f"em {numero_com_extenso(ex.numero_parcelas, 'parcelas', fem=True)}{parcela}"
+            elif forma in FORMA_PAGAMENTO_LABELS:
+                forma_txt = FORMA_PAGAMENTO_LABELS[forma]
             else:
-                forma_txt = self._label_from_map(forma, FORMA_PAGAMENTO_LABELS).rstrip(".")
+                forma_txt = self._texto_livre(forma)
             venc_txt = f", com vencimento {venc}" if venc else ""
-            num(f"Os honorários de êxito serão pagos {forma_txt}{venc_txt}.")
+            parc_txt = f", observado o seguinte parcelamento: {parcelamento}" if parcelamento else ""
+            num(f"Os honorários de êxito serão pagos {forma_txt}{venc_txt}{parc_txt}.")
+        elif parcelamento:
+            venc_txt = f"vencerão {venc} e " if venc else ""
+            num(f"Os honorários de êxito {venc_txt}serão parcelados da seguinte forma: {parcelamento}.")
         elif venc:
             num(f"Os honorários de êxito vencerão {venc}.")
-
-        forma_parcelamento = self._texto_livre(ex.forma_parcelamento)
-        if forma_parcelamento:
-            num(f"Os honorários de êxito serão parcelados da seguinte forma: {forma_parcelamento}.")
 
         if ex.tem_beneficio_prospectivo and ex.prospectivo_duracao_meses:
             num(
@@ -902,15 +920,17 @@ class ContractGenerator:
         if com_subtitulo:
             doc.add_heading("PERMUTA", level=3)
         descricao = (perm.descricao or "").strip()
-        if descricao and descricao[-1] not in ".!?":
-            descricao += "."
+        if descricao:
+            descricao = descricao[0].upper() + descricao[1:]
+            if descricao[-1] not in ".!?":
+                descricao += "."
         num(
             "Os serviços contratados serão remunerados mediante permuta com os serviços de "
             f"{perm.objeto_permuta}, a serem prestados pela CONTRATANTE ao C&F."
             + (f" {descricao}" if descricao else "")
         )
         if perm.tem_torna and perm.valor_torna:
-            forma = (perm.forma_pagamento_torna or "").strip().rstrip(".")
+            forma = self._texto_livre(perm.forma_pagamento_torna)
             forma = f", da seguinte forma: {forma}" if forma else ""
             num(
                 "A CONTRATANTE pagará ainda ao C&F, a título de torna, "
@@ -992,7 +1012,7 @@ class ContractGenerator:
                 "apresentação do(s) respectivo(s) comprovante(s)."
             )
             if ac.reembolso_limitado and ac.descricao_limitacao_reembolso:
-                limite = ac.descricao_limitacao_reembolso.strip().rstrip(".")
+                limite = self._texto_livre(ac.descricao_limitacao_reembolso)
                 self._add_clausula(doc, f"O reembolso observará a seguinte limitação: {limite}.", ilvl=2)
 
         clauses = [
@@ -1127,13 +1147,13 @@ class ContractGenerator:
         base_83 = "Em caso de extinção do Contrato: " + "; ".join(incisos[:-1])
 
         has_exito = any(TipoHonorario.EXITO in e.honorarios for e in data.escopos)
-        criterio_exito = (data.acessorios.criterio_extincao_exito or "").strip()
+        criterio_exito = self._texto_livre(data.acessorios.criterio_extincao_exito)
         if has_exito and criterio_exito:
             self._add_clausula(
                 doc,
                 f"{base_83}; {incisos[-1]}; e (v) os honorários de êxito vincendos ao momento "
                 f"da resilição continuarão devidos ao C&F observando-se o seguinte critério: "
-                f"{criterio_exito.rstrip('.')}."
+                f"{criterio_exito}."
             )
         elif has_exito:
             self._add_clausula(

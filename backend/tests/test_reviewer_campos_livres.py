@@ -54,7 +54,8 @@ def test_campos_livres_extraidos_com_a_frase_do_contrato():
         "Os honorários de êxito serão pagos"
     )
     assert ctx["Escopo 2 - êxito: forma de parcelamento: em até 3 parcelas mensais"] == (
-        "Os honorários de êxito serão parcelados da seguinte forma: em até 3 parcelas mensais."
+        "Os honorários de êxito serão pagos x, com vencimento 10 dias após o recebimento do "
+        "Benefício, observado o seguinte parcelamento: em até 3 parcelas mensais."
     )
     # O revisor vê a redundância: a frase já diz "desconto", o campo repete.
     assert ctx["Escopo 2 - êxito: especificação do desconto: desconto de R$ 500,00 na primeira parcela"] == (
@@ -101,3 +102,18 @@ def test_contexto_e_instrucao_chegam_ao_revisor(monkeypatch, client):
     assert "parcelamento customizado: 50% na assinatura e 50% em 30 dias\n  Frase no contrato: " in conteudo
     assert "Frase no contrato:" in enviado["system"]
     assert "NUNCA cite trecho dela" in enviado["system"]
+
+
+def test_mensalidade_vencimento_obs_vai_com_frase():
+    from app.models.contract import ContratoRequest
+
+    m = _escopo("mensalidade", mensalidade_subtipo="advocacia_partido")
+    m["mensalidade"].update(dia_vencimento="", dia_vencimento_obs="Até o 5º dia útil.")
+    req = _base_req()
+    req["escopos"] = [m]
+    ctx = _linhas_com_contexto(
+        contract_reviewer.extract_open_fields(ContratoRequest(**req).model_dump(mode="json"))
+    )
+    assert "com vencimento até o 5º dia útil" in ctx[
+        "Escopo 1 - mensalidade: observação de vencimento: Até o 5º dia útil."
+    ]

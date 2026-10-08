@@ -646,3 +646,46 @@ def test_clausulas_gerais_com_numeros_por_extenso():
     assert _has(paras, "R$ 0,40 (quarenta centavos).")
     assert _has(paras, "A CONTRATANTE obriga-se a: (i) fornecer")
     assert _has(paras, "; e (iv) os honorários vincendos pactuados por pró-labore")
+
+
+# ── Revisão da #110: campo livre encaixado na frase ───────────────────────
+
+
+def test_vencimento_livre_com_ponto_e_maiuscula_encaixa_na_frase():
+    pl = _escopo("pro_labore")
+    pl["pro_labore"].update(tipo_parcelamento="mensal", numero_parcelas=2, valor_parcela=500,
+                            vencimento_parcelas_obs="Todo dia 10.")
+    m = _escopo("mensalidade", mensalidade_subtipo="advocacia_partido", tipo="consultoria_contratual")
+    m["mensalidade"].update(dia_vencimento="", dia_vencimento_obs="Até o 5º dia útil.")
+    paras = _paras_for(_req_escopos([pl, m]))
+    assert _has(paras, "parcelas de R$ 500,00 (quinhentos reais), com vencimento todo dia 10.")
+    assert _has(paras, "mensalidade de R$ 2.000,00 (dois mil reais), com vencimento até o 5º dia útil, e abrangem")
+    assert not any(".." in p or "., " in p for p in paras)
+
+
+def test_permuta_descricao_vira_frase_propria():
+    e = _escopo("permuta")
+    e["permuta"]["descricao"] = "livre de ônus"
+    assert _has(_paras_for(_req_escopos([e])), "pela CONTRATANTE ao C&F. Livre de ônus.")
+
+
+def test_exito_parcelamento_livre_na_mesma_frase_do_pagamento():
+    e = _escopo("exito")
+    e["exito"].update(forma_pagamento="a_vista", vencimento="", forma_parcelamento="Em parcelas mensais.")
+    paras = _paras_for(_req_escopos([e]))
+    assert _has(paras, "Os honorários de êxito serão pagos à vista, observado o seguinte "
+                       "parcelamento: em parcelas mensais.")
+    assert sum("Os honorários de êxito serão" in p for p in paras) == 1
+
+
+def test_exito_variavel_faixas_com_percentual_por_extenso():
+    e = _escopo("exito")
+    e["exito"].update(subtipo="percentual_variavel", percentual=None, faixas_percentual=[
+        {"faixa": "até R$ 1 milhão", "percentual": "10"},
+        {"faixa": "acima", "percentual": "7,5%"},
+        {"faixa": "outros", "percentual": "a combinar"},
+    ])
+    paras = _paras_for(_req_escopos([e]))
+    assert _has(paras, "10% (dez por cento)")
+    assert _has(paras, "7,5% (sete vírgula cinco por cento)")
+    assert _has(paras, "a combinar")
