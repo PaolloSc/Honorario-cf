@@ -129,7 +129,7 @@ def test_previa_honorarios_endpoint(client):
 def test_exito_vencimento_livre_com_data_entra_como_digitado():
     # Revisão da #109: "até 30/06/2027" saía "Vencimento: em 30/06/2027."
     paras = _paras_for(_req_com("exito", vencimento="até 30/06/2027"))
-    assert _has(paras, "Vencimento: até 30/06/2027.")
+    assert _has(paras, "Os honorários de êxito vencerão até 30/06/2027.")
     assert not _has(paras, "em 30/06/2027")
     # Só a data, digitada sozinha, continua ganhando o "em".
-    assert _has(_paras_for(_req_com("exito", vencimento="30/06/2027")), "Vencimento: em 30/06/2027.")
+    assert _has(_paras_for(_req_com("exito", vencimento="30/06/2027")), "vencerão em 30/06/2027.")
