@@ -124,3 +124,12 @@ def test_previa_honorarios_endpoint(client):
     assert "OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS" in r.text
     assert "10% (dez por cento)" in r.text
     assert "CLÁUSULAS GERAIS" not in r.text
+
+
+def test_exito_vencimento_livre_com_data_entra_como_digitado():
+    # Revisão da #109: "até 30/06/2027" saía "Vencimento: em 30/06/2027."
+    paras = _paras_for(_req_com("exito", vencimento="até 30/06/2027"))
+    assert _has(paras, "Vencimento: até 30/06/2027.")
+    assert not _has(paras, "em 30/06/2027")
+    # Só a data, digitada sozinha, continua ganhando o "em".
+    assert _has(_paras_for(_req_com("exito", vencimento="30/06/2027")), "Vencimento: em 30/06/2027.")

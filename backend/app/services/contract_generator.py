@@ -1,6 +1,7 @@
 from __future__ import annotations
  
 import os
+import re
 import tempfile
 import uuid
 import zipfile
@@ -420,7 +421,9 @@ class ContractGenerator:
         if recorrente and raw.isdigit():
             return f"no dia {int(raw)} de cada mês"
 
-        if len(digits) == 8:
+        # So' uma data digitada (10/05/2026, 10052026) ganha o "em"; texto livre
+        # com data dentro ("até 30/06/2027") entra como foi escrito.
+        if len(digits) == 8 and re.fullmatch(r"[\d/.\- ]+", raw):
             return f"em {digits[:2]}/{digits[2:4]}/{digits[4:]}"
 
         return raw

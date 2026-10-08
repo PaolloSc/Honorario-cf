@@ -16,6 +16,7 @@ import type {
   Participacao,
 } from "@/types/contract";
 import RascunhosPendentes from "@/components/RascunhosPendentes";
+import { errosDoEscopo } from "@/app/lib/validacaoHonorarios";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
 import { getContractFormData, getDraft } from "@/app/lib/api";
 import { cnpjValido } from "@/app/lib/cnpj";
@@ -259,6 +260,7 @@ function validateHonorarios(data: ContratoFormData): string[] {
     if (escopo.honorarios.length === 0) {
       errors.push(`${label}: selecione pelo menos um tipo de honorário.`);
     }
+    errors.push(...errosDoEscopo(escopo, label));
   });
 
   return errors;
