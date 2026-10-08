@@ -83,6 +83,7 @@ def ingest(
             origem=body.origem,
             disparado_por=body.disparado_por,
             xmls=xmls,
+            ultimo_nsu=body.ultimo_nsu,
         )
     except JobLockError as e:
         raise HTTPException(409, str(e)) from e
@@ -108,6 +109,20 @@ def ingest(
         status=data["status"],
         motivo_falha=data["motivo_falha"],
     )
+
+
+@router.get("/adn/ultimo-nsu")
+def ultimo_nsu(
+    cnpj: str,
+    _: bool = Depends(_require_worker),
+    db: Session = Depends(get_db),
+):
+    """Ultimo NSU do ADN ja ingerido com sucesso (0 = comecar do inicio)."""
+    nsu = db.execute(
+        text("SELECT MAX(ultimo_nsu) FROM sync_jobs WHERE cnpj_prestador=:c AND status='ok'"),
+        {"c": _digits(cnpj)},
+    ).scalar()
+    return {"ultimo_nsu": nsu or 0}
 
 
 @router.post("/sync-status")
