@@ -689,3 +689,18 @@ def test_exito_variavel_faixas_com_percentual_por_extenso():
     assert _has(paras, "10% (dez por cento)")
     assert _has(paras, "7,5% (sete vírgula cinco por cento)")
     assert _has(paras, "a combinar")
+
+
+def test_texto_livre_so_baixa_inicial_de_palavra_comum():
+    livre = ContractGenerator._texto_livre
+    assert livre("Todo dia 10.") == "todo dia 10"
+    assert livre("Até o 5º dia útil.") == "até o 5º dia útil"
+    assert livre("À vista.") == "à vista"
+    assert livre("Segunda-feira seguinte") == "segunda-feira seguinte"
+    assert livre("Trinta dias após a assinatura") == "trinta dias após a assinatura"
+    # Nome próprio, empresa, cidade, órgão e sigla ficam como digitados.
+    assert livre("Banco do Brasil, conta X.") == "Banco do Brasil, conta X"
+    assert livre("João Silva") == "João Silva"
+    assert livre("Belo Horizonte") == "Belo Horizonte"
+    assert livre("INSS em dia") == "INSS em dia"
+    assert livre("R$ 500,00 na primeira parcela") == "R$ 500,00 na primeira parcela"
