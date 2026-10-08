@@ -21,4 +21,17 @@ assert.deepEqual(
   [],
 );
 
+// Desconto percentual acima de 100% bloqueia a etapa (achado da revisão da #110).
+const comDesconto = (pct: number, tipo = "percentual") =>
+  ({ honorarios: ["mensalidade"], mensalidade: { tem_desconto: true, desconto_tipo: tipo, desconto_percentual: pct } }) as never;
+assert.deepEqual(errosDoEscopo(comDesconto(150), "Escopo 2"), [
+  "Escopo 2: o desconto de mensalidade não pode passar de 100%.",
+]);
+assert.deepEqual(errosDoEscopo(comDesconto(100), "E"), []);
+assert.deepEqual(errosDoEscopo(comDesconto(150, "livre"), "E"), []);
+assert.deepEqual(
+  errosDoEscopo({ honorarios: [], mensalidade: { tem_desconto: true, desconto_percentual: 150 } } as never, "E"),
+  [],
+);
+
 console.log("validacaoHonorarios.ts ok");

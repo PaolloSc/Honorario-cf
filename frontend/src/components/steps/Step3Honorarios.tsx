@@ -135,6 +135,7 @@ function DescontoCampos({
                 type="number"
                 step="0.01"
                 min="0"
+                max="100"
                 value={h.desconto_percentual || ""}
                 onChange={(e) => onChange({ desconto_percentual: parseFloat(e.target.value) || undefined })}
                 placeholder="%"
