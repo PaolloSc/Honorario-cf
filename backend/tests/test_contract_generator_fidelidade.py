@@ -704,3 +704,11 @@ def test_texto_livre_so_baixa_inicial_de_palavra_comum():
     assert livre("Belo Horizonte") == "Belo Horizonte"
     assert livre("INSS em dia") == "INSS em dia"
     assert livre("R$ 500,00 na primeira parcela") == "R$ 500,00 na primeira parcela"
+
+
+def test_texto_livre_palavra_de_uma_letra():
+    livre = ContractGenerator._texto_livre
+    assert livre("O valor economizado") == "o valor economizado"
+    assert livre("A combinar.") == "a combinar"
+    # Abreviação com ponto não é artigo: fica como digitada.
+    assert livre("A.B. Comércio Ltda") == "A.B. Comércio Ltda"
