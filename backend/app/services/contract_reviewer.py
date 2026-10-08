@@ -131,7 +131,9 @@ def extract_open_fields(data: dict) -> str:
         if not text:
             return
         lines.append(f"{label}: {text}")
-        nucleo = text.rstrip(".;, ").strip()
+        from app.services.contract_generator import ContractGenerator
+
+        nucleo = ContractGenerator._texto_livre(text)
         frase = next((f for f in frases or [] if nucleo and nucleo in f), None)
         if frase:
             lines.append(f"  Frase no contrato: {frase}")
@@ -169,7 +171,8 @@ def extract_open_fields(data: dict) -> str:
         add(f"{prefix} - pró-labore: parcelamento customizado", pro_labore.get("parcelamento_customizado"), frases_pl)
 
         mensalidade = escopo.get("mensalidade") or {}
-        add(f"{prefix} - mensalidade: observação de vencimento", mensalidade.get("dia_vencimento_obs"))
+        frases_m = _frases_do_honorario("mensalidade", mensalidade) if mensalidade else []
+        add(f"{prefix} - mensalidade: observação de vencimento", mensalidade.get("dia_vencimento_obs"), frases_m)
 
         for chave, rotulo in HONORARIO_ROTULOS.items():
             h = escopo.get(chave) or {}

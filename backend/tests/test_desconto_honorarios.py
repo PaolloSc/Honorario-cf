@@ -78,9 +78,8 @@ def test_pro_labore_mensal_e_legado_tem_parcelamento():
 def test_exito_vencimento_e_forma_de_parcelamento_livres():
     paras = _paras_for(_req_com("exito", vencimento="10 dias após o recebimento do Benefício",
                                 forma_parcelamento="em até 3 parcelas mensais"))
-    assert _has(paras, "Os honorários de êxito vencerão 10 dias após o recebimento do Benefício.")
-    assert _has(paras, "Os honorários de êxito serão parcelados da seguinte forma: "
-                       "em até 3 parcelas mensais.")
+    assert _has(paras, "Os honorários de êxito vencerão 10 dias após o recebimento do Benefício "
+                       "e serão parcelados da seguinte forma: em até 3 parcelas mensais.")
 
 
 def test_vigencia_em_acessorios():
