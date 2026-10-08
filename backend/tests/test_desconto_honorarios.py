@@ -94,7 +94,8 @@ def test_vigencia_em_acessorios():
 
 
 def test_contrato_antigo_continua_abrindo_e_gerando():
-    """Chaves que saíram do wizard ainda são aceitas; a vigência migra do pró-labore."""
+    """Chaves que saíram do wizard ainda são aceitas e o texto não muda: a vigência
+    antiga (no pró-labore) só migra ao abrir no wizard, não ao regenerar o .docx."""
     e = _escopo("pro_labore")
     e["honorarios"] = ["pro_labore", "exito", "hora_trabalhada"]
     e["pro_labore"].update(data_inicio="2026-01-01", data_fim="2026-12-31", duracao_meses=12)
@@ -103,12 +104,10 @@ def test_contrato_antigo_continua_abrindo_e_gerando():
     e["hora_trabalhada"] = {"valor_hora": 300, "horas_trabalhadas": 12.5}
     req = _base_req(extra_escopo=e)
 
-    data = ContratoRequest(**req)
-    assert data.acessorios.vigencia_inicio == "2026-01-01"
-    assert data.acessorios.vigencia_meses == 12
+    assert ContratoRequest(**req).acessorios.vigencia_inicio is None
     paras = _paras_for(req)
     assert _has(paras, "Vencimento: em 10/05/2026.")
-    assert _has(paras, "de 01/01/2026 a 31/12/2026")
+    assert not _has(paras, "vigência, de")
 
 
 def test_previa_honorarios_endpoint(client):

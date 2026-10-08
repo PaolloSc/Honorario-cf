@@ -76,7 +76,9 @@ function horaBrasilia(d: Date): string {
   return d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 }
 
-// A vigência morava no pró-labore; contratos antigos a trazem de lá.
+// A vigência morava no pró-labore; contratos antigos a trazem de lá. A migração
+// é só aqui (ao abrir no wizard): no backend ela ressuscitaria a vigência que o
+// advogado apagou, e o .docx de um contrato antigo regenerado ganharia cláusula.
 function vigencia(data: Partial<ContratoFormData>): Pick<Acessorios, "vigencia_inicio" | "vigencia_fim" | "vigencia_meses"> {
   const ac = data.acessorios;
   if (ac?.vigencia_inicio) {
@@ -92,7 +94,11 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
   return {
     contratantes: data.contratantes?.length ? data.contratantes : INITIAL_DATA.contratantes,
     incluir_partes_relacionadas: data.incluir_partes_relacionadas ?? false,
-    escopos: data.escopos ?? [],
+    escopos: (data.escopos ?? []).map((e) =>
+      e.pro_labore?.data_inicio || e.pro_labore?.data_fim || e.pro_labore?.duracao_meses
+        ? { ...e, pro_labore: { ...e.pro_labore, data_inicio: undefined, data_fim: undefined, duracao_meses: undefined } }
+        : e
+    ),
     acessorios: {
       tem_reembolso: data.acessorios?.tem_reembolso ?? true,
       reembolso_limitado: data.acessorios?.reembolso_limitado ?? false,
