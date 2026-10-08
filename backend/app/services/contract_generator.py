@@ -495,7 +495,8 @@ class ContractGenerator:
         1ª palavra é comum e minúscula no meio da frase ("Todo dia 10." ->
         "todo dia 10"); nome próprio, empresa, cidade e sigla ficam como digitados."""
         texto = (value or "").strip().rstrip(".;, ").strip()
-        primeira = re.match(r"[^\W\d_]+", texto)
+        # A palavra precisa terminar em espaço/hífen/vírgula: "A.B. Comércio" é sigla.
+        primeira = re.match(r"([^\W\d_]+)(?=[\s,;:-]|$)", texto)
         if primeira and primeira.group(0).lower() in PALAVRAS_MINUSCULAS_NO_MEIO:
             texto = texto[0].lower() + texto[1:]
         return texto

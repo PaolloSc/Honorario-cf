@@ -132,3 +132,12 @@ def test_exito_vencimento_livre_com_data_entra_como_digitado():
     assert not _has(paras, "em 30/06/2027")
     # Só a data, digitada sozinha, continua ganhando o "em".
     assert _has(_paras_for(_req_com("exito", vencimento="30/06/2027")), "vencerão em 30/06/2027.")
+
+
+@pytest.mark.parametrize("pct", [150, -1])
+def test_desconto_percentual_fora_de_0_a_100_recusado_pela_api(pct):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ContratoRequest(**_req_com("mensalidade", tem_desconto=True, desconto_percentual=pct))
+    assert ContratoRequest(**_req_com("mensalidade", tem_desconto=True, desconto_percentual=100))
