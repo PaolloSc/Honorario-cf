@@ -42,6 +42,15 @@ _SYSTEM_PROMPT = (
     "8. Formalidade e estilo — linguagem inadequada ao contexto juridico "
     "(giria, coloquialismo, abreviacoes tipo 'nois', 'vc', 'pq', 'ta'), "
     "construcoes pouco naturais. "
+    "Alguns campos vem seguidos de uma linha 'Frase no contrato:' com a clausula "
+    "ja montada em que o valor digitado e' inserido. Essa linha e' so' contexto: "
+    "NAO aponte problemas nela e NUNCA cite trecho dela — o \"trecho\" e a "
+    "\"sugestao\" referem-se SEMPRE ao valor digitado no campo. Para esses "
+    "campos, verifique tambem se o valor se encaixa na frase: concordancia com o "
+    "que vem antes dele, sem repetir o que a frase ja diz (ex.: se a frase ja diz "
+    "'sera concedido desconto', o campo nao deve comecar com 'desconto de') e sem "
+    "ponto final no fim do valor (a frase ja fecha a pontuacao); a sugestao deve "
+    "ser o texto que fica bem dentro daquela frase. "
     "Examine com atencao mesmo campos curtos de poucas palavras — nao deixe "
     "de apontar um erro so' por o campo ser curto. NAO opine sobre valores, "
     "percentuais, prazos ou o merito do conteudo. "
@@ -81,15 +90,51 @@ HONORARIO_ROTULOS = {
 }
 
 
+def _frases_do_honorario(chave: str, h: dict) -> list[str]:
+    """Clausulas do bloco de honorario como saem no contrato (mesmo texto da
+    previa de honorarios). [] se o bloco nao montar — a revisao segue sem contexto."""
+    from docx import Document
+
+    from app.models import contract as m
+    from app.services.contract_generator import ContractGenerator
+
+    modelos = {
+        "hora_trabalhada": m.HoraTrabalhada,
+        "pro_labore": m.ProLabore,
+        "mensalidade": m.Mensalidade,
+        "exito": m.Exito,
+        "permuta": m.Permuta,
+    }
+    frases: list[str] = []
+    try:
+        obj = modelos[chave](**h)
+        # Os metodos dos blocos nao usam estado do gerador (template/saida).
+        gen = ContractGenerator.__new__(ContractGenerator)
+        getattr(gen, f"_add_{chave}")(Document(), obj, frases.append)
+    except Exception as e:  # dado incompleto no meio do wizard
+        logger.info("Revisao sem frase de contexto para %s: %s", chave, e)
+        return []
+    return frases
+
+
 def extract_open_fields(data: dict) -> str:
     """Extrai so' os campos de texto livre digitados no formulario (nao a clausula
-    padrao do contrato, que quem preenche o wizard nao tem como editar ali)."""
+    padrao do contrato, que quem preenche o wizard nao tem como editar ali).
+
+    Campos que entram no meio de uma frase pronta do contrato (desconto,
+    parcelamento, vencimento do exito) vao acompanhados dessa frase, para a
+    sugestao se encaixar nela."""
     lines: list[str] = []
 
-    def add(label: str, value) -> None:
+    def add(label: str, value, frases: list[str] | None = None) -> None:
         text = (value or "").strip() if isinstance(value, str) else ""
-        if text:
-            lines.append(f"{label}: {text}")
+        if not text:
+            return
+        lines.append(f"{label}: {text}")
+        nucleo = text.rstrip(".;, ").strip()
+        frase = next((f for f in frases or [] if nucleo and nucleo in f), None)
+        if frase:
+            lines.append(f"  Frase no contrato: {frase}")
 
     for i, c in enumerate(data.get("contratantes") or [], 1):
         add(f"Contratante {i} - profissão", c.get("profissao"))
@@ -110,16 +155,18 @@ def extract_open_fields(data: dict) -> str:
         add(f"{prefix} - permuta: forma de pagamento da torna", permuta.get("forma_pagamento_torna"))
 
         exito = escopo.get("exito") or {}
+        frases_exito = _frases_do_honorario("exito", exito) if exito else []
         add(f"{prefix} - êxito: base de cálculo", exito.get("base_calculo"))
-        add(f"{prefix} - êxito: observação de vencimento", exito.get("vencimento_obs"))
+        add(f"{prefix} - êxito: observação de vencimento", exito.get("vencimento_obs"), frases_exito)
         add(f"{prefix} - êxito: honorário deduzido", exito.get("honorario_deduzido"))
-        add(f"{prefix} - êxito: vencimento", exito.get("vencimento"))
-        add(f"{prefix} - êxito: forma de parcelamento", exito.get("forma_parcelamento"))
+        add(f"{prefix} - êxito: vencimento", exito.get("vencimento"), frases_exito)
+        add(f"{prefix} - êxito: forma de parcelamento", exito.get("forma_parcelamento"), frases_exito)
 
         pro_labore = escopo.get("pro_labore") or {}
-        add(f"{prefix} - pró-labore: observação de vencimento", pro_labore.get("vencimento_obs"))
-        add(f"{prefix} - pró-labore: observação de vencimento (parcelas)", pro_labore.get("vencimento_parcelas_obs"))
-        add(f"{prefix} - pró-labore: parcelamento customizado", pro_labore.get("parcelamento_customizado"))
+        frases_pl = _frases_do_honorario("pro_labore", pro_labore) if pro_labore else []
+        add(f"{prefix} - pró-labore: observação de vencimento", pro_labore.get("vencimento_obs"), frases_pl)
+        add(f"{prefix} - pró-labore: observação de vencimento (parcelas)", pro_labore.get("vencimento_parcelas_obs"), frases_pl)
+        add(f"{prefix} - pró-labore: parcelamento customizado", pro_labore.get("parcelamento_customizado"), frases_pl)
 
         mensalidade = escopo.get("mensalidade") or {}
         add(f"{prefix} - mensalidade: observação de vencimento", mensalidade.get("dia_vencimento_obs"))
@@ -127,8 +174,9 @@ def extract_open_fields(data: dict) -> str:
         for chave, rotulo in HONORARIO_ROTULOS.items():
             h = escopo.get(chave) or {}
             if h.get("tem_desconto"):
-                add(f"{prefix} - {rotulo}: condição do desconto", h.get("desconto_condicao"))
-                add(f"{prefix} - {rotulo}: especificação do desconto", h.get("desconto_livre"))
+                frases = _frases_do_honorario(chave, h)
+                add(f"{prefix} - {rotulo}: condição do desconto", h.get("desconto_condicao"), frases)
+                add(f"{prefix} - {rotulo}: especificação do desconto", h.get("desconto_livre"), frases)
 
     acessorios = data.get("acessorios") or {}
     add("Limitação do reembolso", acessorios.get("descricao_limitacao_reembolso"))
