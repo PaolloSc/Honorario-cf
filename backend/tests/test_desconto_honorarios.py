@@ -27,16 +27,15 @@ def _req_com(hon: str, **campos) -> dict:
 @pytest.mark.parametrize("hon", ["hora_trabalhada", "pro_labore", "mensalidade", "exito", "permuta"])
 def test_desconto_percentual_em_cada_tipo(hon):
     paras = _paras_for(_req_com(hon, **DESCONTO_PCT))
-    assert _has(paras, "Será concedido desconto de 10% (dez por cento) sobre o valor deste honorário. "
-                       "A concessão do desconto fica condicionada ao seguinte: "
-                       "pagamento até a data de vencimento.")
+    assert _has(paras, "Será concedido desconto de 10% (dez por cento) sobre estes honorários, "
+                       "condicionado ao seguinte: pagamento até a data de vencimento.")
 
 
 def test_desconto_livre_sem_condicao():
     paras = _paras_for(_req_com("pro_labore", tem_desconto=True, desconto_tipo="livre",
                                 desconto_livre="R$ 500,00 na primeira parcela"))
     frase = next(p for p in paras if "Será concedido desconto" in p)
-    assert frase == ("Será concedido desconto sobre o valor deste honorário, nos seguintes "
+    assert frase == ("Será concedido desconto sobre estes honorários nos seguintes "
                      "termos: R$ 500,00 na primeira parcela.")
 
 
@@ -56,41 +55,41 @@ def test_percentual_com_extenso_decimal():
 def test_pro_labore_parcelamento_customizado():
     paras = _paras_for(_req_com("pro_labore", tipo_parcelamento="customizado",
                                 parcelamento_customizado="50% na assinatura e 50% em 30 dias"))
-    assert _has(paras, "O valor total de R$ 10.000,00 (dez mil reais) será pago da seguinte "
-                       "forma: 50% na assinatura e 50% em 30 dias.")
+    assert _has(paras, "Os honorários pró-labore, no valor total de R$ 10.000,00 (dez mil reais), "
+                       "serão pagos da seguinte forma: 50% na assinatura e 50% em 30 dias.")
     assert not _has(paras, "parcela única")
 
 
 def test_pro_labore_customizado_sem_valor_nao_escreve_zero():
     paras = _paras_for(_req_com("pro_labore", valor_total=0, tipo_parcelamento="customizado",
                                 parcelamento_customizado="a combinar"))
-    assert _has(paras, "O honorário pró-labore será pago da seguinte forma: a combinar.")
-    # (a tabela de escopo ainda mostra o valor; a frase nova nao)
-    assert not any("R$ 0,00" in p and "seguinte forma" in p for p in paras)
+    assert _has(paras, "Os honorários pró-labore serão pagos da seguinte forma: a combinar.")
+    assert not _has(paras, "R$ 0,00")
 
 
 def test_pro_labore_mensal_e_legado_tem_parcelamento():
     campos = {"numero_parcelas": 3, "valor_parcela": 1000, "vencimento_parcelas": "10"}
     novo = _paras_for(_req_com("pro_labore", tipo_parcelamento="mensal", **campos))
     legado = _paras_for(_req_com("pro_labore", tem_parcelamento=True, **campos))
-    esperado = "será pago em 3 parcelas de R$ 1.000,00"
+    esperado = "serão pagos em 3 (três) parcelas de R$ 1.000,00"
     assert _has(novo, esperado) and _has(legado, esperado)
 
 
 def test_exito_vencimento_e_forma_de_parcelamento_livres():
     paras = _paras_for(_req_com("exito", vencimento="10 dias após o recebimento do Benefício",
                                 forma_parcelamento="em até 3 parcelas mensais"))
-    assert _has(paras, "Vencimento: 10 dias após o recebimento do Benefício.")
-    assert _has(paras, "O honorário de êxito será parcelado da seguinte forma: "
-                       "em até 3 parcelas mensais.")
+    assert _has(paras, "Os honorários de êxito vencerão 10 dias após o recebimento do Benefício "
+                       "e serão parcelados da seguinte forma: em até 3 parcelas mensais.")
 
 
 def test_vigencia_em_acessorios():
     req = _base_req()
     req["acessorios"].update(vigencia_inicio="2026-11-01", vigencia_fim="2027-10-31")
-    assert _has(_paras_for(req), "As Partes pactuam prazo específico de vigência, "
+    assert _has(_paras_for(req), "Fica pactuado o prazo específico de vigência "
                                  "de 01/11/2026 a 31/10/2027.")
-    assert not _has(_paras_for(_base_req()), "vigência, de")
+    assert not _has(_paras_for(_base_req()), "prazo específico de vigência")
+    req["acessorios"].update(vigencia_fim=None, vigencia_meses=12)
+    assert _has(_paras_for(req), "vigência de 12 (doze) meses, contados de 01/11/2026.")
 
 
 def test_contrato_antigo_continua_abrindo_e_gerando():
@@ -106,8 +105,8 @@ def test_contrato_antigo_continua_abrindo_e_gerando():
 
     assert ContratoRequest(**req).acessorios.vigencia_inicio is None
     paras = _paras_for(req)
-    assert _has(paras, "Vencimento: em 10/05/2026.")
-    assert not _has(paras, "vigência, de")
+    assert _has(paras, "Os honorários de êxito vencerão em 10/05/2026.")
+    assert not _has(paras, "prazo específico de vigência")
 
 
 def test_previa_honorarios_endpoint(client):
@@ -129,7 +128,16 @@ def test_previa_honorarios_endpoint(client):
 def test_exito_vencimento_livre_com_data_entra_como_digitado():
     # Revisão da #109: "até 30/06/2027" saía "Vencimento: em 30/06/2027."
     paras = _paras_for(_req_com("exito", vencimento="até 30/06/2027"))
-    assert _has(paras, "Vencimento: até 30/06/2027.")
+    assert _has(paras, "Os honorários de êxito vencerão até 30/06/2027.")
     assert not _has(paras, "em 30/06/2027")
     # Só a data, digitada sozinha, continua ganhando o "em".
-    assert _has(_paras_for(_req_com("exito", vencimento="30/06/2027")), "Vencimento: em 30/06/2027.")
+    assert _has(_paras_for(_req_com("exito", vencimento="30/06/2027")), "vencerão em 30/06/2027.")
+
+
+@pytest.mark.parametrize("pct", [150, -1])
+def test_desconto_percentual_fora_de_0_a_100_recusado_pela_api(pct):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ContratoRequest(**_req_com("mensalidade", tem_desconto=True, desconto_percentual=pct))
+    assert ContratoRequest(**_req_com("mensalidade", tem_desconto=True, desconto_percentual=100))

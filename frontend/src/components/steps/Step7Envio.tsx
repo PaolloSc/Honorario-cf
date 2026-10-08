@@ -227,6 +227,28 @@ function applyFix(data: ContratoFormData, trecho: string, sugestao: string): Con
       };
       return { ...data, escopos };
     }
+    // Campos livres dentro dos honorários (desconto, parcelamento, vencimento do êxito).
+    const honorarioFields: Array<[keyof typeof e, string]> = [
+      ["pro_labore", "parcelamento_customizado"],
+      ["pro_labore", "vencimento_obs"],
+      ["pro_labore", "vencimento_parcelas_obs"],
+      ["exito", "vencimento"],
+      ["exito", "vencimento_obs"],
+      ["exito", "forma_parcelamento"],
+      ["mensalidade", "dia_vencimento_obs"],
+      ...(["hora_trabalhada", "pro_labore", "mensalidade", "exito", "permuta"] as const).flatMap(
+        (h) => [[h, "desconto_condicao"], [h, "desconto_livre"]] as Array<[keyof typeof e, string]>,
+      ),
+    ];
+    for (const [hon, field] of honorarioFields) {
+      const obj = e[hon] as Record<string, unknown> | undefined;
+      const val = obj?.[field];
+      if (typeof val === "string" && val.includes(t)) {
+        const escopos = [...data.escopos];
+        escopos[i] = { ...e, [hon]: { ...obj, [field]: val.replace(t, sugestao) } };
+        return { ...data, escopos };
+      }
+    }
   }
 
   const acessoriosFields = ["descricao_limitacao_reembolso", "criterio_extincao_exito", "clausulas_adicionais"] as const;
