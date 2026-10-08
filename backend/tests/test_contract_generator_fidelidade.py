@@ -712,3 +712,16 @@ def test_texto_livre_palavra_de_uma_letra():
     assert livre("A combinar.") == "a combinar"
     # Abreviação com ponto não é artigo: fica como digitada.
     assert livre("A.B. Comércio Ltda") == "A.B. Comércio Ltda"
+
+
+def test_texto_livre_caixa_alta_e_nome_composto_ficam_como_digitados():
+    livre = ContractGenerator._texto_livre
+    # Palavra da lista toda em maiúscula: não vira "sEM"/"tODO"/"aO".
+    assert livre("SEM juros") == "SEM juros"
+    assert livre("TODO dia 5") == "TODO dia 5"
+    assert livre("AO final do mês") == "AO final do mês"
+    # Seguida de outra palavra com maiúscula: nome composto.
+    assert livre("Segunda Vara Cível") == "Segunda Vara Cível"
+    # Os casos comuns continuam descendo.
+    assert livre("Segunda-feira seguinte") == "segunda-feira seguinte"
+    assert livre("A combinar") == "a combinar"
