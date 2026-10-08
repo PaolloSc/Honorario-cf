@@ -360,27 +360,6 @@ class ContratoRequest(BaseModel):
     acessorios: Acessorios
     participacao: Participacao
     email_destinatario: Optional[str] = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrar_vigencia(cls, data):
-        """A vigencia morava no pro-labore; contratos antigos a trazem de la."""
-        if not isinstance(data, dict):
-            return data
-        ac = data.get("acessorios")
-        if not isinstance(ac, dict) or ac.get("vigencia_inicio"):
-            return data
-        for e in data.get("escopos") or []:
-            pl = (e or {}).get("pro_labore") if isinstance(e, dict) else None
-            if isinstance(pl, dict) and pl.get("data_inicio"):
-                data = {**data, "acessorios": {
-                    **ac,
-                    "vigencia_inicio": pl.get("data_inicio"),
-                    "vigencia_fim": pl.get("data_fim"),
-                    "vigencia_meses": pl.get("duracao_meses"),
-                }}
-                break
-        return data
  
  
 class ContratoResponse(BaseModel):
