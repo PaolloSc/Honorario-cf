@@ -33,7 +33,13 @@ from app.models.contract import (
     TipoPessoa,
     VariacaoPrecoMensalidade,
 )
-from app.utils.currency import formatar_percentual, formatar_valor, valor_com_extenso, valor_por_extenso
+from app.utils.currency import (
+    formatar_percentual,
+    formatar_valor,
+    percentual_com_extenso,
+    valor_com_extenso,
+    valor_por_extenso,
+)
  
 
 INCIDENCIA_EXITO_LABELS = {
@@ -448,6 +454,37 @@ class ContractGenerator:
     def _format_percentual(self, value: float) -> str:
         return formatar_percentual(value)
 
+    @staticmethod
+    def _texto_livre(value: str | None) -> str:
+        """Texto digitado no wizard, sem a pontuacao final (a frase poe a sua)."""
+        return (value or "").strip().rstrip(".;, ").strip()
+
+    def _frase_desconto(self, h) -> str | None:
+        """Desconto opcional de qualquer tipo de honorario; None se nao ha o que dizer."""
+        if not h.tem_desconto:
+            return None
+        if h.desconto_tipo == "livre":
+            livre = self._texto_livre(h.desconto_livre)
+            if not livre:
+                return None
+            frase = f"Será concedido desconto sobre o valor deste honorário, nos seguintes termos: {livre}."
+        else:
+            if not h.desconto_percentual:
+                return None
+            frase = (
+                f"Será concedido desconto de {percentual_com_extenso(h.desconto_percentual)} "
+                "sobre o valor deste honorário."
+            )
+        condicao = self._texto_livre(h.desconto_condicao)
+        if condicao:
+            frase += f" A concessão do desconto fica condicionada ao seguinte: {condicao}."
+        return frase
+
+    def _add_desconto(self, h, num: "_Numerador") -> None:
+        frase = self._frase_desconto(h)
+        if frase:
+            num(frase)
+
     def _label_from_map(self, value: str | None, labels: dict[str, str]) -> str:
         raw = (value or "").strip()
         return labels.get(raw, raw)
@@ -712,6 +749,8 @@ class ContractGenerator:
                 num(
                     f"O saldo acumulado será zerado a cada {ht.duracao_meses} meses.",
                 )
+
+        self._add_desconto(ht, num)
  
     def _add_pro_labore(self, doc: Document, pl: "ProLabore", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
@@ -720,7 +759,14 @@ class ContractGenerator:
             f"Em relação ao honorário pró-labore, será observada a seguinte forma de pagamento:"
         )
  
-        if pl.tem_parcelamento and pl.numero_parcelas and pl.valor_parcela:
+        customizado = self._texto_livre(pl.parcelamento_customizado)
+        if pl.tipo_parcelamento == "customizado" and customizado:
+            sujeito = (
+                f"O valor total de {valor_com_extenso(pl.valor_total)}"
+                if pl.valor_total else "O honorário pró-labore"
+            )
+            num(f"{sujeito} será pago da seguinte forma: {customizado}.")
+        elif pl.tipo_parcelamento == "mensal" and pl.numero_parcelas and pl.valor_parcela:
             num(
                 f"O valor total de {valor_com_extenso(pl.valor_total)} será pago em "
                 f"{pl.numero_parcelas} parcelas de {valor_com_extenso(pl.valor_parcela)}, "
@@ -731,6 +777,8 @@ class ContractGenerator:
                 f"O valor de {valor_com_extenso(pl.valor_total)} será pago em parcela única, "
                 f"com vencimento {self._vencimento_combined(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}."
             )
+
+        self._add_desconto(pl, num)
  
     def _add_mensalidade(self, doc: Document, m: "Mensalidade", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if m.subtipo == SubtipoMensalidade.ADVOCACIA_PARTIDO:
@@ -799,6 +847,8 @@ class ContractGenerator:
                 f"Entende-se por ativo aquele {tipo_label} que não foi definitivamente "
                 f"extinto, baixado e arquivado no sistema do Tribunal ou respectivo órgão.",
             )
+
+        self._add_desconto(m, num)
  
     def _add_exito(self, doc: Document, ex: "Exito", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
@@ -841,6 +891,10 @@ class ContractGenerator:
             num(
                 f"Vencimento: {self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)}.",
             )
+
+        forma_parcelamento = self._texto_livre(ex.forma_parcelamento)
+        if forma_parcelamento:
+            num(f"O honorário de êxito será parcelado da seguinte forma: {forma_parcelamento}.")
  
         if ex.tem_beneficio_prospectivo and ex.prospectivo_duracao_meses:
             num(
@@ -854,6 +908,8 @@ class ContractGenerator:
                 f"O honorário de êxito será pago abatendo-se o valor pago a título de "
                 f"{self._label_from_map(ex.honorario_deduzido, HONORARIO_LABELS)}.",
             )
+
+        self._add_desconto(ex, num)
  
     def _add_permuta(self, doc: Document, perm: "Permuta", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
@@ -867,6 +923,7 @@ class ContractGenerator:
                 f"A torna será de {valor_com_extenso(perm.valor_torna)}, "
                 f"paga da seguinte forma: {perm.forma_pagamento_torna or 'a definir'}."
             )
+        self._add_desconto(perm, num)
  
     def _add_common_clauses(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "CLÁUSULAS GERAIS")
@@ -1018,6 +1075,22 @@ class ContractGenerator:
             "apoio à prestação do serviço."
         )
  
+    def _frase_vigencia(self, ac: Acessorios) -> str | None:
+        """Prazo especifico pactuado (Acessorios > Vigencia); None se nao informado."""
+        def br(iso: str | None) -> str | None:
+            try:
+                d = datetime.fromisoformat(iso) if iso else None
+            except ValueError:
+                return None
+            return d and f"{d.day:02d}/{d.month:02d}/{d.year}"
+
+        inicio, fim = br(ac.vigencia_inicio), br(ac.vigencia_fim)
+        if inicio and fim:
+            return f"As Partes pactuam prazo específico de vigência, de {inicio} a {fim}."
+        if inicio:
+            return f"As Partes pactuam que este Contrato vigorará a partir de {inicio}."
+        return None
+
     def _add_term_and_termination(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "PRAZO, RESCISÃO E OUTROS EFEITOS")
         self._add_clausula(
@@ -1026,6 +1099,9 @@ class ContractGenerator:
             "presente Contrato é celebrado por tempo indeterminado, até que seja esgotado o "
             "objeto contratado."
         )
+        vigencia = self._frase_vigencia(data.acessorios)
+        if vigencia:
+            self._add_clausula(doc, vigencia, ilvl=2)
         self._add_clausula(
             doc,
             "Qualquer Parte poderá rescindir este Contrato imotivadamente mediante "

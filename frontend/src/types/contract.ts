@@ -130,7 +130,16 @@ export interface SubtipoMemoriais {
   sustentacao_oral_todos_julgadores: boolean;
 }
  
-export interface HoraTrabalhada {
+// Desconto opcional, comum aos cinco tipos de honorário.
+export interface ComDesconto {
+  tem_desconto?: boolean;
+  desconto_condicao?: string;
+  desconto_tipo?: "percentual" | "livre";
+  desconto_percentual?: number;
+  desconto_livre?: string;
+}
+
+export interface HoraTrabalhada extends ComDesconto {
   valor_hora: number;
   tem_teto_mensal: boolean;
   valor_teto_mensal?: number;
@@ -141,14 +150,16 @@ export interface HoraTrabalhada {
   data_fim?: string;
   duracao_meses?: number;
   horas_contratadas?: number;
-  horas_trabalhadas?: number;
+  horas_trabalhadas?: number; // legado: saiu do wizard
   tem_hora_urgencia: boolean;
   tem_hora_fora_expediente: boolean;
 }
  
-export interface ProLabore {
+export interface ProLabore extends ComDesconto {
   valor_total: number;
-  tem_parcelamento: boolean;
+  tem_parcelamento: boolean; // legado: virou tipo_parcelamento "mensal"
+  tipo_parcelamento?: "mensal" | "customizado";
+  parcelamento_customizado?: string;
   numero_parcelas?: number;
   valor_parcela?: number;
   vencimento?: string;
@@ -162,7 +173,7 @@ export interface ProLabore {
   duracao_meses?: number;
 }
  
-export interface Mensalidade {
+export interface Mensalidade extends ComDesconto {
   valor: number;
   subtipo: SubtipoMensalidade;
   dia_vencimento: string;
@@ -177,7 +188,7 @@ export interface Mensalidade {
   fases_processuais?: Array<{ fase: string; valor: string }>;
 }
  
-export interface Exito {
+export interface Exito extends ComDesconto {
   subtipo: SubtipoExito;
   percentual?: number;
   incidencia: string;
@@ -188,7 +199,8 @@ export interface Exito {
   forma_pagamento: string;
   numero_parcelas?: number;
   valor_parcela?: number;
-  data_inicio?: string;
+  forma_parcelamento?: string;
+  data_inicio?: string; // legado: "Período do êxito" saiu do wizard
   data_fim?: string;
   duracao_meses?: number;
   tem_beneficio_prospectivo: boolean;
@@ -200,7 +212,7 @@ export interface Exito {
   honorario_deduzido?: string;
 }
  
-export interface Permuta {
+export interface Permuta extends ComDesconto {
   objeto_permuta: string;
   descricao: string;
   tem_torna: boolean;
@@ -235,6 +247,9 @@ export interface Acessorios {
   valor_km?: number;
   criterio_extincao_exito?: string;
   clausulas_adicionais?: string;
+  vigencia_inicio?: string;
+  vigencia_fim?: string;
+  vigencia_meses?: number;
 }
  
 export type ParticipacaoValorTipo = "percentual" | "valor" | "outro";

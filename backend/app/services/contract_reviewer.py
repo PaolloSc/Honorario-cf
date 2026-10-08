@@ -72,6 +72,15 @@ def is_configured() -> bool:
     return bool(settings.deepseek_api_key)
 
 
+HONORARIO_ROTULOS = {
+    "hora_trabalhada": "hora trabalhada",
+    "pro_labore": "pró-labore",
+    "mensalidade": "mensalidade",
+    "exito": "êxito",
+    "permuta": "permuta",
+}
+
+
 def extract_open_fields(data: dict) -> str:
     """Extrai so' os campos de texto livre digitados no formulario (nao a clausula
     padrao do contrato, que quem preenche o wizard nao tem como editar ali)."""
@@ -104,13 +113,22 @@ def extract_open_fields(data: dict) -> str:
         add(f"{prefix} - êxito: base de cálculo", exito.get("base_calculo"))
         add(f"{prefix} - êxito: observação de vencimento", exito.get("vencimento_obs"))
         add(f"{prefix} - êxito: honorário deduzido", exito.get("honorario_deduzido"))
+        add(f"{prefix} - êxito: vencimento", exito.get("vencimento"))
+        add(f"{prefix} - êxito: forma de parcelamento", exito.get("forma_parcelamento"))
 
         pro_labore = escopo.get("pro_labore") or {}
         add(f"{prefix} - pró-labore: observação de vencimento", pro_labore.get("vencimento_obs"))
         add(f"{prefix} - pró-labore: observação de vencimento (parcelas)", pro_labore.get("vencimento_parcelas_obs"))
+        add(f"{prefix} - pró-labore: parcelamento customizado", pro_labore.get("parcelamento_customizado"))
 
         mensalidade = escopo.get("mensalidade") or {}
         add(f"{prefix} - mensalidade: observação de vencimento", mensalidade.get("dia_vencimento_obs"))
+
+        for chave, rotulo in HONORARIO_ROTULOS.items():
+            h = escopo.get(chave) or {}
+            if h.get("tem_desconto"):
+                add(f"{prefix} - {rotulo}: condição do desconto", h.get("desconto_condicao"))
+                add(f"{prefix} - {rotulo}: especificação do desconto", h.get("desconto_livre"))
 
     acessorios = data.get("acessorios") or {}
     add("Limitação do reembolso", acessorios.get("descricao_limitacao_reembolso"))

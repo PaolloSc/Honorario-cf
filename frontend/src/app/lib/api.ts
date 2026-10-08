@@ -293,6 +293,20 @@ export async function previewContratoConsumidor(data: unknown, signal?: AbortSig
   return res.text();
 }
 
+// Pop-up do wizard: como o trecho de honorários vai sair no contrato. Nada é gravado.
+export async function previewHonorarios(data: unknown, signal?: AbortSignal) {
+  const res = await fetchAutenticado(`${API_BASE}/api/contract/preview-honorarios`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+    signal,
+  });
+  if (!res.ok) {
+    throw new Error(`Erro ao gerar prévia: ${res.status}`);
+  }
+  return res.text();
+}
+
 export async function downloadContract(contractId: string) {
   const res = await fetchAutenticado(
     `${API_BASE}/api/contract/${contractId}/download`

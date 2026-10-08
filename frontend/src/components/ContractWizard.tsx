@@ -76,6 +76,16 @@ function horaBrasilia(d: Date): string {
   return d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 }
 
+// A vigência morava no pró-labore; contratos antigos a trazem de lá.
+function vigencia(data: Partial<ContratoFormData>): Pick<Acessorios, "vigencia_inicio" | "vigencia_fim" | "vigencia_meses"> {
+  const ac = data.acessorios;
+  if (ac?.vigencia_inicio) {
+    return { vigencia_inicio: ac.vigencia_inicio, vigencia_fim: ac.vigencia_fim, vigencia_meses: ac.vigencia_meses };
+  }
+  const pl = data.escopos?.find((e) => e.pro_labore?.data_inicio)?.pro_labore;
+  return { vigencia_inicio: pl?.data_inicio, vigencia_fim: pl?.data_fim, vigencia_meses: pl?.duracao_meses };
+}
+
 function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): ContratoFormData {
   if (!data) return { ...INITIAL_DATA };
 
@@ -92,6 +102,7 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       valor_km: data.acessorios?.valor_km,
       criterio_extincao_exito: data.acessorios?.criterio_extincao_exito,
       clausulas_adicionais: data.acessorios?.clausulas_adicionais,
+      ...vigencia(data),
     },
     participacao: (() => {
       const p = (data.participacao ?? {}) as any;
