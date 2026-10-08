@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field, computed_field
 class NFSeData(BaseModel):
     """Representacao canonica de uma NFS-e apos parse XML."""
 
-    cnpj_prestador: str = Field(..., min_length=14, max_length=14)
+    # CNPJ do emitente; numa nota recebida de pessoa fisica, CPF (11 digitos).
+    cnpj_prestador: str = Field(..., min_length=11, max_length=14)
     numero: str
     serie: Optional[str] = None
     codigo_verificacao: Optional[str] = None

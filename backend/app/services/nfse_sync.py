@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.services.nfse_matcher import MatchStatus, match_nfse
 from app.services.nfse_pagamento import gerar_pagamento_para_nfse
-from app.services.nfse_parser import NFSeParseError, parse_nfse_xml
+from app.models.nfse import CancelamentoData
+from app.services.nfse_parser import NFSeParseError, parse_documento
 
 
 @dataclass
@@ -23,6 +24,7 @@ class JobOutcome:
     sem_match: int
     erros: int
     motivo_falha: str | None = None
+    ultimo_nsu: int | None = None
 
 
 class JobLockError(Exception):
@@ -97,7 +99,7 @@ def _finalize_job(db: Session, job_id: int, outcome: JobOutcome) -> None:
             UPDATE sync_jobs
             SET finalizado_em = :n, total_nfs = :t, auto_vinculadas = :a,
                 pendentes = :p, sem_match = :s, erros = :e,
-                status = :st, motivo_falha = :mf
+                status = :st, motivo_falha = :mf, ultimo_nsu = :nsu
             WHERE id = :id
         """),
         {
@@ -109,6 +111,7 @@ def _finalize_job(db: Session, job_id: int, outcome: JobOutcome) -> None:
             "e": outcome.erros,
             "st": outcome.status,
             "mf": outcome.motivo_falha,
+            "nsu": outcome.ultimo_nsu,
             "id": job_id,
         },
     )
@@ -124,6 +127,7 @@ def ingest_payload(
     origem: str,
     disparado_por: str | None,
     xmls: Iterable[bytes],
+    ultimo_nsu: int | None = None,
 ) -> JobOutcome:
     em_andamento = db.execute(
         text("""
@@ -141,19 +145,45 @@ def ingest_payload(
 
     for xml in xmls:
         try:
-            nf = parse_nfse_xml(xml)
+            nf = parse_documento(xml, cnpj_prestador)
         except NFSeParseError:
             errs += 1
             continue
+        if nf is None:  # evento do ADN que nao altera a nota
+            continue
+        if isinstance(nf, CancelamentoData):
+            # ponytail: evento cuja nota ainda nao foi ingerida nao tem efeito;
+            # na ordem do NSU a nota sempre chega antes do seu evento.
+            atualizou = db.execute(
+                text("""
+                    UPDATE nfse_recebidas
+                    SET cancelada = 1, data_cancelamento = :d,
+                        status_matching = 'cancelada',
+                        atualizado_em = :n, motivo = 'cancelada pelo prestador'
+                    WHERE chave_acesso = :ch AND cancelada = 0
+                """),
+                {"d": nf.data_cancelamento, "n": datetime.now(timezone.utc), "ch": nf.chave_acesso},
+            ).rowcount
+            db.commit()
+            total += atualizou
+            continue
 
-        existing = db.execute(
-            text("""
-                SELECT id, cancelada FROM nfse_recebidas
-                WHERE cnpj_prestador = :c AND numero = :n
-                  AND (serie IS :s OR serie = :s)
-            """),
-            {"c": nf.cnpj_prestador, "n": nf.numero, "s": nf.serie},
-        ).fetchone()
+        if nf.chave_acesso:
+            # Padrao nacional: a chave identifica a nota. Nao usa numero/serie,
+            # que podem repetir numeros antigos do BHISS para o mesmo CNPJ.
+            existing = db.execute(
+                text("SELECT id, cancelada FROM nfse_recebidas WHERE chave_acesso = :ch"),
+                {"ch": nf.chave_acesso},
+            ).fetchone()
+        else:
+            existing = db.execute(
+                text("""
+                    SELECT id, cancelada FROM nfse_recebidas
+                    WHERE cnpj_prestador = :c AND numero = :n
+                      AND (serie IS :s OR serie = :s) AND direcao = :d
+                """),
+                {"c": nf.cnpj_prestador, "n": nf.numero, "s": nf.serie, "d": nf.direcao},
+            ).fetchone()
 
         if existing:
             nfse_id, was_cancelada = existing
@@ -172,7 +202,7 @@ def ingest_payload(
                 total += 1
             continue
 
-        candidatos = _contratos_candidatos(db, nf.tomador_doc)
+        candidatos = [] if nf.direcao == "recebida" else _contratos_candidatos(db, nf.tomador_doc)
         match = match_nfse(nf, candidatos)
 
         contract_id = match.contract_id
@@ -185,7 +215,7 @@ def ingest_payload(
             auto += 1
         elif match.status == MatchStatus.PENDENTE:
             pend += 1
-        else:
+        elif match.status == MatchStatus.SEM_MATCH:
             sem += 1
 
         db.execute(
@@ -195,13 +225,15 @@ def ingest_payload(
                     competencia, data_emissao, tomador_doc, tomador_nome,
                     valor_servicos, iss_retido, irrf, pis, cofins, csll,
                     valor_liquido, discriminacao, cancelada, data_cancelamento,
-                    xml_raw, contract_id, participacao_id, status_matching, motivo
+                    xml_raw, contract_id, participacao_id, status_matching, motivo,
+                    direcao, chave_acesso
                 ) VALUES (
                     :cnpj, :num, :ser, :cv,
                     :cmp, :em, :td, :tn,
                     :vs, :iss, :ir, :pis, :co, :cs,
                     :vl, :dis, :canc, :dc,
-                    :xml, :cid, :pid, :st, :mot
+                    :xml, :cid, :pid, :st, :mot,
+                    :dir, :ch
                 )
             """),
             {
@@ -228,6 +260,8 @@ def ingest_payload(
                 "pid": participacao_id,
                 "st": status,
                 "mot": match.motivo,
+                "dir": nf.direcao,
+                "ch": nf.chave_acesso,
             },
         )
         db.commit()
@@ -244,6 +278,7 @@ def ingest_payload(
         pendentes=pend,
         sem_match=sem,
         erros=errs,
+        ultimo_nsu=ultimo_nsu,
     )
     _finalize_job(db, job_id, outcome)
     return outcome

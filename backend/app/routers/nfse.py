@@ -61,6 +61,7 @@ def listar_nfse(
     cnpj_prestador: Optional[str] = None,
     competencia_mes: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}$"),
     status: Optional[str] = None,
+    direcao: Optional[str] = Query(None, pattern=r"^(emitida|recebida)$"),
     db: Session = Depends(get_db),
     user=Depends(_require_financeiro),
 ):
@@ -68,6 +69,9 @@ def listar_nfse(
         raise HTTPException(404, "NFS-e desabilitado")
     sql = ["SELECT * FROM nfse_recebidas WHERE 1=1"]
     params: dict = {}
+    if direcao:
+        sql.append("AND direcao = :d")
+        params["d"] = direcao
     if cnpj_prestador:
         sql.append("AND cnpj_prestador = :c")
         params["c"] = cnpj_prestador
@@ -103,6 +107,8 @@ def vincular_manual(
         raise HTTPException(404, "NFS-e nao encontrada")
     if row.status_matching == "auto":
         raise HTTPException(409, "NFS-e ja vinculada automaticamente; use 'revisar'")
+    if row.status_matching == "recebida":
+        raise HTTPException(409, "NFS-e recebida de fornecedor nao se vincula a contrato")
 
     contract = db.execute(
         text("SELECT contract_id FROM contracts WHERE contract_id=:c"),

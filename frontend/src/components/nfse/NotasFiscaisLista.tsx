@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { nfseApi, type NFSeOut } from "@/app/lib/nfse-api";
+import { nfseApi, type NFSeDirecao, type NFSeOut } from "@/app/lib/nfse-api";
 import { VincularModal } from "./VincularModal";
 
 function brl(v: string) {
@@ -15,21 +15,24 @@ const statusBadge: Record<NFSeOut["status_matching"], { label: string; cls: stri
   sem_match: { label: "✗ sem match", cls: "bg-danger/[0.16] text-danger" },
   erro: { label: "✗ erro", cls: "bg-danger/[0.16] text-danger" },
   cancelada: { label: "🚫 cancelada", cls: "bg-border/35 text-muted" },
+  recebida: { label: "↓ recebida", cls: "bg-border/35 text-foreground" },
 };
 
 export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string }) {
   const [items, setItems] = useState<NFSeOut[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  // Padrao "emitida": a conciliacao com contratos so vale para as notas do escritorio.
+  const [direcao, setDirecao] = useState<NFSeDirecao | "">("emitida");
   const [editing, setEditing] = useState<NFSeOut | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(() => {
     setLoading(true);
     nfseApi
-      .listar({ competencia_mes, status: statusFilter || undefined })
+      .listar({ competencia_mes, status: statusFilter || undefined, direcao: direcao || undefined })
       .then(setItems)
       .finally(() => setLoading(false));
-  }, [competencia_mes, statusFilter]);
+  }, [competencia_mes, statusFilter, direcao]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -45,6 +48,15 @@ export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string
     <div className="space-y-3">
       <div className="flex items-center gap-3 text-xs">
         <select
+          value={direcao}
+          onChange={(e) => setDirecao(e.target.value as NFSeDirecao | "")}
+          className="border border-border bg-card text-foreground rounded px-2 py-1"
+        >
+          <option value="emitida">Emitidas</option>
+          <option value="recebida">Recebidas</option>
+          <option value="">Emitidas e recebidas</option>
+        </select>
+        <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="border border-border bg-card text-foreground rounded px-2 py-1"
@@ -55,10 +67,11 @@ export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string
           <option value="pendente">Pendente</option>
           <option value="sem_match">Sem match</option>
           <option value="cancelada">Cancelada</option>
+          <option value="recebida">Recebida</option>
         </select>
         <span className="text-muted">
           Resumo:{" "}
-          {(["auto","manual","pendente","sem_match","cancelada"] as const)
+          {(["auto","manual","pendente","sem_match","cancelada","recebida"] as const)
             .map((k) => `${resumo[k] || 0} ${k}`)
             .join(" · ")}
         </span>
@@ -73,7 +86,7 @@ export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string
           <thead className="text-xs text-muted border-b border-border">
             <tr>
               <th className="text-left py-2">Nº</th>
-              <th className="text-left py-2">Tomador</th>
+              <th className="text-left py-2">Tomador / Emitente</th>
               <th className="text-right py-2">Valor</th>
               <th className="text-right py-2">Líquido</th>
               <th className="text-left py-2">Status</th>
@@ -88,8 +101,16 @@ export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string
                 <tr key={n.id} className="border-b border-border/40">
                   <td className="py-2 font-mono text-xs">{n.numero}</td>
                   <td className="py-2">
-                    {n.tomador_nome || "—"}{" "}
-                    <span className="text-xs text-muted">{n.tomador_doc}</span>
+                    {n.direcao === "recebida" ? (
+                      <>
+                        Fornecedor <span className="text-xs text-muted">{n.cnpj_prestador}</span>
+                      </>
+                    ) : (
+                      <>
+                        {n.tomador_nome || "—"}{" "}
+                        <span className="text-xs text-muted">{n.tomador_doc}</span>
+                      </>
+                    )}
                   </td>
                   <td className="py-2 text-right">{brl(n.valor_servicos)}</td>
                   <td className="py-2 text-right">{brl(n.valor_liquido)}</td>
