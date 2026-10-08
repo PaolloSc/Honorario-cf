@@ -63,6 +63,27 @@ HONORARIO_LABELS = {
     "hora_trabalhada": "honorários por hora trabalhada",
 }
 
+# Palavras que, digitadas no inicio de um campo livre, perdem a maiuscula ao
+# entrar no meio de uma frase do contrato (ver _texto_livre). Lista fechada: o
+# que nao estiver aqui (nome proprio, empresa, cidade, orgao) fica como digitado.
+PALAVRAS_MINUSCULAS_NO_MEIO = frozenset("""
+    a o as os um uma uns umas ao aos à às de do da dos das em no na nos nas
+    por pelo pela pelos pelas para com sem sob sobre entre até após ante desde
+    contra perante conforme mediante segundo durante
+    todo toda todos todas cada mesmo mesma este esta esse essa aquele aquela
+    sempre quando se caso já ainda antes depois logo assim apenas somente
+    e ou mas porém nem que
+    mensal mensais mensalmente anual anualmente semanal quinzenal diário diária
+    vista parcelado parcelada parcelas parcela integral integralmente
+    janeiro fevereiro março abril maio junho julho agosto setembro outubro
+    novembro dezembro
+    segunda terça quarta quinta sexta sábado domingo
+    dois duas três quatro cinco seis sete oito nove dez onze doze treze
+    quatorze catorze quinze dezesseis dezessete dezoito dezenove vinte trinta
+    quarenta cinquenta sessenta setenta oitenta noventa cem cento
+    primeiro primeira último última
+""".split())
+
 # numId/abstractNumId da lista multinivel das clausulas (ver _ensure_clause_numbering)
 CLAUSE_NUM_ID = 10
 
@@ -470,12 +491,12 @@ class ContractGenerator:
     @staticmethod
     def _texto_livre(value: str | None) -> str:
         """Texto digitado no wizard para entrar no meio de uma frase do contrato:
-        sem a pontuação final (a frase põe a sua) e com a inicial minúscula
-        ("Todo dia 10." -> "todo dia 10"). Sigla e "R$" ficam como estão."""
+        sem a pontuação final (a frase põe a sua). A inicial só desce quando a
+        1ª palavra é comum e minúscula no meio da frase ("Todo dia 10." ->
+        "todo dia 10"); nome próprio, empresa, cidade e sigla ficam como digitados."""
         texto = (value or "").strip().rstrip(".;, ").strip()
-        # ponytail: palavra capitalizada vira minúscula — nome próprio no início
-        # do campo ("Ana") também desce; se incomodar, lista de exceções aqui.
-        if re.match(r"[A-ZÀ-Ý][a-zà-ÿ]+\b", texto):
+        primeira = re.match(r"[^\W\d_]+", texto)
+        if primeira and primeira.group(0).lower() in PALAVRAS_MINUSCULAS_NO_MEIO:
             texto = texto[0].lower() + texto[1:]
         return texto
 
