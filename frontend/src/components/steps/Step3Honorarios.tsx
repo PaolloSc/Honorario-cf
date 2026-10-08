@@ -1,16 +1,19 @@
 ﻿"use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import FormField, {
   Checkbox,
   Input,
   Select,
+  TextArea,
   Toggle,
 } from "@/components/ui/FormField";
+import { previewHonorarios } from "@/app/lib/api";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import DatePicker from "@/components/ui/DatePicker";
 import type {
+  ComDesconto,
   EscopoItem,
   HoraTrabalhada,
   Mensalidade,
@@ -78,12 +81,117 @@ function formatHorasBR(v?: number): string {
   }).format(v);
 }
 
+// "2026-05-10" -> "em 10/05/2026": mostra no campo livre o vencimento que
+// contratos antigos gravaram como data.
+function vencimentoLegado(iso?: string): string {
+  const [a, m, d] = (iso ?? "").split("-");
+  return d ? `em ${d}/${m}/${a}` : "";
+}
+
+interface TextoLivreProps {
+  onEditar: () => void;
+  onSair: () => void;
+}
+
+function DescontoCampos({
+  h,
+  onChange,
+  onEditar,
+  onSair,
+}: TextoLivreProps & { h: ComDesconto; onChange: (partial: ComDesconto) => void }) {
+  const tipo = h.desconto_tipo ?? "percentual";
+  return (
+    <div className="md:col-span-2 pt-2 border-t border-border">
+      <Toggle
+        label="Desconto?"
+        value={h.tem_desconto || false}
+        onChange={(v) => onChange({ tem_desconto: v })}
+      />
+      {h.tem_desconto && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+          <FormField label="Condição do desconto">
+            <Input
+              value={h.desconto_condicao || ""}
+              onChange={(e) => {
+                onEditar();
+                onChange({ desconto_condicao: e.target.value });
+              }}
+              onBlur={onSair}
+              placeholder="Ex.: pagamento até a data de vencimento"
+            />
+          </FormField>
+          <FormField label="Especificação do desconto">
+            <Select
+              value={tipo}
+              onChange={(e) => onChange({ desconto_tipo: e.target.value as "percentual" | "livre" })}
+              options={[
+                { value: "percentual", label: "Percentual" },
+                { value: "livre", label: "Livre" },
+              ]}
+            />
+            {tipo === "percentual" ? (
+              <Input
+                className="mt-2"
+                type="number"
+                step="0.01"
+                min="0"
+                value={h.desconto_percentual || ""}
+                onChange={(e) => onChange({ desconto_percentual: parseFloat(e.target.value) || undefined })}
+                placeholder="%"
+              />
+            ) : (
+              <Input
+                className="mt-2"
+                value={h.desconto_livre || ""}
+                onChange={(e) => {
+                  onEditar();
+                  onChange({ desconto_livre: e.target.value });
+                }}
+                onBlur={onSair}
+                placeholder="Ex.: R$ 500,00 na primeira parcela"
+              />
+            )}
+          </FormField>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Step3Props {
   escopos: EscopoItem[];
   onChange: (escopos: EscopoItem[]) => void;
 }
 
 export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
+  // Pop-up de prévia: abre ao sair de um campo de texto livre que foi editado.
+  const [previa, setPrevia] = useState<{ html?: string; erro?: string } | null>(null);
+  const editado = useRef(false);
+  const pedido = useRef<AbortController | null>(null);
+
+  const textoLivre = (escopo: EscopoItem, tipo: TipoHonorario): TextoLivreProps => ({
+    onEditar: () => {
+      editado.current = true;
+    },
+    onSair: () => {
+      if (!editado.current) return;
+      editado.current = false;
+      pedido.current?.abort();
+      const ctrl = new AbortController();
+      pedido.current = ctrl;
+      setPrevia({});
+      previewHonorarios({ escopos: [{ ...escopo, honorarios: [tipo] }] }, ctrl.signal)
+        .then((html) => setPrevia({ html }))
+        .catch(() => {
+          if (!ctrl.signal.aborted) setPrevia({ erro: "Não foi possível gerar a prévia." });
+        });
+    },
+  });
+
+  const fecharPrevia = () => {
+    pedido.current?.abort();
+    setPrevia(null);
+  };
   const updateEscopo = useCallback(
     (index: number, partial: Partial<EscopoItem>) => {
       const updated = [...escopos];
@@ -375,66 +483,27 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </div>
 
-                      {(() => {
-                        const horasContratadas = calcHorasContratadas(
-                          escopo.hora_trabalhada,
-                          escopo.hora_trabalhada.duracao_meses
-                        );
-                        const horasTrabalhadas = escopo.hora_trabalhada.horas_trabalhadas ?? 0;
-                        const saldo = (horasContratadas ?? 0) - horasTrabalhadas;
-                        return (
-                          <div className="md:col-span-2 pt-2 border-t border-border">
-                            <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
-                              Horas
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <FormField label="Horas contratadas">
-                                <input
-                                  readOnly
-                                  value={formatHorasBR(horasContratadas)}
-                                  placeholder="—"
-                                  className="w-full px-3 py-2 rounded-lg border border-muted bg-border/35 text-muted text-sm cursor-not-allowed"
-                                />
-                              </FormField>
-                              <FormField label="Horas já trabalhadas">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={horasTrabalhadas || ""}
-                                  onChange={(e) =>
-                                    updateHoraTrabalhada(idx, {
-                                      horas_trabalhadas: parseFloat(e.target.value) || 0,
-                                    })
-                                  }
-                                  placeholder="0"
-                                />
-                              </FormField>
-                              <FormField label="Saldo">
-                                <div
-                                  className={`px-3 py-2 rounded-lg border text-sm ${
-                                    horasContratadas == null
-                                      ? "bg-border/25 border-muted text-muted"
-                                      : saldo > 0
-                                        ? "bg-primary/[0.1] border-primary text-primary-dark"
-                                        : saldo < 0
-                                          ? "bg-danger/[0.08] border-danger text-danger"
-                                          : "bg-warning/[0.1] border-warning text-warning"
-                                  }`}
-                                >
-                                  {horasContratadas == null
-                                    ? "—"
-                                    : saldo > 0
-                                      ? `Saldo positivo: ${formatHorasBR(saldo)} horas`
-                                      : saldo < 0
-                                        ? `Horas excedidas: ${formatHorasBR(Math.abs(saldo))} horas`
-                                        : "Horas integralmente utilizadas"}
-                                </div>
-                              </FormField>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                      <div className="md:col-span-2 pt-2 border-t border-border">
+                        <FormField label="Horas contratadas">
+                          <input
+                            readOnly
+                            value={formatHorasBR(
+                              calcHorasContratadas(
+                                escopo.hora_trabalhada,
+                                escopo.hora_trabalhada.duracao_meses
+                              )
+                            )}
+                            placeholder="—"
+                            className="w-full md:w-1/3 px-3 py-2 rounded-lg border border-muted bg-border/35 text-muted text-sm cursor-not-allowed"
+                          />
+                        </FormField>
+                      </div>
+
+                      <DescontoCampos
+                        h={escopo.hora_trabalhada}
+                        onChange={(p) => updateHoraTrabalhada(idx, p)}
+                        {...textoLivre(escopo, "hora_trabalhada")}
+                      />
                     </div>
                   </div>
                 )}
@@ -456,70 +525,99 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </FormField>
 
-                      {!escopo.pro_labore.tem_parcelamento && (
-                        <FormField label="Vencimento (data)">
-                          <DatePicker
-                            value={escopo.pro_labore.vencimento_data}
-                            onChange={(v) =>
-                              updateProLabore(idx, { vencimento_data: v })
-                            }
-                          />
-                        </FormField>
-                      )}
+                      {(() => {
+                        const pl = escopo.pro_labore;
+                        // contratos antigos só têm tem_parcelamento (sim = mensal)
+                        const tipo = pl.tipo_parcelamento ?? (pl.tem_parcelamento ? "mensal" : "");
+                        const livre = textoLivre(escopo, "pro_labore");
+                        return (
+                          <>
+                            <FormField label="Tipo de parcelamento">
+                              <Select
+                                value={tipo}
+                                onChange={(e) => {
+                                  const v = e.target.value as "" | "mensal" | "customizado";
+                                  updateProLabore(idx, {
+                                    tipo_parcelamento: v || undefined,
+                                    tem_parcelamento: v === "mensal",
+                                  });
+                                }}
+                                options={[
+                                  { value: "", label: "Parcela única" },
+                                  { value: "mensal", label: "Mensal" },
+                                  { value: "customizado", label: "Customizado" },
+                                ]}
+                              />
+                            </FormField>
 
-                      <Toggle
-                        label="Parcelamento?"
-                        value={escopo.pro_labore.tem_parcelamento || false}
-                        onChange={(v) => updateProLabore(idx, { tem_parcelamento: v })}
+                            {tipo === "" && (
+                              <FormField label="Vencimento (data)">
+                                <DatePicker
+                                  value={pl.vencimento_data}
+                                  onChange={(v) =>
+                                    updateProLabore(idx, { vencimento_data: v })
+                                  }
+                                />
+                              </FormField>
+                            )}
+
+                            {tipo === "mensal" && (
+                              <>
+                                <FormField label="Número de parcelas">
+                                  <Input
+                                    type="number"
+                                    value={pl.numero_parcelas || ""}
+                                    onChange={(e) =>
+                                      updateProLabore(idx, { numero_parcelas: parseInt(e.target.value) || 0 })
+                                    }
+                                    placeholder="0"
+                                  />
+                                </FormField>
+                                <FormField label="Valor da Parcela (R$)">
+                                  <CurrencyInput
+                                    value={pl.valor_parcela || undefined}
+                                    onChange={(v) =>
+                                      updateProLabore(idx, { valor_parcela: v ?? 0 })
+                                    }
+                                    placeholder="0,00"
+                                  />
+                                </FormField>
+                                <FormField label="Vencimento 1ª parcela (data)">
+                                  <DatePicker
+                                    value={pl.vencimento_parcelas_data}
+                                    onChange={(v) =>
+                                      updateProLabore(idx, { vencimento_parcelas_data: v })
+                                    }
+                                  />
+                                </FormField>
+                              </>
+                            )}
+
+                            {tipo === "customizado" && (
+                              <div className="md:col-span-2">
+                                <FormField label="Parcelamento customizado">
+                                  <TextArea
+                                    value={pl.parcelamento_customizado || ""}
+                                    onChange={(e) => {
+                                      livre.onEditar();
+                                      updateProLabore(idx, { parcelamento_customizado: e.target.value });
+                                    }}
+                                    onBlur={livre.onSair}
+                                    placeholder="Ex.: 50% na assinatura e 50% em 30 dias"
+                                    rows={2}
+                                  />
+                                </FormField>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+
+                      <DescontoCampos
+                        h={escopo.pro_labore}
+                        onChange={(p) => updateProLabore(idx, p)}
+                        {...textoLivre(escopo, "pro_labore")}
                       />
-                      {escopo.pro_labore.tem_parcelamento && (
-                        <>
-                          <FormField label="Número de parcelas">
-                            <Input
-                              type="number"
-                              value={escopo.pro_labore.numero_parcelas || ""}
-                              onChange={(e) =>
-                                updateProLabore(idx, { numero_parcelas: parseInt(e.target.value) || 0 })
-                              }
-                              placeholder="0"
-                            />
-                          </FormField>
-                          <FormField label="Valor da Parcela (R$)">
-                            <CurrencyInput
-                              value={escopo.pro_labore.valor_parcela || undefined}
-                              onChange={(v) =>
-                                updateProLabore(idx, { valor_parcela: v ?? 0 })
-                              }
-                              placeholder="0,00"
-                            />
-                          </FormField>
-                          <FormField label="Vencimento 1ª parcela (data)">
-                            <DatePicker
-                              value={escopo.pro_labore.vencimento_parcelas_data}
-                              onChange={(v) =>
-                                updateProLabore(idx, { vencimento_parcelas_data: v })
-                              }
-                            />
-                          </FormField>
-                        </>
-                      )}
-
-                      <div className="md:col-span-2 pt-2 border-t border-border">
-                        <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
-                          Vigência
-                        </p>
-                        <DateRangePicker
-                          dataInicio={escopo.pro_labore.data_inicio}
-                          dataFim={escopo.pro_labore.data_fim}
-                          onChange={(di, df, dur) =>
-                            updateProLabore(idx, {
-                              data_inicio: di,
-                              data_fim: df,
-                              duracao_meses: dur,
-                            })
-                          }
-                        />
-                      </div>
                     </div>
                   </div>
                 )}
@@ -599,6 +697,12 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           }
                         />
                       </div>
+
+                      <DescontoCampos
+                        h={escopo.mensalidade}
+                        onChange={(p) => updateMensalidade(idx, p)}
+                        {...textoLivre(escopo, "mensalidade")}
+                      />
                     </div>
                   </div>
                 )}
@@ -688,31 +792,34 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         })()}
                       </FormField>
 
-                      <FormField label="Vencimento (data)">
-                        <DatePicker
-                          value={escopo.exito.vencimento_data}
-                          onChange={(v) =>
-                            updateExito(idx, { vencimento_data: v })
-                          }
+                      <FormField label="Vencimento">
+                        <Input
+                          value={escopo.exito.vencimento || vencimentoLegado(escopo.exito.vencimento_data)}
+                          onChange={(e) => {
+                            textoLivre(escopo, "exito").onEditar();
+                            // o texto livre substitui a data/observação de contratos antigos
+                            updateExito(idx, {
+                              vencimento: e.target.value,
+                              vencimento_data: undefined,
+                              vencimento_obs: undefined,
+                            });
+                          }}
+                          onBlur={textoLivre(escopo, "exito").onSair}
+                          placeholder="Ex.: 10 dias após o recebimento do Benefício"
                         />
                       </FormField>
 
-                      <div className="md:col-span-2 pt-2 border-t border-border">
-                        <p className="text-xs font-medium text-foreground mb-2 uppercase tracking-wide">
-                          Período do êxito
-                        </p>
-                        <DateRangePicker
-                          dataInicio={escopo.exito.data_inicio}
-                          dataFim={escopo.exito.data_fim}
-                          onChange={(di, df, dur) =>
-                            updateExito(idx, {
-                              data_inicio: di,
-                              data_fim: df,
-                              duracao_meses: dur,
-                            })
-                          }
+                      <FormField label="Forma de parcelamento">
+                        <Input
+                          value={escopo.exito.forma_parcelamento || ""}
+                          onChange={(e) => {
+                            textoLivre(escopo, "exito").onEditar();
+                            updateExito(idx, { forma_parcelamento: e.target.value });
+                          }}
+                          onBlur={textoLivre(escopo, "exito").onSair}
+                          placeholder="Ex.: em até 3 parcelas mensais"
                         />
-                      </div>
+                      </FormField>
 
                       <Toggle
                         label="Benefício prospectivo?"
@@ -756,6 +863,12 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           />
                         </FormField>
                       )}
+
+                      <DescontoCampos
+                        h={escopo.exito}
+                        onChange={(p) => updateExito(idx, p)}
+                        {...textoLivre(escopo, "exito")}
+                      />
                     </div>
                   </div>
                 )}
@@ -814,12 +927,59 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           </FormField>
                         </>
                       )}
+
+                      <DescontoCampos
+                        h={escopo.permuta}
+                        onChange={(p) => updatePermuta(idx, p)}
+                        {...textoLivre(escopo, "permuta")}
+                      />
                     </div>
                   </div>
                 )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {previa && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={fecharPrevia}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Prévia da cláusula"
+            className="bg-card border border-border rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto text-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-medium">Como vai ficar no contrato</h3>
+              <button type="button" onClick={fecharPrevia} className="text-muted" aria-label="Fechar">
+                ✕
+              </button>
+            </div>
+            {previa.erro ? (
+              <p className="text-danger">{previa.erro}</p>
+            ) : previa.html === undefined ? (
+              <p className="text-muted">Gerando prévia...</p>
+            ) : (
+              <div
+                className="space-y-2 text-justify [&_h3]:font-semibold [&_table]:w-full [&_td]:border [&_td]:border-border [&_td]:p-1"
+                dangerouslySetInnerHTML={{ __html: previa.html }}
+              />
+            )}
+            <div className="flex justify-end mt-4">
+              <button
+                type="button"
+                onClick={fecharPrevia}
+                className="px-3 py-1.5 bg-primary-dark text-white rounded text-xs"
+              >
+                OK
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

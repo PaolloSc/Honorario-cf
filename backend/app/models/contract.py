@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
  
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
  
 from pydantic import BaseModel, Field, model_validator
  
@@ -141,7 +141,16 @@ class SubtipoMemoriais(BaseModel):
     sustentacao_oral_todos_julgadores: bool = False
  
  
-class HoraTrabalhada(BaseModel):
+class _ComDesconto(BaseModel):
+    """Desconto opcional, comum aos cinco tipos de honorario."""
+    tem_desconto: bool = False
+    desconto_condicao: Optional[str] = None
+    desconto_tipo: Literal["percentual", "livre"] = "percentual"
+    desconto_percentual: Optional[float] = None
+    desconto_livre: Optional[str] = None
+
+
+class HoraTrabalhada(_ComDesconto):
     valor_hora: float
     tem_teto_mensal: bool = False
     valor_teto_mensal: Optional[float] = None
@@ -152,14 +161,16 @@ class HoraTrabalhada(BaseModel):
     data_fim: Optional[str] = None
     duracao_meses: Optional[int] = None
     horas_contratadas: Optional[float] = None
-    horas_trabalhadas: Optional[float] = None
+    horas_trabalhadas: Optional[float] = None  # legado: campo saiu do wizard
     tem_hora_urgencia: bool = True
     tem_hora_fora_expediente: bool = True
  
  
-class ProLabore(BaseModel):
+class ProLabore(_ComDesconto):
     valor_total: float
-    tem_parcelamento: bool = False
+    tem_parcelamento: bool = False  # legado: virou tipo_parcelamento="mensal"
+    tipo_parcelamento: Optional[Literal["mensal", "customizado"]] = None
+    parcelamento_customizado: Optional[str] = None
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
     vencimento: Optional[str] = None
@@ -168,12 +179,20 @@ class ProLabore(BaseModel):
     vencimento_parcelas: Optional[str] = None
     vencimento_parcelas_data: Optional[str] = None
     vencimento_parcelas_obs: Optional[str] = None
+    # legado: a vigencia foi para Acessorios (vigencia_*)
     data_inicio: Optional[str] = None
     data_fim: Optional[str] = None
     duracao_meses: Optional[int] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrar_parcelamento(cls, data):
+        if isinstance(data, dict) and not data.get("tipo_parcelamento") and data.get("tem_parcelamento"):
+            data = {**data, "tipo_parcelamento": "mensal"}
+        return data
  
  
-class Mensalidade(BaseModel):
+class Mensalidade(_ComDesconto):
     valor: float
     subtipo: SubtipoMensalidade
     dia_vencimento: str
@@ -193,7 +212,7 @@ class SubtipoExito(str, Enum):
     PERCENTUAL_VARIAVEL = "percentual_variavel"
  
  
-class Exito(BaseModel):
+class Exito(_ComDesconto):
     subtipo: SubtipoExito = SubtipoExito.PERCENTUAL_FIXO
     percentual: Optional[float] = None
     incidencia: str = ""
@@ -204,6 +223,8 @@ class Exito(BaseModel):
     forma_pagamento: str = ""
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
+    forma_parcelamento: Optional[str] = None
+    # legado: "Periodo do exito" saiu do wizard
     data_inicio: Optional[str] = None
     data_fim: Optional[str] = None
     duracao_meses: Optional[int] = None
@@ -216,7 +237,7 @@ class Exito(BaseModel):
     honorario_deduzido: Optional[str] = None
  
  
-class Permuta(BaseModel):
+class Permuta(_ComDesconto):
     objeto_permuta: str
     descricao: str = ""
     tem_torna: bool = False
@@ -251,6 +272,9 @@ class Acessorios(BaseModel):
     valor_km: Optional[float] = None
     criterio_extincao_exito: Optional[str] = None
     clausulas_adicionais: Optional[str] = None
+    vigencia_inicio: Optional[str] = None
+    vigencia_fim: Optional[str] = None
+    vigencia_meses: Optional[int] = None
  
  
 class ParticipacaoParticipante(BaseModel):

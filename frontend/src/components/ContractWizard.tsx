@@ -16,6 +16,7 @@ import type {
   Participacao,
 } from "@/types/contract";
 import RascunhosPendentes from "@/components/RascunhosPendentes";
+import { errosDoEscopo } from "@/app/lib/validacaoHonorarios";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
 import { getContractFormData, getDraft } from "@/app/lib/api";
 import { cnpjValido } from "@/app/lib/cnpj";
@@ -76,13 +77,29 @@ function horaBrasilia(d: Date): string {
   return d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 }
 
+// A vigência morava no pró-labore; contratos antigos a trazem de lá. A migração
+// é só aqui (ao abrir no wizard): no backend ela ressuscitaria a vigência que o
+// advogado apagou, e o .docx de um contrato antigo regenerado ganharia cláusula.
+function vigencia(data: Partial<ContratoFormData>): Pick<Acessorios, "vigencia_inicio" | "vigencia_fim" | "vigencia_meses"> {
+  const ac = data.acessorios;
+  if (ac?.vigencia_inicio) {
+    return { vigencia_inicio: ac.vigencia_inicio, vigencia_fim: ac.vigencia_fim, vigencia_meses: ac.vigencia_meses };
+  }
+  const pl = data.escopos?.find((e) => e.pro_labore?.data_inicio)?.pro_labore;
+  return { vigencia_inicio: pl?.data_inicio, vigencia_fim: pl?.data_fim, vigencia_meses: pl?.duracao_meses };
+}
+
 function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): ContratoFormData {
   if (!data) return { ...INITIAL_DATA };
 
   return {
     contratantes: data.contratantes?.length ? data.contratantes : INITIAL_DATA.contratantes,
     incluir_partes_relacionadas: data.incluir_partes_relacionadas ?? false,
-    escopos: data.escopos ?? [],
+    escopos: (data.escopos ?? []).map((e) =>
+      e.pro_labore?.data_inicio || e.pro_labore?.data_fim || e.pro_labore?.duracao_meses
+        ? { ...e, pro_labore: { ...e.pro_labore, data_inicio: undefined, data_fim: undefined, duracao_meses: undefined } }
+        : e
+    ),
     acessorios: {
       tem_reembolso: data.acessorios?.tem_reembolso ?? true,
       reembolso_limitado: data.acessorios?.reembolso_limitado ?? false,
@@ -92,6 +109,7 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       valor_km: data.acessorios?.valor_km,
       criterio_extincao_exito: data.acessorios?.criterio_extincao_exito,
       clausulas_adicionais: data.acessorios?.clausulas_adicionais,
+      ...vigencia(data),
     },
     participacao: (() => {
       const p = (data.participacao ?? {}) as any;
@@ -242,6 +260,7 @@ function validateHonorarios(data: ContratoFormData): string[] {
     if (escopo.honorarios.length === 0) {
       errors.push(`${label}: selecione pelo menos um tipo de honorário.`);
     }
+    errors.push(...errosDoEscopo(escopo, label));
   });
 
   return errors;

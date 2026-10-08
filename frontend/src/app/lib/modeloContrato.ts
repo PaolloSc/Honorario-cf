@@ -3,8 +3,8 @@
 // escopo  = mesmo escopo, outro cliente (zera contratantes e contatos do cliente)
 export type ModoModelo = "cliente" | "escopo";
 
-// Datas de vencimento de contrato antigo quase sempre já passaram: nunca copiar.
-const DATA_VENCIMENTO = /^(dia_)?vencimento\w*_data$/;
+// Datas de vencimento e vigência de contrato antigo quase sempre já passaram: nunca copiar.
+const DATA_VENCIMENTO = /^((dia_)?vencimento\w*_data|vigencia_\w+)$/;
 
 function semDatasDeVencimento(valor: unknown): unknown {
   if (Array.isArray(valor)) return valor.map(semDatasDeVencimento);
@@ -38,5 +38,16 @@ export function prepararModelo(dados: Record<string, unknown>, modo: ModoModelo)
     participacao.listas_transmissao = [];
   }
   copia.participacao = participacao;
+  // vigência legada (dentro do pró-labore): sem isto o wizard a migraria para Acessórios
+  if (Array.isArray(copia.escopos)) {
+    copia.escopos = copia.escopos.map((e: Record<string, unknown>) => {
+      if (!e.pro_labore) return e;
+      const pl = { ...(e.pro_labore as Record<string, unknown>) };
+      delete pl.data_inicio;
+      delete pl.data_fim;
+      delete pl.duracao_meses;
+      return { ...e, pro_labore: pl };
+    });
+  }
   return copia;
 }
