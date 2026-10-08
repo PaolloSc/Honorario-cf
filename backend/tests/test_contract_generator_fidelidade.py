@@ -162,13 +162,13 @@ def test_xml_bem_formado_para_cada_caso(nome):
 @pytest.mark.parametrize("nome", ["exito", "multi_hora_exito", "multi_todos"])
 def test_tabela_exito_presente_quando_ha_exito(nome):
     paras = _paras_for(_req_escopos(_CASOS[nome]))
-    assert _has(paras, "50% do percentual de êxito pactuado")
+    assert _has(paras, "50% (cinquenta por cento) do percentual de êxito pactuado")
 
 
 @pytest.mark.parametrize("nome", ["hora", "pro_labore", "mensalidade_processo", "permuta"])
 def test_tabela_exito_ausente_quando_nao_ha_exito(nome):
     paras = _paras_for(_req_escopos(_CASOS[nome]))
-    assert not _has(paras, "50% do percentual de êxito pactuado")
+    assert not _has(paras, "50% (cinquenta por cento) do percentual de êxito pactuado")
 
 
 @pytest.mark.parametrize("partes_rel", [True, False])
@@ -213,7 +213,7 @@ def test_secao5_sem_reembolso_omite_51():
     req = _base_req()
     req["acessorios"]["tem_reembolso"] = False
     paras = _paras_for(req)
-    assert not _has(paras, "no prazo de até 05 dias")
+    assert not _has(paras, "Valores adiantados pelo C&F serão reembolsados")
     assert _has(paras, "CredLocaliza")
 
 
@@ -250,15 +250,15 @@ def test_secao8_rescisao_cpc_e_extincao():
 
 def test_secao8_tabela_exito_presente_com_exito():
     paras = _paras_for(_req_com_exito())
-    assert _has(paras, "50% do percentual de êxito pactuado")
-    assert _has(paras, "100% do percentual de êxito pactuado")
+    assert _has(paras, "50% (cinquenta por cento) do percentual de êxito pactuado")
+    assert _has(paras, "100% (cem por cento) do percentual de êxito pactuado")
     assert _has(paras, "Antes da primeira decisão de mérito")
     assert _has(paras, "inocorrência de determinada fase processual")
 
 
 def test_secao8_tabela_exito_ausente_sem_exito():
     paras = _paras_for(_base_req(honorario="hora_trabalhada"))
-    assert not _has(paras, "50% do percentual de êxito pactuado")
+    assert not _has(paras, "50% (cinquenta por cento) do percentual de êxito pactuado")
 
 
 def test_secao9_pi_uso_de_nome_marca():
@@ -305,7 +305,7 @@ def test_criterio_extincao_exito_substitui_tabela_de_fases():
     req["acessorios"]["criterio_extincao_exito"] = "assinatura do acordo"
     paras = _preview_paras(req)
     assert _has(paras, "observando-se o seguinte critério: assinatura do acordo.")
-    assert not _has(paras, "50% do percentual de êxito pactuado")
+    assert not _has(paras, "50% (cinquenta por cento) do percentual de êxito pactuado")
     assert not _has(paras, "inocorrência de determinada fase processual")
     assert _has(paras, "8.4. Exceto se expressa")
 
@@ -322,7 +322,8 @@ def test_clausulas_adicionais_numeradas_antes_do_foro():
 
 def test_exito_incidencia_fundida_com_beneficio():
     paras = _paras_for(_req_com_exito())
-    assert _has(paras, "incidirá sobre o benefício econômico, corrigido")
+    assert _has(paras, "Os honorários de êxito corresponderão a 20% (vinte por cento) sobre o "
+                       "benefício econômico, corrigido monetariamente")
     # As antigas 3.5 ("Incidência:") e 3.6 não existem mais separadas
     assert not _has(paras, "Incidência: benefício econômico.")
 
@@ -331,14 +332,14 @@ def test_exito_forma_pagamento_texto_livre():
     req = _req_com_exito()
     req["escopos"][0]["exito"]["forma_pagamento"] = "quando da formalização do acordo"
     paras = _paras_for(req)
-    assert _has(paras, "Forma de pagamento: quando da formalização do acordo.")
+    assert _has(paras, "Os honorários de êxito serão pagos quando da formalização do acordo")
 
 
 def test_exito_sem_forma_pagamento_omite_clausula():
     req = _req_com_exito()
     req["escopos"][0]["exito"]["forma_pagamento"] = ""
     paras = _paras_for(req)
-    assert not _has(paras, "Forma de pagamento:")
+    assert not _has(paras, "serão pagos")
 
 
 def test_sem_exito_omite_item_v_da_extincao():
@@ -410,15 +411,18 @@ def _clausulas_secao3(paras: list[str]) -> list[str]:
 
 def test_secao3_honorario_unico_numera_corrido_e_sem_subtitulo():
     paras = _preview_paras(_req_escopos([_escopo("hora_trabalhada")]))
-    assert _clausulas_secao3(paras) == ["3.1.", "3.2.", "3.3."]
+    # Valor e apuracao formam uma unica clausula corrida (sem "sera observado o seguinte").
+    assert _clausulas_secao3(paras) == ["3.1."]
     assert not _has(paras, "HORA TRABALHADA")
 
 
 def test_secao3_varios_honorarios_usam_subclausulas():
-    paras = _preview_paras(_req_escopos([_escopo("hora_trabalhada"), _escopo("pro_labore")]))
-    # 1o bloco: 3.1 (chapeu) + 3.1.1, 3.1.2; 2o bloco: 3.2 (chapeu) + 3.2.1
-    assert _clausulas_secao3(paras) == ["3.1.", "3.1.1.", "3.1.2.", "3.2.", "3.2.1."]
-    assert _has(paras, "HORA TRABALHADA") and _has(paras, "PRÓ-LABORE")
+    hora = _escopo("hora_trabalhada")
+    hora["hora_trabalhada"]["tem_hora_urgencia"] = True
+    paras = _preview_paras(_req_escopos([hora, _escopo("exito")]))
+    # 1o bloco: 3.1 (valor) + 3.1.1 (urgencia); 2o bloco: 3.2 (percentual) + 3.2.1 (pagamento)
+    assert _clausulas_secao3(paras) == ["3.1.", "3.1.1.", "3.2.", "3.2.1."]
+    assert _has(paras, "HORA TRABALHADA") and _has(paras, "ÊXITO")
 
 
 def test_clausulas_sao_numeradas_pelo_word_e_nao_no_texto():
@@ -569,6 +573,76 @@ def _preco_tabela(percentual: float) -> list[str]:
 
 def test_tabela_preco_pro_labore_e_exito_com_acento_e_percentual_pt_br():
     paras = _preco_tabela(10.0)
-    assert _has(paras, "R$ 2.000,00 (dois mil reais) pró-labore + 10% de êxito")
+    assert _has(paras, "R$ 2.000,00 (dois mil reais) de pró-labore + 10% (dez por cento) de êxito")
     assert not _has(paras, "10.0%")
-    assert _has(_preco_tabela(10.5), "pró-labore + 10,5% de êxito")
+    assert _has(_preco_tabela(10.5), "de pró-labore + 10,5% (dez vírgula cinco por cento) de êxito")
+
+
+# ── Texto corrido e coerente (out/2026) ────────────────────────────────────
+
+
+def _hora(**kw) -> dict:
+    e = _escopo("hora_trabalhada")
+    e["hora_trabalhada"].update(kw)
+    return e
+
+
+def test_honorarios_sem_chapeu_sera_observado_o_seguinte():
+    for nome in _CASOS:
+        paras = _paras_for(_req_escopos(_CASOS[nome]))
+        assert not _has(paras, "será observado o seguinte"), nome
+        assert not _has(paras, "será observada a seguinte"), nome
+
+
+def test_hora_trabalhada_texto_corrido_com_acrescimos_por_extenso():
+    paras = _preview_paras(_req_escopos([_hora(tem_hora_urgencia=True, tem_hora_fora_expediente=True)]))
+    assert _has(paras, "3.1. Os serviços serão remunerados por hora trabalhada, ao valor de "
+                       "R$ 300,00 (trezentos reais) por hora, sendo as horas apuradas ao final "
+                       "de cada mês e faturadas em parcela única no mês imediatamente subsequente.")
+    assert _has(paras, "3.2. Quando, por solicitação da CONTRATANTE, os serviços forem prestados "
+                       "em regime de urgência, as horas trabalhadas serão acrescidas de 50% "
+                       "(cinquenta por cento); quando prestados após as 19 (dezenove) horas, em "
+                       "finais de semana ou em feriados, de 100% (cem por cento); e, quando "
+                       "reunidas as duas hipóteses, de 150% (cento e cinquenta por cento).")
+    assert _clausulas_secao3(paras) == ["3.1.", "3.2."]
+
+
+def test_valor_zero_nao_aparece():
+    paras = _paras_for(_req_escopos([_hora(valor_hora=0)]))
+    assert not _has(paras, "R$ 0,00")
+    assert not _has(paras, "zero reais")
+    assert _has(paras, "Os serviços serão remunerados por hora trabalhada, sendo as horas apuradas")
+
+
+def test_pro_labore_parcelado_numa_frase_com_extenso():
+    e = _escopo("pro_labore")
+    e["pro_labore"].update(tem_parcelamento=True, numero_parcelas=2, valor_parcela=5000,
+                           vencimento_parcelas_data="2026-01-10")
+    paras = _paras_for(_req_escopos([e]))
+    assert _has(paras, "Os honorários pró-labore, no valor total de R$ 10.000,00 (dez mil reais), "
+                       "serão pagos em 2 (duas) parcelas de R$ 5.000,00 (cinco mil reais), com "
+                       "vencimento todo dia 10.")
+
+
+def test_vencimento_vazio_nao_vira_a_definir():
+    paras = _paras_for(_req_escopos([_escopo("pro_labore")]))
+    assert not _has(paras, "a definir")
+    assert _has(paras, "Os honorários pró-labore, no valor de R$ 10.000,00 (dez mil reais), "
+                       "serão pagos em parcela única.")
+
+
+def test_mensalidade_por_pasta_concorda_no_feminino():
+    paras = _paras_for(_req_escopos([_escopo("mensalidade", mensalidade_subtipo="por_pasta")]))
+    assert _has(paras, "por pasta, devida enquanto esta estiver ativa, com vencimento")
+    assert _has(paras, "Considera-se ativa a pasta que não tenha sido definitivamente extinta")
+
+
+def test_clausulas_gerais_com_numeros_por_extenso():
+    paras = _paras_for(_base_req())
+    assert _has(paras, "juros de 1% (um por cento) ao mês, multa de 10% (dez por cento)")
+    assert _has(paras, "no prazo de até 5 (cinco) dias")
+    assert _has(paras, "durante os 10 (dez) dias seguintes à notificação")
+    assert _has(paras, "prazo de antecedência de 30 (trinta) dias")
+    assert _has(paras, "R$ 0,40 (quarenta centavos).")
+    assert _has(paras, "A CONTRATANTE obriga-se a: (i) fornecer")
+    assert _has(paras, "; e (iv) os honorários vincendos pactuados por pró-labore")
