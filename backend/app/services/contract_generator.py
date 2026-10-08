@@ -497,8 +497,17 @@ class ContractGenerator:
         texto = (value or "").strip().rstrip(".;, ").strip()
         # A palavra precisa terminar em espaço/hífen/vírgula: "A.B. Comércio" é sigla.
         primeira = re.match(r"([^\W\d_]+)(?=[\s,;:-]|$)", texto)
-        if primeira and primeira.group(0).lower() in PALAVRAS_MINUSCULAS_NO_MEIO:
-            texto = texto[0].lower() + texto[1:]
+        if primeira:
+            p = primeira.group(1)
+            # Próxima palavra (separada por espaço) com maiúscula = nome composto
+            # ("Segunda Vara Cível"); palavra toda em caixa alta ("SEM") fica.
+            seguinte = re.match(r"\s+([^\W\d_])", texto[len(p):])
+            if (
+                p.lower() in PALAVRAS_MINUSCULAS_NO_MEIO
+                and (len(p) == 1 or p[1:].islower())
+                and not (seguinte and seguinte.group(1).isupper())
+            ):
+                texto = texto[0].lower() + texto[1:]
         return texto
 
     def _frase_desconto(self, h) -> str | None:
