@@ -206,9 +206,12 @@ def test_lotes_pagina_descarta_nsu_repetido_e_para_no_404():
     httpx.Response(200, json={"StatusProcessamento": "DOCUMENTOS_LOCALIZADOS", "LoteDFe": [_doc(5)]}),
 ])
 def test_lotes_condicoes_de_parada(fim):
+    from itertools import islice
+
     from workers.nfse_adn.client import lotes
 
-    assert list(lotes(_adn({5: fim}), 5)) == []
+    # islice: sem a guarda de NSU o ultimo caso entra em loop; assim falha rapido.
+    assert list(islice(lotes(_adn({5: fim}), 5), 3)) == []
 
 
 def test_lotes_rejeicao_levanta():
