@@ -37,6 +37,7 @@ from app.models.contract import (
 from app.utils.currency import (
     formatar_percentual,
     formatar_valor,
+    numero_com_extenso,
     percentual_com_extenso,
     valor_com_extenso,
     valor_por_extenso,
@@ -52,14 +53,14 @@ INCIDENCIA_EXITO_LABELS = {
 
 FORMA_PAGAMENTO_LABELS = {
     "a_vista": "à vista",
-    "parcelado": "parcelado",
-    "conforme_cumprimento": "conforme cumprimento",
+    "parcelado": "de forma parcelada",
+    "conforme_cumprimento": "conforme o cumprimento",
 }
 
 HONORARIO_LABELS = {
-    "pro_labore": "pró-labore",
-    "mensalidade": "mensalidade",
-    "hora_trabalhada": "hora trabalhada",
+    "pro_labore": "honorários pró-labore",
+    "mensalidade": "mensalidades",
+    "hora_trabalhada": "honorários por hora trabalhada",
 }
 
 # numId/abstractNumId da lista multinivel das clausulas (ver _ensure_clause_numbering)
@@ -415,7 +416,8 @@ class ContractGenerator:
     def _format_vencimento(self, value: str | None, *, recorrente: bool = False) -> str:
         raw = (value or "").strip()
         if not raw:
-            return "a definir"
+            # Vencimento não informado: quem chama omite a frase inteira.
+            return ""
 
         digits = "".join(ch for ch in raw if ch.isdigit())
         if recorrente and raw.isdigit():
@@ -459,29 +461,29 @@ class ContractGenerator:
 
     @staticmethod
     def _texto_livre(value: str | None) -> str:
-        """Texto digitado no wizard, sem a pontuacao final (a frase poe a sua)."""
+        """Texto digitado no wizard, sem a pontuação final (a frase põe a sua)."""
         return (value or "").strip().rstrip(".;, ").strip()
 
     def _frase_desconto(self, h) -> str | None:
-        """Desconto opcional de qualquer tipo de honorario; None se nao ha o que dizer."""
+        """Desconto opcional de qualquer tipo de honorário; None se não há o que dizer."""
         if not h.tem_desconto:
             return None
+        condicao = self._texto_livre(h.desconto_condicao)
         if h.desconto_tipo == "livre":
             livre = self._texto_livre(h.desconto_livre)
             if not livre:
                 return None
-            frase = f"Será concedido desconto sobre o valor deste honorário, nos seguintes termos: {livre}."
-        else:
-            if not h.desconto_percentual:
-                return None
-            frase = (
-                f"Será concedido desconto de {percentual_com_extenso(h.desconto_percentual)} "
-                "sobre o valor deste honorário."
-            )
-        condicao = self._texto_livre(h.desconto_condicao)
-        if condicao:
-            frase += f" A concessão do desconto fica condicionada ao seguinte: {condicao}."
-        return frase
+            frase = f"Será concedido desconto sobre estes honorários nos seguintes termos: {livre}."
+            if condicao:
+                frase += f" O desconto fica condicionado ao seguinte: {condicao}."
+            return frase
+        if not h.desconto_percentual:
+            return None
+        frase = (
+            f"Será concedido desconto de {percentual_com_extenso(h.desconto_percentual)} "
+            "sobre estes honorários"
+        )
+        return f"{frase}, condicionado ao seguinte: {condicao}." if condicao else f"{frase}."
 
     def _add_desconto(self, h, num: "_Numerador") -> None:
         frase = self._frase_desconto(h)
@@ -541,7 +543,7 @@ class ContractGenerator:
             ):
                 c = contratante if isinstance(contratante, ContratantePJ) else ContratantePJ(**contratante)
                 text = (
-                    f"{rotulo}: {c.razao_social.upper()}, inscrita no CNPJ n. {self._format_cnpj(c.cnpj)}, "
+                    f"{rotulo}: {c.razao_social.upper()}, inscrita no CNPJ sob o n. {self._format_cnpj(c.cnpj)}, "
                     f"com sede em {c.endereco}, e-mail: {c.email}"
                 )
                 # Qualificacao de cada representante precedida por virgula (nao por ponto).
@@ -566,8 +568,8 @@ class ContractGenerator:
 
         doc.add_paragraph(
             "CONTRATADO: CARVALHO & FURTADO ADVOGADOS, sociedade simples de advocacia, "
-                "inscrita no CNPJ n. 25.463.159/0001-73, com sede na Rua Antônio de Albuquerque, "
-                "n. 271, 5º andar, Savassi, Belo Horizonte/MG, a seguir denominado C&F."
+                "inscrita no CNPJ sob o n. 25.463.159/0001-73, com sede na Rua Antônio de Albuquerque, "
+                "n. 271, 5º andar, Savassi, Belo Horizonte/MG, doravante denominado simplesmente C&F."
         )
 
     def _qualificar_representante(self, r: "RepresentantePJ") -> str:
@@ -698,146 +700,118 @@ class ContractGenerator:
     def _add_hora_trabalhada(self, doc: Document, ht: "HoraTrabalhada", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
             doc.add_heading("HORA TRABALHADA", level=3)
+        valor = f", ao valor de {valor_com_extenso(ht.valor_hora)} por hora" if ht.valor_hora else ""
         num(
-            f"Em relação ao honorário por hora trabalhada, será observado o seguinte:"
-        )
- 
-        num(
-            f"O valor da hora trabalhada será de {valor_com_extenso(ht.valor_hora)}.",
+            f"Os serviços serão remunerados por hora trabalhada{valor}, sendo as horas "
+            "apuradas ao final de cada mês e faturadas em parcela única no mês "
+            "imediatamente subsequente."
         )
 
-        num(
-            f"As horas trabalhadas serão apuradas ao final de cada mês e faturadas em "
-            "parcela única no mês imediatamente subsequente.",
-        )
- 
-        if ht.tem_hora_urgencia:
-            num(
-                f"As horas trabalhadas serão acrescidas de percentual de 50% (cinquenta por cento) "
-                "quando, por solicitação da CONTRATANTE, os serviços forem prestados em regime "
-                "de urgência.",
-            )
- 
-        if ht.tem_hora_fora_expediente:
-            num(
-                f"Caso a CONTRATANTE demande a prestação dos serviços após as 19:00 horas ou "
-                "durante finais de semana ou feriados, as horas trabalhadas serão acrescidas "
-                "do percentual de 100% (cem por cento).",
-            )
- 
+        urgencia = "em regime de urgência"
+        fora = "após as 19 (dezenove) horas, em finais de semana ou em feriados"
         if ht.tem_hora_urgencia and ht.tem_hora_fora_expediente:
             num(
-                f"Caso as horas sejam de urgência e prestadas fora do expediente, serão cobradas "
-                "com acréscimo de 150%.",
+                "Quando, por solicitação da CONTRATANTE, os serviços forem prestados "
+                f"{urgencia}, as horas trabalhadas serão acrescidas de {percentual_com_extenso(50)}; "
+                f"quando prestados {fora}, de {percentual_com_extenso(100)}; e, quando "
+                f"reunidas as duas hipóteses, de {percentual_com_extenso(150)}."
             )
- 
+        elif ht.tem_hora_urgencia or ht.tem_hora_fora_expediente:
+            cond, pct = (urgencia, 50) if ht.tem_hora_urgencia else (fora, 100)
+            num(
+                f"Quando, por solicitação da CONTRATANTE, os serviços forem prestados {cond}, "
+                f"as horas trabalhadas serão acrescidas de {percentual_com_extenso(pct)}."
+            )
+
         if ht.tem_teto_mensal and ht.valor_teto_mensal:
             num(
-                f"A fatura mensal das horas trabalhadas respeitará o teto de "
-                f"{valor_com_extenso(ht.valor_teto_mensal)}, de modo que o valor excedente "
-                f"será cobrado na(s) fatura(s) subsequente(s) respeitando o referido teto.",
+                "O valor mensal faturado a título de horas trabalhadas não excederá o teto "
+                f"de {valor_com_extenso(ht.valor_teto_mensal)}; o excedente será cobrado "
+                "na(s) fatura(s) subsequente(s), respeitado o mesmo teto."
             )
- 
+
         if ht.tem_pacote_horas and ht.quantidade_horas_pacote and ht.valor_pacote:
-            num(
-                f"Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
-                f"{ht.quantidade_horas_pacote} horas, no valor de "
-                f"{valor_com_extenso(ht.valor_pacote)}.",
+            zera = (
+                f", e o saldo acumulado será zerado a cada {numero_com_extenso(ht.duracao_meses, 'meses')}"
+                if ht.duracao_meses else ""
             )
             num(
-                f"As horas não utilizadas em determinado mês serão acumuladas e poderão ser "
-                f"aproveitadas no mês imediatamente subsequente.",
+                "Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
+                f"{numero_com_extenso(ht.quantidade_horas_pacote, 'horas', fem=True)}, no valor de "
+                f"{valor_com_extenso(ht.valor_pacote)}. As horas não utilizadas em determinado "
+                f"mês serão acumuladas e poderão ser aproveitadas no mês imediatamente subsequente{zera}."
             )
-            if ht.duracao_meses:
-                num(
-                    f"O saldo acumulado será zerado a cada {ht.duracao_meses} meses.",
-                )
 
         self._add_desconto(ht, num)
- 
+
+    def _com_vencimento(self, data: str | None, obs: str | None, legacy: str | None, *, recorrente: bool = False) -> str:
+        """', com vencimento X' — ou '' quando o vencimento não foi informado."""
+        venc = self._vencimento_combined(data, obs, legacy, recorrente=recorrente)
+        return f", com vencimento {venc}" if venc else ""
+
     def _add_pro_labore(self, doc: Document, pl: "ProLabore", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
             doc.add_heading("PRÓ-LABORE", level=3)
-        num(
-            f"Em relação ao honorário pró-labore, será observada a seguinte forma de pagamento:"
-        )
- 
+        total = f", no valor total de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
         customizado = self._texto_livre(pl.parcelamento_customizado)
         if pl.tipo_parcelamento == "customizado" and customizado:
-            sujeito = (
-                f"O valor total de {valor_com_extenso(pl.valor_total)}"
-                if pl.valor_total else "O honorário pró-labore"
-            )
-            num(f"{sujeito} será pago da seguinte forma: {customizado}.")
+            num(f"Os honorários pró-labore{total} serão pagos da seguinte forma: {customizado}.")
         elif pl.tipo_parcelamento == "mensal" and pl.numero_parcelas and pl.valor_parcela:
             num(
-                f"O valor total de {valor_com_extenso(pl.valor_total)} será pago em "
-                f"{pl.numero_parcelas} parcelas de {valor_com_extenso(pl.valor_parcela)}, "
-                f"com vencimento {self._vencimento_combined(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}."
+                f"Os honorários pró-labore{total} serão pagos em "
+                f"{numero_com_extenso(pl.numero_parcelas, 'parcelas', fem=True)} de "
+                f"{valor_com_extenso(pl.valor_parcela)}"
+                f"{self._com_vencimento(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}."
             )
         else:
+            total = f", no valor de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
             num(
-                f"O valor de {valor_com_extenso(pl.valor_total)} será pago em parcela única, "
-                f"com vencimento {self._vencimento_combined(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}."
+                f"Os honorários pró-labore{total} serão pagos em parcela única"
+                f"{self._com_vencimento(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}."
             )
 
         self._add_desconto(pl, num)
- 
+
     def _add_mensalidade(self, doc: Document, m: "Mensalidade", num: "_Numerador", com_subtitulo: bool = False) -> None:
+        venc = self._com_vencimento(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)
+        valor = f" de {valor_com_extenso(m.valor)}" if m.valor else ""
         if m.subtipo == SubtipoMensalidade.ADVOCACIA_PARTIDO:
             if com_subtitulo:
                 doc.add_heading("MENSALIDADE DE ADVOCACIA DE PARTIDO", level=3)
             num(
-                f"Em relação ao honorário por mensalidade de advocacia de partido, "
-                "será observado o seguinte:"
+                f"Os honorários de advocacia de partido serão pagos por mensalidade{valor}{venc}, "
+                "e abrangem a prestação de serviços advocatícios de consultoria e de "
+                "contencioso de rotina nas áreas oferecidas pelo C&F."
+            )
+            num(
+                "A precificação tem como referência o fluxo atual de demanda da "
+                "CONTRATANTE, devendo os honorários ser renegociados caso esse fluxo aumente."
             )
 
-            num(
-                f"O honorário abrange a prestação de serviços advocatícios de consultoria "
-                "e contencioso de rotina nas áreas oferecidas pelo C&F.",
-            )
-
-            num(
-                f"A precificação possui como referência o fluxo atual de demanda da "
-                "CONTRATANTE, sendo que o honorário deverá ser renegociado caso esse "
-                "fluxo aumente.",
-            )
-
-            num(
-                f"O valor da mensalidade será de {valor_com_extenso(m.valor)}.",
-            )
-
-            num(
-                f"O vencimento da fatura mensal será {self._vencimento_combined(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)}.",
-            )
- 
         elif m.subtipo in (SubtipoMensalidade.POR_PROCESSO, SubtipoMensalidade.POR_PASTA):
-            tipo_label = "processo" if m.subtipo == SubtipoMensalidade.POR_PROCESSO else "pasta"
+            processo = m.subtipo == SubtipoMensalidade.POR_PROCESSO
+            tipo_label = "processo" if processo else "pasta"
             if com_subtitulo:
                 doc.add_heading(f"MENSALIDADE POR {tipo_label.upper()}", level=3)
- 
-            var_label = ""
-            if m.variacao_preco == VariacaoPrecoMensalidade.LIMITACAO_TEMPORAL:
-                var_label = " com limitação temporal"
-            elif m.variacao_preco == VariacaoPrecoMensalidade.REDUCAO_VOLUME:
-                var_label = " com redução por volume"
-            elif m.variacao_preco == VariacaoPrecoMensalidade.VARIACAO_FASE_PROCESSUAL:
-                var_label = " com variação por fase processual"
- 
+
+            var_label = {
+                VariacaoPrecoMensalidade.REDUCAO_VOLUME: ", com redução por volume",
+                VariacaoPrecoMensalidade.VARIACAO_FASE_PROCESSUAL: ", com variação por fase processual",
+            }.get(m.variacao_preco, "")
+            devida = "devida enquanto este estiver ativo" if processo else "devida enquanto esta estiver ativa"
             num(
-                f"Em relação ao honorário por mensalidade{var_label}, o vencimento "
-                f"da fatura será {self._vencimento_combined(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)} "
-                f"e o valor de {valor_com_extenso(m.valor)} será devido por {tipo_label} enquanto este "
-                f"estiver ativo."
+                f"Os honorários serão pagos por mensalidade{valor} por {tipo_label}, "
+                f"{devida}{var_label}{venc}."
             )
- 
+
             if m.variacao_preco == VariacaoPrecoMensalidade.LIMITACAO_TEMPORAL and m.limitacao_temporal_anos:
                 num(
-                    f"O valor será devido até {m.limitacao_temporal_anos} anos de tramitação "
-                    f"sob o patrocínio do C&F."
+                    f"A mensalidade será devida por até {numero_com_extenso(m.limitacao_temporal_anos, 'anos')} "
+                    "de tramitação sob o patrocínio do C&F."
                 )
- 
+
             if m.faixas_preco:
+                num("O valor da mensalidade observará as seguintes faixas:")
                 table = doc.add_table(rows=1, cols=2)
                 self._apply_table_grid(table)
                 self._set_table_header(table, "Faixa", "Valor")
@@ -845,28 +819,35 @@ class ContractGenerator:
                     row = table.add_row().cells
                     row[0].text = faixa.get("faixa", "")
                     row[1].text = faixa.get("valor", "")
- 
-            num(
-                f"Entende-se por ativo aquele {tipo_label} que não foi definitivamente "
-                f"extinto, baixado e arquivado no sistema do Tribunal ou respectivo órgão.",
-            )
+
+            if processo:
+                ativo = ("Considera-se ativo o processo que não tenha sido definitivamente "
+                         "extinto, baixado e arquivado")
+            else:
+                ativo = ("Considera-se ativa a pasta que não tenha sido definitivamente "
+                         "extinta, baixada e arquivada")
+            num(f"{ativo} no sistema do Tribunal ou do respectivo órgão.")
 
         self._add_desconto(m, num)
- 
+
     def _add_exito(self, doc: Document, ex: "Exito", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
             doc.add_heading("ÊXITO", level=3)
-        num(
-            f"Em relação ao honorário de êxito, será observado o seguinte:"
+
+        incidencia = (
+            self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)
+            or "benefício econômico e/ou financeiro e/ou fiscal e/ou tributário"
         )
- 
-        if ex.subtipo == SubtipoExito.PERCENTUAL_FIXO and ex.percentual:
+        beneficio = (
+            f"o {incidencia}, corrigido monetariamente, aproveitável à CONTRATANTE "
+            "(Benefício), ainda que parcial"
+        )
+        base = (ex.base_calculo or "").strip()
+        base = f", tendo como base de cálculo {base}" if base else ""
+        if ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
             num(
-                f"O percentual de êxito será de {self._format_percentual(ex.percentual)} sobre {ex.base_calculo}."
-            )
-        elif ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
-            num(
-                f"O percentual será calculado conforme o valor do Benefício:"
+                f"Os honorários de êxito incidirão sobre {beneficio}{base}, no percentual "
+                "correspondente à faixa de valor do Benefício, conforme a tabela abaixo:"
             )
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
@@ -875,59 +856,68 @@ class ContractGenerator:
                 row = table.add_row().cells
                 row[0].text = faixa.get("faixa", "")
                 row[1].text = faixa.get("percentual", "")
- 
-        incidencia = (
-            self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)
-            or "benefício econômico e/ou financeiro e/ou fiscal e/ou tributário"
-        )
-        num(
-            f"O percentual incidirá sobre o {incidencia}, corrigido "
-            "monetariamente, aproveitável à CONTRATANTE (Benefício), ainda que parcial.",
-        )
-
-        if (ex.forma_pagamento or "").strip():
+        elif ex.percentual:
             num(
-                f"Forma de pagamento: {self._label_from_map(ex.forma_pagamento, FORMA_PAGAMENTO_LABELS)}.",
+                f"Os honorários de êxito corresponderão a {percentual_com_extenso(ex.percentual)} "
+                f"sobre {beneficio}{base}."
             )
+        else:
+            num(f"Os honorários de êxito incidirão sobre {beneficio}{base}.")
 
+        forma = (ex.forma_pagamento or "").strip()
+        venc = ""
         if ex.vencimento or ex.vencimento_data or ex.vencimento_obs:
-            num(
-                f"Vencimento: {self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)}.",
-            )
+            venc = self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)
+        if forma:
+            if forma == "parcelado" and ex.numero_parcelas:
+                parcela = f" de {valor_com_extenso(ex.valor_parcela)}" if ex.valor_parcela else ""
+                forma_txt = f"em {numero_com_extenso(ex.numero_parcelas, 'parcelas', fem=True)}{parcela}"
+            else:
+                forma_txt = self._label_from_map(forma, FORMA_PAGAMENTO_LABELS).rstrip(".")
+            venc_txt = f", com vencimento {venc}" if venc else ""
+            num(f"Os honorários de êxito serão pagos {forma_txt}{venc_txt}.")
+        elif venc:
+            num(f"Os honorários de êxito vencerão {venc}.")
 
         forma_parcelamento = self._texto_livre(ex.forma_parcelamento)
         if forma_parcelamento:
-            num(f"O honorário de êxito será parcelado da seguinte forma: {forma_parcelamento}.")
- 
+            num(f"Os honorários de êxito serão parcelados da seguinte forma: {forma_parcelamento}.")
+
         if ex.tem_beneficio_prospectivo and ex.prospectivo_duracao_meses:
             num(
-                f"Nos casos em que os serviços do C&F também proporcionarem Benefício prospectivo "
-                f"à CONTRATANTE, incidirão honorários de êxito calculados sobre o período de "
-                f"{ex.prospectivo_duracao_meses} meses.",
+                "Caso os serviços do C&F também proporcionem Benefício prospectivo à "
+                "CONTRATANTE, os honorários de êxito incidirão igualmente sobre o Benefício "
+                f"apurado no período de {numero_com_extenso(ex.prospectivo_duracao_meses, 'meses')}."
             )
- 
+
         if ex.deduz_outro_honorario and ex.honorario_deduzido:
             num(
-                f"O honorário de êxito será pago abatendo-se o valor pago a título de "
-                f"{self._label_from_map(ex.honorario_deduzido, HONORARIO_LABELS)}.",
+                "Do valor dos honorários de êxito será abatido o valor pago a título de "
+                f"{self._label_from_map(ex.honorario_deduzido, HONORARIO_LABELS)}."
             )
 
         self._add_desconto(ex, num)
- 
+
     def _add_permuta(self, doc: Document, perm: "Permuta", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
             doc.add_heading("PERMUTA", level=3)
+        descricao = (perm.descricao or "").strip()
+        if descricao and descricao[-1] not in ".!?":
+            descricao += "."
         num(
-            f"O serviço contratado será permutado com o serviço de {perm.objeto_permuta} "
-            f"a ser prestado pela CONTRATANTE ao C&F. {perm.descricao}"
+            "Os serviços contratados serão remunerados mediante permuta com os serviços de "
+            f"{perm.objeto_permuta}, a serem prestados pela CONTRATANTE ao C&F."
+            + (f" {descricao}" if descricao else "")
         )
         if perm.tem_torna and perm.valor_torna:
+            forma = (perm.forma_pagamento_torna or "").strip().rstrip(".")
+            forma = f", da seguinte forma: {forma}" if forma else ""
             num(
-                f"A torna será de {valor_com_extenso(perm.valor_torna)}, "
-                f"paga da seguinte forma: {perm.forma_pagamento_torna or 'a definir'}."
+                "A CONTRATANTE pagará ainda ao C&F, a título de torna, "
+                f"{valor_com_extenso(perm.valor_torna)}{forma}."
             )
         self._add_desconto(perm, num)
- 
+
     def _add_common_clauses(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "CLÁUSULAS GERAIS")
 
@@ -943,10 +933,10 @@ class ContractGenerator:
         clauses = [
             "Todos os valores previstos nesta contratação serão reajustados anualmente "
             "pela variação positiva e acumulada do IPCA, ou outro índice que vier a "
-            "substituí-lo, sempre desde a data da assinatura do Contrato.",
+            "substituí-lo, a partir da data de assinatura do Contrato.",
             "Todo e qualquer pagamento devido ao C&F será feito por meio de boleto bancário "
             f"ou transferência bancária para a conta de sua titularidade: {settings.bank_account_info}.",
-            "A CONTRATANTE se declara ciente das notórias tentativas gerais de fraude e "
+            "A CONTRATANTE declara-se ciente das notórias tentativas gerais de fraude e "
             "golpes simulando contatos de advogados e escritórios de advocacia, estando, "
             "contudo, igualmente ciente dos canais oficiais de contato do C&F e obrigando-se "
             "a realizar pagamentos somente em conta de titularidade do C&F ou mediante "
@@ -955,10 +945,10 @@ class ContractGenerator:
             "previsto neste Contrato será considerado inválido e ineficaz.",
             "As obrigações de pagamento previstas neste Contrato serão devidas, independentemente "
             "de notificação, tão logo se dê o seu vencimento.",
-            "O atraso no pagamento implicará a incidência do seguinte: juros de 1% a.m; "
-            "multa de 10% (dez por cento) sobre o valor em atraso e atualização monetária "
-            "pelo IPCA, sem prejuízo de suspensão do serviço ou rescisão contratual a "
-            "critério do C&F.",
+            f"O atraso no pagamento sujeitará a CONTRATANTE a juros de {percentual_com_extenso(1)} "
+            f"ao mês, multa de {percentual_com_extenso(10)} sobre o valor em atraso e "
+            "atualização monetária pelo IPCA, sem prejuízo da suspensão dos serviços ou da "
+            "rescisão contratual, a critério do C&F.",
             "Em caso de mudanças legislativas/regulatórias relevantes que alterem a carga "
             "tributária, os custos de conformidade, ou a forma de incidência/retenção de "
             "tributos aplicáveis aos serviços, as Partes renegociarão, de boa-fé, os valores "
@@ -998,11 +988,12 @@ class ContractGenerator:
             self._add_clausula(
                 doc,
                 "Valores adiantados pelo C&F serão reembolsados pela "
-                "CONTRATANTE, mediante comprovação, no prazo de até 05 dias após a "
-                "apresentação do(s) comprovante(s)."
+                f"CONTRATANTE no prazo de até {numero_com_extenso(5, 'dias')}, contados da "
+                "apresentação do(s) respectivo(s) comprovante(s)."
             )
             if ac.reembolso_limitado and ac.descricao_limitacao_reembolso:
-                doc.add_paragraph(f"Limitação: {ac.descricao_limitacao_reembolso}")
+                limite = ac.descricao_limitacao_reembolso.strip().rstrip(".")
+                self._add_clausula(doc, f"O reembolso observará a seguinte limitação: {limite}.", ilvl=2)
 
         clauses = [
             "Custas, despesas, taxas, emolumentos, cópias xerográficas, diligências, "
@@ -1015,11 +1006,10 @@ class ContractGenerator:
             "ferramentas e/ou sistemas de busca de ativos, endereços e outras informações "
             "como CredLocaliza ou equivalentes, cujo custo será reembolsado pela CONTRATANTE "
             "nos exatos valores faturados pela ferramenta ou sistema.",
-            "A prestação de serviço presencial fora da sede do C&F implicará em despesas de "
-            f"deslocamento, as quais serão cobradas à razão de {valor_com_extenso(ac.valor_km or 1.70)} "
+            "A prestação de serviço presencial fora da sede do C&F implicará despesas de "
+            f"deslocamento, cobradas à razão de {valor_com_extenso(ac.valor_km or 1.70)} "
             "por quilômetro rodado.",
-            "O custo de cada cópia xerox a ser reembolsado pela CONTRATANTE é de R$ 0,40 "
-            "(quarenta centavos de reais).",
+            f"O custo de cada cópia reprográfica reembolsável pela CONTRATANTE é de {valor_com_extenso(0.40)}.",
         ]
         # Sucumbencia/renuncia so faz sentido quando ha honorario de exito pactuado.
         if has_exito:
@@ -1038,16 +1028,16 @@ class ContractGenerator:
         self._add_secao(doc, "OBRIGAÇÕES DAS PARTES")
         self._add_clausula(
             doc,
-            "Obrigações da CONTRATANTE: (i) fornecer informações/documentos de forma "
-            "completa e em tempo hábil; (ii) manter dados cadastrais atualizados; (iii) "
-            "efetuar pagamentos dentro dos respectivos prazos; (iv) autorizar despesas "
-            "quando exigido; (v) cooperar com o C&F na estratégia definida."
+            "A CONTRATANTE obriga-se a: (i) fornecer informações e documentos de forma "
+            "completa e em tempo hábil; (ii) manter seus dados cadastrais atualizados; "
+            "(iii) efetuar os pagamentos nos respectivos prazos; (iv) autorizar despesas "
+            "quando exigido; e (v) cooperar com o C&F na estratégia definida."
         )
         self._add_clausula(
             doc,
-            "Obrigações do C&F: (i) executar o serviço com diligência, técnica e zelo; "
-            "(ii) manter confidencialidade e sigilo profissional; (iii) fornecer "
-            "informações/documentos relativas à prestação de serviços, quando solicitado."
+            "O C&F obriga-se a: (i) executar o serviço com diligência, técnica e zelo; "
+            "(ii) manter confidencialidade e sigilo profissional; e (iii) fornecer, quando "
+            "solicitado, informações e documentos relativos à prestação dos serviços."
         )
         self._add_clausula(
             doc,
@@ -1059,7 +1049,7 @@ class ContractGenerator:
         self._add_secao(doc, "COMPLIANCE")
         self._add_clausula(
             doc,
-            "As Partes comprometem-se a observar a legislação aplicável, incluindo Lei "
+            "As Partes comprometem-se a observar a legislação aplicável, incluindo a Lei "
             "Anticorrupção e outras normas similares, bem como a cooperar com diretrizes de "
             "Governança, quando existentes e conhecidas, no que for pertinente à execução "
             "deste Contrato."
@@ -1079,7 +1069,7 @@ class ContractGenerator:
         )
  
     def _frase_vigencia(self, ac: Acessorios) -> str | None:
-        """Prazo especifico pactuado (Acessorios > Vigencia); None se nao informado."""
+        """Prazo específico pactuado (Acessórios > Vigência); None se não informado."""
         def br(iso: str | None) -> str | None:
             try:
                 d = datetime.fromisoformat(iso) if iso else None
@@ -1089,9 +1079,14 @@ class ContractGenerator:
 
         inicio, fim = br(ac.vigencia_inicio), br(ac.vigencia_fim)
         if inicio and fim:
-            return f"As Partes pactuam prazo específico de vigência, de {inicio} a {fim}."
+            return f"Fica pactuado o prazo específico de vigência de {inicio} a {fim}."
+        if inicio and ac.vigencia_meses:
+            return (
+                f"Fica pactuado o prazo específico de vigência de "
+                f"{numero_com_extenso(ac.vigencia_meses, 'meses')}, contados de {inicio}."
+            )
         if inicio:
-            return f"As Partes pactuam que este Contrato vigorará a partir de {inicio}."
+            return f"O presente Contrato vigorará a partir de {inicio}."
         return None
 
     def _add_term_and_termination(self, doc: Document, data: ContratoRequest) -> None:
@@ -1115,45 +1110,46 @@ class ContractGenerator:
             "Este prazo de antecedência não substitui nem prejudica o disposto nos "
             "arts. 112, § 1º, do Código de Processo Civil e 5º, § 3º, do Estatuto da OAB, de "
             "modo que, no caso de demandas judiciais, arbitrais ou administrativas, o C&F e "
-            "seus advogados permanecerão representando a CONTRATANTE durante os dez dias "
+            "seus advogados permanecerão representando a CONTRATANTE durante os 10 (dez) dias "
             "seguintes à notificação, salvo se forem substituídos antes do término desse "
             "prazo.",
             ilvl=2,
         )
-        base_83 = (
-            "Em caso de extinção contratual, aplica-se o seguinte: (i) honorários "
-            "vencidos serão devidos integralmente; (ii) honorários vincendos pactuados por "
-            "hora trabalhada serão devidos em relação aos serviços executados até a efetiva "
-            "extinção; (iii) honorários vincendos pactuados por mensalidade serão devidos "
-            "observando-se o prazo de antecedência de 30 dias previsto nesta cláusula; "
-            "(iv) honorários vincendos pactuados por pró-labore serão devidos, "
-            "proporcionalmente, observando-se os serviços executados e ainda não "
-            "remunerados"
-        )
+        incisos = [
+            "(i) os honorários vencidos serão devidos integralmente",
+            "(ii) os honorários vincendos pactuados por hora trabalhada serão devidos em "
+            "relação aos serviços executados até a efetiva extinção",
+            "(iii) os honorários vincendos pactuados por mensalidade serão devidos "
+            "observando-se o prazo de antecedência de 30 (trinta) dias previsto nesta cláusula",
+            "(iv) os honorários vincendos pactuados por pró-labore serão devidos, "
+            "proporcionalmente, observando-se os serviços executados e ainda não remunerados",
+        ]
+        base_83 = "Em caso de extinção do Contrato: " + "; ".join(incisos[:-1])
 
         has_exito = any(TipoHonorario.EXITO in e.honorarios for e in data.escopos)
         criterio_exito = (data.acessorios.criterio_extincao_exito or "").strip()
         if has_exito and criterio_exito:
             self._add_clausula(
                 doc,
-                f"{base_83}; (v) honorários de êxito vincendos ao momento da resilição "
-                f"continuarão devidos ao C&F observando-se o seguinte critério: {criterio_exito}."
+                f"{base_83}; {incisos[-1]}; e (v) os honorários de êxito vincendos ao momento "
+                f"da resilição continuarão devidos ao C&F observando-se o seguinte critério: "
+                f"{criterio_exito.rstrip('.')}."
             )
         elif has_exito:
             self._add_clausula(
                 doc,
-                f"{base_83}; (v) honorários de êxito vincendos ao momento da resilição "
-                "continuarão devidos ao C&F observando-se a seguinte proporção não cumulativa:"
+                f"{base_83}; {incisos[-1]}; e (v) os honorários de êxito vincendos ao momento "
+                "da resilição continuarão devidos ao C&F observando-se a seguinte proporção "
+                "não cumulativa:"
             )
             linhas = [
-                ("Antes da primeira decisão de mérito", "50% do percentual de êxito pactuado"),
-                ("Depois da primeira decisão de mérito e antes da primeira decisão recursal",
-                 "70% do percentual de êxito pactuado"),
+                ("Antes da primeira decisão de mérito", 50),
+                ("Depois da primeira decisão de mérito e antes da primeira decisão recursal", 70),
                 ("Depois da primeira decisão recursal e antes do cumprimento ou liquidação "
-                 "definitiva da decisão", "85% do percentual de êxito pactuado"),
-                ("Durante cumprimento ou liquidação definitiva da decisão e antes do efetivo "
-                 "proveito econômico", "95% do percentual de êxito pactuado"),
-                ("Depois do efetivo proveito econômico", "100% do percentual de êxito pactuado"),
+                 "definitiva da decisão", 85),
+                ("Durante o cumprimento ou a liquidação definitiva da decisão e antes do efetivo "
+                 "proveito econômico", 95),
+                ("Depois do efetivo proveito econômico", 100),
             ]
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
@@ -1163,7 +1159,7 @@ class ContractGenerator:
             for fase, valor in linhas:
                 row = table.add_row().cells
                 row[0].text = fase
-                row[1].text = valor
+                row[1].text = f"{percentual_com_extenso(valor)} do percentual de êxito pactuado"
             self._add_clausula(
                 doc,
                 "A eventual inocorrência de determinada fase processual não afeta o "
@@ -1172,7 +1168,7 @@ class ContractGenerator:
                 "resilição, independentemente da ocorrência das fases anteriores."
             )
         else:
-            self._add_clausula(doc, f"{base_83}.")
+            self._add_clausula(doc, f"{base_83}; e {incisos[-1]}.")
 
         self._add_clausula(
             doc,
@@ -1224,20 +1220,20 @@ class ContractGenerator:
             "Os direitos e obrigações decorrentes deste Contrato não poderão ser cedidos, "
             "salvo com expressa autorização das Partes signatárias.",
             "O não exercício, pelas Partes, de quaisquer dos direitos ou prerrogativas "
-            "previstas neste Contrato, ou mesmo na legislação aplicável, será tido como ato "
+            "previstos neste Contrato, ou mesmo na legislação aplicável, será tido como ato "
             "de mera liberalidade, não constituindo alteração ou novação das obrigações ora "
             "estabelecidas, cujo cumprimento poderá ser exigido a qualquer tempo, "
             "independentemente de comunicação prévia à Parte.",
-            "As Partes se comprometem a consultar uma à outra sempre que o não-exercício "
+            "As Partes comprometem-se a consultar-se mutuamente sempre que o não exercício "
             "reiterado de eventual direito trouxer dúvida sobre eventual renúncia tácita, "
             "preferindo a manifestação expressa para a compreensão do comportamento alheio "
             "e formação de legítima confiança.",
-            "O presente contrato é título executivo extrajudicial, podendo ser utilizado "
+            "O presente Contrato constitui título executivo extrajudicial, podendo ser utilizado "
             "para a execução judicial de quaisquer obrigações nele constantes.",
             "Nos termos do artigo 10, § 2º, da MP 2200-2/2001, § 4º do artigo 784 do Código "
             "de Processo Civil e legislação correlata, as Partes e as testemunhas aqui "
             "envolvidas reconhecem a validade de assinaturas eletrônicas ainda que não "
-            "utilizem de certificado digital emitido pelo padrão ICP-Brasil.",
+            "utilizem certificado digital emitido pelo padrão ICP-Brasil.",
             "O Contrato terá efeito a partir da data indicada como aquela da sua "
             "formalização, independentemente de as assinaturas, eletrônicas ou não, serem "
             "eventualmente realizadas em data distinta.",
@@ -1404,14 +1400,19 @@ class ContractGenerator:
     def _preco_resumo(self, escopo: EscopoItem) -> str:
         parts = []
         for tipo in escopo.honorarios:
+            # Valor zerado ou vazio não aparece: fica só o tipo de honorário.
             if tipo == TipoHonorario.HORA_TRABALHADA and escopo.hora_trabalhada:
-                parts.append(f"{valor_com_extenso(escopo.hora_trabalhada.valor_hora)} por hora trabalhada")
+                v = escopo.hora_trabalhada.valor_hora
+                parts.append(f"{valor_com_extenso(v)} por hora trabalhada" if v else "Hora trabalhada")
             elif tipo == TipoHonorario.PRO_LABORE and escopo.pro_labore:
-                parts.append(f"{valor_com_extenso(escopo.pro_labore.valor_total)} pró-labore")
+                v = escopo.pro_labore.valor_total
+                parts.append(f"{valor_com_extenso(v)} de pró-labore" if v else "Pró-labore")
             elif tipo == TipoHonorario.MENSALIDADE and escopo.mensalidade:
-                parts.append(f"{valor_com_extenso(escopo.mensalidade.valor)} de mensalidade")
-            elif tipo == TipoHonorario.EXITO and escopo.exito and escopo.exito.percentual:
-                parts.append(f"{self._format_percentual(escopo.exito.percentual)} de êxito")
+                v = escopo.mensalidade.valor
+                parts.append(f"{valor_com_extenso(v)} de mensalidade" if v else "Mensalidade")
+            elif tipo == TipoHonorario.EXITO and escopo.exito:
+                v = escopo.exito.percentual
+                parts.append(f"{percentual_com_extenso(v)} de êxito" if v else "Êxito")
             elif tipo == TipoHonorario.PERMUTA and escopo.permuta:
-                parts.append(f"Permuta: {escopo.permuta.objeto_permuta}")
+                parts.append(f"Permuta com serviços de {escopo.permuta.objeto_permuta}")
         return " + ".join(parts) if parts else "A definir"
