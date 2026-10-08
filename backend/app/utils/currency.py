@@ -49,3 +49,14 @@ def formatar_percentual(value) -> str:
     if num.is_integer():
         return f"{int(num)}%"
     return f"{num:.2f}".rstrip("0").rstrip(".").replace(".", ",") + "%"
+
+
+def percentual_com_extenso(value) -> str:
+    """10 -> '10% (dez por cento)', 2.25 -> '2,25% (dois vírgula vinte e cinco por cento)'."""
+    num = round(float(value), 2)
+    inteiro, _, dec = f"{num:.2f}".rstrip("0").rstrip(".").partition(".")
+    extenso = num2words(int(inteiro), lang="pt_BR")
+    if dec:
+        zero = "zero " if dec.startswith("0") else ""  # 1,05 -> "um vírgula zero cinco"
+        extenso += f" vírgula {zero}{num2words(int(dec), lang='pt_BR')}"
+    return f"{formatar_percentual(num)} ({extenso} por cento)"

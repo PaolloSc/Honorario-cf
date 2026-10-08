@@ -2,6 +2,7 @@
 
 import FormField, { Input, TextArea, Toggle } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import DateRangePicker from "@/components/ui/DateRangePicker";
 import type { Acessorios } from "@/types/contract";
  
 interface Step4Props {
@@ -16,10 +17,23 @@ export default function Step4Acessorios({ acessorios, onChange }: Step4Props) {
         4. Acessórios
       </h2>
       <p className="text-sm text-muted mb-6">
-        Configure reembolsos, despesas e penalidades.
+        Configure vigência, reembolsos, despesas e penalidades.
       </p>
  
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
+        <FormField
+          label="Vigência"
+          hint="Prazo específico do contrato. Deixe vazio para tempo indeterminado."
+        >
+          <DateRangePicker
+            dataInicio={acessorios.vigencia_inicio}
+            dataFim={acessorios.vigencia_fim}
+            onChange={(di, df, dur) =>
+              onChange({ ...acessorios, vigencia_inicio: di, vigencia_fim: df, vigencia_meses: dur })
+            }
+          />
+        </FormField>
+
         <Toggle
           label="Há reembolso de despesas?"
           value={acessorios.tem_reembolso}

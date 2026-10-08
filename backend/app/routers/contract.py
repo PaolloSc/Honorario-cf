@@ -5,9 +5,11 @@ import logging
 import re
 import uuid
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
@@ -21,7 +23,7 @@ from app.database import (
     serialize_cliente_docs,
     utcnow,
 )
-from app.models.contract import ContratoRequest, ContratoResponse
+from app.models.contract import Acessorios, ContratoRequest, ContratoResponse, EscopoItem
 from app.models.contrato_consumidor import (
     TIPO_CONSUMIDOR_AEREO,
     ContratoConsumidorRequest,
@@ -680,6 +682,50 @@ def preview_contrato_consumidor(
             tmp_path.unlink()
         except OSError:
             pass
+
+
+# Contratante ficticio: na etapa 3 o cliente costuma estar pela metade e a
+# previa de honorarios nao depende dele.
+_CONTRATANTE_PREVIA = {
+    "tipo": "PF", "nome": "Prévia", "nacionalidade": "brasileiro(a)", "cpf": "00000000000",
+    "profissao": "-", "estado_civil": "Solteiro(a)", "endereco": "-", "email": "previa@cf.adv.br",
+}
+
+
+class PreviaHonorariosRequest(BaseModel):
+    escopos: list[EscopoItem]
+    acessorios: Optional[Acessorios] = None
+
+
+@router.post("/preview-honorarios", response_class=HTMLResponse)
+def preview_honorarios(
+    body: PreviaHonorariosRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> HTMLResponse:
+    """Previa so' da secao de honorarios, para o pop-up do wizard. Nada e' gravado."""
+    import tempfile
+
+    data = ContratoRequest(
+        contratantes=[_CONTRATANTE_PREVIA],
+        escopos=body.escopos,
+        acessorios=body.acessorios or Acessorios(),
+        participacao={"tem_participacao": False},
+    )
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        get_generator()._build_document(data).save(str(tmp_path))
+        html = _docx_to_html(tmp_path)
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+    # Secoes saem como <h3> numerado; recorta da secao 3 ate a seguinte.
+    inicio = html.rfind("<h3>", 0, html.find("OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS"))
+    fim = html.rfind("<h3>", 0, html.find("CLÁUSULAS GERAIS"))
+    return HTMLResponse(html[inicio:fim])
 
 
 @router.get("/{contract_id}/preview", response_class=HTMLResponse)
