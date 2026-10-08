@@ -19,6 +19,12 @@ function formatCurrency(val: number): string {
   });
 }
  
+// "2026-11-01" -> "01/11/2026" sem passar por Date (fuso não mexe no dia).
+function dataBR(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return d ? `${d}/${m}/${a}` : iso;
+}
+ 
 interface Step6Props {
   data: ContratoFormData;
 }
@@ -100,6 +106,13 @@ export default function Step6Revisao({ data }: Step6Props) {
       {/* Acessórios */}
       <Section title="Acessórios">
         <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
+          {data.acessorios.vigencia_inicio && (
+            <li>
+              Vigência: {dataBR(data.acessorios.vigencia_inicio)}
+              {data.acessorios.vigencia_fim ? ` a ${dataBR(data.acessorios.vigencia_fim)}` : " em diante"}
+              {data.acessorios.vigencia_meses ? ` (${data.acessorios.vigencia_meses} meses)` : ""}
+            </li>
+          )}
           <li>
             Reembolso:{" "}
             {data.acessorios.tem_reembolso
@@ -239,17 +252,13 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
       }
       parts.push(s);
     } else if (tipo === "pro_labore" && escopo.pro_labore) {
-      let s = `${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`;
-      if (escopo.pro_labore.duracao_meses) s += ` · ${escopo.pro_labore.duracao_meses} meses`;
-      parts.push(s);
+      parts.push(`${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`);
     } else if (tipo === "mensalidade" && escopo.mensalidade) {
       let s = `${formatCurrency(escopo.mensalidade.valor)}/mês`;
       if (escopo.mensalidade.duracao_meses) s += ` · ${escopo.mensalidade.duracao_meses} meses`;
       parts.push(s);
     } else if (tipo === "exito" && escopo.exito?.percentual) {
-      let s = `${formatPercentual(escopo.exito.percentual)} êxito`;
-      if (escopo.exito.duracao_meses) s += ` · ${escopo.exito.duracao_meses} meses`;
-      parts.push(s);
+      parts.push(`${formatPercentual(escopo.exito.percentual)} êxito`);
     } else if (tipo === "permuta" && escopo.permuta) {
       parts.push(`Permuta: ${escopo.permuta.objeto_permuta}`);
     } else {
