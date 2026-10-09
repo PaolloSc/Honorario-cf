@@ -6,6 +6,7 @@ Uso:
 
 Ambiente: NFSE_CERT_PFX_B64, NFSE_CERT_PFX_SENHA, NFSE_ADN_BASE_URL (padrao:
 homologacao) e, com --ingerir, HONORARIO_API_URL e NFSE_WORKER_TOKEN.
+--ingerir exige NFSE_ADN_BASE_URL igual a URL de producao.
 Os valores do certificado nunca vao para log."""
 from __future__ import annotations
 
@@ -82,6 +83,11 @@ def main() -> None:
     args = parser.parse_args()
     cnpj = "".join(ch for ch in args.cnpj if ch.isdigit())
     base = (os.getenv("NFSE_ADN_BASE_URL") or ADN_HOMOLOGACAO).rstrip("/")
+    if args.ingerir and base != ADN_PRODUCAO:
+        # Trava tambem aqui, nao so no workflow: nota de homologacao nunca
+        # entra no Honorario, nem rodando o worker a mao.
+        log.error("--ingerir so com NFSE_ADN_BASE_URL=%s (atual: %s)", ADN_PRODUCAO, base)
+        sys.exit(2)
 
     hon = None
     if args.ingerir:

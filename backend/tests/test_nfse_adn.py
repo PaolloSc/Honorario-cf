@@ -304,3 +304,110 @@ def test_certificado_senha_errada_nao_vaza_a_senha():
     with pytest.raises(CertificadoError) as e:
         ssl_context_do_pfx(_pfx(b"segredo"), "errada")
     assert "errada" not in str(e.value) and "segredo" not in str(e.value)
+
+
+# --- revisao da #111 --------------------------------------------------------
+
+def test_nt007_valor_liquido_vem_de_vliq_e_csll_sem_pis_cofins():
+    # NT 007: vRetCSLL = PIS + COFINS + CSLL retidos (65 + 300 + 100).
+    from app.services.nfse_parser import parse_documento
+
+    nf = parse_documento(_xml("nacional_emitida_nt007.xml"), CF)
+    assert nf.valor_liquido == Decimal("8885.00")  # vLiq da nota; antes saia 8520
+    assert (nf.pis, nf.cofins, nf.csll) == (Decimal("65.00"), Decimal("300.00"), Decimal("100.00"))
+
+
+def test_falha_no_meio_do_ingest_finaliza_o_job_com_erro(db, monkeypatch):  # noqa: F811
+    from app.services import nfse_sync
+
+    def explode(*a, **kw):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(nfse_sync, "match_nfse", explode)
+    with pytest.raises(RuntimeError):
+        _ingest(db, [_xml("nacional_emitida.xml")], ultimo_nsu=9)
+    row = db.execute(text("SELECT status, motivo_falha, ultimo_nsu FROM sync_jobs")).fetchone()
+    assert row[0] == "erro" and "boom" in row[1] and row[2] is None
+    monkeypatch.undo()
+    assert _ingest(db, [_xml("nacional_emitida.xml")]).status == "ok"  # sem 409 preso
+
+
+def test_sql_do_nfse_nao_compara_boolean_com_inteiro():
+    """No Postgres, boolean = 1 da erro ('operator does not exist'). O SQLite dos
+    testes aceita, entao este teste olha o texto do SQL."""
+    import re
+
+    raiz = Path(__file__).parent.parent / "app"
+    arquivos = [raiz / "services/nfse_sync.py", raiz / "services/nfse_pagamento.py",
+                raiz / "routers/nfse.py", raiz / "routers/nfse_internal.py",
+                raiz / "routers/admin_credenciais.py"]
+    ruins = re.compile(r"\b(cancelada|ativo|vinculo_ativo|aprovada)\s*=\s*[01]\b|\bIS\s+:\w+")
+    achados = [f"{a.name}: {m.group(0)}" for a in arquivos for m in ruins.finditer(a.read_text(encoding="utf-8"))]
+    assert achados == []
+
+
+def test_run_recusa_ingerir_fora_de_producao(monkeypatch):
+    from workers.nfse_adn import run
+
+    chamadas = []
+    monkeypatch.setattr(run, "executar", lambda *a, **kw: chamadas.append(a) or 0)
+    monkeypatch.setenv("NFSE_CERT_PFX_B64", base64.b64encode(_pfx(b"s")).decode())
+    monkeypatch.setenv("NFSE_CERT_PFX_SENHA", "s")
+    monkeypatch.setenv("HONORARIO_API_URL", "https://hon.teste")
+    monkeypatch.setenv("NFSE_WORKER_TOKEN", "t")
+
+    for base in ["", run.ADN_HOMOLOGACAO, "https://adn.nfse.gov.br.evil/contribuintes"]:
+        monkeypatch.setenv("NFSE_ADN_BASE_URL", base)
+        monkeypatch.setattr("sys.argv", ["run", "--cnpj", CF, "--ingerir"])
+        with pytest.raises(SystemExit) as e:
+            run.main()
+        assert e.value.code == 2
+    assert chamadas == []
+
+    monkeypatch.setenv("NFSE_ADN_BASE_URL", run.ADN_PRODUCAO)
+    with pytest.raises(SystemExit) as e:
+        run.main()
+    assert e.value.code == 0 and len(chamadas) == 1
+
+
+@pytest.mark.skipif(not __import__("os").getenv("TEST_POSTGRES_URL"),
+                    reason="defina TEST_POSTGRES_URL para rodar contra Postgres de verdade")
+def test_ingest_completo_no_postgres():
+    """Emitida (auto + pagamento), recebida e cancelamento num Postgres real."""
+    import os
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.database import Base
+
+    eng = create_engine(os.environ["TEST_POSTGRES_URL"])
+    Base.metadata.drop_all(eng)
+    Base.metadata.create_all(eng)
+    try:
+        with sessionmaker(bind=eng)() as s:
+            s.execute(text("""
+                INSERT INTO contracts (contract_id, status, client_name, client_email,
+                                       current_version, cliente_docs, created_at, updated_at)
+                VALUES ('c-1', 'ativo', 'X', 'x@x.com', 1, '["98765432000100"]', now(), now())"""))
+            s.execute(text("""
+                INSERT INTO participacoes (contract_id, beneficiario_email, beneficiario_nome,
+                       tipo_honorario, percentual_captacao, percentual_performance, natureza,
+                       cliente_cpf_cnpj, data_inicio, vinculo_ativo, aprovada, created_at, updated_at)
+                VALUES ('c-1', 'b@x.com', 'B', 'mensalidade', 10, 0, 'contratual',
+                        '98765432000100', '2024-08-01', TRUE, TRUE, now(), now())"""))
+            s.commit()
+            abrasf = _xml("abrasf_minimo.xml").replace(b"12345678000199", CF.encode())
+            job = _ingest(s, [abrasf, _xml("nacional_emitida_nt007.xml"), _xml("nacional_recebida.xml"),
+                              _xml("nacional_evento_cancelamento.xml")], ultimo_nsu=3)
+            assert (job.status, job.erros, job.auto_vinculadas) == ("ok", 0, 2)
+            _ingest(s, [abrasf])  # dedupe ABRASF (serie NULL) no Postgres
+            rows = dict(s.execute(text(
+                "SELECT COALESCE(chave_acesso, numero), status_matching FROM nfse_recebidas")).fetchall())
+            assert rows == {"1000": "auto", CHAVE_EMITIDA: "cancelada",
+                            "31062002112223330001440000000000000426100000000042": "recebida"}
+            assert s.execute(text("SELECT valor_liquido FROM nfse_recebidas WHERE chave_acesso=:c"),
+                             {"c": CHAVE_EMITIDA}).scalar() == Decimal("8885.00")
+    finally:
+        Base.metadata.drop_all(eng)
+        eng.dispose()
