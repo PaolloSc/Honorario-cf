@@ -35,10 +35,15 @@ class NFSeData(BaseModel):
     direcao: str = "emitida"
     # Chave de acesso de 50 digitos do padrao nacional (None no ABRASF/BHISS).
     chave_acesso: Optional[str] = None
+    # vLiq da nota nacional: o valor oficial. Quando vem, prevalece sobre a
+    # conta abaixo (a NT 007 mudou o que vRetCSLL soma; ver nfse_parser).
+    valor_liquido_nota: Optional[Decimal] = None
 
     @computed_field
     @property
     def valor_liquido(self) -> Decimal:
+        if self.valor_liquido_nota is not None:
+            return self.valor_liquido_nota
         return (
             self.valor_servicos
             - self.iss_retido

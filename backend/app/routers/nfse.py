@@ -119,7 +119,7 @@ def vincular_manual(
 
     part = db.execute(
         text("""SELECT id FROM participacoes
-                WHERE contract_id=:c AND vinculo_ativo=1 AND aprovada=1
+                WHERE contract_id=:c AND vinculo_ativo=TRUE AND aprovada=TRUE
                 ORDER BY data_inicio DESC LIMIT 1"""),
         {"c": body.contract_id},
     ).fetchone()

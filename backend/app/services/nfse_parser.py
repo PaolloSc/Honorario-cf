@@ -188,6 +188,14 @@ def _parse_nfse_nacional(root: Element, xml: bytes, cnpj_consultado: str) -> "NF
     trib = dps.find(f"{_NS_NAC}valores/{_NS_NAC}trib")
     iss = _decimal(_n(inf, "valores/vISSQN")) if _n(trib, "tribMun/tpRetISSQN") in ("2", "3") else Decimal("0")
     pis_ret, cofins_ret = _RET_PIS_COFINS.get(_n(trib, "tribFed/piscofins/tpRetPisCofins") or "", (False, False))
+    pis = _decimal(_n(trib, "tribFed/piscofins/vPis")) if pis_ret else Decimal("0")
+    cofins = _decimal(_n(trib, "tribFed/piscofins/vCofins")) if cofins_ret else Decimal("0")
+    # NT 007 (desde 09/02/2026): vRetCSLL traz PIS+COFINS+CSLL retidos somados.
+    # ponytail: nota anterior a NT traz so a CSLL; se a subtracao der negativa,
+    # e o formato antigo. O valor liquido nao depende disso: vem de vLiq.
+    ret_csll = _decimal(_n(trib, "tribFed/vRetCSLL"))
+    csll = ret_csll - pis - cofins if ret_csll >= pis + cofins else ret_csll
+    vliq = _n(inf, "valores/vLiq")
 
     return NFSeData(
         cnpj_prestador=emitente,
@@ -201,9 +209,10 @@ def _parse_nfse_nacional(root: Element, xml: bytes, cnpj_consultado: str) -> "NF
         valor_servicos=_decimal(_n(dps, "valores/vServPrest/vServ")),
         iss_retido=iss,
         irrf=_decimal(_n(trib, "tribFed/vRetIRRF")),
-        pis=_decimal(_n(trib, "tribFed/piscofins/vPis")) if pis_ret else Decimal("0"),
-        cofins=_decimal(_n(trib, "tribFed/piscofins/vCofins")) if cofins_ret else Decimal("0"),
-        csll=_decimal(_n(trib, "tribFed/vRetCSLL")),
+        pis=pis,
+        cofins=cofins,
+        csll=csll,
+        valor_liquido_nota=Decimal(vliq) if vliq else None,
         discriminacao=_n(dps, "serv/cServ/xDescServ"),
         xml_raw=xml,
         direcao=direcao,

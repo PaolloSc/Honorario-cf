@@ -147,7 +147,7 @@ def report_status(
     if status == "erro_login":
         db.execute(
             text("""UPDATE credencial_pbh
-                    SET ativo=0, motivo_inativacao=:m, atualizado_em=:n
+                    SET ativo=FALSE, motivo_inativacao=:m, atualizado_em=:n
                     WHERE cnpj_prestador=:c"""),
             {"m": motivo or "login_invalido", "n": now, "c": cnpj},
         )
