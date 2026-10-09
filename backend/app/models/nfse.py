@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field, computed_field
 class NFSeData(BaseModel):
     """Representacao canonica de uma NFS-e apos parse XML."""
 
-    cnpj_prestador: str = Field(..., min_length=14, max_length=14)
+    # CNPJ do emitente; numa nota recebida de pessoa fisica, CPF (11 digitos).
+    cnpj_prestador: str = Field(..., min_length=11, max_length=14)
     numero: str
     serie: Optional[str] = None
     codigo_verificacao: Optional[str] = None
@@ -29,10 +30,20 @@ class NFSeData(BaseModel):
     cancelada: bool = False
     data_cancelamento: Optional[datetime] = None
     xml_raw: bytes
+    # "emitida" = o escritorio e' o prestador (fluxo de conciliacao com contrato);
+    # "recebida" = o escritorio e' tomador/intermediario (nota de fornecedor).
+    direcao: str = "emitida"
+    # Chave de acesso de 50 digitos do padrao nacional (None no ABRASF/BHISS).
+    chave_acesso: Optional[str] = None
+    # vLiq da nota nacional: o valor oficial. Quando vem, prevalece sobre a
+    # conta abaixo (a NT 007 mudou o que vRetCSLL soma; ver nfse_parser).
+    valor_liquido_nota: Optional[Decimal] = None
 
     @computed_field
     @property
     def valor_liquido(self) -> Decimal:
+        if self.valor_liquido_nota is not None:
+            return self.valor_liquido_nota
         return (
             self.valor_servicos
             - self.iss_retido
@@ -41,6 +52,14 @@ class NFSeData(BaseModel):
             - self.cofins
             - self.csll
         )
+
+
+class CancelamentoData(BaseModel):
+    """Evento de cancelamento do padrao nacional (vem no mesmo fluxo de NSU)."""
+
+    chave_acesso: str
+    data_cancelamento: Optional[datetime] = None
+    xml_raw: bytes
 
 
 class CredencialPbhCreate(BaseModel):
@@ -75,6 +94,8 @@ class NFSeOut(BaseModel):
     participacao_id: Optional[int]
     pagamento_id: Optional[int]
     motivo: Optional[str]
+    direcao: str = "emitida"
+    chave_acesso: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -91,6 +112,9 @@ class IngestRequest(BaseModel):
     origem: str = "cron"
     disparado_por: Optional[str] = None
     xmls_b64: list[str]
+    # Ultimo NSU do ADN contido neste lote; gravado no sync_job so' se o ingest
+    # terminar ok, para o proximo run continuar dali.
+    ultimo_nsu: Optional[int] = None
 
 
 class SyncJobOut(BaseModel):

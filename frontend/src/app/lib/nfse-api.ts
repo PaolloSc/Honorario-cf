@@ -3,7 +3,10 @@ import { fetchAutenticado } from "./api";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
 
 export type NFSeStatus =
-  | "auto" | "manual" | "pendente" | "sem_match" | "erro" | "cancelada";
+  | "auto" | "manual" | "pendente" | "sem_match" | "erro" | "cancelada" | "recebida";
+
+// emitida = o escritorio e o prestador; recebida = nota de fornecedor.
+export type NFSeDirecao = "emitida" | "recebida";
 
 export interface NFSeOut {
   id: number;
@@ -22,6 +25,8 @@ export interface NFSeOut {
   participacao_id: number | null;
   pagamento_id: number | null;
   motivo: string | null;
+  direcao: NFSeDirecao;
+  chave_acesso: string | null;
 }
 
 export interface HealthResponse {
@@ -50,11 +55,12 @@ async function _fetch<T>(path: string, init?: RequestInit): Promise<T> {
 export const nfseApi = {
   health: () => _fetch<HealthResponse>("/api/nfse/health"),
 
-  listar: (params: { cnpj_prestador?: string; competencia_mes?: string; status?: string }) => {
+  listar: (params: { cnpj_prestador?: string; competencia_mes?: string; status?: string; direcao?: NFSeDirecao }) => {
     const q = new URLSearchParams();
     if (params.cnpj_prestador) q.set("cnpj_prestador", params.cnpj_prestador);
     if (params.competencia_mes) q.set("competencia_mes", params.competencia_mes);
     if (params.status) q.set("status", params.status);
+    if (params.direcao) q.set("direcao", params.direcao);
     return _fetch<NFSeOut[]>(`/api/nfse?${q.toString()}`);
   },
 
