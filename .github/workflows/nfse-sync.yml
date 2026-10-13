@@ -5,11 +5,8 @@ on:
     - cron: '0 6 * * *'      # 03:00 America/Sao_Paulo
   workflow_dispatch:
     inputs:
-      periodo_inicio:
-        description: 'YYYY-MM-DD (opcional)'
-        required: false
-      periodo_fim:
-        description: 'YYYY-MM-DD (opcional)'
+      nsu:
+        description: 'NSU inicial (opcional; padrão: último ingerido)'
         required: false
 
 concurrency:
@@ -27,43 +24,39 @@ jobs:
     env:
       HONORARIO_API_URL: ${{ secrets.HONORARIO_API_URL }}
       NFSE_WORKER_TOKEN: ${{ secrets.NFSE_WORKER_TOKEN }}
+      NFSE_CERT_PFX_B64: ${{ secrets.NFSE_CERT_PFX_B64 }}
+      NFSE_CERT_PFX_SENHA: ${{ secrets.NFSE_CERT_PFX_SENHA }}
+      # Vazio = homologação (produção restrita). Produção: https://adn.nfse.gov.br/contribuintes
+      NFSE_ADN_BASE_URL: ${{ vars.NFSE_ADN_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Check feature flag
+        id: flag
         run: |
           STATUS=$(curl -fsS "$HONORARIO_API_URL/api/nfse/health" || echo '{"enabled":false}')
           ENABLED=$(echo "$STATUS" | python -c "import sys,json; print(json.load(sys.stdin).get('enabled', False))")
-          if [ "$ENABLED" != "True" ]; then
-            echo "NFS-e desabilitado, encerrando."
-            exit 0
-          fi
+          echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
+          if [ "$ENABLED" != "True" ]; then echo "NFS-e desabilitado, encerrando."; fi
 
       - uses: actions/setup-python@v5
+        if: steps.flag.outputs.enabled == 'True'
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: 'backend/workers/nfse_scraper/requirements.txt'
+          cache-dependency-path: 'backend/workers/nfse_adn/requirements.txt'
 
-      - run: pip install -r backend/workers/nfse_scraper/requirements.txt
-      - run: python -m playwright install --with-deps chromium
+      - if: steps.flag.outputs.enabled == 'True'
+        run: pip install -r backend/workers/nfse_adn/requirements.txt
 
-      - name: Run scraper
+      - name: Baixar NFS-e do ADN
+        if: steps.flag.outputs.enabled == 'True'
         working-directory: backend
+        env:
+          NSU: ${{ github.event.inputs.nsu }}
         run: |
           ARGS="--cnpj ${{ matrix.cnpj }}"
-          if [ -n "${{ github.event.inputs.periodo_inicio }}" ]; then
-            ARGS="$ARGS --inicio ${{ github.event.inputs.periodo_inicio }}"
-          fi
-          if [ -n "${{ github.event.inputs.periodo_fim }}" ]; then
-            ARGS="$ARGS --fim ${{ github.event.inputs.periodo_fim }}"
-          fi
-          python -m workers.nfse_scraper.run $ARGS
-
-      - name: Upload screenshots on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots-${{ matrix.cnpj }}
-          path: backend/screenshots/
-          retention-days: 7
+          if [ -n "$NSU" ]; then ARGS="$ARGS --nsu $NSU"; fi
+          # Só grava no Honorário quando aponta para produção; homologação é dry-run.
+          if [ "$NFSE_ADN_BASE_URL" = "https://adn.nfse.gov.br/contribuintes" ]; then ARGS="$ARGS --ingerir"; fi
+          python -m workers.nfse_adn.run $ARGS

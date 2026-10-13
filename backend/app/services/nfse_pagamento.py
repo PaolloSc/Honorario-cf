@@ -61,7 +61,7 @@ def gerar_pagamento_para_nfse(db: Session, nfse_id: int) -> PagamentoResult:
                 valor_participacao, dentro_limite_temporal, observacoes,
                 registrado_por, status, parcela_num, parcela_total, created_at
             ) VALUES (
-                :pid, :dt, :vl, :vp, 1, 'NFS-e auto', 'sistema',
+                :pid, :dt, :vl, :vp, TRUE, 'NFS-e auto', 'sistema',
                 'aguardando_pagamento', 1, 1, :now
             )
         """),

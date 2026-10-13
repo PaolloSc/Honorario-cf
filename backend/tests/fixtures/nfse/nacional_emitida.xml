@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+  <infNFSe Id="NFS31062002254631590001730000000000000126100000000017">
+    <xLocEmi>Belo Horizonte</xLocEmi>
+    <nNFSe>12</nNFSe>
+    <dhProc>2026-05-10T10:05:00-03:00</dhProc>
+    <emit>
+      <CNPJ>25463159000173</CNPJ>
+      <xNome>Escritorio C&amp;F</xNome>
+    </emit>
+    <valores>
+      <vBC>10000.00</vBC>
+      <pAliqAplic>5.00</pAliqAplic>
+      <vISSQN>500.00</vISSQN>
+      <vTotalRet>1115.00</vTotalRet>
+      <vLiq>8885.00</vLiq>
+    </valores>
+    <DPS versao="1.01">
+      <infDPS Id="DPS310620022546315900017300001000000000000012">
+        <tpAmb>2</tpAmb>
+        <dhEmi>2026-05-10T10:00:00-03:00</dhEmi>
+        <serie>1</serie>
+        <nDPS>12</nDPS>
+        <dCompet>2026-05-01</dCompet>
+        <prest><CNPJ>25463159000173</CNPJ></prest>
+        <toma>
+          <CNPJ>98765432000100</CNPJ>
+          <xNome>Cliente Exemplo LTDA</xNome>
+        </toma>
+        <serv>
+          <cServ>
+            <cTribNac>170101</cTribNac>
+            <xDescServ>Honorarios advocaticios maio/2026</xDescServ>
+          </cServ>
+        </serv>
+        <valores>
+          <vServPrest><vServ>10000.00</vServ></vServPrest>
+          <trib>
+            <tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>2</tpRetISSQN></tribMun>
+            <tribFed>
+              <piscofins><CST>01</CST><vPis>65.00</vPis><vCofins>300.00</vCofins><tpRetPisCofins>3</tpRetPisCofins></piscofins>
+              <vRetIRRF>150.00</vRetIRRF>
+              <vRetCSLL>100.00</vRetCSLL>
+            </tribFed>
+          </trib>
+        </valores>
+      </infDPS>
+    </DPS>
+  </infNFSe>
+</NFSe>
