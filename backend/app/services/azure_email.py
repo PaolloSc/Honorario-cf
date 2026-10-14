@@ -74,6 +74,7 @@ class AzureEmailService:
         subject: str,
         attachment_path: str,
         attachment_name: str | None = None,
+        cc_email: str | None = None,
     ) -> dict:
         """Send a contract as attachment via Outlook/Graph API."""
         token = await self._get_access_token()
@@ -115,6 +116,7 @@ class AzureEmailService:
                     ),
                 },
                 "toRecipients": self._build_recipients(to_email, to_name),
+                "ccRecipients": self._build_recipients(cc_email, cc_email) if cc_email else [],
                 "attachments": [
                     {
                         "@odata.type": "#microsoft.graph.fileAttachment",
