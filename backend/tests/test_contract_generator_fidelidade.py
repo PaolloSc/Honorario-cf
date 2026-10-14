@@ -725,3 +725,15 @@ def test_texto_livre_caixa_alta_e_nome_composto_ficam_como_digitados():
     # Os casos comuns continuam descendo.
     assert livre("Segunda-feira seguinte") == "segunda-feira seguinte"
     assert livre("A combinar") == "a combinar"
+
+
+def test_texto_livre_cdg27_moeda_nao_e_nome_composto_e_hifen_maiusculo_e():
+    livre = ContractGenerator._texto_livre
+    # "R$" depois da 1ª palavra comum não conta como nome composto.
+    assert livre("Até R$ 500,00") == "até R$ 500,00"
+    assert livre("A partir de R$ 1.000,00.") == "a partir de R$ 1.000,00"
+    # Hífen + maiúscula é nome composto/sigla; hífen + minúscula continua descendo.
+    assert livre("A-B Serviços") == "A-B Serviços"
+    assert livre("Segunda-feira seguinte") == "segunda-feira seguinte"
+    # Nome composto por espaço continua protegido.
+    assert livre("Segunda Vara Cível") == "Segunda Vara Cível"
