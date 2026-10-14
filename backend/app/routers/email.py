@@ -291,6 +291,7 @@ async def send_contract_email(
                 subject=data.assunto,
                 attachment_path=str(review_path),
                 attachment_name=attachment_name,
+                cc_email=user.email,  # advogado logado recebe junto com o cliente
             )
         finally:
             if review_path != filepath:

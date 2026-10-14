@@ -130,27 +130,14 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
         throw new Error("Nenhum e-mail de destinatário informado.");
       }
 
-      const falhas: string[] = [];
-      for (const dest of destinatarios) {
-        try {
-          const r = await sendEmail({
-            contract_id: id,
-            destinatario_email: dest.email.trim(),
-            destinatario_nome: dest.nome || dest.email,
-            assunto: "Contrato de Prestação de Serviços Advocatícios - C&F Advogados - Para Conferência",
-          });
-          if (!r.success) falhas.push(`${dest.email}: ${r.message || "erro"}`);
-        } catch (err) {
-          falhas.push(`${dest.email}: ${err instanceof Error ? err.message : "erro"}`);
-        }
-      }
-
-      if (falhas.length === destinatarios.length) {
-        throw new Error(`Erro ao enviar e-mail: ${falhas.join("; ")}`);
-      }
-      if (falhas.length > 0) {
-        setEmailWarning(`Alguns e-mails não foram enviados: ${falhas.join("; ")}`);
-      }
+      // Uma única mensagem com todos em "Para" (backend aceita vírgula).
+      const r = await sendEmail({
+        contract_id: id,
+        destinatario_email: destinatarios.map((d) => d.email.trim()).join(","),
+        destinatario_nome: destinatarios.map((d) => d.nome || d.email.trim()).join(" e "),
+        assunto: "Contrato de Prestação de Serviços Advocatícios - C&F Advogados - Para Conferência",
+      });
+      if (!r.success) throw new Error(`Erro ao enviar e-mail: ${r.message || "erro"}`);
 
       setStatus("sent_email");
       setMessage(
