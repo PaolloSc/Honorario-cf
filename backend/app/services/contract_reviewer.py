@@ -261,6 +261,14 @@ def review_text(document_text: str) -> list[dict]:
     return _drop_nested_trechos(findings)
 
 
+def so_do_digitado(findings: list[dict], data: dict) -> list[dict]:
+    """O modelo recebe "rotulo: texto" e as vezes critica o rotulo (hifen, "do" vs
+    "para"), que nao e' texto de ninguem. Fica so' o achado cujo trecho esta no
+    que a pessoa digitou."""
+    textos = [t for _, t in open_fields(data)]
+    return [f for f in findings if any((f.get("trecho") or "").strip() in t for t in textos)]
+
+
 # Instrucao pro humano em vez de texto pronto (ex.: "Substituir por X ou remover")
 # gera um loop: aplicar cola a instrucao no contrato, a IA aponta ela de novo na
 # proxima revisao. So' descarta o achado; o prompt ja pede pra nao gerar isso, isto
