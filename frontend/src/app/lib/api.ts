@@ -294,17 +294,23 @@ export async function previewContratoConsumidor(data: unknown, signal?: AbortSig
 }
 
 // Pop-up do wizard: como o trecho de honorários vai sair no contrato. Nada é gravado.
-export async function previewHonorarios(data: unknown, signal?: AbortSignal) {
+// Com revisar=true a IA corrige o português (lento): o html volta com o digitado
+// riscado e a sugestão em verde.
+export async function previewHonorarios(data: unknown, signal?: AbortSignal, revisar = false) {
   const res = await fetchAutenticado(`${API_BASE}/api/contract/preview-honorarios`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...(data as object), revisar }),
     signal,
   });
   if (!res.ok) {
     throw new Error(`Erro ao gerar prévia: ${res.status}`);
   }
-  return res.text();
+  return (await res.json()) as {
+    html: string;
+    findings: Array<{ trecho: string; problema: string; sugestao: string }>;
+    erro?: string | null;
+  };
 }
 
 export async function downloadContract(contractId: string) {
