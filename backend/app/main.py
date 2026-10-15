@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.database import init_db
-from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, drafts, email, emissor, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
+from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, drafts, email, emissor, faturamento, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
 
 init_db()
 
@@ -79,6 +79,7 @@ app.include_router(users.router)
 app.include_router(participacoes.router)
 app.include_router(nfse.router)
 app.include_router(emissor.router)
+app.include_router(faturamento.router)
 app.include_router(admin_credenciais.router)
 app.include_router(nfse_internal.router)
 app.include_router(tax_codes.router)
