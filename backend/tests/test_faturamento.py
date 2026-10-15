@@ -21,9 +21,11 @@ def _como(role: str):
 
 @pytest.fixture(autouse=True)
 def _login():
+    app.state.limiter.enabled = False  # os testes fazem dezenas de chamadas por minuto
     _como("financeiro")
     yield
     app.dependency_overrides.pop(get_current_user, None)
+    app.state.limiter.enabled = True
 
 
 @pytest.fixture

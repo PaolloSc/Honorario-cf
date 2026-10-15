@@ -10,16 +10,17 @@ import re
 from datetime import date, datetime, timezone
 
 from cryptography.x509.oid import NameOID
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth import CurrentUser, require_financeiro
+from app.auth import CurrentUser, get_current_user, require_financeiro
 from app.config import settings
 from app.database import get_db
-from app.models.emissao_db import EmissorConfigDB
-from app.services.emissor_cert import guardar_certificado, tem_certificado
+from app.models.emissao_db import EmissorConfigDB, NfseEmitidaDB, NfseEmitidaEventoDB
+from app.services import emissao
+from app.services.emissor_cert import cnpjs_do_certificado, guardar_certificado, tem_certificado
 from workers.nfse_adn.cert import CertificadoError, carregar_pfx
 
 router = APIRouter(prefix="/api/emissor", tags=["emissor"])
@@ -146,7 +147,7 @@ async def enviar_certificado(
     validade = cert.not_valid_after_utc.date()
     if validade < date.today():
         raise HTTPException(400, f"Certificado vencido em {validade:%d/%m/%Y}")
-    if cfg.cnpj not in cert.subject.rfc4514_string():
+    if cfg.cnpj not in cnpjs_do_certificado(cert):  # igualdade exata, nao substring
         raise HTTPException(400, "O certificado nao e do CNPJ do emissor")
     cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     guardar_certificado(cfg, conteudo, senha)
@@ -158,3 +159,104 @@ async def enviar_certificado(
     db.commit()
     db.refresh(cfg)
     return _out(cfg)
+
+
+# --- notas emitidas -------------------------------------------------------------
+
+emitidas_router = APIRouter(prefix="/api/nfse-emitidas", tags=["nfse-emitidas"])
+
+
+def _leitura(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Financeiro e admin escrevem; o leitor so le (a escrita dele ja e barrada em get_current_user)."""
+    if user.role not in ("financeiro", "admin", "leitor"):
+        raise HTTPException(403, "Acesso restrito ao setor financeiro")
+    return user
+
+
+class NfseEmitidaOut(BaseModel):
+    id: int
+    fatura_id: int
+    status: str
+    ambiente: str
+    dps_serie: str
+    dps_numero: int
+    chave_acesso: str | None
+    numero_nfse: str | None
+    valor_servicos: str
+    iss: str
+    erro_codigo: str | None
+    erro_mensagem: str | None
+    emitida_em: datetime | None
+    emitida_por: str
+    criado_em: datetime | None
+    tem_xml: bool
+
+
+class EventoOut(BaseModel):
+    id: int
+    tipo: str
+    payload: dict
+    criado_em: datetime | None
+
+
+class NfseEmitidaDetalhe(NfseEmitidaOut):
+    eventos: list[EventoOut]
+
+
+def nota_out(n: NfseEmitidaDB) -> NfseEmitidaOut:
+    return NfseEmitidaOut(
+        id=n.id, fatura_id=n.fatura_id, status=n.status, ambiente=n.ambiente, dps_serie=n.dps_serie,
+        dps_numero=n.dps_numero, chave_acesso=n.chave_acesso, numero_nfse=n.numero_nfse,
+        valor_servicos=f"{n.valor_servicos:.2f}", iss=f"{n.iss:.2f}", erro_codigo=n.erro_codigo,
+        erro_mensagem=n.erro_mensagem, emitida_em=n.emitida_em, emitida_por=n.emitida_por,
+        criado_em=n.criado_em, tem_xml=bool(n.xml_nfse),
+    )
+
+
+def _nota(db: Session, nota_id: int) -> NfseEmitidaDB:
+    n = db.get(NfseEmitidaDB, nota_id)
+    if n is None:
+        raise HTTPException(404, "Nota nao encontrada")
+    return n
+
+
+@emitidas_router.get("", response_model=list[NfseEmitidaOut])
+def listar_emitidas(status: str | None = Query(default=None), fatura_id: int | None = None,
+                    db: Session = Depends(get_db), _u: CurrentUser = Depends(_leitura)):
+    q = db.query(NfseEmitidaDB)
+    if status:
+        q = q.filter(NfseEmitidaDB.status == status)
+    if fatura_id:
+        q = q.filter(NfseEmitidaDB.fatura_id == fatura_id)
+    return [nota_out(n) for n in q.order_by(NfseEmitidaDB.id.desc()).limit(500).all()]
+
+
+@emitidas_router.get("/{nota_id}", response_model=NfseEmitidaDetalhe)
+def detalhe_emitida(nota_id: int, db: Session = Depends(get_db), _u: CurrentUser = Depends(_leitura)):
+    n = _nota(db, nota_id)
+    eventos = (db.query(NfseEmitidaEventoDB).filter(NfseEmitidaEventoDB.nfse_emitida_id == n.id)
+               .order_by(NfseEmitidaEventoDB.id).all())
+    return NfseEmitidaDetalhe(**nota_out(n).model_dump(), eventos=[
+        EventoOut(id=e.id, tipo=e.tipo, payload=e.payload or {}, criado_em=e.criado_em) for e in eventos])
+
+
+@emitidas_router.get("/{nota_id}/xml")
+def baixar_xml(nota_id: int, db: Session = Depends(get_db), _u: CurrentUser = Depends(_leitura)):
+    """O XML da NFS-e autorizada e o documento com validade juridica."""
+    n = _nota(db, nota_id)
+    if not n.xml_nfse:
+        raise HTTPException(404, "Esta nota ainda nao tem XML (so notas autorizadas)")
+    nome = f"NFSe-{n.chave_acesso or n.id}.xml"
+    return Response(bytes(n.xml_nfse), media_type="application/xml",
+                    headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+
+
+@emitidas_router.post("/{nota_id}/consultar", response_model=NfseEmitidaOut)
+def consultar_emitida(nota_id: int, confirmar_sem_nota: bool = False, db: Session = Depends(get_db),
+                      _u: CurrentUser = Depends(require_financeiro)):
+    """Pergunta ao SEFIN, pela DPS, o que aconteceu com uma nota 'processando'. Nao reenvia nada.
+    `confirmar_sem_nota`: so para ambiente de producao, onde 'nao achei a nota' nao e concluido sozinho."""
+    try:
+        return nota_out(emissao.consultar(db, nota_id, confirmar_sem_nota=confirmar_sem_nota))
+    except emissao.EmissaoErro as e:
+        raise HTTPException(e.status_code, e.mensagem) from None

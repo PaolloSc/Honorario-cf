@@ -9,7 +9,7 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser, require_financeiro
 from app.database import ContractDB, ContractVersionDB, get_db
 from app.models.emissao_db import ContratoFaturamentoDB, FaturaDB, ServicoDB, TomadorDB
+from app.routers.emissor import NfseEmitidaOut, nota_out
+from app.services import emissao
 from app.utils.documento import normalizar_doc
 
 router = APIRouter(prefix="/api", tags=["faturamento"])
@@ -470,3 +472,15 @@ def aprovar_fatura(fatura_id: int, db: Session = Depends(get_db), user: CurrentU
     f.status, f.aprovada_por = "aprovada", user.email
     db.commit()
     return f
+
+
+@router.post("/faturas/{fatura_id}/emitir", response_model=NfseEmitidaOut)
+def emitir_fatura(fatura_id: int, idempotency_key: str = Header(default="", alias="Idempotency-Key"),
+                  db: Session = Depends(get_db), user: CurrentUser = Depends(require_financeiro)):
+    """Emite a NFS-e (producao restrita). Sempre 200 com a nota: confira `status` (autorizada,
+    rejeitada ou processando). 'processando' = sem resposta do SEFIN: nao reenvie, use
+    POST /api/nfse-emitidas/{id}/consultar. Repetir a mesma Idempotency-Key devolve a mesma nota."""
+    try:
+        return nota_out(emissao.emitir(db, fatura_id, idempotency_key, user.email))
+    except emissao.EmissaoErro as e:
+        raise HTTPException(e.status_code, e.mensagem) from None

@@ -27,82 +27,27 @@ from workers.nfse_adn.cert import CertificadoError, carregar_pfx, ssl_context_do
 
 from .assinatura import PERFIS, assinar_dps
 from .dps import DpsParams, id_dps, montar_dps, regras_locais
+from .sefin import SEFIN_BASES, SEFIN_HOST, post_dps, uma_linha  # noqa: F401  (SEFIN_* reexportados)
 
-SEFIN_HOST = "https://sefin.producaorestrita.nfse.gov.br"
-# A documentacao (/API/SefinNacional/docs) e os relatos (/SefinNacional/nfse) divergem
-# no prefixo. Tenta um e, so se a rota nao existir (404 sem JSON), o outro.
 # Parametros municipais (convenio, aliquotas...) do ADN, tambem so producao restrita.
 PARAMETRIZACAO = "https://adn.producaorestrita.nfse.gov.br/parametrizacao"
-SEFIN_BASES = (f"{SEFIN_HOST}/SefinNacional", f"{SEFIN_HOST}/API/SefinNacional")
-
-
-def _campo(d: dict, nome: str):
-    return d.get(nome, d.get(nome[0].lower() + nome[1:]))
-
-
-def _json(r: httpx.Response) -> dict:
-    try:
-        corpo = r.json()
-    except ValueError:
-        return {}
-    return corpo if isinstance(corpo, dict) else {}
-
-
-def _uma_linha(texto: str) -> str:
-    """Texto do servidor numa linha so e sem '::': o Actions le '::cmd::' no inicio da linha
-    como comando de workflow (add-mask, error...)."""
-    return re.sub(r"\s+", " ", texto).replace("::", ": :")
-
-
-def _erros(corpo: dict) -> list[tuple[str, str]]:
-    brutos = _campo(corpo, "Erros") or _campo(corpo, "Erro") or []
-    if isinstance(brutos, dict):
-        brutos = [brutos]
-    saida = []
-    for e in brutos if isinstance(brutos, list) else []:
-        if isinstance(e, dict):
-            saida.append((str(_campo(e, "Codigo") or "?"), str(_campo(e, "Descricao") or _campo(e, "Mensagem") or "")))
-    return saida
-
-
-def _chave(corpo: dict) -> str | None:
-    chave = _campo(corpo, "ChaveAcesso")
-    if chave:
-        return str(chave)
-    b64 = _campo(corpo, "NfseXmlGZipB64")
-    if not b64:
-        return None
-    try:
-        xml = gzip.decompress(base64.b64decode(b64))
-        inf = etree.fromstring(xml).find(".//{*}infNFSe")
-        return inf.get("Id").removeprefix("NFS") if inf is not None else None
-    except (ValueError, OSError, etree.XMLSyntaxError, AttributeError):
-        return None
+_uma_linha = uma_linha
 
 
 def enviar(http: httpx.Client, dps_assinado: bytes) -> int:
     """POST da DPS. 0 = nota gerada, 1 = rejeitada, 3 = sem resposta util."""
-    corpo = {"dpsXmlGZipB64": base64.b64encode(gzip.compress(dps_assinado, mtime=0)).decode()}
-    r = None
-    for base in SEFIN_BASES:
-        r = http.post(f"{base}/nfse", json=corpo)
-        if r.status_code == 404 and not _json(r):
-            print(f"{base}/nfse: 404 (rota inexistente), tentando o outro prefixo")
-            continue
-        print(f"POST {base}/nfse")
-        break
-    resposta = _json(r)
-    print(f"HTTP {r.status_code}")
-    chave = _chave(resposta)
-    if r.is_success and chave:
-        print(f"NFS-e gerada. Chave de acesso: {chave}")
+    r = post_dps(http, dps_assinado, avisar=print)
+    print(f"POST {r.base}/nfse")
+    print(f"HTTP {r.status}")
+    if r.sucesso:
+        print(f"NFS-e gerada. Chave de acesso: {r.chave}")
         return 0
-    erros = _erros(resposta)
+    erros = r.erros
     for codigo, descricao in erros:
-        print(f"rejeicao {_uma_linha(codigo)}: {_uma_linha(descricao)}")
+        print(f"rejeicao {uma_linha(codigo)}: {uma_linha(descricao)}")
     if not erros:
         # Sem JSON conhecido (ex.: pagina 403/404 do IIS): so o inicio do texto.
-        print("resposta sem erros estruturados: " + _uma_linha(r.text)[:300])
+        print("resposta sem erros estruturados: " + uma_linha(r.texto)[:300])
     return 1 if erros else 3
 
 

@@ -504,3 +504,19 @@ def test_workflow_do_smoke_tem_workflow_dispatch_e_so_ele():
     assert list(_gatilhos(wf)) == ["workflow_dispatch"]
     inputs = _gatilhos(wf)["workflow_dispatch"]["inputs"]
     assert {"cnpj", "im", "nbs", "c_trib_mun", "reg_ap_trib_sn", "tp_ret_issqn", "consulta"} <= set(inputs)
+
+
+# --- tomador com CPF e endereco (servico de emissao do app) -------------------
+
+def test_tomador_cpf_e_endereco_completo_validam_no_xsd(schema):
+    end = {"cMun": "3106200", "CEP": "30130001", "xLgr": "Av. Afonso Pena", "nro": "100", "xBairro": "Centro", "xCpl": "sl 5"}
+    raiz = etree.fromstring(montar_dps(_params(tomador_cpf="52998224725", tomador_end=end)))
+    schema.assertValid(raiz)
+    toma = raiz.find(f"{{{NS_DPS}}}infDPS/{{{NS_DPS}}}toma")
+    assert [e.tag.split("}")[1] for e in toma] == ["CPF", "xNome", "end"]
+    assert [e.tag.split("}")[1] for e in toma.find(f"{{{NS_DPS}}}end")] == ["endNac", "xLgr", "nro", "xCpl", "xBairro"]
+
+
+def test_endereco_incompleto_nao_entra():
+    xml = montar_dps(_params(tomador_end={"cMun": "3106200", "CEP": "30130001"}))
+    assert b"<end>" not in xml

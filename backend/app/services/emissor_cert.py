@@ -3,10 +3,16 @@ no mesmo padrao de credencial_pbh. So decifra em memoria, na hora de assinar/env
 from __future__ import annotations
 
 import base64
+import re
 
 from app.config import settings
 from app.models.emissao_db import EmissorConfigDB
 from app.services.crypto import CryptoBox, EncryptedBlob
+
+
+def cnpjs_do_certificado(cert) -> set[str]:
+    """CNPJs (14 digitos isolados) no subject do certificado e-CNPJ (CN 'NOME:00000000000000')."""
+    return set(re.findall(r"(?<!\d)\d{14}(?!\d)", cert.subject.rfc4514_string()))
 
 
 def _box() -> CryptoBox:
