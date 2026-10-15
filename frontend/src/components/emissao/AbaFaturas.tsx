@@ -6,7 +6,7 @@ import {
   emissaoApi, type Fatura, type FaturasResposta, type Servico, type Tomador, type Faturamento,
 } from "@/app/lib/emissao-api";
 import {
-  ROTULO_STATUS, STATUS_FATURA, acoesDaFatura, brl, competenciaDoMes, mensagemDeErro, resultadoDaEmissao,
+  ROTULO_STATUS, STATUS_FATURA, acoesDaFatura, brl, competenciaDoMes, ehErroDeRede, mensagemDeErro, resultadoDaEmissao,
   rotuloCompetencia,
 } from "@/app/lib/emissao";
 import { Aviso, Campo, ConfirmDialog, StatusBadge, botaoPrimario, botaoSecundario, inputCls } from "./ui";
@@ -21,6 +21,7 @@ export function AbaFaturas() {
   const [msg, setMsg] = useState<Msg | null>(null);
   const [emitindo, setEmitindo] = useState<{ fatura: Fatura; chave: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [erroEmitir, setErroEmitir] = useState("");
 
   const carregar = useCallback(async () => {
     try {
@@ -51,6 +52,7 @@ export function AbaFaturas() {
   const emitir = async () => {
     if (!emitindo) return;
     setOcupado(true);
+    setErroEmitir("");
     try {
       // a mesma chave enquanto o diálogo estiver aberto: repetir depois de um erro de rede é seguro
       const nota = await emissaoApi.emitir(emitindo.fatura.id, emitindo.chave);
@@ -58,7 +60,14 @@ export function AbaFaturas() {
       setMsg(resultadoDaEmissao(nota));
       await carregar();
     } catch (e) {
-      setMsg({ tipo: "erro", texto: `${mensagemDeErro(e)} — pode tentar de novo: a mesma tentativa não gera nota em duplicidade.` });
+      if (ehErroDeRede(e)) {
+        // sem resposta: o diálogo fica aberto com a MESMA chave; repetir é seguro
+        setErroEmitir(`${mensagemDeErro(e)} Sem resposta do servidor: pode tentar de novo, a mesma tentativa não gera nota em duplicidade.`);
+      } else {
+        // a API respondeu com erro (regra de negócio): outra tentativa será outra intenção
+        setEmitindo(null);
+        setMsg({ tipo: "erro", texto: mensagemDeErro(e) });
+      }
     } finally {
       setOcupado(false);
     }
@@ -111,7 +120,7 @@ export function AbaFaturas() {
                     <td className="p-3"><StatusBadge status={f.status} /></td>
                     <td className="p-3 text-right space-x-3 whitespace-nowrap">
                       {a.aprovar && <button onClick={() => agir(() => emissaoApi.aprovarFatura(f.id), "Fatura aprovada.")} className="text-primary hover:underline">Aprovar</button>}
-                      {a.emitir && <button onClick={() => setEmitindo({ fatura: f, chave: crypto.randomUUID() })} className="font-medium text-primary-dark hover:underline">Emitir nota</button>}
+                      {a.emitir && <button onClick={() => { setErroEmitir(""); setEmitindo({ fatura: f, chave: crypto.randomUUID() }); }} className="font-medium text-primary-dark hover:underline">Emitir nota</button>}
                       {a.excluir && <button onClick={() => agir(() => emissaoApi.excluirFatura(f.id), "Fatura excluída.")} className="text-danger hover:underline">Excluir</button>}
                       {f.status === "emitindo" && <span className="text-xs text-muted">acompanhe em Notas emitidas</span>}
                     </td>
@@ -128,6 +137,7 @@ export function AbaFaturas() {
           titulo="Emitir NFS-e?"
           verbo="Emitir nota"
           ocupado={ocupado}
+          erro={erroEmitir}
           onConfirmar={emitir}
           onCancelar={() => setEmitindo(null)}
           texto={<>
