@@ -71,16 +71,17 @@ def _cfg_pronto(db: Session) -> EmissorConfigDB:
     return cfg
 
 
-def _certificado(cfg: EmissorConfigDB):
-    """(key, cert, ctx_tls) abertos so em memoria."""
+def _certificado(cfg: EmissorConfigDB, cnpj: str | None = None):
+    """(key, cert, ctx_tls) abertos so em memoria. `cnpj`: o prestador da nota (padrao: o do emissor)."""
     try:
         pfx, senha = decifrar_certificado(cfg)
         key, cert, _ = carregar_pfx(pfx, senha)
         ctx = ssl_context_do_pfx(pfx, senha)
     except (CertificadoError, InvalidCipherError, ValueError, RuntimeError):
         raise EmissaoErro(409, "Certificado do emissor ilegivel: envie o certificado de novo") from None
-    if cfg.cnpj not in cnpjs_do_certificado(cert):  # confere de novo na hora de usar, de forma exata
-        raise EmissaoErro(409, "O certificado guardado nao e do CNPJ do emissor")
+    if (cnpj or cfg.cnpj) not in cnpjs_do_certificado(cert):  # confere de novo na hora de usar, de forma exata
+        raise EmissaoErro(409, "O certificado guardado nao e do CNPJ do emissor" if cnpj is None
+                          else "O certificado vigente nao e do prestador desta nota: so ele pode consultar a DPS")
     return key, cert, ctx
 
 
@@ -175,11 +176,13 @@ def _aplicar_resposta(db: Session, nota: NfseEmitidaDB, fatura: FaturaDB, r: Res
     _evento(db, nota, "resposta", _payload_resposta(r))
     if r.sucesso:
         _autorizar(db, nota, fatura, r.chave, xml_da_nota(r.corpo))
-    elif r.erros:
+    elif r.erros and 400 <= r.status < 500:
+        # So 4xx e rejeicao do SEFIN (libera nova DPS). 5xx com corpo de erro e falha do servidor: o
+        # resultado e desconhecido (a nota pode ter sido gerada), entao fica processando e so a consulta decide.
         codigo, mensagem = r.erros[0]
         resto = [f"{c}: {m}" for c, m in r.erros[1:]]
         _rejeitar(db, nota, fatura, codigo, "; ".join([mensagem, *resto]))
-    # senao: inconclusivo (5xx sem erro, pagina de erro): continua processando; a consulta decide
+    # senao: inconclusivo (5xx, com ou sem erro; pagina de erro): continua processando; a consulta decide
 
 
 # --- emitir ---------------------------------------------------------------------
@@ -278,29 +281,38 @@ def emitir(db: Session, fatura_id: int, idempotency_key: str, usuario: str,
 # --- consultar ------------------------------------------------------------------
 
 def consultar(db: Session, nota_id: int, http: httpx.Client | None = None, agora: datetime | None = None,
-              idade_min_s: int = IDADE_MIN_PARA_CONCLUIR_S) -> NfseEmitidaDB:
+              idade_min_s: int = IDADE_MIN_PARA_CONCLUIR_S, confirmar_sem_nota: bool = False) -> NfseEmitidaDB:
     """Descobre pela DPS o que aconteceu com uma nota 'processando' (ou busca o XML de uma autorizada
-    sem XML). So le do SEFIN: nao envia DPS."""
+    sem XML). So le do SEFIN: nao envia DPS.
+
+    Nao depende do emissor estar ativo: uma nota em aberto precisa poder ser consultada mesmo depois
+    de desativar o emissor. Usa o certificado vigente, que tem de ser do prestador da nota.
+    'Nao achei a nota' (SEM_NOTA) libera nova DPS: sozinho, depois de `idade_min_s`, so em
+    homologacao; em producao so com `confirmar_sem_nota` (decisao de uma pessoa)."""
     nota = db.get(NfseEmitidaDB, nota_id)
     if nota is None:
         raise EmissaoErro(404, "Nota nao encontrada")
     if nota.status not in ("processando", "autorizada") or (nota.status == "autorizada" and nota.xml_nfse):
         return nota
-    cfg = _cfg_pronto(db)
+    cfg = db.get(EmissorConfigDB, 1)
+    if cfg is None or not tem_certificado(cfg):
+        raise EmissaoErro(409, "Emissor sem certificado: nao ha como consultar o SEFIN")
     fatura = db.get(FaturaDB, nota.fatura_id)
-    _, _, ctx = _certificado(cfg)
+    _, _, ctx = _certificado(cfg, nota.cnpj_prestador)
+    municipio = ((nota.servico_snapshot or {}).get("emissor") or {}).get("municipio_ibge") or cfg.municipio_ibge
 
     proprio = http is None
     http = http or _cliente(ctx)
     try:
         chave = nota.chave_acesso
         if nota.status == "processando":
-            r = get_dps(http, id_dps(cfg.municipio_ibge, nota.cnpj_prestador, nota.dps_serie, nota.dps_numero))
+            r = get_dps(http, id_dps(municipio, nota.cnpj_prestador, nota.dps_serie, nota.dps_numero))
             _evento(db, nota, "consulta", _payload_resposta(r))
             chave = r.chave if r.status == 200 else None
             if chave is None:
                 idade = (agora or _agora_utc()) - _aware(nota.criado_em)
-                if r.status == 404 and idade >= timedelta(seconds=idade_min_s):
+                automatico = nota.ambiente == "homologacao" and idade >= timedelta(seconds=idade_min_s)
+                if r.status == 404 and (automatico or confirmar_sem_nota):
                     _rejeitar(db, nota, fatura, "SEM_NOTA", "A consulta pela DPS nao encontrou NFS-e gerada")
                 db.commit()
                 return nota
