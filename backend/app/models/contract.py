@@ -146,7 +146,7 @@ class _ComDesconto(BaseModel):
     tem_desconto: bool = False
     desconto_condicao: Optional[str] = None
     desconto_tipo: Literal["percentual", "livre"] = "percentual"
-    desconto_percentual: Optional[float] = None
+    desconto_percentual: Optional[float] = Field(None, ge=0, le=100)
     desconto_livre: Optional[str] = None
 
 

@@ -107,6 +107,7 @@ function DescontoCampos({
                 type="number"
                 step="0.01"
                 min="0"
+                max="100"
                 value={h.desconto_percentual || ""}
                 onChange={(e) => {
                   onEditar();

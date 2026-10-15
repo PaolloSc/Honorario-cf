@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evento versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+  <infEvento Id="EVT31062002254631590001730000000000000126100000000017101101001">
+    <nSeqEvento>1</nSeqEvento>
+    <dhProc>2026-05-12T14:00:00-03:00</dhProc>
+    <nDFSe>77</nDFSe>
+    <pedRegEvento versao="1.01">
+      <infPedReg Id="PRE31062002254631590001730000000000000126100000000017101101001">
+        <tpAmb>2</tpAmb>
+        <verAplic>1.0</verAplic>
+        <dhEvento>2026-05-12T13:58:00-03:00</dhEvento>
+        <CNPJAutor>25463159000173</CNPJAutor>
+        <chNFSe>31062002254631590001730000000000000126100000000017</chNFSe>
+        <nPedRegEvento>1</nPedRegEvento>
+        <e101101><xDesc>Cancelamento de NFS-e</xDesc><cMotivo>1</cMotivo><xMotivo>Erro na emissao</xMotivo></e101101>
+      </infPedReg>
+    </pedRegEvento>
+  </infEvento>
+</evento>

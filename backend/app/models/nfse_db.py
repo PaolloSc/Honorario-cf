@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Column,
     Date,
@@ -39,7 +40,7 @@ class CredencialPbhDB(Base):
 class NFSeRecebidaDB(Base):
     __tablename__ = "nfse_recebidas"
     __table_args__ = (
-        UniqueConstraint("cnpj_prestador", "numero", "serie", name="uq_nfse_chave"),
+        UniqueConstraint("cnpj_prestador", "numero", "serie", "direcao", name="uq_nfse_chave"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -67,6 +68,8 @@ class NFSeRecebidaDB(Base):
     pagamento_id = Column(Integer, ForeignKey("participacao_pagamentos.id"), nullable=True)
     status_matching = Column(String(20), nullable=False)
     motivo = Column(Text, nullable=True)
+    direcao = Column(String(10), nullable=False, default="emitida", server_default="emitida")
+    chave_acesso = Column(String(50), nullable=True, unique=True)
     criado_em = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     atualizado_em = Column(DateTime(timezone=True), nullable=True)
 
@@ -89,6 +92,7 @@ class SyncJobDB(Base):
     erros = Column(Integer, nullable=False, default=0, server_default="0")
     status = Column(String(30), nullable=False)
     motivo_falha = Column(Text, nullable=True)
+    ultimo_nsu = Column(BigInteger, nullable=True)
     screenshot_url = Column(Text, nullable=True)
 
 

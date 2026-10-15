@@ -9,6 +9,16 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      # Banco descartavel para os testes que precisam de Postgres de verdade
+      # (o resto roda em SQLite, que aceita boolean = 1).
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -35,6 +45,7 @@ jobs:
           AZURE_CLIENT_SECRET: "test"
           AZURE_SENDER_EMAIL: "test@test.com"
           DOCUSEAL_API_KEY: "test"
+          TEST_POSTGRES_URL: "postgresql://postgres:postgres@localhost:5432/postgres"
 
   frontend:
     runs-on: ubuntu-latest
