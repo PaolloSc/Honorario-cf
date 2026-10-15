@@ -8,62 +8,62 @@ on:
   workflow_dispatch:
     inputs:
       cnpj:
-        description: CNPJ do prestador (o do certificado)
+        description: 'CNPJ do prestador (o do certificado)'
         default: '25463159000173'
       serie:
-        description: Serie da DPS
+        description: 'Serie da DPS'
         default: '900'
       ndps:
-        description: Numero da DPS (vazio = segundos desde 1970, nao repete)
+        description: 'Numero da DPS (vazio = segundos desde 1970, nao repete)'
         required: false
       op_simp_nac:
-        description: 1 nao optante, 2 MEI, 3 ME/EPP (pergunte ao contador)
+        description: '1 nao optante, 2 MEI, 3 ME/EPP (pergunte ao contador)'
         default: '1'
       reg_ap_trib_sn:
-        description: Regime de apuracao do SN, so ME/EPP (op_simp_nac=3): 1 tudo pelo SN, 2 ou 3 ISS fora do SN. Vazio = 1
+        description: 'Regime de apuracao do SN, so ME/EPP (op_simp_nac=3): 1 tudo pelo SN, 2 ou 3 ISS fora do SN. Vazio = 1'
         required: false
       tp_ret_issqn:
-        description: ISS retido? 1 nao, 2 pelo tomador, 3 pelo intermediario. ME/EPP pelo SN com retido exige aliquota (min 1.80); sem retencao nao pode ter aliquota
+        description: 'ISS retido? 1 nao, 2 pelo tomador, 3 pelo intermediario. ME/EPP pelo SN com retido exige aliquota (min 1.80); sem retencao nao pode ter aliquota'
         default: '1'
       p_tot_trib_sn:
-        description: So ME/EPP - percentual aproximado de tributos do SN (ex 6.00)
+        description: 'So ME/EPP - percentual aproximado de tributos do SN (ex 6.00)'
         default: '0'
       reg_esp_trib:
-        description: Regime especial (0 nenhum, 6 sociedade de profissionais)
+        description: 'Regime especial (0 nenhum, 6 sociedade de profissionais)'
         default: '0'
       c_trib_nac:
-        description: Codigo de tributacao nacional (6 digitos; 17.14 advocacia = 171401)
+        description: 'Codigo de tributacao nacional (6 digitos; 17.14 advocacia = 171401)'
         default: '171401'
       aliquota_iss:
-        description: Aliquota de ISS em % (ex 2.00; vazio = nao informa)
+        description: 'Aliquota de ISS em % (ex 2.00; vazio = nao informa)'
         required: false
       c_trib_mun:
-        description: Codigo de tributacao municipal, 3 digitos (ex 001 na NF2026.752); vazio = nao informa
+        description: 'Codigo de tributacao municipal, 3 digitos (ex 001 na NF2026.752); vazio = nao informa'
         required: false
       competencia:
-        description: Competencia AAAA-MM-DD (vazio = hoje, Brasilia)
+        description: 'Competencia AAAA-MM-DD (vazio = hoje, Brasilia)'
         required: false
       consulta:
-        description: So le os parametros municipais (convenio, aliquota, regimes, retencoes) do ADN em producao restrita; nao monta nem envia DPS
+        description: 'So le os parametros municipais (convenio, aliquota, regimes, retencoes) do ADN em producao restrita; nao monta nem envia DPS'
         type: boolean
         default: false
       im:
-        description: Inscricao municipal do prestador (E0116 se faltar; nao ha padrao)
+        description: 'Inscricao municipal do prestador (E0116 se faltar; nao ha padrao)'
         required: false
       nbs:
-        description: Codigo NBS do servico, 9 digitos sem pontos (E0322 com IBS/CBS; nao ha padrao). Advocacia, item 17.14, correlacao Anexo VIII v1.0.0 - 113011000 (criminal), 113012000 (outras areas, exceto consultoria tributaria), 113019000 (nao classificados); confirmar com o contador
+        description: 'Codigo NBS do servico, 9 digitos sem pontos (E0322 com IBS/CBS; nao ha padrao). Advocacia, item 17.14, correlacao Anexo VIII v1.0.0 - 113011000 (criminal), 113012000 (outras areas, exceto consultoria tributaria), 113019000 (nao classificados); confirmar com o contador'
         required: false
       ibscbs:
-        description: Incluir o grupo IBS/CBS
+        description: 'Incluir o grupo IBS/CBS'
         type: boolean
         default: true
       assinatura:
-        description: Perfil da assinatura (sha256 ou sha1)
+        description: 'Perfil da assinatura (sha256 ou sha1)'
         default: sha256
         type: choice
         options: [sha256, sha1]
       dry_run:
-        description: So monta e assina, nao envia
+        description: 'So monta e assina, nao envia'
         type: boolean
         default: false
 
