@@ -501,7 +501,10 @@ class ContractGenerator:
             p = primeira.group(1)
             # Próxima palavra (separada por espaço) com maiúscula = nome composto
             # ("Segunda Vara Cível"); palavra toda em caixa alta ("SEM") fica.
-            seguinte = re.match(r"\s+([^\W\d_])", texto[len(p):])
+            # "R$" é moeda, não nome ("Até R$ 500,00" desce); "A-B Serviços" (hífen
+            # + maiúscula) é nome composto e fica.
+            resto = texto[len(p):]
+            seguinte = re.match(r"\s+([^\W\d_])(?!\$)", resto) or re.match(r"-([^\W\d_])", resto)
             if (
                 p.lower() in PALAVRAS_MINUSCULAS_NO_MEIO
                 and (len(p) == 1 or p[1:].islower())
