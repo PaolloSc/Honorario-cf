@@ -337,6 +337,7 @@ def review_contract(
 
         text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"))
         findings = contract_reviewer.review_text(text) if text.strip() else []
+        findings = contract_reviewer.so_do_digitado(findings, data.model_dump(mode="json"))
         return {"enabled": True, "findings": findings, "preview_html": preview_html}
     except contract_reviewer.ContractReviewError as e:
         logger.warning("Revisao do contrato indisponivel: %s", e)
@@ -775,7 +776,9 @@ def preview_honorarios(
     erro = None
     if body.revisar and campos and contract_reviewer.is_configured():
         try:
-            findings = contract_reviewer.review_text("\n".join(f"{r}: {t}" for r, t in campos))
+            findings = contract_reviewer.so_do_digitado(
+                contract_reviewer.review_text("\n".join(f"{r}: {t}" for r, t in campos)), dump
+            )
         except contract_reviewer.ContractReviewError as e:
             logger.warning("Revisao da previa de honorarios indisponivel: %s", e)
             erro = "Revisão da IA indisponível."
