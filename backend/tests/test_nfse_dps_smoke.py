@@ -350,3 +350,75 @@ def test_workflow_so_le_o_conteudo_do_repositorio():
     wf = (Path(__file__).parents[2] / ".github/workflows/nfse-dps-smoke.yml").read_text(encoding="utf-8")
     assert "permissions:\n  contents: read" in wf
     assert "--im" in wf and "--nbs" in wf
+
+
+# --- consulta de parametros municipais, cTribMun, competencia -----------------
+
+def test_ctribmun_entra_apos_ctribnac_e_valida_no_xsd(schema):
+    raiz = etree.fromstring(montar_dps(_params(c_trib_mun="001", nbs="113019000")))
+    schema.assertValid(raiz)
+    c_serv = raiz.find(f"{{{NS_DPS}}}infDPS/{{{NS_DPS}}}serv/{{{NS_DPS}}}cServ")
+    assert [e.tag.split("}")[1] for e in c_serv] == ["cTribNac", "cTribMun", "xDescServ", "cNBS"]
+    assert b"cTribMun" not in montar_dps(_params())
+
+
+def test_competencia_informada_vai_em_dcompet_e_local_e_o_de_bh():
+    raiz = etree.fromstring(montar_dps(_params(competencia=datetime.date(2026, 10, 7))))
+    assert raiz.findtext(f".//{{{NS_DPS}}}dCompet") == "2026-10-07"
+    # municipio de emissao e de prestacao: o mesmo (BH); o de incidencia e derivado pelo SEFIN
+    assert raiz.findtext(f".//{{{NS_DPS}}}cLocEmi") == raiz.findtext(f".//{{{NS_DPS}}}cLocPrestacao") == "3106200"
+
+
+def test_consultar_faz_so_gets_na_parametrizacao_de_producao_restrita(capsys):
+    vistos = []
+
+    def handler(req):
+        vistos.append((req.method, str(req.url)))
+        return httpx.Response(200, json={"aliquotas": {"17.14.01.000": [{"Aliq": 5.0}]}})
+
+    assert run.consultar(_http(handler), "3106200", "171401", "001", "2026-10-07") == 0
+    base = "https://adn.producaorestrita.nfse.gov.br/parametrizacao/3106200"
+    assert {m for m, _ in vistos} == {"GET"}
+    urls = [u for _, u in vistos]
+    assert urls == [
+        f"{base}/convenio",
+        f"{base}/17.14.01.000/2026-10-07/aliquota", f"{base}/17.14.01.000/2026-10-07/regimes_especiais",
+        f"{base}/17.14.01.001/2026-10-07/aliquota", f"{base}/17.14.01.001/2026-10-07/regimes_especiais",
+        f"{base}/2026-10-07/retencoes",
+    ]
+    assert "HTTP 200" in capsys.readouterr().out
+
+
+def test_consultar_sem_ctribmun_so_o_codigo_000_e_resposta_sem_comando_do_actions(capsys):
+    urls = []
+
+    def handler(req):
+        urls.append(str(req.url))
+        return httpx.Response(404, json={"mensagem": "nao parametrizado\n::error::x"})
+
+    run.consultar(_http(handler), "3106200", "171401", None, "2026-10-07")
+    assert len(urls) == 4 and all("17.14.01.001" not in u for u in urls)
+    out = capsys.readouterr().out
+    assert "HTTP 404" in out and "::" not in out.replace("-> HTTP", "").replace("GET ", "").replace(": :", "")
+
+
+def test_main_consulta_nao_monta_dps_nem_envia(monkeypatch, capsys, pfx):
+    monkeypatch.setenv("NFSE_CERT_PFX_B64", base64.b64encode(pfx).decode())
+    monkeypatch.setenv("NFSE_CERT_PFX_SENHA", "senha-de-teste")
+    chamado = {}
+    monkeypatch.setattr(run, "consultar", lambda http, *a: chamado.setdefault("args", a) and 0)
+    monkeypatch.setattr(run, "montar_dps", lambda *a, **k: pytest.fail("montou DPS no modo consulta"))
+    monkeypatch.setattr(run, "enviar", lambda *a: pytest.fail("enviou no modo consulta"))
+    assert run.main(["--cnpj", CNPJ, "--consulta", "--c-trib-mun", "001", "--competencia", "2026-10-07"]) == 0
+    assert chamado["args"] == ("3106200", "171401", "001", "2026-10-07")
+
+
+def test_main_ctribmun_e_competencia_invalidos_abortam(monkeypatch, capsys, pfx):
+    monkeypatch.setenv("NFSE_CERT_PFX_B64", base64.b64encode(pfx).decode())
+    monkeypatch.setenv("NFSE_CERT_PFX_SENHA", "senha-de-teste")
+    assert run.main(["--cnpj", CNPJ, "--dry-run", "--c-trib-mun", "1"]) == 2
+    assert run.main(["--cnpj", CNPJ, "--dry-run", "--competencia", "07/10/2026"]) == 2
+
+
+def test_parametrizacao_tambem_e_producao_restrita():
+    assert run.PARAMETRIZACAO.startswith("https://adn.producaorestrita.nfse.gov.br/")
