@@ -175,6 +175,9 @@ export default function FinanceiroPage() {
         <h1 className="font-display text-2xl font-semibold text-primary-dark tracking-wide">
           Setor Financeiro — Participações
         </h1>
+        <a href="/financeiro/emissao" className="mt-2 inline-block text-sm text-primary hover:underline">
+          Emissão de NFS-e →
+        </a>
         <p className="text-sm text-muted mt-1">
           Cálculo e gestão de participações em honorários contratuais conforme regras vigentes a partir de
           {regras ? ` ${regras.vigencia_inicio}` : ""}.
