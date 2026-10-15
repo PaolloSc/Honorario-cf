@@ -19,6 +19,15 @@ on:
       op_simp_nac:
         description: 1 nao optante, 2 MEI, 3 ME/EPP (pergunte ao contador)
         default: '1'
+      reg_ap_trib_sn:
+        description: Regime de apuracao do SN, so ME/EPP (op_simp_nac=3): 1 tudo pelo SN, 2 ou 3 ISS fora do SN. Vazio = 1
+        required: false
+      tp_ret_issqn:
+        description: ISS retido? 1 nao, 2 pelo tomador, 3 pelo intermediario. ME/EPP pelo SN com retido exige aliquota (min 1.80); sem retencao nao pode ter aliquota
+        default: '1'
+      p_tot_trib_sn:
+        description: So ME/EPP - percentual aproximado de tributos do SN (ex 6.00)
+        default: '0'
       reg_esp_trib:
         description: Regime especial (0 nenhum, 6 sociedade de profissionais)
         default: '0'
@@ -91,6 +100,9 @@ jobs:
           NDPS: ${{ inputs.ndps }}
           OP_SIMP_NAC: ${{ inputs.op_simp_nac }}
           REG_ESP_TRIB: ${{ inputs.reg_esp_trib }}
+          REG_AP_TRIB_SN: ${{ inputs.reg_ap_trib_sn }}
+          TP_RET_ISSQN: ${{ inputs.tp_ret_issqn }}
+          P_TOT_TRIB_SN: ${{ inputs.p_tot_trib_sn }}
           C_TRIB_NAC: ${{ inputs.c_trib_nac }}
           ALIQUOTA_ISS: ${{ inputs.aliquota_iss }}
           IM: ${{ inputs.im }}
@@ -104,6 +116,8 @@ jobs:
         run: |
           ARGS=(--cnpj "$CNPJ" --serie "$SERIE" --op-simp-nac "$OP_SIMP_NAC" --reg-esp-trib "$REG_ESP_TRIB" \
                 --c-trib-nac "$C_TRIB_NAC" --assinatura "$ASSINATURA")
+          [ -n "$REG_AP_TRIB_SN" ] && ARGS+=(--reg-ap-trib-sn "$REG_AP_TRIB_SN")
+          ARGS+=(--tp-ret-issqn "$TP_RET_ISSQN" --p-tot-trib-sn "$P_TOT_TRIB_SN")
           [ -n "$NDPS" ] && ARGS+=(--ndps "$NDPS")
           [ -n "$C_TRIB_MUN" ] && ARGS+=(--c-trib-mun "$C_TRIB_MUN")
           [ -n "$COMPETENCIA" ] && ARGS+=(--competencia "$COMPETENCIA")

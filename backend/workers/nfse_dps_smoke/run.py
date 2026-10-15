@@ -26,7 +26,7 @@ from lxml import etree
 from workers.nfse_adn.cert import CertificadoError, carregar_pfx, ssl_context_do_pfx
 
 from .assinatura import PERFIS, assinar_dps
-from .dps import DpsParams, id_dps, montar_dps
+from .dps import DpsParams, id_dps, montar_dps, regras_locais
 
 SEFIN_HOST = "https://sefin.producaorestrita.nfse.gov.br"
 # A documentacao (/API/SefinNacional/docs) e os relatos (/SefinNacional/nfse) divergem
@@ -130,6 +130,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--valor", default="1.00")
     ap.add_argument("--c-trib-nac", default="171401")
     ap.add_argument("--op-simp-nac", default="1", choices=["1", "2", "3"])
+    ap.add_argument("--reg-ap-trib-sn", choices=["1", "2", "3"], help="so ME/EPP (padrao 1: tudo pelo Simples)")
+    ap.add_argument("--tp-ret-issqn", default="1", choices=["1", "2", "3"], help="1 nao retido, 2 retido pelo tomador")
+    ap.add_argument("--p-tot-trib-sn", default="0", help="so ME/EPP, % aproximado de tributos (padrao 0)")
     ap.add_argument("--reg-esp-trib", default="0", choices=["0", "1", "2", "3", "4", "5", "6", "9"])
     ap.add_argument("--aliquota-iss")
     ap.add_argument("--c-trib-mun", help="codigo de tributacao municipal, 3 digitos (ex.: 001)")
@@ -186,11 +189,18 @@ def main(argv: list[str] | None = None) -> int:
             return 3
 
     n_dps = a.ndps or int(time.time())
-    dps = montar_dps(DpsParams(
+    params = DpsParams(
         cnpj_prestador=cnpj, serie=a.serie, n_dps=n_dps, valor=Decimal(a.valor), c_trib_nac=a.c_trib_nac,
         op_simp_nac=a.op_simp_nac, reg_esp_trib=a.reg_esp_trib, tomador_cnpj=re.sub(r"\D", "", a.tomador_cnpj),
         aliquota_iss=Decimal(a.aliquota_iss) if a.aliquota_iss else None, ibscbs=not a.sem_ibscbs, c_trib_mun=a.c_trib_mun, competencia=competencia, im=a.im or None, nbs=nbs or None,
-    ))
+        reg_ap_trib_sn=a.reg_ap_trib_sn, tp_ret_issqn=a.tp_ret_issqn, p_tot_trib_sn=a.p_tot_trib_sn,
+    )
+    if erros := regras_locais(params):
+        print("abortado: a DPS seria rejeitada pelas regras do Anexo I (nada foi enviado)")
+        for e in erros:
+            print(f"  {e}")
+        return 2
+    dps = montar_dps(params)
     assinado = assinar_dps(dps, key, cert, a.assinatura)
     print(f"DPS {id_dps('3106200', cnpj, a.serie, n_dps)} assinada ({a.assinatura}, {len(assinado)} bytes)")
     if a.dry_run:

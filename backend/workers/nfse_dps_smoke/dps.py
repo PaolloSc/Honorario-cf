@@ -27,7 +27,10 @@ class DpsParams:
     descricao: str = "TESTE DE INTEGRACAO - SEM VALOR FISCAL"
     c_mun: str = BELO_HORIZONTE
     op_simp_nac: str = "1"  # 1 nao optante, 2 MEI, 3 ME/EPP
+    reg_ap_trib_sn: str | None = None  # so ME/EPP (op_simp_nac=3); 1 tudo pelo SN, 2/3 ISS fora do SN. Padrao 1
     reg_esp_trib: str = "0"
+    tp_ret_issqn: str = "1"  # 1 nao retido, 2 retido pelo tomador, 3 pelo intermediario
+    p_tot_trib_sn: str = "0"  # so ME/EPP: % aproximado de tributos da aliquota do SN
     aliquota_iss: Decimal | None = None
     c_trib_mun: str | None = None  # 3 digitos; vira o 4o bloco do codigo de servico (17.14.01.001)
     competencia: date | None = None  # padrao: o dia da emissao
@@ -41,6 +44,22 @@ class DpsParams:
     c_class_trib: str = "000001"
     ver_aplic: str = "honorario-cf-smoke"
     agora: datetime | None = None
+
+
+def regras_locais(p: DpsParams) -> list[str]:
+    """Rejeicoes do Anexo I (v1.01) que da para evitar antes de enviar: o SEFIN devolve uma por vez."""
+    erros = []
+    sn_total = p.op_simp_nac == "3" and (p.reg_ap_trib_sn or "1") == "1"
+    if p.op_simp_nac == "2" and p.reg_esp_trib != "0":
+        erros.append("E0174: MEI exige regEspTrib=0")
+    if sn_total and p.reg_esp_trib != "0":
+        erros.append("E0175: ME/EPP com apuracao pelo SN (regApTribSN=1) exige regEspTrib=0")
+    if sn_total and p.tp_ret_issqn == "1" and p.aliquota_iss is not None:
+        erros.append("E0625: sem retencao de ISS (tpRetISSQN=1) nao se informa a aliquota; "
+                     "para a nota com 5% retido use tp_ret_issqn=2")
+    if sn_total and p.tp_ret_issqn in ("2", "3") and (p.aliquota_iss is None or p.aliquota_iss < Decimal("1.8")):
+        erros.append("E0621: com ISS retido (tpRetISSQN=2/3), ME/EPP pelo SN informa a aliquota (minimo 1,80)")
+    return erros
 
 
 def id_dps(c_mun: str, cnpj: str, serie: str, n_dps: int) -> str:
@@ -76,6 +95,8 @@ def montar_dps(p: DpsParams) -> bytes:
         _e(prest, "IM", p.im)
     reg = _e(prest, "regTrib")
     _e(reg, "opSimpNac", p.op_simp_nac)
+    if p.op_simp_nac == "3":  # E0166 se faltar; E0162 se vier para nao optante ou MEI
+        _e(reg, "regApTribSN", p.reg_ap_trib_sn or "1")
     _e(reg, "regEspTrib", p.reg_esp_trib)
 
     toma = _e(inf, "toma")
@@ -97,12 +118,12 @@ def montar_dps(p: DpsParams) -> bytes:
     trib = _e(valores, "trib")
     trib_mun = _e(trib, "tribMun")
     _e(trib_mun, "tribISSQN", 1)
-    _e(trib_mun, "tpRetISSQN", 1)
+    _e(trib_mun, "tpRetISSQN", p.tp_ret_issqn)
     if p.aliquota_iss is not None:
         _e(trib_mun, "pAliq", f"{p.aliquota_iss:.2f}")
     tot = _e(trib, "totTrib")
     if p.op_simp_nac == "3":
-        _e(tot, "pTotTribSN", "0")
+        _e(tot, "pTotTribSN", p.p_tot_trib_sn)
     else:
         _e(tot, "indTotTrib", 0)
 
