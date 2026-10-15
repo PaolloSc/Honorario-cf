@@ -695,15 +695,49 @@ _CONTRATANTE_PREVIA = {
 class PreviaHonorariosRequest(BaseModel):
     escopos: list[EscopoItem]
     acessorios: Optional[Acessorios] = None
+    # True pede tambem a revisao de portugues da IA (lenta; o pop-up faz 2 chamadas).
+    revisar: bool = False
 
 
-@router.post("/preview-honorarios", response_class=HTMLResponse)
+_MARCA_DIGITADO = "background:rgba(250,204,21,.35);border-radius:2px;padding:0 1px"
+_MARCA_RISCADO = "background:rgba(239,68,68,.18);color:#b91c1c;text-decoration:line-through"
+_MARCA_IA = "background:rgba(34,197,94,.22);text-decoration:none;border-radius:2px;padding:0 1px"
+
+
+def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
+    """Amarelo = o que a pessoa digitou. Onde a IA propoe outro texto, o digitado sai
+    riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar)."""
+    from html import escape
+
+    for texto in textos:
+        alvo = escape(texto)
+        dentro = alvo
+        for a in achados:
+            trecho = escape((a.get("trecho") or "").strip())
+            if trecho and trecho in dentro:
+                # ponytail: casa por substring; trecho dentro de sugestao ja inserida
+                # nao e' tratado (o revisor ja descarta trechos aninhados).
+                dentro = dentro.replace(
+                    trecho,
+                    f'<del style="{_MARCA_RISCADO}">{trecho}</del>'
+                    f'<ins style="{_MARCA_IA}">{escape(a.get("sugestao") or "")}</ins>',
+                    1,
+                )
+        html = html.replace(alvo, f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>', 1)
+    return html
+
+
+@router.post("/preview-honorarios")
 def preview_honorarios(
     body: PreviaHonorariosRequest,
     user: CurrentUser = Depends(get_current_user),
-) -> HTMLResponse:
-    """Previa so' da secao de honorarios, para o pop-up do wizard. Nada e' gravado."""
+) -> dict:
+    """Previa so' da secao de honorarios, para o pop-up do wizard: o texto digitado
+    vem destacado e, com revisar=True, a correcao da IA aparece no lugar. Nada e' gravado."""
     import tempfile
+    from html import escape
+
+    from app.utils.currency import percentual_com_extenso
 
     data = ContratoRequest(
         contratantes=[_CONTRATANTE_PREVIA],
@@ -725,7 +759,27 @@ def preview_honorarios(
     # Secoes saem como <h3> numerado; recorta da secao 3 ate a seguinte.
     inicio = html.rfind("<h3>", 0, html.find("OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS"))
     fim = html.rfind("<h3>", 0, html.find("CLÁUSULAS GERAIS"))
-    return HTMLResponse(html[inicio:fim])
+    html = html[inicio:fim]
+
+    dump = {"escopos": [e.model_dump(mode="json") for e in body.escopos]}
+    # O gerador tira a pontuacao final do que foi digitado; o destaque tem de casar.
+    campos = [(r, t.rstrip(".;, ").strip()) for r, t in contract_reviewer.open_fields(dump)]
+    campos = [(r, t) for r, t in campos if len(t) >= 3 and escape(t) in html]
+    textos = [t for _, t in campos]
+    # Desconto percentual nao e' texto livre, mas e' a "especificacao" que a pessoa preencheu.
+    for h in (e.model_dump(mode="json").get(k) or {} for e in body.escopos for k in contract_reviewer.HONORARIO_ROTULOS):
+        if h.get("tem_desconto") and h.get("desconto_tipo") != "livre" and h.get("desconto_percentual"):
+            textos.append(percentual_com_extenso(h["desconto_percentual"]))
+
+    findings: list[dict] = []
+    erro = None
+    if body.revisar and campos and contract_reviewer.is_configured():
+        try:
+            findings = contract_reviewer.review_text("\n".join(f"{r}: {t}" for r, t in campos))
+        except contract_reviewer.ContractReviewError as e:
+            logger.warning("Revisao da previa de honorarios indisponivel: %s", e)
+            erro = "Revisão da IA indisponível."
+    return {"html": _marcar_digitados(html, textos, findings), "findings": findings, "erro": erro}
 
 
 @router.get("/{contract_id}/preview", response_class=HTMLResponse)

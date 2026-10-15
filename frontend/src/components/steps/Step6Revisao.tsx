@@ -243,13 +243,6 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
       const ht = escopo.hora_trabalhada;
       let s = `${formatCurrency(ht.valor_hora)}/hora`;
       if (ht.duracao_meses) s += ` · ${ht.duracao_meses} meses`;
-      if (ht.horas_contratadas) {
-        const horas = new Intl.NumberFormat("pt-BR", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }).format(ht.horas_contratadas);
-        s += ` · ${horas}h contratadas`;
-      }
       parts.push(s);
     } else if (tipo === "pro_labore" && escopo.pro_labore) {
       parts.push(`${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`);
