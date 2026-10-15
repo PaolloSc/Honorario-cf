@@ -764,25 +764,41 @@ def preview_honorarios(
 
     dump = {"escopos": [e.model_dump(mode="json") for e in body.escopos]}
     # O gerador tira a pontuacao final do que foi digitado; o destaque tem de casar.
-    campos = [(r, t.rstrip(".;, ").strip()) for r, t in contract_reviewer.open_fields(dump)]
-    campos = [(r, t) for r, t in campos if len(t) >= 3 and escape(t) in html]
-    textos = [t for _, t in campos]
+    completos = contract_reviewer.campos_abertos(dump)
+    completos = [c for c in completos if len(c[1].rstrip(".;, ").strip()) >= 3 and escape(c[1].rstrip(".;, ").strip()) in html]
+    textos = [t.rstrip(".;, ").strip() for _, t, _ in completos]
     # Desconto percentual nao e' texto livre, mas e' a "especificacao" que a pessoa preencheu.
     for h in (e.model_dump(mode="json").get(k) or {} for e in body.escopos for k in contract_reviewer.HONORARIO_ROTULOS):
         if h.get("tem_desconto") and h.get("desconto_tipo") != "livre" and h.get("desconto_percentual"):
             textos.append(percentual_com_extenso(h["desconto_percentual"]))
 
     findings: list[dict] = []
+    avisos: list[dict] = []
     erro = None
-    if body.revisar and campos and contract_reviewer.is_configured():
+    if body.revisar and completos and not contract_reviewer.is_configured():
+        # Sem isto o pop-up dizia "nenhuma correção necessária" sem a IA ter olhado nada.
+        erro = "Revisão da IA não configurada neste ambiente (DEEPSEEK_API_KEY)."
+    elif body.revisar and completos:
         try:
-            findings = contract_reviewer.so_do_digitado(
-                contract_reviewer.review_text("\n".join(f"{r}: {t}" for r, t in campos)), dump
+            # Cada campo vai com a frase fixa do contrato em volta (so' contexto: a
+            # correcao tem de cair dentro do que foi digitado — so_do_digitado garante).
+            achados = contract_reviewer.so_do_digitado(
+                contract_reviewer.review_text(
+                    contract_reviewer.texto_para_revisao(completos), avisar_ambiguidade=True
+                ),
+                dump,
             )
+            findings = [f for f in achados if f.get("tipo") != "aviso"]
+            avisos = [f for f in achados if f.get("tipo") == "aviso"]
         except contract_reviewer.ContractReviewError as e:
             logger.warning("Revisao da previa de honorarios indisponivel: %s", e)
             erro = "Revisão da IA indisponível."
-    return {"html": _marcar_digitados(html, textos, findings), "findings": findings, "erro": erro}
+    return {
+        "html": _marcar_digitados(html, textos, findings),
+        "findings": findings,
+        "avisos": avisos,
+        "erro": erro,
+    }
 
 
 @router.get("/{contract_id}/preview", response_class=HTMLResponse)
