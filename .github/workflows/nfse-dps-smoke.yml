@@ -28,6 +28,16 @@ on:
       aliquota_iss:
         description: Aliquota de ISS em % (ex 2.00; vazio = nao informa)
         required: false
+      c_trib_mun:
+        description: Codigo de tributacao municipal, 3 digitos (ex 001 na NF2026.752); vazio = nao informa
+        required: false
+      competencia:
+        description: Competencia AAAA-MM-DD (vazio = hoje, Brasilia)
+        required: false
+      consulta:
+        description: So le os parametros municipais (convenio, aliquota, regimes, retencoes) do ADN em producao restrita; nao monta nem envia DPS
+        type: boolean
+        default: false
       im:
         description: Inscricao municipal do prestador (E0116 se faltar; nao ha padrao)
         required: false
@@ -84,6 +94,9 @@ jobs:
           C_TRIB_NAC: ${{ inputs.c_trib_nac }}
           ALIQUOTA_ISS: ${{ inputs.aliquota_iss }}
           IM: ${{ inputs.im }}
+          C_TRIB_MUN: ${{ inputs.c_trib_mun }}
+          COMPETENCIA: ${{ inputs.competencia }}
+          CONSULTA: ${{ inputs.consulta }}
           NBS: ${{ inputs.nbs }}
           IBSCBS: ${{ inputs.ibscbs }}
           ASSINATURA: ${{ inputs.assinatura }}
@@ -92,6 +105,9 @@ jobs:
           ARGS=(--cnpj "$CNPJ" --serie "$SERIE" --op-simp-nac "$OP_SIMP_NAC" --reg-esp-trib "$REG_ESP_TRIB" \
                 --c-trib-nac "$C_TRIB_NAC" --assinatura "$ASSINATURA")
           [ -n "$NDPS" ] && ARGS+=(--ndps "$NDPS")
+          [ -n "$C_TRIB_MUN" ] && ARGS+=(--c-trib-mun "$C_TRIB_MUN")
+          [ -n "$COMPETENCIA" ] && ARGS+=(--competencia "$COMPETENCIA")
+          [ "$CONSULTA" = "true" ] && ARGS+=(--consulta)
           [ -n "$IM" ] && ARGS+=(--im "$IM")
           [ -n "$NBS" ] && ARGS+=(--nbs "$NBS")
           [ -n "$ALIQUOTA_ISS" ] && ARGS+=(--aliquota-iss "$ALIQUOTA_ISS")
