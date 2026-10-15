@@ -2,7 +2,7 @@
 //   node src/app/lib/emissao.check.ts
 import assert from "node:assert/strict";
 import {
-  acoesDaFatura, competenciaDoMes, digitos, mensagemDeErro, resultadoDaEmissao, rotuloCompetencia,
+  acoesDaFatura, competenciaDoMes, digitos, ehErroDeRede, mensagemDeErro, resultadoDaEmissao, rotuloCompetencia,
   CLASSE_STATUS, ROTULO_STATUS, STATUS_FATURA,
 } from "./emissao.ts";
 
@@ -20,6 +20,12 @@ assert.equal(
   "c_trib_nac: String should match pattern",
 );
 assert.equal(mensagemDeErro(new Error("Falha ao conectar")), "Falha ao conectar");
+
+// só erro sem resposta da API é "de rede" (aí repetir com a mesma chave é seguro)
+assert.equal(ehErroDeRede(new TypeError("Failed to fetch")), true);
+assert.equal(ehErroDeRede(new Error("Falha ao conectar na API (x): boom")), true);
+assert.equal(ehErroDeRede(new Error('409 {"detail":"Aprove a fatura antes."}')), false);
+assert.equal(ehErroDeRede(new Error("502 Bad Gateway")), false);
 
 // resultado da emissão: autorizada, rejeitada e sem resposta (nunca sugere reenviar)
 assert.deepEqual(resultadoDaEmissao({ status: "autorizada", numero_nfse: "752", erro_codigo: null, erro_mensagem: null }),

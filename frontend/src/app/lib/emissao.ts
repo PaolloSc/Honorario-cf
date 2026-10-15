@@ -65,6 +65,13 @@ export function mensagemDeErro(e: unknown): string {
   return bruto;
 }
 
+/** Erro de rede (sem resposta da API): as respostas da API chegam como "NNN corpo". Só neste caso
+ *  repetir a mesma tentativa (mesma Idempotency-Key) é o caminho certo. */
+export function ehErroDeRede(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return !/^\d{3}\b/.test(msg);
+}
+
 /** Texto do resultado de uma emissão, para o aviso depois do botão Emitir. */
 export function resultadoDaEmissao(n: {
   status: string;

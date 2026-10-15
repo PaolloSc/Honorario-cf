@@ -47,27 +47,33 @@ export function Campo({ rotulo, dica, children }: { rotulo: string; dica?: strin
 
 /** Confirmação de ato sem volta (emitir nota). O foco inicial fica em Cancelar. */
 export function ConfirmDialog({
-  titulo, texto, verbo, ocupado, onConfirmar, onCancelar,
+  titulo, texto, verbo, ocupado, erro, onConfirmar, onCancelar,
 }: {
   titulo: string;
   texto: React.ReactNode;
   verbo: string;
   ocupado?: boolean;
+  erro?: string;
   onConfirmar: () => void;
   onCancelar: () => void;
 }) {
   const cancelar = useRef<HTMLButtonElement>(null);
+  // Os callbacks mudam a cada render do pai: ficam num ref para o foco e o listener de Esc
+  // não serem refeitos (o foco voltava para Cancelar a cada render).
+  const vivo = useRef({ ocupado, onCancelar });
+  vivo.current = { ocupado, onCancelar };
   useEffect(() => {
-    cancelar.current?.focus();
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && !ocupado && onCancelar();
+    cancelar.current?.focus(); // só ao abrir
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && !vivo.current.ocupado && vivo.current.onCancelar();
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
-  }, [onCancelar, ocupado]);
+  }, []);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div role="dialog" aria-modal="true" aria-labelledby="dlg-titulo" className="w-full max-w-md rounded-lg border border-border bg-card p-6">
         <h2 id="dlg-titulo" className="font-display text-lg font-semibold text-primary-dark mb-2">{titulo}</h2>
         <div className="text-sm text-foreground mb-5">{texto}</div>
+        {erro && <div role="alert" className="mb-4 rounded-lg border border-danger bg-danger/[0.08] p-3 text-sm text-danger">{erro}</div>}
         <div className="flex justify-end gap-2">
           <button ref={cancelar} onClick={onCancelar} disabled={ocupado} className={botaoSecundario}>Cancelar</button>
           <button onClick={onConfirmar} disabled={ocupado} className={botaoPrimario}>
