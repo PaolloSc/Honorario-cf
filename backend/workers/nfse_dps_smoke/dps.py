@@ -5,7 +5,7 @@ sao de teste (tomador ficticio, valor 1,00) e todos podem ser trocados."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -29,6 +29,8 @@ class DpsParams:
     op_simp_nac: str = "1"  # 1 nao optante, 2 MEI, 3 ME/EPP
     reg_esp_trib: str = "0"
     aliquota_iss: Decimal | None = None
+    c_trib_mun: str | None = None  # 3 digitos; vira o 4o bloco do codigo de servico (17.14.01.001)
+    competencia: date | None = None  # padrao: o dia da emissao
     im: str | None = None  # inscricao municipal do prestador (E0116 se o municipio exigir)
     nbs: str | None = None  # 9 digitos, sem pontos (E0322 se houver IBS/CBS)
     tomador_cnpj: str = TOMADOR_FICTICIO_CNPJ
@@ -64,7 +66,7 @@ def montar_dps(p: DpsParams) -> bytes:
     _e(inf, "verAplic", p.ver_aplic)
     _e(inf, "serie", p.serie)
     _e(inf, "nDPS", p.n_dps)
-    _e(inf, "dCompet", agora.date().isoformat())
+    _e(inf, "dCompet", (p.competencia or agora.date()).isoformat())
     _e(inf, "tpEmit", 1)
     _e(inf, "cLocEmi", p.c_mun)
 
@@ -84,6 +86,8 @@ def montar_dps(p: DpsParams) -> bytes:
     _e(_e(serv, "locPrest"), "cLocPrestacao", p.c_mun)
     c_serv = _e(serv, "cServ")
     _e(c_serv, "cTribNac", p.c_trib_nac)
+    if p.c_trib_mun:
+        _e(c_serv, "cTribMun", p.c_trib_mun)
     _e(c_serv, "xDescServ", p.descricao)
     if p.nbs:
         _e(c_serv, "cNBS", p.nbs)
