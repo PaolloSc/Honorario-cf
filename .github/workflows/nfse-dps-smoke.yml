@@ -28,6 +28,12 @@ on:
       aliquota_iss:
         description: Aliquota de ISS em % (ex 2.00; vazio = nao informa)
         required: false
+      im:
+        description: Inscricao municipal do prestador (E0116 se faltar; nao ha padrao)
+        required: false
+      nbs:
+        description: Codigo NBS do servico, 9 digitos sem pontos (E0322 com IBS/CBS; nao ha padrao). Advocacia, item 17.14, correlacao Anexo VIII v1.0.0 - 113011000 (criminal), 113012000 (outras areas, exceto consultoria tributaria), 113019000 (nao classificados); confirmar com o contador
+        required: false
       ibscbs:
         description: Incluir o grupo IBS/CBS
         type: boolean
@@ -41,6 +47,9 @@ on:
         description: So monta e assina, nao envia
         type: boolean
         default: false
+
+permissions:
+  contents: read
 
 concurrency:
   group: nfse-dps-smoke
@@ -74,6 +83,8 @@ jobs:
           REG_ESP_TRIB: ${{ inputs.reg_esp_trib }}
           C_TRIB_NAC: ${{ inputs.c_trib_nac }}
           ALIQUOTA_ISS: ${{ inputs.aliquota_iss }}
+          IM: ${{ inputs.im }}
+          NBS: ${{ inputs.nbs }}
           IBSCBS: ${{ inputs.ibscbs }}
           ASSINATURA: ${{ inputs.assinatura }}
           DRY_RUN: ${{ inputs.dry_run }}
@@ -81,6 +92,8 @@ jobs:
           ARGS=(--cnpj "$CNPJ" --serie "$SERIE" --op-simp-nac "$OP_SIMP_NAC" --reg-esp-trib "$REG_ESP_TRIB" \
                 --c-trib-nac "$C_TRIB_NAC" --assinatura "$ASSINATURA")
           [ -n "$NDPS" ] && ARGS+=(--ndps "$NDPS")
+          [ -n "$IM" ] && ARGS+=(--im "$IM")
+          [ -n "$NBS" ] && ARGS+=(--nbs "$NBS")
           [ -n "$ALIQUOTA_ISS" ] && ARGS+=(--aliquota-iss "$ALIQUOTA_ISS")
           [ "$IBSCBS" = "false" ] && ARGS+=(--sem-ibscbs)
           [ "$DRY_RUN" = "true" ] && ARGS+=(--dry-run)

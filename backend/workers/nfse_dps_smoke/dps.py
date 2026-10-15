@@ -29,6 +29,8 @@ class DpsParams:
     op_simp_nac: str = "1"  # 1 nao optante, 2 MEI, 3 ME/EPP
     reg_esp_trib: str = "0"
     aliquota_iss: Decimal | None = None
+    im: str | None = None  # inscricao municipal do prestador (E0116 se o municipio exigir)
+    nbs: str | None = None  # 9 digitos, sem pontos (E0322 se houver IBS/CBS)
     tomador_cnpj: str = TOMADOR_FICTICIO_CNPJ
     tomador_nome: str = "TOMADOR FICTICIO PARA TESTE LTDA"
     ibscbs: bool = True
@@ -68,6 +70,8 @@ def montar_dps(p: DpsParams) -> bytes:
 
     prest = _e(inf, "prest")
     _e(prest, "CNPJ", p.cnpj_prestador)
+    if p.im:
+        _e(prest, "IM", p.im)
     reg = _e(prest, "regTrib")
     _e(reg, "opSimpNac", p.op_simp_nac)
     _e(reg, "regEspTrib", p.reg_esp_trib)
@@ -81,6 +85,8 @@ def montar_dps(p: DpsParams) -> bytes:
     c_serv = _e(serv, "cServ")
     _e(c_serv, "cTribNac", p.c_trib_nac)
     _e(c_serv, "xDescServ", p.descricao)
+    if p.nbs:
+        _e(c_serv, "cNBS", p.nbs)
 
     valores = _e(inf, "valores")
     _e(_e(valores, "vServPrest"), "vServ", f"{p.valor:.2f}")

@@ -300,3 +300,53 @@ def test_cadeia_sem_rede_devolve_o_que_tem(monkeypatch):
 
     monkeypatch.setattr("workers.nfse_adn.cert.httpx.get", sem_rede)
     assert completar_cadeia(folha, []) == []
+
+
+# --- IM, NBS, titular, saida do servidor --------------------------------------
+
+def test_im_e_nbs_entram_no_lugar_do_leiaute_e_validam_no_xsd(schema):
+    raiz = etree.fromstring(montar_dps(_params(im="123456", nbs="113012000")))
+    schema.assertValid(raiz)
+    inf = raiz.find(f"{{{NS_DPS}}}infDPS")
+    assert [e.tag.split("}")[1] for e in inf.find(f"{{{NS_DPS}}}prest")] == ["CNPJ", "IM", "regTrib"]
+    assert [e.tag.split("}")[1] for e in inf.find(f"{{{NS_DPS}}}serv/{{{NS_DPS}}}cServ")] == [
+        "cTribNac", "xDescServ", "cNBS"]
+
+
+def test_sem_im_e_nbs_nada_e_emitido():
+    xml = montar_dps(_params())
+    assert b"<IM>" not in xml and b"cNBS" not in xml
+
+
+def test_main_nbs_com_pontos_e_normalizado_e_invalido_aborta(monkeypatch, capsys, pfx):
+    monkeypatch.setenv("NFSE_CERT_PFX_B64", base64.b64encode(pfx).decode())
+    monkeypatch.setenv("NFSE_CERT_PFX_SENHA", "senha-de-teste")
+    assert run.main(["--cnpj", CNPJ, "--dry-run", "--nbs", "1.1301.20.00", "--im", "123"]) == 0
+    assert run.main(["--cnpj", CNPJ, "--dry-run", "--nbs", "1.1301"]) == 2
+    assert "9 digitos" in capsys.readouterr().out
+
+
+def test_titular_que_nao_confere_aborta_antes_de_enviar(monkeypatch, capsys, pfx):
+    monkeypatch.setenv("NFSE_CERT_PFX_B64", base64.b64encode(pfx).decode())
+    monkeypatch.setenv("NFSE_CERT_PFX_SENHA", "senha-de-teste")
+    monkeypatch.setattr(run, "enviar", lambda *a: pytest.fail("enviou com certificado de outro CNPJ"))
+    monkeypatch.setattr(run, "ssl_context_do_pfx", lambda *a: pytest.fail("abriu TLS"))
+    assert run.main(["--cnpj", "11222333000181"]) == 2
+    out = capsys.readouterr().out
+    assert "NAO CONFERE" in out and "abortado" in out
+
+
+def test_saida_do_servidor_nao_vira_comando_do_actions(capsys):
+    corpo = {"erros": [{"Codigo": "E1", "Descricao": "ok\n::add-mask::segredo\n::error::x"}]}
+    run.enviar(_http(lambda req: httpx.Response(400, json=corpo)), b"<DPS/>")
+    run.enviar(_http(lambda req: httpx.Response(500, text="a\n::set-output name=x::y")), b"<DPS/>")
+    linhas = capsys.readouterr().out.splitlines()
+    assert len(linhas) == 6  # 2 envios x (POST, HTTP, rejeicao ou texto): o texto do servidor ficou em 1 linha
+    assert not any(l.lstrip().startswith("::") for l in linhas)
+    assert not any("::" in l for l in linhas)
+
+
+def test_workflow_so_le_o_conteudo_do_repositorio():
+    wf = (Path(__file__).parents[2] / ".github/workflows/nfse-dps-smoke.yml").read_text(encoding="utf-8")
+    assert "permissions:\n  contents: read" in wf
+    assert "--im" in wf and "--nbs" in wf
