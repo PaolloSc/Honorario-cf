@@ -120,10 +120,25 @@ def test_previa_honorarios_endpoint(client):
     finally:
         app.dependency_overrides.pop(get_current_user, None)
     assert r.status_code == 200
-    assert r.text.startswith("<h3>")
-    assert "OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS" in r.text
-    assert "10% (dez por cento)" in r.text
-    assert "CLÁUSULAS GERAIS" not in r.text
+    html = r.json()["html"]
+    assert html.startswith("<h3>")
+    assert "OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS" in html
+    assert "10% (dez por cento)" in html
+    assert "CLÁUSULAS GERAIS" not in html
+    # percentual e condicao digitada vem destacados em amarelo
+    assert "<mark" in html and "pagamento até a data de vencimento" in html
+
+
+def test_marcar_digitados_mostra_ia_ao_lado_do_digitado():
+    from app.routers.contract import _marcar_digitados
+
+    out = _marcar_digitados(
+        "<p>condicionada ao seguinte: pagamento ate o vencimeto.</p>",
+        ["pagamento ate o vencimeto"],
+        [{"trecho": "vencimeto", "sugestao": "vencimento"}],
+    )
+    assert "<del" in out and ">vencimeto</del>" in out and ">vencimento</ins>" in out
+    assert out.count("<mark") == 1
 
 
 def test_exito_vencimento_livre_com_data_entra_como_digitado():

@@ -82,14 +82,18 @@ HONORARIO_ROTULOS = {
 
 
 def extract_open_fields(data: dict) -> str:
-    """Extrai so' os campos de texto livre digitados no formulario (nao a clausula
-    padrao do contrato, que quem preenche o wizard nao tem como editar ali)."""
-    lines: list[str] = []
+    """Campos de texto livre digitados no formulario (nao a clausula padrao do
+    contrato, que quem preenche o wizard nao tem como editar ali), uma linha cada."""
+    return "\n".join(f"{label}: {text}" for label, text in open_fields(data))
+
+
+def open_fields(data: dict) -> list[tuple[str, str]]:
+    lines: list[tuple[str, str]] = []
 
     def add(label: str, value) -> None:
         text = (value or "").strip() if isinstance(value, str) else ""
         if text:
-            lines.append(f"{label}: {text}")
+            lines.append((label, text))
 
     for i, c in enumerate(data.get("contratantes") or [], 1):
         add(f"Contratante {i} - profissão", c.get("profissao"))
@@ -135,7 +139,7 @@ def extract_open_fields(data: dict) -> str:
     add("Critério de extinção do êxito", acessorios.get("criterio_extincao_exito"))
     add("Cláusulas adicionais", acessorios.get("clausulas_adicionais"))
 
-    return "\n".join(lines)
+    return lines
 
 
 def review_text(document_text: str) -> list[dict]:
