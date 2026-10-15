@@ -252,9 +252,11 @@ def baixar_xml(nota_id: int, db: Session = Depends(get_db), _u: CurrentUser = De
 
 
 @emitidas_router.post("/{nota_id}/consultar", response_model=NfseEmitidaOut)
-def consultar_emitida(nota_id: int, db: Session = Depends(get_db), _u: CurrentUser = Depends(require_financeiro)):
-    """Pergunta ao SEFIN, pela DPS, o que aconteceu com uma nota 'processando'. Nao reenvia nada."""
+def consultar_emitida(nota_id: int, confirmar_sem_nota: bool = False, db: Session = Depends(get_db),
+                      _u: CurrentUser = Depends(require_financeiro)):
+    """Pergunta ao SEFIN, pela DPS, o que aconteceu com uma nota 'processando'. Nao reenvia nada.
+    `confirmar_sem_nota`: so para ambiente de producao, onde 'nao achei a nota' nao e concluido sozinho."""
     try:
-        return nota_out(emissao.consultar(db, nota_id))
+        return nota_out(emissao.consultar(db, nota_id, confirmar_sem_nota=confirmar_sem_nota))
     except emissao.EmissaoErro as e:
         raise HTTPException(e.status_code, e.mensagem) from None
