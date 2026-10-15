@@ -1,0 +1,87 @@
+name: nfse-dps-smoke
+
+# Smoke test: monta, assina e envia 1 DPS ao SEFIN Nacional, PRODUCAO RESTRITA
+# (host fixo em backend/workers/nfse_dps_smoke/run.py, sem opcao de producao).
+# So dispara a mao. A saida tem so o status HTTP, a chave de acesso ou os
+# codigos de rejeicao.
+on:
+  workflow_dispatch:
+    inputs:
+      cnpj:
+        description: CNPJ do prestador (o do certificado)
+        default: '25463159000173'
+      serie:
+        description: Serie da DPS
+        default: '900'
+      ndps:
+        description: Numero da DPS (vazio = segundos desde 1970, nao repete)
+        required: false
+      op_simp_nac:
+        description: 1 nao optante, 2 MEI, 3 ME/EPP (pergunte ao contador)
+        default: '1'
+      reg_esp_trib:
+        description: Regime especial (0 nenhum, 6 sociedade de profissionais)
+        default: '0'
+      c_trib_nac:
+        description: Codigo de tributacao nacional (6 digitos; 17.14 advocacia = 171401)
+        default: '171401'
+      aliquota_iss:
+        description: Aliquota de ISS em % (ex 2.00; vazio = nao informa)
+        required: false
+      ibscbs:
+        description: Incluir o grupo IBS/CBS
+        type: boolean
+        default: true
+      assinatura:
+        description: Perfil da assinatura (sha256 ou sha1)
+        default: sha256
+        type: choice
+        options: [sha256, sha1]
+      dry_run:
+        description: So monta e assina, nao envia
+        type: boolean
+        default: false
+
+concurrency:
+  group: nfse-dps-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'backend/workers/nfse_dps_smoke/requirements.txt'
+
+      - run: pip install -r backend/workers/nfse_dps_smoke/requirements.txt
+
+      - name: Enviar 1 DPS (producao restrita)
+        working-directory: backend
+        env:
+          NFSE_CERT_PFX_B64: ${{ secrets.NFSE_CERT_PFX_B64 }}
+          NFSE_CERT_PFX_SENHA: ${{ secrets.NFSE_CERT_PFX_SENHA }}
+          # Entradas passam por env, nunca interpoladas no script (injecao de comando).
+          CNPJ: ${{ inputs.cnpj }}
+          SERIE: ${{ inputs.serie }}
+          NDPS: ${{ inputs.ndps }}
+          OP_SIMP_NAC: ${{ inputs.op_simp_nac }}
+          REG_ESP_TRIB: ${{ inputs.reg_esp_trib }}
+          C_TRIB_NAC: ${{ inputs.c_trib_nac }}
+          ALIQUOTA_ISS: ${{ inputs.aliquota_iss }}
+          IBSCBS: ${{ inputs.ibscbs }}
+          ASSINATURA: ${{ inputs.assinatura }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          ARGS=(--cnpj "$CNPJ" --serie "$SERIE" --op-simp-nac "$OP_SIMP_NAC" --reg-esp-trib "$REG_ESP_TRIB" \
+                --c-trib-nac "$C_TRIB_NAC" --assinatura "$ASSINATURA")
+          [ -n "$NDPS" ] && ARGS+=(--ndps "$NDPS")
+          [ -n "$ALIQUOTA_ISS" ] && ARGS+=(--aliquota-iss "$ALIQUOTA_ISS")
+          [ "$IBSCBS" = "false" ] && ARGS+=(--sem-ibscbs)
+          [ "$DRY_RUN" = "true" ] && ARGS+=(--dry-run)
+          python -m workers.nfse_dps_smoke.run "${ARGS[@]}"
