@@ -45,6 +45,12 @@ def _json(r: httpx.Response) -> dict:
     return corpo if isinstance(corpo, dict) else {}
 
 
+def _uma_linha(texto: str) -> str:
+    """Texto do servidor numa linha so e sem '::': o Actions le '::cmd::' no inicio da linha
+    como comando de workflow (add-mask, error...)."""
+    return re.sub(r"\s+", " ", texto).replace("::", ": :")
+
+
 def _erros(corpo: dict) -> list[tuple[str, str]]:
     brutos = _campo(corpo, "Erros") or _campo(corpo, "Erro") or []
     if isinstance(brutos, dict):
@@ -90,10 +96,10 @@ def enviar(http: httpx.Client, dps_assinado: bytes) -> int:
         return 0
     erros = _erros(resposta)
     for codigo, descricao in erros:
-        print(f"rejeicao {codigo}: {descricao}")
+        print(f"rejeicao {_uma_linha(codigo)}: {_uma_linha(descricao)}")
     if not erros:
         # Sem JSON conhecido (ex.: pagina 403/404 do IIS): so o inicio do texto.
-        print("resposta sem erros estruturados: " + re.sub(r"\s+", " ", r.text)[:300])
+        print("resposta sem erros estruturados: " + _uma_linha(r.text)[:300])
     return 1 if erros else 3
 
 
@@ -107,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--op-simp-nac", default="1", choices=["1", "2", "3"])
     ap.add_argument("--reg-esp-trib", default="0", choices=["0", "1", "2", "3", "4", "5", "6", "9"])
     ap.add_argument("--aliquota-iss")
+    ap.add_argument("--im", help="inscricao municipal do prestador (nao ha padrao)")
+    ap.add_argument("--nbs", help="codigo NBS, 9 digitos (nao ha padrao)")
     ap.add_argument("--tomador-cnpj", default="11222333000181")
     ap.add_argument("--sem-ibscbs", action="store_true")
     ap.add_argument("--assinatura", default="sha256", choices=sorted(PERFIS))
@@ -123,16 +131,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"certificado ausente ou invalido ({type(e).__name__})")
         return 2
     vence = cert.not_valid_after_utc
+    confere = cnpj in cert.subject.rfc4514_string()
     print(f"certificado: vence em {vence:%Y-%m-%d}"
           f"{' (VENCIDO)' if vence < datetime.now(timezone.utc) else ''}; "
-          f"titular com o CNPJ informado: {'sim' if cnpj in cert.subject.rfc4514_string() else 'NAO CONFERE'}; "
+          f"titular com o CNPJ informado: {'sim' if confere else 'NAO CONFERE'}; "
           f"intermediarios no pfx: {len(extras)}")
+
+    if not confere:
+        print("abortado: o certificado nao e do CNPJ informado (nada foi enviado)")
+        return 2
+    nbs = re.sub(r"\D", "", a.nbs or "")
+    if a.nbs and len(nbs) != 9:
+        print("abortado: --nbs deve ter 9 digitos (ex.: 1.1301.20.00 vira 113012000)")
+        return 2
 
     n_dps = a.ndps or int(time.time())
     dps = montar_dps(DpsParams(
         cnpj_prestador=cnpj, serie=a.serie, n_dps=n_dps, valor=Decimal(a.valor), c_trib_nac=a.c_trib_nac,
         op_simp_nac=a.op_simp_nac, reg_esp_trib=a.reg_esp_trib, tomador_cnpj=re.sub(r"\D", "", a.tomador_cnpj),
-        aliquota_iss=Decimal(a.aliquota_iss) if a.aliquota_iss else None, ibscbs=not a.sem_ibscbs,
+        aliquota_iss=Decimal(a.aliquota_iss) if a.aliquota_iss else None, ibscbs=not a.sem_ibscbs, im=a.im or None, nbs=nbs or None,
     ))
     assinado = assinar_dps(dps, key, cert, a.assinatura)
     print(f"DPS {id_dps('3106200', cnpj, a.serie, n_dps)} assinada ({a.assinatura}, {len(assinado)} bytes)")
