@@ -124,19 +124,30 @@ def extract_open_fields(data: dict) -> str:
     Campos que entram no meio de uma frase pronta do contrato (desconto,
     parcelamento, vencimento do exito) vao acompanhados dessa frase, para a
     sugestao se encaixar nela."""
-    lines: list[str] = []
+    linhas: list[str] = []
+    for label, text, frase in _campos_abertos(data):
+        linhas.append(f"{label}: {text}")
+        if frase:
+            linhas.append(f"  Frase no contrato: {frase}")
+    return "\n".join(linhas)
+
+
+def open_fields(data: dict) -> list[tuple[str, str]]:
+    return [(label, text) for label, text, _ in _campos_abertos(data)]
+
+
+def _campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
+    lines: list[tuple[str, str, str | None]] = []
 
     def add(label: str, value, frases: list[str] | None = None) -> None:
         text = (value or "").strip() if isinstance(value, str) else ""
         if not text:
             return
-        lines.append(f"{label}: {text}")
         from app.services.contract_generator import ContractGenerator
 
         nucleo = ContractGenerator._texto_livre(text)
         frase = next((f for f in frases or [] if nucleo and nucleo in f), None)
-        if frase:
-            lines.append(f"  Frase no contrato: {frase}")
+        lines.append((label, text, frase))
 
     for i, c in enumerate(data.get("contratantes") or [], 1):
         add(f"Contratante {i} - profissão", c.get("profissao"))
@@ -186,7 +197,7 @@ def extract_open_fields(data: dict) -> str:
     add("Critério de extinção do êxito", acessorios.get("criterio_extincao_exito"))
     add("Cláusulas adicionais", acessorios.get("clausulas_adicionais"))
 
-    return "\n".join(lines)
+    return lines
 
 
 def review_text(document_text: str) -> list[dict]:

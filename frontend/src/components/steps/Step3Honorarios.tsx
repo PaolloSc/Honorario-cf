@@ -53,34 +53,6 @@ const SUBTIPO_EXITO = [
   { value: "percentual_variavel", label: "Percentual Variável" },
 ];
 
-function calcHorasContratadas(
-  ht: HoraTrabalhada,
-  duracaoMeses?: number
-): number | undefined {
-  if (!ht.valor_hora || ht.valor_hora <= 0) return undefined;
-  if (ht.tem_pacote_horas && ht.valor_pacote && ht.valor_pacote > 0) {
-    return ht.valor_pacote / ht.valor_hora;
-  }
-  if (
-    ht.tem_teto_mensal &&
-    ht.valor_teto_mensal &&
-    ht.valor_teto_mensal > 0 &&
-    duracaoMeses &&
-    duracaoMeses > 0
-  ) {
-    return (ht.valor_teto_mensal * duracaoMeses) / ht.valor_hora;
-  }
-  return undefined;
-}
-
-function formatHorasBR(v?: number): string {
-  if (v == null || Number.isNaN(v)) return "";
-  return new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(v);
-}
-
 // "2026-05-10" -> "em 10/05/2026": mostra no campo livre o vencimento que
 // contratos antigos gravaram como data.
 function vencimentoLegado(iso?: string): string {
@@ -137,7 +109,11 @@ function DescontoCampos({
                 min="0"
                 max="100"
                 value={h.desconto_percentual || ""}
-                onChange={(e) => onChange({ desconto_percentual: parseFloat(e.target.value) || undefined })}
+                onChange={(e) => {
+                  onEditar();
+                  onChange({ desconto_percentual: parseFloat(e.target.value) || undefined });
+                }}
+                onBlur={onSair}
                 placeholder="%"
               />
             ) : (
@@ -166,7 +142,13 @@ interface Step3Props {
 
 export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
   // Pop-up de prévia: abre ao sair de um campo de texto livre que foi editado.
-  const [previa, setPrevia] = useState<{ html?: string; erro?: string } | null>(null);
+  // revisando: a IA ainda está corrigindo o português (o html já mostra o digitado).
+  const [previa, setPrevia] = useState<{
+    html?: string;
+    erro?: string;
+    revisando?: boolean;
+    findings?: Array<{ trecho: string; problema: string; sugestao: string }>;
+  } | null>(null);
   const editado = useRef(false);
   const pedido = useRef<AbortController | null>(null);
 
@@ -181,10 +163,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
       const ctrl = new AbortController();
       pedido.current = ctrl;
       setPrevia({});
-      previewHonorarios({ escopos: [{ ...escopo, honorarios: [tipo] }] }, ctrl.signal)
-        .then((html) => setPrevia({ html }))
+      const body = { escopos: [{ ...escopo, honorarios: [tipo] }] };
+      // 1ª chamada rápida (digitado em amarelo); 2ª com a IA, que troca o html ao chegar.
+      previewHonorarios(body, ctrl.signal)
+        .then(({ html }) => {
+          setPrevia({ html, revisando: true });
+          return previewHonorarios(body, ctrl.signal, true);
+        })
+        .then(({ html, findings, erro }) =>
+          setPrevia({ html, findings, revisando: false, erro: erro ?? undefined })
+        )
         .catch(() => {
-          if (!ctrl.signal.aborted) setPrevia({ erro: "Não foi possível gerar a prévia." });
+          if (ctrl.signal.aborted) return;
+          // Se a IA falhar, fica a prévia sem correções.
+          setPrevia((p) => (p?.html ? { ...p, revisando: false } : { erro: "Não foi possível gerar a prévia." }));
         });
     },
   });
@@ -271,20 +263,6 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
     (escopoIdx: number, partial: Partial<HoraTrabalhada>) => {
       const escopo = escopos[escopoIdx];
       const merged: HoraTrabalhada = { ...escopo.hora_trabalhada!, ...partial };
-      const recalcFields = [
-        "valor_hora",
-        "valor_teto_mensal",
-        "tem_teto_mensal",
-        "valor_pacote",
-        "tem_pacote_horas",
-        "duracao_meses",
-      ];
-      const shouldRecalc =
-        partial.horas_contratadas === undefined &&
-        Object.keys(partial).some((k) => recalcFields.includes(k));
-      if (shouldRecalc) {
-        merged.horas_contratadas = calcHorasContratadas(merged, merged.duracao_meses);
-      }
       const updated: EscopoItem = { ...escopo, hora_trabalhada: merged };
       const final = [...escopos];
       final[escopoIdx] = updated;
@@ -470,34 +448,13 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           dataInicio={escopo.hora_trabalhada.data_inicio}
                           dataFim={escopo.hora_trabalhada.data_fim}
                           onChange={(di, df, dur) => {
-                            const horasContratadas = calcHorasContratadas(
-                              escopo.hora_trabalhada!,
-                              dur
-                            );
                             updateHoraTrabalhada(idx, {
                               data_inicio: di,
                               data_fim: df,
                               duracao_meses: dur,
-                              horas_contratadas: horasContratadas,
                             });
                           }}
                         />
-                      </div>
-
-                      <div className="md:col-span-2 pt-2 border-t border-border">
-                        <FormField label="Horas contratadas">
-                          <input
-                            readOnly
-                            value={formatHorasBR(
-                              calcHorasContratadas(
-                                escopo.hora_trabalhada,
-                                escopo.hora_trabalhada.duracao_meses
-                              )
-                            )}
-                            placeholder="—"
-                            className="w-full md:w-1/3 px-3 py-2 rounded-lg border border-muted bg-border/35 text-muted text-sm cursor-not-allowed"
-                          />
-                        </FormField>
                       </div>
 
                       <DescontoCampos
@@ -966,10 +923,33 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
             ) : previa.html === undefined ? (
               <p className="text-muted">Gerando prévia...</p>
             ) : (
-              <div
-                className="space-y-2 text-justify [&_h3]:font-semibold [&_table]:w-full [&_td]:border [&_td]:border-border [&_td]:p-1"
-                dangerouslySetInnerHTML={{ __html: previa.html }}
-              />
+              <>
+                <p className="text-xs text-muted mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span><mark style={{ background: "rgba(250,204,21,.35)" }}>amarelo</mark> = o que você escreveu</span>
+                  <span><del style={{ background: "rgba(239,68,68,.18)", color: "#b91c1c" }}>riscado</del> = trecho corrigido</span>
+                  <span><ins style={{ background: "rgba(34,197,94,.22)", textDecoration: "none" }}>verde</ins> = como a IA melhorou</span>
+                </p>
+                <div
+                  className="space-y-2 text-justify [&_h3]:font-semibold [&_table]:w-full [&_td]:border [&_td]:border-border [&_td]:p-1"
+                  dangerouslySetInnerHTML={{ __html: previa.html }}
+                />
+                {previa.revisando && <p className="text-muted mt-3">IA revisando o português...</p>}
+                {previa.erro && <p className="text-warning mt-3">{previa.erro}</p>}
+                {previa.findings && previa.findings.length > 0 && (
+                  <ul className="mt-3 space-y-2 border-t border-border pt-3">
+                    {previa.findings.map((f, i) => (
+                      <li key={i}>
+                        <span className="line-through text-danger">{f.trecho}</span> →{" "}
+                        <span className="text-primary-dark font-medium">{f.sugestao}</span>
+                        <span className="block text-xs text-muted">{f.problema}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {previa.findings && previa.findings.length === 0 && !previa.revisando && !previa.erro && (
+                  <p className="text-muted mt-3">IA: nenhuma correção necessária.</p>
+                )}
+              </>
             )}
             <div className="flex justify-end mt-4">
               <button
