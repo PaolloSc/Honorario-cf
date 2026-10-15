@@ -16,8 +16,9 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import httpx
 from lxml import etree
@@ -30,6 +31,8 @@ from .dps import DpsParams, id_dps, montar_dps
 SEFIN_HOST = "https://sefin.producaorestrita.nfse.gov.br"
 # A documentacao (/API/SefinNacional/docs) e os relatos (/SefinNacional/nfse) divergem
 # no prefixo. Tenta um e, so se a rota nao existir (404 sem JSON), o outro.
+# Parametros municipais (convenio, aliquotas...) do ADN, tambem so producao restrita.
+PARAMETRIZACAO = "https://adn.producaorestrita.nfse.gov.br/parametrizacao"
 SEFIN_BASES = (f"{SEFIN_HOST}/SefinNacional", f"{SEFIN_HOST}/API/SefinNacional")
 
 
@@ -103,6 +106,22 @@ def enviar(http: httpx.Client, dps_assinado: bytes) -> int:
     return 1 if erros else 3
 
 
+def consultar(http: httpx.Client, c_mun: str, c_trib_nac: str, c_trib_mun: str | None, competencia: str) -> int:
+    """GETs de parametrizacao do municipio (so leitura): convenio, aliquota, regimes especiais e
+    retencoes para a competencia. O codigo de servico da API tem 9 digitos: cTribNac + 3 (000 ou cTribMun)."""
+    n = c_trib_nac
+    base = f"{n[0:2]}.{n[2:4]}.{n[4:6]}"
+    codigos = [f"{base}.000"] + ([f"{base}.{c_trib_mun}"] if c_trib_mun and c_trib_mun != "000" else [])
+    caminhos = [f"/{c_mun}/convenio"]
+    for cod in codigos:
+        caminhos += [f"/{c_mun}/{cod}/{competencia}/aliquota", f"/{c_mun}/{cod}/{competencia}/regimes_especiais"]
+    caminhos.append(f"/{c_mun}/{competencia}/retencoes")
+    for caminho in caminhos:
+        r = http.get(f"{PARAMETRIZACAO}{caminho}")
+        print(f"GET {caminho} -> HTTP {r.status_code}: {_uma_linha(r.text)[:700]}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cnpj", required=True)
@@ -113,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--op-simp-nac", default="1", choices=["1", "2", "3"])
     ap.add_argument("--reg-esp-trib", default="0", choices=["0", "1", "2", "3", "4", "5", "6", "9"])
     ap.add_argument("--aliquota-iss")
+    ap.add_argument("--c-trib-mun", help="codigo de tributacao municipal, 3 digitos (ex.: 001)")
+    ap.add_argument("--competencia", help="AAAA-MM-DD (padrao: hoje, em Brasilia)")
+    ap.add_argument("--consulta", action="store_true", help="so le os parametros do municipio, nao monta DPS")
     ap.add_argument("--im", help="inscricao municipal do prestador (nao ha padrao)")
     ap.add_argument("--nbs", help="codigo NBS, 9 digitos (nao ha padrao)")
     ap.add_argument("--tomador-cnpj", default="11222333000181")
@@ -145,11 +167,29 @@ def main(argv: list[str] | None = None) -> int:
         print("abortado: --nbs deve ter 9 digitos (ex.: 1.1301.20.00 vira 113012000)")
         return 2
 
+    if a.c_trib_mun and not re.fullmatch(r"\d{3}", a.c_trib_mun):
+        print("abortado: --c-trib-mun deve ter 3 digitos (ex.: 001)")
+        return 2
+    try:
+        competencia = date.fromisoformat(a.competencia) if a.competencia else None
+    except ValueError:
+        print("abortado: --competencia deve ser AAAA-MM-DD")
+        return 2
+
+    if a.consulta:
+        dia = (competencia or datetime.now(ZoneInfo("America/Sao_Paulo")).date()).isoformat()
+        try:
+            with httpx.Client(verify=ssl_context_do_pfx(pfx, senha), timeout=60) as http:
+                return consultar(http, "3106200", a.c_trib_nac, a.c_trib_mun, dia)
+        except httpx.HTTPError as e:
+            print(f"erro de rede/TLS: {type(e).__name__}: {e}")
+            return 3
+
     n_dps = a.ndps or int(time.time())
     dps = montar_dps(DpsParams(
         cnpj_prestador=cnpj, serie=a.serie, n_dps=n_dps, valor=Decimal(a.valor), c_trib_nac=a.c_trib_nac,
         op_simp_nac=a.op_simp_nac, reg_esp_trib=a.reg_esp_trib, tomador_cnpj=re.sub(r"\D", "", a.tomador_cnpj),
-        aliquota_iss=Decimal(a.aliquota_iss) if a.aliquota_iss else None, ibscbs=not a.sem_ibscbs, im=a.im or None, nbs=nbs or None,
+        aliquota_iss=Decimal(a.aliquota_iss) if a.aliquota_iss else None, ibscbs=not a.sem_ibscbs, c_trib_mun=a.c_trib_mun, competencia=competencia, im=a.im or None, nbs=nbs or None,
     ))
     assinado = assinar_dps(dps, key, cert, a.assinatura)
     print(f"DPS {id_dps('3106200', cnpj, a.serie, n_dps)} assinada ({a.assinatura}, {len(assinado)} bytes)")
