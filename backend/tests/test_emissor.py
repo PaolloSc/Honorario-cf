@@ -46,9 +46,11 @@ def _como(role: str):
 def _ambiente(monkeypatch):
     monkeypatch.setattr(settings, "nfse_kek", base64.b64encode(os.urandom(32)).decode())
     monkeypatch.setattr(settings, "nfse_emissao_producao_permitida", False)
+    app.state.limiter.enabled = False  # os testes fazem dezenas de chamadas por minuto
     _como("financeiro")
     yield
     app.dependency_overrides.pop(get_current_user, None)
+    app.state.limiter.enabled = True
 
 
 @pytest.fixture
@@ -187,3 +189,10 @@ def test_422_de_campo_invalido_nao_ecoa_o_valor_recebido(client):
     r = client.put("/api/emissor", json={**DADOS, "inscricao_municipal": "VALOR-ECOADO-" * 3})
     assert r.status_code == 422 and "VALOR-ECOADO" not in r.text
     assert r.json()["detail"][0]["loc"] == ["body", "inscricao_municipal"]
+
+
+def test_cnpj_do_certificado_e_igualdade_exata_nao_substring(client):
+    # certificado cujo CN tem o CNPJ do emissor DENTRO de um numero maior: nao pode passar
+    client.put("/api/emissor", json=DADOS)
+    r = _subir(client, _pfx(cnpj="9" + CNPJ + "9"))
+    assert r.status_code == 400 and "CNPJ" in r.json()["detail"]
