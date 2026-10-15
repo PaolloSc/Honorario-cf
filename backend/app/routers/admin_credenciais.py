@@ -63,7 +63,7 @@ def upsert_credencial(
             text("""
                 UPDATE credencial_pbh
                 SET login_enc=:le, nonce_login=:nl, senha_enc=:se, nonce_senha=:ns,
-                    ativo=1, motivo_inativacao=NULL, atualizado_em=:now
+                    ativo=TRUE, motivo_inativacao=NULL, atualizado_em=:now
                 WHERE id=:id
             """),
             {
@@ -149,7 +149,7 @@ def desativar(
     now = datetime.now(timezone.utc)
     user_email = user.get("email") if isinstance(user, dict) else getattr(user, "email", "admin")
     db.execute(
-        text("""UPDATE credencial_pbh SET ativo=0, motivo_inativacao=:m, atualizado_em=:n
+        text("""UPDATE credencial_pbh SET ativo=FALSE, motivo_inativacao=:m, atualizado_em=:n
                 WHERE cnpj_prestador=:c"""),
         {"m": motivo or "manual", "n": now, "c": cnpj},
     )

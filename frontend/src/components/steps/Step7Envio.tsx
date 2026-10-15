@@ -227,6 +227,28 @@ function applyFix(data: ContratoFormData, trecho: string, sugestao: string): Con
       };
       return { ...data, escopos };
     }
+    // Campos livres dentro dos honorários (desconto, parcelamento, vencimento do êxito).
+    const honorarioFields: Array<[keyof typeof e, string]> = [
+      ["pro_labore", "parcelamento_customizado"],
+      ["pro_labore", "vencimento_obs"],
+      ["pro_labore", "vencimento_parcelas_obs"],
+      ["exito", "vencimento"],
+      ["exito", "vencimento_obs"],
+      ["exito", "forma_parcelamento"],
+      ["mensalidade", "dia_vencimento_obs"],
+      ...(["hora_trabalhada", "pro_labore", "mensalidade", "exito", "permuta"] as const).flatMap(
+        (h) => [[h, "desconto_condicao"], [h, "desconto_livre"]] as Array<[keyof typeof e, string]>,
+      ),
+    ];
+    for (const [hon, field] of honorarioFields) {
+      const obj = e[hon] as Record<string, unknown> | undefined;
+      const val = obj?.[field];
+      if (typeof val === "string" && val.includes(t)) {
+        const escopos = [...data.escopos];
+        escopos[i] = { ...e, [hon]: { ...obj, [field]: val.replace(t, sugestao) } };
+        return { ...data, escopos };
+      }
+    }
   }
 
   const acessoriosFields = ["descricao_limitacao_reembolso", "criterio_extincao_exito", "clausulas_adicionais"] as const;
@@ -401,30 +423,15 @@ export default function Step7Envio({
         throw new Error("Nenhum e-mail de destinatário informado.");
       }
 
-      const falhas: string[] = [];
-      for (const dest of destinatarios) {
-        const email = dest.email.trim();
-        try {
-          const emailResult = await sendEmail({
-            contract_id: resultContractId,
-            destinatario_email: email,
-            destinatario_nome: dest.nome || email,
-            assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
-          });
-          if (!emailResult.success) {
-            falhas.push(`${email}: ${emailResult.message || "erro"}`);
-          }
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : "erro desconhecido";
-          falhas.push(`${email}: ${detail}`);
-        }
-      }
-
-      if (falhas.length === destinatarios.length) {
-        throw new Error(`Erro ao enviar e-mail: ${falhas.join("; ")}`);
-      }
-      if (falhas.length > 0) {
-        setEmailWarning(`Alguns e-mails não foram enviados: ${falhas.join("; ")}`);
+      // Uma única mensagem com todos os contratantes em "Para" (backend aceita lista separada por vírgula).
+      const emailResult = await sendEmail({
+        contract_id: resultContractId,
+        destinatario_email: destinatarios.map((d) => d.email.trim()).join(","),
+        destinatario_nome: destinatarios.map((d) => d.nome || d.email.trim()).join(" e "),
+        assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
+      });
+      if (!emailResult.success) {
+        throw new Error(`Erro ao enviar e-mail: ${emailResult.message || "erro"}`);
       }
 
       // Send participação sheet to financeiro if applicable

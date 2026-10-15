@@ -18,6 +18,8 @@ class MatchStatus(str, Enum):
     AUTO = "auto"
     PENDENTE = "pendente"
     SEM_MATCH = "sem_match"
+    # Nota de fornecedor (escritorio tomador): nao concilia com contrato.
+    RECEBIDA = "recebida"
 
 
 @dataclass
@@ -51,6 +53,8 @@ def _ids_na_discriminacao(texto: str | None) -> set[str]:
 
 
 def match_nfse(nf, contratos: Iterable[_ContractLike]) -> MatchResult:
+    if getattr(nf, "direcao", "emitida") == "recebida":
+        return MatchResult(MatchStatus.RECEBIDA, motivo="nota recebida de fornecedor")
     candidatos = _candidatos(nf, contratos)
     if not candidatos:
         return MatchResult(MatchStatus.SEM_MATCH, motivo="nenhum contrato elegivel")

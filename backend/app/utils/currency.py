@@ -51,6 +51,11 @@ def formatar_percentual(value) -> str:
     return f"{num:.2f}".rstrip("0").rstrip(".").replace(".", ",") + "%"
 
 
+def _extenso(n) -> str:
+    num = float(n)
+    return num2words(int(num) if num.is_integer() else num, lang="pt_BR")
+
+
 def percentual_com_extenso(value) -> str:
     """10 -> '10% (dez por cento)', 2.25 -> '2,25% (dois vírgula vinte e cinco por cento)'."""
     num = round(float(value), 2)
@@ -60,3 +65,16 @@ def percentual_com_extenso(value) -> str:
         zero = "zero " if dec.startswith("0") else ""  # 1,05 -> "um vírgula zero cinco"
         extenso += f" vírgula {zero}{num2words(int(dec), lang='pt_BR')}"
     return f"{formatar_percentual(num)} ({extenso} por cento)"
+
+
+def numero_com_extenso(n, unidade: str = "", fem: bool = False) -> str:
+    """30, 'dias' -> '30 (trinta) dias'; fem=True: 2, 'parcelas' -> '2 (duas) parcelas'."""
+    import re
+
+    extenso = _extenso(n)
+    if fem:
+        extenso = re.sub(r"\bum\b", "uma", extenso)
+        extenso = re.sub(r"\bdois\b", "duas", extenso)
+        extenso = re.sub(r"entos\b", "entas", extenso)
+    texto = f"{int(n) if float(n).is_integer() else n} ({extenso})"
+    return f"{texto} {unidade}" if unidade else texto
