@@ -156,3 +156,50 @@ def test_desconto_percentual_fora_de_0_a_100_recusado_pela_api(pct):
     with pytest.raises(ValidationError):
         ContratoRequest(**_req_com("mensalidade", tem_desconto=True, desconto_percentual=pct))
     assert ContratoRequest(**_req_com("mensalidade", tem_desconto=True, desconto_percentual=100))
+
+
+def test_previa_sem_ia_configurada_avisa_em_vez_de_dizer_que_esta_ok(client, monkeypatch):
+    from app.services import contract_reviewer
+
+    monkeypatch.setattr(contract_reviewer, "is_configured", lambda: False)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        azure_id="x", email="lawyer@test.com", name="Lawyer", role="user"
+    )
+    e = _req_com("pro_labore", **DESCONTO_PCT)["escopos"]
+    try:
+        r = client.post("/api/contract/preview-honorarios", json={"escopos": e, "revisar": True})
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+    assert "não configurada" in r.json()["erro"]
+
+
+def test_previa_com_ia_manda_frase_de_contexto_e_separa_avisos(client, monkeypatch):
+    from app.services import contract_reviewer
+
+    visto = {}
+
+    def falso(texto, avisar_ambiguidade=False):
+        visto["texto"], visto["avisar"] = texto, avisar_ambiguidade
+        return [
+            {"trecho": "a gente", "problema": "informal", "sugestao": "o escritório"},
+            {"trecho": "perca a ação", "problema": "condição vaga", "sugestao": "", "tipo": "aviso"},
+            {"trecho": "Será concedido desconto", "problema": "frase fixa", "sugestao": "x"},
+        ]
+
+    monkeypatch.setattr(contract_reviewer, "is_configured", lambda: True)
+    monkeypatch.setattr(contract_reviewer, "review_text", falso)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        azure_id="x", email="lawyer@test.com", name="Lawyer", role="user"
+    )
+    e = _req_com("pro_labore", tem_desconto=True, desconto_tipo="percentual", desconto_percentual=100,
+                 desconto_condicao="caso a gente perca a ação")["escopos"]
+    try:
+        r = client.post("/api/contract/preview-honorarios", json={"escopos": e, "revisar": True}).json()
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+    assert visto["avisar"] is True
+    assert "Frase no contrato: Será concedido desconto" in visto["texto"]
+    # a correção da frase fixa é descartada; o aviso vai separado e sem riscar o texto
+    assert [f["trecho"] for f in r["findings"]] == ["a gente"]
+    assert [a["trecho"] for a in r["avisos"]] == ["perca a ação"]
+    assert "<del" in r["html"] and "perca a ação" in r["html"]
