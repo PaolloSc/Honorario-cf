@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     nfse_kek: str = ""                       # base64 32 bytes (AES-GCM)
     nfse_worker_token: str = ""              # bearer p/ worker GH Actions
     nfse_backfill_days: int = 90
+    # Trava da emissao: so 'homologacao' (producao restrita) ate alguem ligar de proposito.
+    nfse_emissao_producao_permitida: bool = False
     nfse_gh_actions_cidrs: str = ""          # CSV, opcional (allowlist)
 
     model_config = {"env_file": str(ENV_FILE), "env_file_encoding": "utf-8"}

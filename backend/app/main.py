@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -9,7 +11,7 @@ from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.database import init_db
-from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, drafts, email, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
+from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, drafts, email, emissor, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
 
 init_db()
 
@@ -31,6 +33,14 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validacao_sem_eco(request: Request, exc: RequestValidationError):
+    """422 padrao do FastAPI devolve o valor recebido ('input'). Em rotas com senha ou
+    certificado isso ecoaria o segredo na resposta: devolve so onde e por que falhou."""
+    erros = [{"loc": e.get("loc"), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": erros})
 app.add_middleware(SlowAPIMiddleware)
 
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
@@ -68,6 +78,7 @@ app.include_router(cnpj.router)
 app.include_router(users.router)
 app.include_router(participacoes.router)
 app.include_router(nfse.router)
+app.include_router(emissor.router)
 app.include_router(admin_credenciais.router)
 app.include_router(nfse_internal.router)
 app.include_router(tax_codes.router)
