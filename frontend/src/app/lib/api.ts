@@ -309,6 +309,8 @@ export async function previewHonorarios(data: unknown, signal?: AbortSignal, rev
   return (await res.json()) as {
     html: string;
     findings: Array<{ trecho: string; problema: string; sugestao: string }>;
+    // Condição vaga/ambígua: só leitura, sem sugestão.
+    avisos: Array<{ trecho: string; problema: string }>;
     erro?: string | null;
   };
 }

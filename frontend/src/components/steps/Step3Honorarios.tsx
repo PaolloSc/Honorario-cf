@@ -173,8 +173,48 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
     erro?: string;
     revisando?: boolean;
     findings?: Array<{ trecho: string; problema: string; sugestao: string }>;
+    avisos?: Array<{ trecho: string; problema: string }>;
   } | null>(null);
   const pedido = useRef<AbortController | null>(null);
+
+  const abrirPrevia = (key: string, escopo: EscopoItem, tipo: TipoHonorario) => {
+    pedido.current?.abort();
+    const ctrl = new AbortController();
+    pedido.current = ctrl;
+    setPrevia({ key });
+    const body = { escopos: [{ ...escopo, honorarios: [tipo] }] };
+    // 1ª chamada rápida (digitado em amarelo); 2ª com a IA, que troca o html ao chegar.
+    previewHonorarios(body, ctrl.signal)
+      .then(({ html }) => {
+        setPrevia({ key, html, revisando: true });
+        return previewHonorarios(body, ctrl.signal, true);
+      })
+      .then(({ html, findings, avisos, erro }) =>
+        setPrevia({ key, html, findings, avisos, revisando: false, erro: erro ?? undefined })
+      )
+      .catch(() => {
+        if (ctrl.signal.aborted) return;
+        // Se a IA falhar, fica a prévia sem correções.
+        setPrevia((p) => (p?.html ? { ...p, revisando: false } : { key, erro: "Não foi possível gerar a prévia." }));
+      });
+  };
+
+  // Grava a sugestão da IA no campo de texto livre que contém o trecho e reabre a prévia.
+  const aplicarCorrecao = (f: { trecho: string; sugestao: string }) => {
+    if (!previa?.key) return;
+    const [idxStr, tipo] = previa.key.split(":");
+    const idx = Number(idxStr);
+    const escopo = escopos[idx];
+    const obj = (escopo as unknown as Record<string, Record<string, unknown> | undefined>)[tipo];
+    const campo = obj && Object.keys(obj).find((k) => typeof obj[k] === "string" && (obj[k] as string).includes(f.trecho));
+    if (!obj || !campo) return;
+    const novo = {
+      ...escopo,
+      [tipo]: { ...obj, [campo]: (obj[campo] as string).replace(f.trecho, f.sugestao) },
+    } as EscopoItem;
+    onChange(escopos.map((e, i) => (i === idx ? novo : e)));
+    abrirPrevia(previa.key, novo, tipo as TipoHonorario);
+  };
 
   const textoLivre = (escopo: EscopoItem, tipo: TipoHonorario): TextoLivreProps => {
     const key = `${escopos.indexOf(escopo)}:${tipo}`;
@@ -182,27 +222,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
       pendente: pendentes.has(key),
       onEditar: () => marcar(key, true),
       onSair: () => {},
-      onAbrir: () => {
-        pedido.current?.abort();
-        const ctrl = new AbortController();
-        pedido.current = ctrl;
-        setPrevia({ key });
-        const body = { escopos: [{ ...escopo, honorarios: [tipo] }] };
-        // 1ª chamada rápida (digitado em amarelo); 2ª com a IA, que troca o html ao chegar.
-        previewHonorarios(body, ctrl.signal)
-          .then(({ html }) => {
-            setPrevia({ key, html, revisando: true });
-            return previewHonorarios(body, ctrl.signal, true);
-          })
-          .then(({ html, findings, erro }) =>
-            setPrevia({ key, html, findings, revisando: false, erro: erro ?? undefined })
-          )
-          .catch(() => {
-            if (ctrl.signal.aborted) return;
-            // Se a IA falhar, fica a prévia sem correções.
-            setPrevia((p) => (p?.html ? { ...p, revisando: false } : { key, erro: "Não foi possível gerar a prévia." }));
-          });
-      },
+      onAbrir: () => abrirPrevia(key, escopo, tipo),
     };
   };
 
@@ -967,6 +987,23 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         <span className="line-through text-danger">{f.trecho}</span> →{" "}
                         <span className="text-primary-dark font-medium">{f.sugestao}</span>
                         <span className="block text-xs text-muted">{f.problema}</span>
+                        <button
+                          type="button"
+                          onClick={() => aplicarCorrecao(f)}
+                          className="mt-1 px-2 py-0.5 border border-primary text-primary-dark rounded text-xs"
+                        >
+                          Aplicar correção
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {previa.avisos && previa.avisos.length > 0 && (
+                  <ul className="mt-3 space-y-2 rounded-lg border border-warning bg-warning/[0.1] p-3 text-xs">
+                    {previa.avisos.map((a, i) => (
+                      <li key={i}>
+                        <span className="font-medium text-warning">Condição ambígua:</span>{" "}
+                        &ldquo;{a.trecho}&rdquo; — {a.problema}
                       </li>
                     ))}
                   </ul>

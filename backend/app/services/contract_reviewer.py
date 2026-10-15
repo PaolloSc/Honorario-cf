@@ -70,6 +70,15 @@ _SYSTEM_PROMPT = (
     "Se nao houver nada a apontar, responda []."
 )
 
+# So' no pop-up de honorarios: alem do portugues, avisa condicao vaga sem reescrever o merito.
+_AVISO_AMBIGUIDADE = (
+    " Alem dos problemas de portugues, se um campo traz condicao ou valor vago ou "
+    "ambiguo (ex.: nao diz quem, o que ou quando), acrescente UM item por campo com "
+    '"tipo": "aviso", "trecho" copiado do campo, "problema" explicando a ambiguidade '
+    'e "sugestao": "" (nao reescreva o merito nem sugira outra condicao). '
+    "Itens de aviso nao contam no limite de 15."
+)
+
 _JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
 
 
@@ -124,19 +133,23 @@ def extract_open_fields(data: dict) -> str:
     Campos que entram no meio de uma frase pronta do contrato (desconto,
     parcelamento, vencimento do exito) vao acompanhados dessa frase, para a
     sugestao se encaixar nela."""
+    return texto_para_revisao(campos_abertos(data))
+
+
+def texto_para_revisao(campos: list[tuple[str, str, str | None]]) -> str:
     linhas: list[str] = []
-    for label, text, frase in _campos_abertos(data):
+    for label, text, frase in campos:
         linhas.append(f"{label}: {text}")
         if frase:
             linhas.append(f"  Frase no contrato: {frase}")
-    return "\n".join(linhas)
+    return chr(10).join(linhas)
 
 
 def open_fields(data: dict) -> list[tuple[str, str]]:
-    return [(label, text) for label, text, _ in _campos_abertos(data)]
+    return [(label, text) for label, text, _ in campos_abertos(data)]
 
 
-def _campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
+def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
     lines: list[tuple[str, str, str | None]] = []
 
     def add(label: str, value, frases: list[str] | None = None) -> None:
@@ -200,7 +213,7 @@ def _campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
     return lines
 
 
-def review_text(document_text: str) -> list[dict]:
+def review_text(document_text: str, avisar_ambiguidade: bool = False) -> list[dict]:
     """Envia o texto do contrato para o DeepSeek (endpoint compativel Anthropic) e
     retorna divergencias de portugues/padrao. Levanta ContractReviewError se a API
     nao estiver configurada ou a chamada falhar."""
@@ -217,7 +230,7 @@ def review_text(document_text: str) -> list[dict]:
         # da DeepSeek nao expoe seed, entao isto e' o maximo de consistencia possivel
         # (revisao de portugues nao precisa de criatividade).
         "temperature": 0,
-        "system": _SYSTEM_PROMPT,
+        "system": _SYSTEM_PROMPT + (_AVISO_AMBIGUIDADE if avisar_ambiguidade else ""),
         "messages": [{"role": "user", "content": document_text[:60000]}],
     }
     headers = {
@@ -257,8 +270,10 @@ def review_text(document_text: str) -> list[dict]:
     if not isinstance(findings, list):
         return []
     findings = [f for f in findings if isinstance(f, dict)]
+    avisos = [f for f in findings if f.get("tipo") == "aviso"] if avisar_ambiguidade else []
+    findings = [f for f in findings if f.get("tipo") != "aviso"]
     findings = [f for f in findings if not _is_instruction_not_text(f.get("sugestao"))]
-    return _drop_nested_trechos(findings)
+    return _drop_nested_trechos(findings) + avisos
 
 
 def so_do_digitado(findings: list[dict], data: dict) -> list[dict]:
