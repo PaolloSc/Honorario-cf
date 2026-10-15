@@ -23,7 +23,7 @@ from lxml import etree
 from workers.nfse_adn.cert import CertificadoError, carregar_pfx, completar_cadeia
 from workers.nfse_dps_smoke import run
 from workers.nfse_dps_smoke.assinatura import DS, NS_DPS, assinar_dps
-from workers.nfse_dps_smoke.dps import DpsParams, id_dps, montar_dps
+from workers.nfse_dps_smoke.dps import DpsParams, id_dps, montar_dps, regras_locais
 
 XSD = Path(__file__).parent / "fixtures" / "nfse" / "xsd" / "DPS_v1.01.xsd"
 CNPJ = "25463159000173"
@@ -422,3 +422,55 @@ def test_main_ctribmun_e_competencia_invalidos_abortam(monkeypatch, capsys, pfx)
 
 def test_parametrizacao_tambem_e_producao_restrita():
     assert run.PARAMETRIZACAO.startswith("https://adn.producaorestrita.nfse.gov.br/")
+
+
+# --- ME/EPP (opSimpNac=3): regApTribSN, retencao e totTrib --------------------
+
+def _tags(raiz, caminho):
+    return [e.tag.split("}")[1] for e in raiz.find(caminho.format(n=f"{{{NS_DPS}}}"))]
+
+
+@pytest.mark.parametrize("kw", [
+    {"op_simp_nac": "3"},
+    {"op_simp_nac": "3", "reg_ap_trib_sn": "2", "aliquota_iss": Decimal("5.00")},
+    {"op_simp_nac": "3", "tp_ret_issqn": "2", "aliquota_iss": Decimal("5.00"), "c_trib_mun": "001",
+     "nbs": "113019000", "im": "03656630021", "p_tot_trib_sn": "6.00"},
+])
+def test_me_epp_leva_regaptribsn_na_ordem_do_xsd_e_valida(schema, kw):
+    raiz = etree.fromstring(montar_dps(_params(**kw)))
+    schema.assertValid(raiz)
+    assert _tags(raiz, "{n}infDPS/{n}prest/{n}regTrib") == ["opSimpNac", "regApTribSN", "regEspTrib"]
+    assert raiz.findtext(f".//{{{NS_DPS}}}regApTribSN") == kw.get("reg_ap_trib_sn", "1")
+    assert _tags(raiz, "{n}infDPS/{n}valores/{n}trib/{n}totTrib") == ["pTotTribSN"]  # nunca indTotTrib (E0712)
+
+
+@pytest.mark.parametrize("op", ["1", "2"])
+def test_regaptribsn_nao_sai_para_nao_optante_nem_mei(op):
+    xml = montar_dps(_params(op_simp_nac=op, reg_ap_trib_sn="1"))
+    assert b"regApTribSN" not in xml and b"pTotTribSN" not in xml and b"<indTotTrib>0<" in xml  # E0162/E0713
+
+
+def test_retencao_do_iss_vai_em_tpretissqn():
+    xml = montar_dps(_params(op_simp_nac="3", tp_ret_issqn="2", aliquota_iss=Decimal("5.00")))
+    assert etree.fromstring(xml).findtext(f".//{{{NS_DPS}}}tpRetISSQN") == "2"
+
+
+def test_regras_locais_do_anexo_i():
+    ok = _params(op_simp_nac="3", tp_ret_issqn="2", aliquota_iss=Decimal("5.00"))
+    assert regras_locais(ok) == [] and regras_locais(_params()) == []
+    assert regras_locais(_params(op_simp_nac="3", aliquota_iss=Decimal("5.00")))[0].startswith("E0625")  # sem retencao
+    assert regras_locais(_params(op_simp_nac="3", tp_ret_issqn="2"))[0].startswith("E0621")  # retido sem aliquota
+    assert regras_locais(_params(op_simp_nac="3", tp_ret_issqn="2", aliquota_iss=Decimal("1.00")))[0].startswith("E0621")
+    assert regras_locais(_params(op_simp_nac="3", reg_esp_trib="6"))[0].startswith("E0175")
+    assert regras_locais(_params(op_simp_nac="2", reg_esp_trib="6"))[0].startswith("E0174")
+    # fora do SN (regApTribSN=2) a aliquota e do municipio: as regras de pAliq acima nao se aplicam
+    assert regras_locais(_params(op_simp_nac="3", reg_ap_trib_sn="2", aliquota_iss=Decimal("5.00"))) == []
+
+
+def test_main_aborta_com_a_regra_do_anexo_i_antes_de_assinar(monkeypatch, capsys, pfx):
+    monkeypatch.setenv("NFSE_CERT_PFX_B64", base64.b64encode(pfx).decode())
+    monkeypatch.setenv("NFSE_CERT_PFX_SENHA", "senha-de-teste")
+    monkeypatch.setattr(run, "enviar", lambda *a: pytest.fail("enviou DPS que o SEFIN rejeitaria"))
+    args = ["--cnpj", CNPJ, "--op-simp-nac", "3", "--aliquota-iss", "5.00"]
+    assert run.main(args) == 2 and "E0625" in capsys.readouterr().out
+    assert run.main(args + ["--tp-ret-issqn", "2", "--dry-run", "--c-trib-mun", "001"]) == 0
