@@ -474,3 +474,33 @@ def test_main_aborta_com_a_regra_do_anexo_i_antes_de_assinar(monkeypatch, capsys
     args = ["--cnpj", CNPJ, "--op-simp-nac", "3", "--aliquota-iss", "5.00"]
     assert run.main(args) == 2 and "E0625" in capsys.readouterr().out
     assert run.main(args + ["--tp-ret-issqn", "2", "--dry-run", "--c-trib-mun", "001"]) == 0
+
+
+# --- workflows: YAML valido (um ': ' sem aspas numa description derrubou o dispatch) ---
+
+WORKFLOWS = sorted((Path(__file__).parents[2] / ".github" / "workflows").glob("*.yml"))
+
+
+def _gatilhos(wf: dict) -> dict:
+    return wf.get("on", wf.get(True)) or {}  # YAML 1.1 le a chave 'on' como True
+
+
+@pytest.mark.parametrize("arq", WORKFLOWS, ids=lambda p: p.name)
+def test_todo_workflow_e_yaml_valido_e_respeita_o_limite_de_inputs(arq):
+    yaml = pytest.importorskip("yaml")
+    wf = yaml.safe_load(arq.read_text(encoding="utf-8"))
+    assert isinstance(wf, dict) and wf.get("jobs")
+    disparo = _gatilhos(wf).get("workflow_dispatch")
+    if isinstance(disparo, dict):
+        inputs = disparo.get("inputs") or {}
+        assert len(inputs) <= 25  # limite do GitHub
+        for nome, cfg in inputs.items():
+            assert isinstance(cfg.get("description", ""), str), nome
+
+
+def test_workflow_do_smoke_tem_workflow_dispatch_e_so_ele():
+    yaml = pytest.importorskip("yaml")
+    wf = yaml.safe_load((Path(__file__).parents[2] / ".github/workflows/nfse-dps-smoke.yml").read_text(encoding="utf-8"))
+    assert list(_gatilhos(wf)) == ["workflow_dispatch"]
+    inputs = _gatilhos(wf)["workflow_dispatch"]["inputs"]
+    assert {"cnpj", "im", "nbs", "c_trib_mun", "reg_ap_trib_sn", "tp_ret_issqn", "consulta"} <= set(inputs)
