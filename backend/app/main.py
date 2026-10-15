@@ -62,6 +62,7 @@ app.add_middleware(
         "Authorization",
         "Content-Type",
         "Accept",
+        "Idempotency-Key",
         "X-Dev-User-Email",
         "X-Dev-User-Role",
         "X-Dev-User-Name",
