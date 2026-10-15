@@ -189,3 +189,14 @@ def test_extract_open_fields_inclui_endereco_e_observacoes_de_vencimento():
     assert "o valor da causa atulizado" in text
     assert "apos a homologacao do acôrdo" in text
     assert "excto em mes de recesso" in text
+
+
+def test_so_do_digitado_descarta_critica_ao_rotulo():
+    from app.services.contract_reviewer import so_do_digitado
+
+    data = {"escopos": [{"hora_trabalhada": {"tem_desconto": True, "desconto_condicao": "pagamento ate o vencimeto"}}]}
+    achados = [
+        {"trecho": "condição do desconto", "sugestao": "condição para o desconto"},
+        {"trecho": "vencimeto", "sugestao": "vencimento"},
+    ]
+    assert [a["trecho"] for a in so_do_digitado(achados, data)] == ["vencimeto"]

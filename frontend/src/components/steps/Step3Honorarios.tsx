@@ -63,6 +63,9 @@ function vencimentoLegado(iso?: string): string {
 interface TextoLivreProps {
   onEditar: () => void;
   onSair: () => void;
+  // Texto mexido e ainda não aprovado no pop-up; onAbrir abre a prévia pra aprovar.
+  pendente: boolean;
+  onAbrir: () => void;
 }
 
 function DescontoCampos({
@@ -70,6 +73,8 @@ function DescontoCampos({
   onChange,
   onEditar,
   onSair,
+  pendente,
+  onAbrir,
 }: TextoLivreProps & { h: ComDesconto; onChange: (partial: ComDesconto) => void }) {
   const tipo = h.desconto_tipo ?? "percentual";
   return (
@@ -131,6 +136,14 @@ function DescontoCampos({
           </FormField>
         </div>
       )}
+      {pendente && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-warning bg-warning/[0.1] px-3 py-2 text-xs text-warning">
+          <span>Texto alterado e ainda não aprovado.</span>
+          <button type="button" onClick={onAbrir} className="font-medium underline">
+            Ver prévia e aprovar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -141,45 +154,57 @@ interface Step3Props {
 }
 
 export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
-  // Pop-up de prévia: abre ao sair de um campo de texto livre que foi editado.
+  // Pop-up de prévia: aberto sob demanda ("Ver prévia e aprovar"). Editar um texto
+  // livre o marca como pendente; aprovar no pop-up tira a pendência, e nova edição
+  // volta a pedir aprovação — mas sem reabrir o pop-up sozinho.
+  const [pendentes, setPendentes] = useState<Set<string>>(new Set());
+  const marcar = (key: string, pendente: boolean) =>
+    setPendentes((prev) => {
+      if (prev.has(key) === pendente) return prev;
+      const n = new Set(prev);
+      if (pendente) n.add(key);
+      else n.delete(key);
+      return n;
+    });
   // revisando: a IA ainda está corrigindo o português (o html já mostra o digitado).
   const [previa, setPrevia] = useState<{
+    key?: string;
     html?: string;
     erro?: string;
     revisando?: boolean;
     findings?: Array<{ trecho: string; problema: string; sugestao: string }>;
   } | null>(null);
-  const editado = useRef(false);
   const pedido = useRef<AbortController | null>(null);
 
-  const textoLivre = (escopo: EscopoItem, tipo: TipoHonorario): TextoLivreProps => ({
-    onEditar: () => {
-      editado.current = true;
-    },
-    onSair: () => {
-      if (!editado.current) return;
-      editado.current = false;
-      pedido.current?.abort();
-      const ctrl = new AbortController();
-      pedido.current = ctrl;
-      setPrevia({});
-      const body = { escopos: [{ ...escopo, honorarios: [tipo] }] };
-      // 1ª chamada rápida (digitado em amarelo); 2ª com a IA, que troca o html ao chegar.
-      previewHonorarios(body, ctrl.signal)
-        .then(({ html }) => {
-          setPrevia({ html, revisando: true });
-          return previewHonorarios(body, ctrl.signal, true);
-        })
-        .then(({ html, findings, erro }) =>
-          setPrevia({ html, findings, revisando: false, erro: erro ?? undefined })
-        )
-        .catch(() => {
-          if (ctrl.signal.aborted) return;
-          // Se a IA falhar, fica a prévia sem correções.
-          setPrevia((p) => (p?.html ? { ...p, revisando: false } : { erro: "Não foi possível gerar a prévia." }));
-        });
-    },
-  });
+  const textoLivre = (escopo: EscopoItem, tipo: TipoHonorario): TextoLivreProps => {
+    const key = `${escopos.indexOf(escopo)}:${tipo}`;
+    return {
+      pendente: pendentes.has(key),
+      onEditar: () => marcar(key, true),
+      onSair: () => {},
+      onAbrir: () => {
+        pedido.current?.abort();
+        const ctrl = new AbortController();
+        pedido.current = ctrl;
+        setPrevia({ key });
+        const body = { escopos: [{ ...escopo, honorarios: [tipo] }] };
+        // 1ª chamada rápida (digitado em amarelo); 2ª com a IA, que troca o html ao chegar.
+        previewHonorarios(body, ctrl.signal)
+          .then(({ html }) => {
+            setPrevia({ key, html, revisando: true });
+            return previewHonorarios(body, ctrl.signal, true);
+          })
+          .then(({ html, findings, erro }) =>
+            setPrevia({ key, html, findings, revisando: false, erro: erro ?? undefined })
+          )
+          .catch(() => {
+            if (ctrl.signal.aborted) return;
+            // Se a IA falhar, fica a prévia sem correções.
+            setPrevia((p) => (p?.html ? { ...p, revisando: false } : { key, erro: "Não foi possível gerar a prévia." }));
+          });
+      },
+    };
+  };
 
   const fecharPrevia = () => {
     pedido.current?.abort();
@@ -955,9 +980,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
               <button
                 type="button"
                 onClick={fecharPrevia}
-                className="px-3 py-1.5 bg-primary-dark text-white rounded text-xs"
+                className="px-3 py-1.5 border border-border rounded text-xs mr-2"
               >
-                OK
+                Voltar e editar
+              </button>
+              <button
+                type="button"
+                disabled={!previa.html}
+                onClick={() => {
+                  if (previa.key) marcar(previa.key, false);
+                  fecharPrevia();
+                }}
+                className="px-3 py-1.5 bg-primary-dark text-white rounded text-xs disabled:opacity-50"
+              >
+                Aprovar
               </button>
             </div>
           </div>
