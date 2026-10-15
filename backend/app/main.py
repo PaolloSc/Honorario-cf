@@ -62,6 +62,7 @@ app.add_middleware(
         "Authorization",
         "Content-Type",
         "Accept",
+        "Idempotency-Key",
         "X-Dev-User-Email",
         "X-Dev-User-Role",
         "X-Dev-User-Name",
@@ -79,6 +80,7 @@ app.include_router(users.router)
 app.include_router(participacoes.router)
 app.include_router(nfse.router)
 app.include_router(emissor.router)
+app.include_router(emissor.emitidas_router)
 app.include_router(faturamento.router)
 app.include_router(admin_credenciais.router)
 app.include_router(nfse_internal.router)

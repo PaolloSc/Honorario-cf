@@ -38,6 +38,8 @@ class DpsParams:
     nbs: str | None = None  # 9 digitos, sem pontos (E0322 se houver IBS/CBS)
     tomador_cnpj: str = TOMADOR_FICTICIO_CNPJ
     tomador_nome: str = "TOMADOR FICTICIO PARA TESTE LTDA"
+    tomador_cpf: str | None = None  # se informado, vai no lugar do CNPJ do tomador
+    tomador_end: dict | None = None  # cMun, CEP, xLgr, nro, xBairro (+ xCpl): so entra se completo
     ibscbs: bool = True
     c_ind_op: str = "100301"  # demais servicos onerosos (Anexo VII)
     cst: str = "000"
@@ -100,8 +102,22 @@ def montar_dps(p: DpsParams) -> bytes:
     _e(reg, "regEspTrib", p.reg_esp_trib)
 
     toma = _e(inf, "toma")
-    _e(toma, "CNPJ", p.tomador_cnpj)
+    if p.tomador_cpf:
+        _e(toma, "CPF", p.tomador_cpf)
+    else:
+        _e(toma, "CNPJ", p.tomador_cnpj)
     _e(toma, "xNome", p.tomador_nome)
+    e = p.tomador_end or {}
+    if all(e.get(k) for k in ("cMun", "CEP", "xLgr", "nro", "xBairro")):
+        end = _e(toma, "end")
+        nac = _e(end, "endNac")
+        _e(nac, "cMun", e["cMun"])
+        _e(nac, "CEP", e["CEP"])
+        _e(end, "xLgr", e["xLgr"])
+        _e(end, "nro", e["nro"])
+        if e.get("xCpl"):
+            _e(end, "xCpl", e["xCpl"])
+        _e(end, "xBairro", e["xBairro"])
 
     serv = _e(inf, "serv")
     _e(_e(serv, "locPrest"), "cLocPrestacao", p.c_mun)
