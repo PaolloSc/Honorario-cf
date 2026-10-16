@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, get_db, utcnow
+from app.models.documentos_complementares import ROTULO_DOCUMENTO, TIPO_DISTRATO, TIPOS_COMPLEMENTARES
 from app.services.azure_email import AzureEmailService
 from app.services.docuseal import DocuSealService, link_assinatura
 from app.utils.participacao import linhas_participacao
@@ -352,10 +353,12 @@ async def send_for_signature(
             .first()
         )
         from app.models.contrato_consumidor import TIPO_CONSUMIDOR_AEREO
+        from app.models.documentos_complementares import TIPO_SUBSTABELECIMENTO
         from app.services.consumidor_generator import CONTRATADA_NOME
 
         tipo = _tipo_da_versao(latest_ver.form_data_json if latest_ver else None)
         eh_consumidor = tipo == TIPO_CONSUMIDOR_AEREO
+        eh_substabelecimento = tipo == TIPO_SUBSTABELECIMENTO
 
         # Build the full list of signatarios first (need roles to regenerate DOCX)
         all_signatarios = list(data.signatarios)
@@ -369,12 +372,18 @@ async def send_for_signature(
                     "name": CONTRATADA_NOME,
                     "role": "Contratado",
                 })
+        elif eh_substabelecimento:
+            # So' os substabelecentes assinam: sem socio "Contratado", contratante nem testemunha.
+            if not all_signatarios or any(
+                not s.get("role", "").startswith("Substabelecente") for s in all_signatarios
+            ):
+                raise HTTPException(400, "O substabelecimento é assinado apenas pelos substabelecentes.")
         else:
             all_signatarios = _resolver_assinatura_escritorio(all_signatarios, db)
 
         # Testemunha 1 fixa (financeiro): injetada em toda submissao.
         # Inserida ANTES de eventuais testemunhas do payload p/ que a dedup a nomeie "Testemunha 1".
-        lilian_present = any(
+        lilian_present = eh_substabelecimento or any(
             s.get("email", "").lower() == settings.testemunha1_email.lower()
             and s.get("role", "").startswith("Testemunha")
             for s in all_signatarios
@@ -403,7 +412,7 @@ async def send_for_signature(
 
         # Assign order for sequential signing:
         # Contratante(s) -> Contratado (C&F) -> Testemunha(s) -> Lilian por ultimo
-        _ROLE_ORDER = {"Contratante": 1, "Contratado": 3, "Testemunha": 4}
+        _ROLE_ORDER = {"Contratante": 1, "Substabelecente": 1, "Contratado": 3, "Testemunha": 4}
         for sig in all_signatarios:
             # Extract base role (without number suffix) for order lookup
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
@@ -446,8 +455,9 @@ async def send_for_signature(
                     logger.error("Failed to patch DOCX with signatures: %s", patch_err)
 
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
-        rotulo = (
-            "Contrato de Prestação de Serviços" if eh_consumidor else "Contrato Honorários"
+        rotulo = ROTULO_DOCUMENTO.get(
+            tipo,
+            "Contrato de Prestação de Serviços" if eh_consumidor else "Contrato Honorários",
         )
         template_name = (
             f"{rotulo} — {contract.client_name}"
@@ -797,6 +807,39 @@ def _pendentes_docuseal(status_data: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def _refletir_na_origem(contract: ContractDB, db: Session) -> None:
+    """Aditivo assinado so' deixa auditoria no contrato de origem; distrato assinado o encerra.
+
+    Idempotente: o DocuSeal reentrega webhook e a sincronizacao roda a cada abertura da pagina.
+    """
+    if not contract.contrato_origem_id:
+        return
+    origem = db.query(ContractDB).filter(ContractDB.contract_id == contract.contrato_origem_id).first()
+    if origem is None:
+        return
+    rotulo = ROTULO_DOCUMENTO[contract.tipo_contrato]
+    acao = f"{contract.tipo_contrato}_assinado"
+    ja_registrado = (
+        db.query(AuditLogDB.id)
+        .filter(AuditLogDB.contract_id == origem.contract_id, AuditLogDB.action == acao,
+                AuditLogDB.detail.like(f"%{contract.contract_id}%"))
+        .first()
+    )
+    if not ja_registrado:
+        db.add(AuditLogDB(
+            contract_id=origem.contract_id, action=acao, created_at=utcnow(),
+            detail=f"{rotulo} assinado ({contract.contract_id})",
+        ))
+    if contract.tipo_contrato == TIPO_DISTRATO and origem.status != "encerrado":
+        origem.status = "encerrado"
+        origem.updated_at = utcnow()
+        db.add(AuditLogDB(
+            contract_id=origem.contract_id, action="encerramento", created_at=utcnow(),
+            detail=f"Contrato encerrado por distrato assinado ({contract.contract_id})",
+        ))
+    db.commit()
+
+
 async def _aplicar_conclusao(
     contract: ContractDB,
     version: ContractVersionDB,
@@ -824,6 +867,11 @@ async def _aplicar_conclusao(
         logger.info("Contract %s updated to status '%s' (%s)", contract.contract_id, novo_status, acao)
 
     if novo_status != "assinado":
+        return
+
+    if contract.tipo_contrato in TIPOS_COMPLEMENTARES:
+        # Documento complementar nao gera ficha de participacao; so' reflete no contrato de origem.
+        _refletir_na_origem(contract, db)
         return
 
     ja_enviada = (
