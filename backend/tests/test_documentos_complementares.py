@@ -11,6 +11,12 @@ Contrato de API fixado por estes testes:
        -> {contratantes, aditivos_existentes}
   GET  /api/contracts/{contract_id}/documentos
        -> {documentos: [{contract_id, tipo_contrato, status}]}
+
+Formato fixado: dia com 2 digitos ("05 de outubro de 2026"), como nos modelos.
+OAB vai em texto livre e e impressa como veio. Numero de processo e CNJ com
+digito verificador; "tipo" do processo e livre (Processo, Agravo de Instrumento...).
+
+Todos os dados sao ficticios (processos com DV valido inventados).
 """
 import io
 import json
@@ -18,16 +24,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from docx import Document
+from fastapi import Request
 
-from app.auth import CurrentUser, get_current_user
+from app.auth import CurrentUser, _enforce_readonly, get_current_user
 from app.database import ColaboradorDB, ContractDB, ContractVersionDB, SessionLocal, utcnow
 from app.main import app
 
 SECRET = "test-webhook-secret"
 ORIGEM = "origem-001"
-SOCIO = {"email": "socia@cf.com", "name": "Socia CF", "role": "Contratado"}
+SOCIO = {"email": "socia@cf.com", "name": "Sócia CF", "role": "Contratado"}
+CONTRATANTE_SIG = {"email": "c@exemplo.com", "name": "Fulano de Tal", "role": "Contratante"}
 
-# Dados ficticios — nunca os dos modelos reais.
 CLIENTE_PJ = {
     "tipo": "PJ",
     "razao_social": "EMPRESA EXEMPLO LTDA",
@@ -37,49 +44,86 @@ CLIENTE_PJ = {
     "representantes": [{"nome": "Fulano de Tal", "cpf": "123.456.789-09"}],
 }
 
+CLIENTE_PF = {
+    "tipo": "PF",
+    "nome": "Mônica Exemplo da Silva",
+    "nacionalidade": "brasileira",
+    "cpf": "987.654.321-00",
+    "profissao": "engenheira",
+    "estado_civil": "casado",
+    "endereco": "Rua das Acácias, 50, Belo Horizonte/MG, CEP 30.100-000",
+    "email": "monica@exemplo.com",
+}
+
 ADITIVO = {
     "contrato_origem_id": ORIGEM,
-    "data_documento": "2026-10-16",
-    "objeto": "prestacao de servicos de compliance trabalhista",
-    "remuneracao": {"valor_mensal": 1500.0, "franquia_horas": 5, "valor_hora_excedente": 300.0},
+    "data_documento": "2026-10-05",
+    "objeto": "prestação de serviços de auditoria trabalhista",
+    "remuneracao": {"valor_mensal": 1250.5, "franquia_horas": 1, "valor_hora_excedente": 210.0},
     "compensacao_anual": True,
-    "abrangencia": [{"razao_social": "FILIAL EXEMPLO LTDA", "cnpj": "44.555.666/0001-77"}],
+    "abrangencia": [{"razao_social": "FILIAL ÁGUA BRANCA LTDA", "cnpj": "44.555.666/0001-77"}],
 }
 
 DISTRATO = {
     "contrato_origem_id": ORIGEM,
-    "data_documento": "2026-10-16",
-    "data_contrato_origem": "2022-04-28",
-    "objeto_contrato_origem": "consultoria e contencioso de rotina",
+    "data_documento": "2026-10-07",
+    "data_contrato_origem": "2021-03-09",
+    "objeto_contrato_origem": "assessoria jurídica empresarial",
     "ressalva_exito": False,
     "substabelecer_e_devolver": True,
 }
 
+PROC_A = {"tipo": "Processo", "numero": "1234567-49.2020.8.13.0024",
+          "descricao": "Outorgante x Parte Contrária A"}
+PROC_B = {"tipo": "Agravo de Instrumento", "numero": "1111111-60.2023.4.06.0000",
+          "descricao": "Outorgante x Parte Contrária B"}
+
 SUBSTABELECIMENTO = {
     "contrato_origem_id": None,
-    "data_documento": "2026-10-16",
+    "data_documento": "2026-10-08",
     "outorgante": {"razao_social": "OUTORGANTE EXEMPLO LTDA"},
     "substabelecentes": [
-        {"nome": "Socia CF", "oab": "OAB/MG n.º 111.111", "email": "socia@cf.com"},
-        {"nome": "Advogado CF", "oab": "OAB/MG n.º 222.222", "email": "adv@cf.com"},
+        {"nome": "Sócia CF", "oab": "OAB/MG nº 111.111", "email": "socia@cf.com"},
+        {"nome": "Advogado CF", "oab": "OAB/MG nº 222.222", "email": "adv@cf.com"},
     ],
     "substabelecidos": [
         {"nome": "Beltrana Parceira", "genero": "F", "estado_civil": "casada",
-         "oab": "OAB/MG sob o n.º 333.333"},
+         "oab": "OAB/MG sob o nº 333.333"},
+        {"nome": "Ciclano Parceiro", "genero": "M", "estado_civil": "solteiro",
+         "oab": "OAB/MG sob o nº 444.444"},
     ],
     "endereco_substabelecidos": "Rua Parceira, 10, Belo Horizonte/MG, CEP 30.000-000",
-    "processos": [
-        {"numero": "5012442-37.2017.8.13.0079", "descricao": "Outorgante x Parte Contraria A"},
-        {"numero": "0864562-85.2014.8.13.0024", "descricao": "Outorgante x Parte Contraria B"},
-    ],
+    "processos": [PROC_A, PROC_B],
 }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 
-def _user(role: str = "advogado"):
-    return lambda: CurrentUser(azure_id="x", email="lawyer@test.com", name="Lawyer", role=role)
+def _user(role: str = "advogado", email: str = "lawyer@test.com"):
+    return lambda: CurrentUser(azure_id="x", email=email, name="Lawyer", role=role)
+
+
+def _semear_origem(contratante: dict, status: str = "assinado"):
+    db = SessionLocal()
+    try:
+        db.query(ContractVersionDB).filter_by(contract_id=ORIGEM).delete()
+        db.query(ContractDB).filter_by(contract_id=ORIGEM).delete()
+        db.commit()
+        db.add(ContractDB(
+            contract_id=ORIGEM, status=status, client_name="Cliente",
+            client_email=contratante["email"], current_version=1, created_by="lawyer@test.com",
+            created_at=utcnow(), updated_at=utcnow(),
+        ))
+        db.commit()
+        db.add(ContractVersionDB(
+            contract_id=ORIGEM, version_number=1,
+            form_data_json=json.dumps({"contratantes": [contratante], "escopos": []}),
+            created_at=utcnow(),
+        ))
+        db.commit()
+    finally:
+        db.close()
 
 
 @pytest.fixture(autouse=True)
@@ -88,26 +132,22 @@ def auth_e_origem():
     db = SessionLocal()
     try:
         db.add(ColaboradorDB(nome=SOCIO["name"], email=SOCIO["email"], papel="socio", ativo=True))
-        db.add(ContractDB(
-            contract_id=ORIGEM, status="assinado", client_name=CLIENTE_PJ["razao_social"],
-            client_email=CLIENTE_PJ["email"], current_version=1, created_by="lawyer@test.com",
-            created_at=utcnow(), updated_at=utcnow(),
-        ))
-        db.commit()
-        db.add(ContractVersionDB(
-            contract_id=ORIGEM, version_number=1,
-            form_data_json=json.dumps({"contratantes": [CLIENTE_PJ], "escopos": []}),
-            created_at=utcnow(),
-        ))
         db.commit()
     finally:
         db.close()
+    _semear_origem(CLIENTE_PJ)
     yield
     app.dependency_overrides.pop(get_current_user, None)
 
 
 def _gerar(client, tipo: str, payload: dict):
     return client.post(f"/api/documentos/{tipo}", json=payload)
+
+
+def _id(client, tipo: str, payload: dict) -> str:
+    r = _gerar(client, tipo, payload)
+    assert r.status_code == 200, r.text
+    return r.json()["contract_id"]
 
 
 def _texto(client, contract_id: str) -> str:
@@ -118,7 +158,15 @@ def _texto(client, contract_id: str) -> str:
     for t in doc.tables:
         for linha in t.rows:
             partes.extend(c.text for c in linha.cells)
-    return "\n".join(partes)
+    texto = "\n".join(partes)
+    _sem_marcadores(texto)
+    return texto
+
+
+def _sem_marcadores(texto: str):
+    """Nenhum documento sai com campo nao preenchido (o modelo real tem '[número de vias]')."""
+    for lixo in ("[", "{{", "None", "R$ 0,00", "0 (zero)"):
+        assert lixo not in texto, f"marcador solto: {lixo!r}"
 
 
 def _status(contract_id: str) -> str:
@@ -148,6 +196,15 @@ def _enviar_capturando(client, contract_id: str, signatarios: list[dict]) -> lis
     return capturados
 
 
+def _webhook_concluido(client):
+    with patch("app.routers.docuseal.DOCUSEAL_WEBHOOK_SECRET", SECRET), \
+         patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        r = client.post("/api/docuseal/webhook",
+                        json={"event_type": "submission.completed", "data": {"id": "999"}},
+                        headers={"x-docuseal-secret": SECRET})
+    assert r.status_code == 200
+
+
 # ── Pre-preenchimento ─────────────────────────────────────────────────────
 
 
@@ -163,36 +220,58 @@ def test_prefill_traz_partes_do_contrato_de_origem(client):
 
 
 def test_aditivo_gera_docx_com_partes_valores_e_abrangencia(client):
-    r = _gerar(client, "aditivo", ADITIVO)
-    assert r.status_code == 200, r.text
-    texto = _texto(client, r.json()["contract_id"])
+    texto = _texto(client, _id(client, "aditivo", ADITIVO))
 
     assert "ADITIVO CONTRATUAL AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS" in texto
+    assert "º ADITIVO" not in texto  # o 1º aditivo nao leva numero no titulo
     assert "EMPRESA EXEMPLO LTDA" in texto and "11.222.333/0001-81" in texto
     assert "CARVALHO & FURTADO ADVOGADOS" in texto
-    assert "R$ 1.500,00 (mil e quinhentos reais)" in texto
-    assert "5 (cinco) horas" in texto
-    assert "R$ 300,00 (trezentos reais)" in texto
-    assert "FILIAL EXEMPLO LTDA" in texto and "44.555.666/0001-77" in texto
+    assert "prestação de serviços de auditoria trabalhista" in texto
+    assert "R$ 1.250,50 (mil, duzentos e cinquenta reais e cinquenta centavos)" in texto
+    assert "1 (uma) hora mensal" in texto
+    assert "O valor da hora excedente será de R$ 210,00 (duzentos e dez reais)" in texto
+    assert "Compensação e Faturamento" in texto and "12 (doze) meses" in texto
+    assert "FILIAL ÁGUA BRANCA LTDA" in texto and "44.555.666/0001-77" in texto
     assert "Permanecem inalteradas as demais cláusulas" in texto
-    assert "16 de outubro de 2026" in texto
+    assert "vias de igual teor" in texto
+    assert "05 de outubro de 2026" in texto
 
 
-def test_segundo_aditivo_e_numerado_e_cita_o_primeiro(client):
-    primeiro = _gerar(client, "aditivo", ADITIVO).json()["contract_id"]
-    r = _gerar(client, "aditivo", {**ADITIVO, "objeto": "elaboracao de politicas internas"})
-    assert r.status_code == 200, r.text
-    texto = _texto(client, r.json()["contract_id"])
+def test_aditivo_pf_qualifica_com_cpf(client):
+    _semear_origem(CLIENTE_PF)
+    texto = _texto(client, _id(client, "aditivo", ADITIVO))
+    assert "Mônica Exemplo da Silva" in texto and "987.654.321-00" in texto
 
-    assert "2º ADITIVO CONTRATUAL" in texto
-    assert "compliance trabalhista" in texto  # considerando do 1º aditivo
-    assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["aditivos_existentes"] == 2
-    assert primeiro != r.json()["contract_id"]
+
+def test_aditivo_sem_franquia_e_sem_compensacao(client):
+    payload = {**ADITIVO, "remuneracao": {"valor_mensal": 1.0}, "compensacao_anual": False,
+               "abrangencia": []}
+    texto = _texto(client, _id(client, "aditivo", payload))
+    assert "R$ 1,00 (um real)" in texto
+    assert "franquia" not in texto.lower() and "hora excedente" not in texto
+    assert "Compensação e Faturamento" not in texto
+    assert "Abrangência" not in texto
+
+
+def test_aditivo_franquia_no_plural_feminino(client):
+    payload = {**ADITIVO, "remuneracao": {**ADITIVO["remuneracao"], "franquia_horas": 2}}
+    assert "2 (duas) horas mensais" in _texto(client, _id(client, "aditivo", payload))
+
+
+def test_aditivos_seguintes_sao_numerados_e_citam_os_anteriores(client):
+    _id(client, "aditivo", ADITIVO)
+    segundo = _texto(client, _id(client, "aditivo", {**ADITIVO, "objeto": "elaboração de políticas internas"}))
+    terceiro = _texto(client, _id(client, "aditivo", {**ADITIVO, "objeto": "treinamento de gestores"}))
+
+    assert "2º ADITIVO CONTRATUAL" in segundo
+    assert "auditoria trabalhista" in segundo  # considerando do 1º
+    assert "3º ADITIVO CONTRATUAL" in terceiro
+    assert "auditoria trabalhista" in terceiro and "políticas internas" in terceiro
+    assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["aditivos_existentes"] == 3
 
 
 def test_aditivo_exige_contrato_de_origem(client):
-    r = _gerar(client, "aditivo", {**ADITIVO, "contrato_origem_id": None})
-    assert r.status_code == 422
+    assert _gerar(client, "aditivo", {**ADITIVO, "contrato_origem_id": None}).status_code == 422
 
 
 def test_aditivo_com_origem_inexistente_da_404(client):
@@ -201,36 +280,62 @@ def test_aditivo_com_origem_inexistente_da_404(client):
     assert r.json()["detail"] != "Not Found"  # 404 do contrato, nao de rota inexistente
 
 
+def test_aditivo_e_assinado_por_contratante_socio_e_testemunhas(client):
+    cid = _id(client, "aditivo", ADITIVO)
+    papeis = [s["role"] for s in _enviar_capturando(client, cid, [CONTRATANTE_SIG, SOCIO])]
+    assert any(p.startswith("Contratante") for p in papeis)
+    assert "Contratado" in papeis
+    assert any(p.startswith("Testemunha") for p in papeis)
+
+
+def test_aditivo_assinado_nao_muda_status_da_origem(client):
+    cid = _id(client, "aditivo", ADITIVO)
+    _enviar_capturando(client, cid, [CONTRATANTE_SIG, SOCIO])
+    _webhook_concluido(client)
+    assert _status(cid) == "assinado"
+    assert _status(ORIGEM) == "assinado"
+
+
 # ── Distrato ──────────────────────────────────────────────────────────────
 
 
-def test_distrato_gera_quitacao_total_e_clausula_de_substabelecer(client):
-    r = _gerar(client, "distrato", DISTRATO)
-    assert r.status_code == 200, r.text
-    texto = _texto(client, r.json()["contract_id"])
+def test_distrato_quitacao_total_com_substabelecer(client):
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
 
     assert "DISTRATO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS" in texto
-    assert "28 de abril de 2022" in texto
+    assert "09 de março de 2021" in texto
+    assert "assessoria jurídica empresarial" in texto
     assert "art. 472 do Código Civil" in texto
+    assert "integralmente adimplidos" in texto
     assert "honorários de êxito futuros" in texto  # quitacao total
     assert "substabelecer sem reserva de poderes" in texto
+    assert "2 (duas) vias" in texto and "2 (duas) testemunhas" in texto
     assert "TESTEMUNHAS" in texto.upper()
+    assert "07 de outubro de 2026" in texto
+    assert "Aditivo" not in texto  # sem aditivos cadastrados, nao cita nenhum
 
 
-def test_distrato_com_ressalva_de_exito_e_sem_substabelecer(client):
-    r = _gerar(client, "distrato", {**DISTRATO, "ressalva_exito": True,
-                                    "substabelecer_e_devolver": False})
-    assert r.status_code == 200, r.text
-    texto = _texto(client, r.json()["contract_id"])
+# Frase da ressalva e PROVISORIA: depende da validacao juridica do socio (issue #126).
+RESSALVA = "ressalvados os honorários de êxito"
 
-    assert "ressalvados os honorários de êxito" in texto
-    assert "substabelecer sem reserva de poderes" not in texto
+
+@pytest.mark.parametrize("ressalva,substabelecer", [
+    (True, True), (True, False), (False, False),
+])
+def test_distrato_flags_sao_independentes(client, ressalva, substabelecer):
+    payload = {**DISTRATO, "ressalva_exito": ressalva, "substabelecer_e_devolver": substabelecer}
+    texto = _texto(client, _id(client, "distrato", payload))
+
+    assert (RESSALVA in texto) is ressalva
+    assert ("honorários de êxito futuros" in texto) is (not ressalva)
+    assert ("integralmente adimplidos" in texto) is (not ressalva)
+    assert ("substabelecer sem reserva de poderes" in texto) is substabelecer
 
 
 def test_distrato_cita_aditivos_existentes(client):
-    _gerar(client, "aditivo", ADITIVO)
-    texto = _texto(client, _gerar(client, "distrato", DISTRATO).json()["contract_id"])
-    assert "aditivo" in texto.lower()
+    _id(client, "aditivo", ADITIVO)
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert "1º Aditivo" in texto or "auditoria trabalhista" in texto
 
 
 def test_distrato_duplicado_e_bloqueado(client):
@@ -238,18 +343,25 @@ def test_distrato_duplicado_e_bloqueado(client):
     assert _gerar(client, "distrato", DISTRATO).status_code == 409
 
 
+def test_distrato_e_assinado_por_contratante_socio_e_testemunhas(client):
+    cid = _id(client, "distrato", DISTRATO)
+    papeis = [s["role"] for s in _enviar_capturando(client, cid, [CONTRATANTE_SIG, SOCIO])]
+    assert any(p.startswith("Contratante") for p in papeis)
+    assert "Contratado" in papeis
+    assert any(p.startswith("Testemunha") for p in papeis)
+
+
+def test_distrato_enviado_mas_nao_assinado_nao_encerra_origem(client):
+    cid = _id(client, "distrato", DISTRATO)
+    _enviar_capturando(client, cid, [CONTRATANTE_SIG, SOCIO])
+    assert _status(ORIGEM) == "assinado"
+
+
 def test_distrato_assinado_encerra_o_contrato_de_origem(client):
-    distrato_id = _gerar(client, "distrato", DISTRATO).json()["contract_id"]
-    _enviar_capturando(client, distrato_id, [
-        {"email": "c@exemplo.com", "name": "Fulano de Tal", "role": "Contratante"}, SOCIO,
-    ])
-    with patch("app.routers.docuseal.DOCUSEAL_WEBHOOK_SECRET", SECRET), \
-         patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
-        r = client.post("/api/docuseal/webhook",
-                        json={"event_type": "submission.completed", "data": {"id": "999"}},
-                        headers={"x-docuseal-secret": SECRET})
-    assert r.status_code == 200
-    assert _status(distrato_id) == "assinado"
+    cid = _id(client, "distrato", DISTRATO)
+    _enviar_capturando(client, cid, [CONTRATANTE_SIG, SOCIO])
+    _webhook_concluido(client)
+    assert _status(cid) == "assinado"
     assert _status(ORIGEM) == "encerrado"
 
 
@@ -257,28 +369,47 @@ def test_distrato_assinado_encerra_o_contrato_de_origem(client):
 
 
 def test_substabelecimento_sem_origem_lista_processos_e_advogados(client):
-    r = _gerar(client, "substabelecimento", SUBSTABELECIMENTO)
-    assert r.status_code == 200, r.text
-    texto = _texto(client, r.json()["contract_id"])
+    texto = _texto(client, _id(client, "substabelecimento", SUBSTABELECIMENTO))
 
     assert "SUBSTABELECIMENTO SEM RESERVA DE PODERES" in texto
-    assert "SOCIA CF, OAB/MG n.º 111.111" in texto.upper()
-    assert "Beltrana Parceira, brasileira, casada" in texto
+    assert "SÓCIA CF, OAB/MG nº 111.111" in texto  # substabelecentes em MAIUSCULAS
+    assert "ADVOGADO CF, OAB/MG nº 222.222" in texto
+    assert "substabelecem, SEM RESERVA DE PODERES" in texto
+    assert "Dra. Beltrana Parceira, brasileira, casada, inscrita na OAB/MG sob o nº 333.333" in texto
+    assert "Dr. Ciclano Parceiro, brasileiro, solteiro, inscrito na OAB/MG sob o nº 444.444" in texto
+    assert "Rua Parceira, 10, Belo Horizonte/MG, CEP 30.000-000" in texto
     assert "OUTORGANTE EXEMPLO LTDA" in texto
-    assert "5012442-37.2017.8.13.0079" in texto and "0864562-85.2014.8.13.0024" in texto
+    assert "seus incidentes, desdobramentos e recursos correlatos" in texto
     assert "ressalvados os honorários contratuais e sucumbenciais" in texto
+    assert "Processo n.º 1234567-49.2020.8.13.0024" in texto and "Parte Contrária A" in texto
+    assert "Agravo de Instrumento n.º 1111111-60.2023.4.06.0000" in texto and "Parte Contrária B" in texto
     assert "25.463.159/0001-73" in texto  # extensao fixa a patronos anteriores
+    assert "08 de outubro de 2026" in texto
 
 
-def test_substabelecimento_rejeita_numero_de_processo_invalido(client):
-    payload = {**SUBSTABELECIMENTO, "processos": [{"numero": "123", "descricao": "x"}]}
+def test_substabelecimento_com_um_processo(client):
+    texto = _texto(client, _id(client, "substabelecimento", {**SUBSTABELECIMENTO, "processos": [PROC_A]}))
+    assert "1234567-49.2020.8.13.0024" in texto and "1111111-60.2023.4.06.0000" not in texto
+
+
+@pytest.mark.parametrize("numero", [
+    "123",                          # formato invalido
+    "1234567-50.2020.8.13.0024",    # digito verificador errado
+])
+def test_substabelecimento_rejeita_numero_de_processo_invalido(client, numero):
+    payload = {**SUBSTABELECIMENTO, "processos": [{**PROC_A, "numero": numero}]}
     assert _gerar(client, "substabelecimento", payload).status_code == 422
 
 
+@pytest.mark.parametrize("campo", ["processos", "substabelecentes", "substabelecidos"])
+def test_substabelecimento_exige_listas_nao_vazias(client, campo):
+    assert _gerar(client, "substabelecimento", {**SUBSTABELECIMENTO, campo: []}).status_code == 422
+
+
 def test_substabelecimento_e_assinado_so_pelos_substabelecentes(client):
-    sid = _gerar(client, "substabelecimento", SUBSTABELECIMENTO).json()["contract_id"]
+    sid = _id(client, "substabelecimento", SUBSTABELECIMENTO)
     enviados = _enviar_capturando(client, sid, [
-        {"email": "socia@cf.com", "name": "Socia CF", "role": "Substabelecente"},
+        {"email": "socia@cf.com", "name": "Sócia CF", "role": "Substabelecente"},
         {"email": "adv@cf.com", "name": "Advogado CF", "role": "Substabelecente"},
     ])
     papeis = [s["role"] for s in enviados]
@@ -291,8 +422,8 @@ def test_substabelecimento_e_assinado_so_pelos_substabelecentes(client):
 
 
 def test_documentos_derivados_aparecem_no_contrato_de_origem(client):
-    _gerar(client, "aditivo", ADITIVO)
-    _gerar(client, "distrato", DISTRATO)
+    _id(client, "aditivo", ADITIVO)
+    _id(client, "distrato", DISTRATO)
     r = client.get(f"/api/contracts/{ORIGEM}/documentos")
     assert r.status_code == 200
     tipos = sorted(d["tipo_contrato"] for d in r.json()["documentos"])
@@ -300,7 +431,8 @@ def test_documentos_derivados_aparecem_no_contrato_de_origem(client):
 
 
 def test_edicao_de_rascunho_regenera_nova_versao(client):
-    cid = _gerar(client, "aditivo", ADITIVO).json()["contract_id"]
+    # Amarra o formato salvo: form_data usa as mesmas chaves do payload.
+    cid = _id(client, "aditivo", ADITIVO)
     form = client.get(f"/api/contracts/{cid}/form-data").json()["form_data"]
     form["objeto"] = "objeto corrigido"
     assert client.put(f"/api/contracts/{cid}", json={"form_data": form}).status_code == 200
@@ -308,13 +440,37 @@ def test_edicao_de_rascunho_regenera_nova_versao(client):
     assert client.get(f"/api/contracts/{cid}").json()["current_version"] == 2
 
 
-def test_advogado_nao_cria_documento_de_contrato_alheio(client):
+def _origem_de_outro_advogado():
     db = SessionLocal()
     try:
         db.query(ContractDB).filter_by(contract_id=ORIGEM).update({"created_by": "outro@test.com"})
         db.commit()
     finally:
         db.close()
+
+
+def test_advogado_nao_acessa_contrato_alheio(client):
+    _origem_de_outro_advogado()
+    assert _gerar(client, "aditivo", ADITIVO).status_code == 403
+    assert client.get(f"/api/documentos/prefill/{ORIGEM}").status_code == 403  # expoe CPF/CNPJ
+    assert client.get(f"/api/contracts/{ORIGEM}/documentos").status_code == 403
+
+
+def test_admin_acessa_contrato_alheio(client):
+    _origem_de_outro_advogado()
+    app.dependency_overrides[get_current_user] = _user("admin", "admin@test.com")
+    assert client.get(f"/api/documentos/prefill/{ORIGEM}").status_code == 200
+    assert _gerar(client, "aditivo", ADITIVO).status_code == 200
+
+
+def test_leitor_nao_cria_documento(client):
+    # O override pula o guard de somente-leitura; aqui ele e aplicado de verdade,
+    # provando que o router novo depende de get_current_user.
+    def leitor(request: Request):
+        return _enforce_readonly(request, CurrentUser(azure_id="x", email="l@test.com",
+                                                      name="Leitor", role="leitor"))
+
+    app.dependency_overrides[get_current_user] = leitor
     assert _gerar(client, "aditivo", ADITIVO).status_code == 403
 
 
