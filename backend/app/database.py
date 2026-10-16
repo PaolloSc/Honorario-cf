@@ -174,6 +174,8 @@ class ContractDB(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     cliente_docs = Column(Text, nullable=False, default="[]")
+    # Documento complementar (aditivo/distrato/substabelecimento): contrato que o originou.
+    contrato_origem_id = Column(String(64), ForeignKey("contracts.contract_id"), nullable=True, index=True)
 
     versions = relationship(
         "ContractVersionDB", back_populates="contract", order_by="ContractVersionDB.version_number"
