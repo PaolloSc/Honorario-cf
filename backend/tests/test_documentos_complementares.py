@@ -58,6 +58,7 @@ CLIENTE_PF = {
 ADITIVO = {
     "contrato_origem_id": ORIGEM,
     "data_documento": "2026-10-05",
+    "data_contrato_origem": "2020-01-15",
     "objeto": "prestação de serviços de auditoria trabalhista",
     "remuneracao": {"valor_mensal": 1250.5, "franquia_horas": 1, "valor_hora_excedente": 210.0},
     "compensacao_anual": True,
@@ -510,22 +511,29 @@ def _data_do_contrato_na_origem(iso: str):
         db.close()
 
 
-def test_aditivo_nao_usa_a_data_de_cadastro_como_ano_do_contrato(client):
-    texto = _texto(client, _id(client, "aditivo", ADITIVO))
-    assert "Serviços Advocatícios em " not in texto  # origem foi cadastrada hoje; ano nao e' inventado
+# Decisao do usuario: data do contrato de origem e' OBRIGATORIA no aditivo e no
+# distrato, para nao sair considerando sem ano nem com ano errado.
+@pytest.mark.parametrize("tipo,payload", [("aditivo", ADITIVO), ("distrato", DISTRATO)])
+def test_data_do_contrato_de_origem_e_obrigatoria(client, tipo, payload):
+    sem = {k: v for k, v in payload.items() if k != "data_contrato_origem"}
+    assert _gerar(client, tipo, sem).status_code == 422
+    assert _gerar(client, tipo, {**payload, "data_contrato_origem": None}).status_code == 422
+
+
+def test_aditivo_cita_o_ano_informado(client):
+    assert "Serviços Advocatícios em 2020;" in _texto(client, _id(client, "aditivo", ADITIVO))
+
+
+def test_prefill_sugere_a_data_do_contrato_do_pai(client):
     assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["data_contrato_origem"] is None
-
-
-def test_aditivo_usa_a_data_do_contrato_do_pai_quando_ha(client):
     _data_do_contrato_na_origem("2019-05-02")
     assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["data_contrato_origem"] == "2019-05-02"
-    assert "Serviços Advocatícios em 2019;" in _texto(client, _id(client, "aditivo", ADITIVO))
 
 
 def test_aditivo_prefere_a_data_informada_pelo_advogado(client):
     _data_do_contrato_na_origem("2019-05-02")
-    texto = _texto(client, _id(client, "aditivo", {**ADITIVO, "data_contrato_origem": "2020-01-15"}))
-    assert "Serviços Advocatícios em 2020;" in texto
+    texto = _texto(client, _id(client, "aditivo", ADITIVO))
+    assert "Serviços Advocatícios em 2020;" in texto and "2019" not in texto
 
 
 @pytest.mark.parametrize("tipo,payload,campo", [
