@@ -137,12 +137,10 @@ def gerar_documento(
             # Servidor manda nos campos derivados do contrato de origem.
             form_origem = _form_data_atual(origem, db)
             data.contratantes = form_origem.get("contratantes") or []
-            data.aditivos_anteriores = _aditivos_anteriores(
-                origem.contract_id, db, so_assinados=tipo == TIPO_DISTRATO
-            )
+            # So aditivo assinado e' citado como celebrado; a numeracao conta tambem os rascunhos.
+            data.aditivos_anteriores = _aditivos_anteriores(origem.contract_id, db, so_assinados=True)
             if tipo == TIPO_ADITIVO:
-                data.numero = len(data.aditivos_anteriores) + 1
-                data.data_contrato_origem = data.data_contrato_origem or _data_contrato_origem(form_origem)
+                data.numero = len(_derivados(origem.contract_id, db, TIPO_ADITIVO)) + 1
             if tipo == TIPO_DISTRATO and _derivados(origem.contract_id, db, TIPO_DISTRATO):
                 raise HTTPException(409, "Já existe um distrato para este contrato")
 
