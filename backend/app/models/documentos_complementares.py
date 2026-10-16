@@ -25,8 +25,16 @@ ROTULO_DOCUMENTO = {
     TIPO_SUBSTABELECIMENTO: "Substabelecimento",
 }
 
-# Numero unico do CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO
-_CNJ = re.compile(r"^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$")
+# Numero unico do CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO (DD = digito verificador, mod 97)
+_CNJ = re.compile(r"^(\d{7})-(\d{2})\.(\d{4})\.(\d)\.(\d{2})\.(\d{4})$")
+
+
+def _cnj_valido(numero: str) -> bool:
+    m = _CNJ.match(numero)
+    if not m:
+        return False
+    seq, dv, ano, j, tr, origem = m.groups()
+    return 98 - (int(seq + ano + j + tr + origem + "00") % 97) == int(dv)
 
 
 class AditivoAnterior(BaseModel):
@@ -56,8 +64,9 @@ class Empresa(BaseModel):
 
 class Remuneracao(BaseModel):
     valor_mensal: float = Field(gt=0)
-    franquia_horas: int = Field(gt=0)
-    valor_hora_excedente: float = Field(gt=0)
+    # Opcionais: sem franquia / hora excedente as clausulas correspondentes somem.
+    franquia_horas: Optional[int] = Field(default=None, gt=0)
+    valor_hora_excedente: Optional[float] = Field(default=None, gt=0)
 
 
 class AditivoRequest(_ComOrigem):
@@ -118,14 +127,14 @@ class Substabelecido(BaseModel):
 class Processo(BaseModel):
     numero: str
     descricao: str = ""  # "Parte A x Parte B"
-    classe: str = "Processo"  # "Processo", "Agravo de Instrumento"...
+    tipo: str = "Processo"  # livre: "Processo", "Agravo de Instrumento"...
 
     @field_validator("numero")
     @classmethod
     def _numero_cnj(cls, v: str) -> str:
         v = v.strip()
-        if not _CNJ.match(v):
-            raise ValueError("Número de processo fora do padrão CNJ (0000000-00.0000.0.00.0000)")
+        if not _cnj_valido(v):
+            raise ValueError("Número de processo inválido (padrão CNJ 0000000-00.0000.0.00.0000, com dígito verificador)")
         return v
 
 
