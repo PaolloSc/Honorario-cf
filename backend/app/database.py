@@ -174,6 +174,15 @@ class ContractDB(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     cliente_docs = Column(Text, nullable=False, default="[]")
+    # Documento complementar (aditivo/distrato/substabelecimento): contrato que o originou.
+    contrato_origem_id = Column(
+        String(64),
+        # use_alter: FK para a propria tabela so pode ser criada depois do indice unico de
+        # contract_id; inline no CREATE TABLE o Postgres recusa.
+        ForeignKey("contracts.contract_id", use_alter=True, name="fk_contracts_contrato_origem_id"),
+        nullable=True,
+        index=True,
+    )
 
     versions = relationship(
         "ContractVersionDB", back_populates="contract", order_by="ContractVersionDB.version_number"

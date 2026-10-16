@@ -16,6 +16,11 @@ from app.database import (
     get_db,
     utcnow,
 )
+from app.models.documentos_complementares import (
+    REQUESTS as REQUESTS_COMPLEMENTARES,
+    email_contato,
+    nome_exibicao,
+)
 from app.services.contract_dispatch import parse_form_data
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,7 @@ class ContractSummary(BaseModel):
     client_name: str
     client_email: str
     tipo_contrato: str
+    contrato_origem_id: Optional[str] = None
     current_version: int
     created_by: Optional[str] = None
     created_at: str
@@ -69,6 +75,7 @@ class ContractDetail(BaseModel):
     created_at: str
     updated_at: str
     tipo_contrato: str = "honorarios"
+    contrato_origem_id: Optional[str] = None
     # Socio pre-selecionado para assinar pelo escritorio (ver socio_sugerido)
     socio_sugerido: Optional[str] = None
     versions: list[VersionSummary]
@@ -88,6 +95,11 @@ class UpdateContractRequest(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _extract_client_info(data: dict) -> tuple[str, str]:
+    tipo = data.get("tipo_contrato")
+    if tipo in REQUESTS_COMPLEMENTARES:
+        # Aditivo/distrato guardam os contratantes; o substabelecimento, o outorgante.
+        parsed = REQUESTS_COMPLEMENTARES[tipo](**data)
+        return (nome_exibicao(parsed), email_contato(parsed))
     contratantes = data.get("contratantes", [])
     if not contratantes:
         return ("", "")
@@ -167,6 +179,7 @@ def list_contracts(
                 client_name=c.client_name,
                 client_email=c.client_email,
                 tipo_contrato=c.tipo_contrato,
+                contrato_origem_id=c.contrato_origem_id,
                 current_version=c.current_version,
                 created_by=c.created_by,
                 created_at=c.created_at.isoformat(),
@@ -208,6 +221,7 @@ def get_contract(
         created_at=contract.created_at.isoformat(),
         updated_at=contract.updated_at.isoformat(),
         tipo_contrato=contract.tipo_contrato or "honorarios",
+        contrato_origem_id=contract.contrato_origem_id,
         socio_sugerido=sugerido.email if sugerido else None,
         versions=[
             VersionSummary(
@@ -230,6 +244,43 @@ def get_contract(
             for a in contract.audit_logs
         ],
     )
+
+
+class DocumentoDerivado(BaseModel):
+    contract_id: str
+    tipo_contrato: str
+    status: str
+    client_name: str
+    created_at: str
+
+
+@router.get("/{contract_id}/documentos")
+def list_documentos(
+    contract_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Aditivos, distrato e substabelecimentos derivados do contrato."""
+    contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
+    if not contract:
+        raise HTTPException(404, "Contrato nao encontrado")
+    _check_access(contract, user)
+
+    query = db.query(ContractDB).filter(ContractDB.contrato_origem_id == contract_id)
+    if user.role != "admin":  # mesma regra da lista de contratos
+        query = query.filter(ContractDB.created_by == user.email)
+    return {
+        "documentos": [
+            DocumentoDerivado(
+                contract_id=d.contract_id,
+                tipo_contrato=d.tipo_contrato,
+                status=d.status,
+                client_name=d.client_name,
+                created_at=d.created_at.isoformat(),
+            )
+            for d in query.order_by(ContractDB.created_at, ContractDB.id).all()
+        ]
+    }
 
 
 @router.get("/{contract_id}/form-data", response_model=ContractFormDataResponse)
@@ -273,6 +324,10 @@ def update_contract(
         raise HTTPException(404, "Contrato nao encontrado")
 
     _check_access(contract, user)
+
+    if contract.tipo_contrato in REQUESTS_COMPLEMENTARES:
+        # O vinculo e' a coluna; o form_data nao pode divergir dela.
+        body.form_data["contrato_origem_id"] = contract.contrato_origem_id
 
     try:
         contrato_data, gen = parse_form_data(body.form_data)
