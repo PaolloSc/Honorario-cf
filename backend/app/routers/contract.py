@@ -30,6 +30,7 @@ from app.models.contrato_consumidor import (
     email_contato,
     nome_exibicao,
 )
+from app.models.documentos_complementares import ROTULO_DOCUMENTO
 from app.services import contract_reviewer
 from app.services.contract_dispatch import TIPO_HONORARIOS
 from app.services.contract_dispatch import get_generator as get_consumidor_gen
@@ -509,7 +510,7 @@ def download_contract(
 
     return FileResponse(
         path=str(filepath),
-        filename=_contract_filename(contract.client_name, contract_id),
+        filename=_contract_filename(contract.client_name, contract_id, contract.tipo_contrato or TIPO_HONORARIOS),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
 
@@ -534,7 +535,9 @@ def _contract_filename(
 ) -> str:
     """Nome do anexo: o cliente precisa reconhecer o contrato pelo arquivo."""
     consumidor = tipo == TIPO_CONSUMIDOR_AEREO
-    rotulo = "Contrato de Prestação de Serviços" if consumidor else "Contrato Honorários"
+    rotulo = ROTULO_DOCUMENTO.get(
+        tipo, "Contrato de Prestação de Serviços" if consumidor else "Contrato Honorários"
+    )
     generico = f"contrato_{'servicos' if consumidor else 'honorarios'}_{contract_id}.docx"
 
     nome = _safe_filename_part(client_name) if client_name else ""
