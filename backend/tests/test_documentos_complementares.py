@@ -332,10 +332,17 @@ def test_distrato_flags_sao_independentes(client, ressalva, substabelecer):
     assert ("substabelecer sem reserva de poderes" in texto) is substabelecer
 
 
-def test_distrato_cita_aditivos_existentes(client):
-    _id(client, "aditivo", ADITIVO)
+def test_distrato_cita_so_aditivos_assinados(client):
+    # Decisao: aditivo em rascunho conta na numeracao, mas o distrato so cita
+    # como "celebrado" o que foi assinado.
+    assinado = _id(client, "aditivo", ADITIVO)
+    _enviar_capturando(client, assinado, [CONTRATANTE_SIG, SOCIO])
+    _webhook_concluido(client)
+    _id(client, "aditivo", {**ADITIVO, "objeto": "treinamento de gestores"})  # fica em rascunho
+
     texto = _texto(client, _id(client, "distrato", DISTRATO))
-    assert "1º Aditivo" in texto or "auditoria trabalhista" in texto
+    assert "auditoria trabalhista" in texto
+    assert "treinamento de gestores" not in texto and "2º Aditivo" not in texto
 
 
 def test_distrato_duplicado_e_bloqueado(client):
