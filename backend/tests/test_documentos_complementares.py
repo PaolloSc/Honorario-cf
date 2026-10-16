@@ -485,3 +485,99 @@ def test_tipo_desconhecido_da_404(client):
     r = _gerar(client, "procuracao", ADITIVO)
     assert r.status_code == 404
     assert "procuracao" in r.json()["detail"]  # 404 do tipo, nao de rota inexistente
+
+
+# ── Ajustes da revisao do PR #127 ─────────────────────────────────────────
+
+
+def test_distrato_com_pessoa_fisica_nao_fala_em_contrato_social(client):
+    _semear_origem(CLIENTE_PF)
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert 'doravante denominado(a) simplesmente "CONTRATANTE"' in texto
+    assert "inscrito(a)" not in texto
+    assert texto.count("Contrato Social") == 1  # so' o do escritorio (CONTRATADA)
+
+
+def _data_do_contrato_na_origem(iso: str):
+    db = SessionLocal()
+    try:
+        ver = db.query(ContractVersionDB).filter_by(contract_id=ORIGEM).one()
+        form = json.loads(ver.form_data_json)
+        form["data_contrato_origem"] = iso
+        ver.form_data_json = json.dumps(form)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_aditivo_nao_usa_a_data_de_cadastro_como_ano_do_contrato(client):
+    texto = _texto(client, _id(client, "aditivo", ADITIVO))
+    assert "Serviços Advocatícios em " not in texto  # origem foi cadastrada hoje; ano nao e' inventado
+    assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["data_contrato_origem"] is None
+
+
+def test_aditivo_usa_a_data_do_contrato_do_pai_quando_ha(client):
+    _data_do_contrato_na_origem("2019-05-02")
+    assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["data_contrato_origem"] == "2019-05-02"
+    assert "Serviços Advocatícios em 2019;" in _texto(client, _id(client, "aditivo", ADITIVO))
+
+
+def test_aditivo_prefere_a_data_informada_pelo_advogado(client):
+    _data_do_contrato_na_origem("2019-05-02")
+    texto = _texto(client, _id(client, "aditivo", {**ADITIVO, "data_contrato_origem": "2020-01-15"}))
+    assert "Serviços Advocatícios em 2020;" in texto
+
+
+@pytest.mark.parametrize("tipo,payload,campo", [
+    ("aditivo", ADITIVO, "data_documento"),
+    ("distrato", DISTRATO, "data_documento"),
+    ("distrato", DISTRATO, "data_contrato_origem"),
+    ("aditivo", ADITIVO, "data_contrato_origem"),
+    ("substabelecimento", SUBSTABELECIMENTO, "data_documento"),
+])
+def test_data_invalida_da_422(client, tipo, payload, campo):
+    assert _gerar(client, tipo, {**payload, campo: "2026-13-45"}).status_code == 422
+
+
+def test_substabelecimento_com_um_substabelecente_e_uma_substabelecida(client):
+    payload = {**SUBSTABELECIMENTO, "substabelecentes": SUBSTABELECIMENTO["substabelecentes"][:1],
+               "substabelecidos": SUBSTABELECIMENTO["substabelecidos"][:1]}
+    texto = _texto(client, _id(client, "substabelecimento", payload))
+    assert "OAB/MG nº 111.111, substabelece, SEM RESERVA DE PODERES, à advogada Dra. Beltrana" in texto
+    assert "substabelecem" not in texto and "todos com" not in texto
+    assert "com endereço profissional à Rua Parceira" in texto
+
+
+def test_substabelecimento_com_um_substabelecido_homem(client):
+    payload = {**SUBSTABELECIMENTO, "substabelecidos": SUBSTABELECIMENTO["substabelecidos"][1:]}
+    texto = _texto(client, _id(client, "substabelecimento", payload))
+    assert "substabelecem, SEM RESERVA DE PODERES, ao advogado Dr. Ciclano" in texto
+
+
+def test_substabelecimento_com_varios_continua_no_plural(client):
+    texto = _texto(client, _id(client, "substabelecimento", SUBSTABELECIMENTO))
+    assert "aos advogados Dra. Beltrana" in texto and "todos com endereço profissional" in texto
+
+
+def test_distrato_com_ressalva_nao_contradiz_a_quitacao(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True,
+                                                    "substabelecer_e_devolver": False}))
+    assert "plena, geral, rasa" not in texto
+    assert texto.index("em juízo ou fora dele") < texto.index(RESSALVA)  # qualifica a quitacao
+    assert "DA QUITAÇÃO" in texto and "REVOGAÇÃO DE PODERES" not in texto
+
+
+def test_distrato_total_mantem_a_quitacao_plena_e_o_titulo_de_poderes(client):
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert "plena, geral, rasa, irrestrita e irrevogável quitação, em juízo ou fora dele" in texto
+    assert "DA QUITAÇÃO E REVOGAÇÃO DE PODERES" in texto
+
+
+def test_edicao_nao_troca_o_contrato_de_origem(client):
+    cid = _id(client, "aditivo", ADITIVO)
+    form = client.get(f"/api/contracts/{cid}/form-data").json()["form_data"]
+    form["contrato_origem_id"] = "outro-contrato"
+    assert client.put(f"/api/contracts/{cid}", json={"form_data": form}).status_code == 200
+    atual = client.get(f"/api/contracts/{cid}/form-data").json()["form_data"]
+    assert atual["contrato_origem_id"] == ORIGEM
+    assert [d["contract_id"] for d in client.get(f"/api/contracts/{ORIGEM}/documentos").json()["documentos"]] == [cid]

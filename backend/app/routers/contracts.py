@@ -325,6 +325,10 @@ def update_contract(
 
     _check_access(contract, user)
 
+    if contract.tipo_contrato in REQUESTS_COMPLEMENTARES:
+        # O vinculo e' a coluna; o form_data nao pode divergir dela.
+        body.form_data["contrato_origem_id"] = contract.contrato_origem_id
+
     try:
         contrato_data, gen = parse_form_data(body.form_data)
     except Exception as e:
