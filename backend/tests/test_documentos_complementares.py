@@ -259,9 +259,21 @@ def test_aditivo_franquia_no_plural_feminino(client):
     assert "2 (duas) horas mensais" in _texto(client, _id(client, "aditivo", payload))
 
 
+def _assinar(contract_id: str):
+    """Atalho: o fluxo de assinatura em si e' coberto pelos testes de webhook."""
+    db = SessionLocal()
+    try:
+        db.query(ContractDB).filter_by(contract_id=contract_id).update({"status": "assinado"})
+        db.commit()
+    finally:
+        db.close()
+
+
 def test_aditivos_seguintes_sao_numerados_e_citam_os_anteriores(client):
-    _id(client, "aditivo", ADITIVO)
-    segundo = _texto(client, _id(client, "aditivo", {**ADITIVO, "objeto": "elaboração de políticas internas"}))
+    _assinar(_id(client, "aditivo", ADITIVO))
+    segundo_id = _id(client, "aditivo", {**ADITIVO, "objeto": "elaboração de políticas internas"})
+    segundo = _texto(client, segundo_id)
+    _assinar(segundo_id)
     terceiro = _texto(client, _id(client, "aditivo", {**ADITIVO, "objeto": "treinamento de gestores"}))
 
     assert "2º ADITIVO CONTRATUAL" in segundo
@@ -589,3 +601,27 @@ def test_edicao_nao_troca_o_contrato_de_origem(client):
     atual = client.get(f"/api/contracts/{cid}/form-data").json()["form_data"]
     assert atual["contrato_origem_id"] == ORIGEM
     assert [d["contract_id"] for d in client.get(f"/api/contracts/{ORIGEM}/documentos").json()["documentos"]] == [cid]
+
+
+# ── Revisao final (Angela, PR #127) ───────────────────────────────────────
+
+
+def test_aditivo_cita_so_aditivos_assinados_mas_numera_os_rascunhos(client):
+    _assinar(_id(client, "aditivo", ADITIVO))
+    _id(client, "aditivo", {**ADITIVO, "objeto": "elaboração de políticas internas"})  # rascunho
+    texto = _texto(client, _id(client, "aditivo", {**ADITIVO, "objeto": "treinamento de gestores"}))
+    assert "3º ADITIVO CONTRATUAL" in texto
+    assert "firmaram o 1º Aditivo" in texto
+    assert "políticas internas" not in texto and "2º Aditivo" not in texto
+
+
+@pytest.mark.parametrize("data", ["20261016", "2026-W42-1", "2026-10-16T10:00", " 2026-10-16"])
+def test_data_fora_do_formato_aaaa_mm_dd_da_422(client, data):
+    assert _gerar(client, "aditivo", {**ADITIVO, "data_documento": data}).status_code == 422
+
+
+def test_substabelecimento_um_substabelecente_varios_substabelecidos(client):
+    payload = {**SUBSTABELECIMENTO, "substabelecentes": SUBSTABELECIMENTO["substabelecentes"][:1]}
+    texto = _texto(client, _id(client, "substabelecimento", payload))
+    assert "OAB/MG nº 111.111, substabelece, SEM RESERVA DE PODERES, aos advogados" in texto
+    assert "substabelecem" not in texto and "todos com endereço profissional" in texto

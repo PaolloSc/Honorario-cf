@@ -27,6 +27,7 @@ ROTULO_DOCUMENTO = {
 }
 
 # Numero unico do CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO (DD = digito verificador, mod 97)
+_DATA_ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
 _CNJ = re.compile(r"^(\d{7})-(\d{2})\.(\d{4})\.(\d)\.(\d{2})\.(\d{4})$")
 
 
@@ -56,6 +57,8 @@ class _DocumentoComplementar(BaseModel):
     def _data_iso(cls, v):
         if v in (None, ""):
             return None
+        if not isinstance(v, str) or not _DATA_ISO.fullmatch(v):
+            raise ValueError("Data inválida (use AAAA-MM-DD)")
         try:
             date.fromisoformat(v)
         except ValueError:
@@ -87,9 +90,9 @@ class AditivoRequest(_ComOrigem):
     remuneracao: Remuneracao
     compensacao_anual: bool = True
     abrangencia: list[Empresa] = Field(default_factory=list)
-    # Quando o contrato original foi firmado (nao a data de cadastro na plataforma). Se nao vier,
-    # nem do contrato de origem, o considerando fica sem o ano.
-    data_contrato_origem: Optional[str] = None
+    # Quando o contrato original foi firmado (nao a data de cadastro na plataforma). Obrigatoria:
+    # o contrato de honorarios nao guarda essa data, entao o advogado informa.
+    data_contrato_origem: str = Field(min_length=1)
     numero: int = 1  # servidor: 1 + aditivos ja existentes
 
 
