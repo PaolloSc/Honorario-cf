@@ -28,6 +28,8 @@ ESCRITORIO_CNPJ = "25.463.159/0001-73"
 ESCRITORIO_OAB = "OAB/MG sob o n.º 125"
 ESCRITORIO_ENDERECO = "Rua Antônio de Albuquerque, n.º 271, 5º andar, Savassi, Belo Horizonte/MG, CEP 30.112-010"
 LOCAL = "Belo Horizonte/MG"
+# Sem signatarios definidos o documento sai com linha em branco; as tags do DocuSeal so entram no envio.
+LINHA = "_" * 32
 
 
 def _sem_ponto(texto: str) -> str:
@@ -85,7 +87,7 @@ class ComplementarGenerator(ConsumidorGenerator):
 
     def _qualificar(self, c: dict, *, com_representantes: bool = True) -> str:
         """Qualificacao do contratante a partir do form_data do contrato de origem."""
-        nome = nome_contratante(c).upper()
+        nome = nome_contratante(c)
         if c.get("cnpj"):
             partes = [nome, "pessoa jurídica de direito privado", self._cnpj_cpf(c)]
             if c.get("endereco"):
@@ -95,7 +97,7 @@ class ComplementarGenerator(ConsumidorGenerator):
                 partes.append(
                     "neste ato representada por "
                     + "; e por ".join(
-                        ", ".join(filter(None, [r["nome"].upper(), f"CPF {r['cpf']}" if r.get("cpf") else None]))
+                        ", ".join(filter(None, [r["nome"], f"CPF {r['cpf']}" if r.get("cpf") else None]))
                         for r in reps
                     )
                 )
@@ -132,15 +134,13 @@ class ComplementarGenerator(ConsumidorGenerator):
                     [ESCRITORIO_NOME, f"CNPJ n.º {ESCRITORIO_CNPJ}", "Contratada"],
                 ))
         else:
-            unico = len(data.contratantes) == 1
-            for i, c in enumerate(data.contratantes, 1):
+            for c in data.contratantes:
                 nome = nome_contratante(c)
-                role = "Contratante" if unico else f"Contratante {i}"
                 doc_ = c.get("cnpj") or c.get("cpf") or ""
                 rotulo = [nome.upper(), f"{'CNPJ' if c.get('cnpj') else 'CPF'} n.º {doc_}", "Contratante"]
-                entries.append((f"{{{{Assinatura {nome};type=signature;role={role}}}}}", rotulo))
+                entries.append((LINHA, rotulo))
             entries.append((
-                "{{Assinatura Contratada;type=signature;role=Contratado}}",
+                LINHA,
                 [ESCRITORIO_NOME, f"CNPJ n.º {ESCRITORIO_CNPJ}", "Contratada"],
             ))
         self._grid_assinaturas(doc, entries)
@@ -213,14 +213,18 @@ class AditivoGenerator(ComplementarGenerator):
 
         r = data.remuneracao
         clausula("Remuneração")
+        franquia = ""
+        if r.franquia_horas:
+            horas = numero_com_extenso(r.franquia_horas, "hora mensal" if r.franquia_horas == 1 else "horas mensais", fem=True)
+            franquia = f", correspondente a uma franquia de {horas} de trabalho"
         doc.add_paragraph(
             f"Pelos serviços objeto deste aditivo, o CONTRATANTE pagará ao CONTRATADO o valor fixo "
-            f"mensal de {valor_com_extenso(r.valor_mensal)}, correspondente a uma franquia de "
-            f"{numero_com_extenso(r.franquia_horas, 'horas')} mensais de trabalho."
+            f"mensal de {valor_com_extenso(r.valor_mensal)}{franquia}."
         )
-        doc.add_paragraph(
-            f"Parágrafo único: O valor da hora excedente será de {valor_com_extenso(r.valor_hora_excedente)}."
-        )
+        if r.valor_hora_excedente:
+            doc.add_paragraph(
+                f"Parágrafo único: O valor da hora excedente será de {valor_com_extenso(r.valor_hora_excedente)}."
+            )
 
         if data.compensacao_anual:
             clausula("Compensação e Faturamento")
@@ -236,9 +240,9 @@ class AditivoGenerator(ComplementarGenerator):
         if data.abrangencia:
             clausula("Abrangência")
             empresas = [
-                f"{nome_contratante(c).upper()}, inscrita no CNPJ sob o n.º {c['cnpj']}"
+                f"{nome_contratante(c)}, inscrita no CNPJ sob o n.º {c['cnpj']}"
                 for c in data.contratantes if c.get("cnpj")
-            ] + [f"{e.razao_social.upper()}, inscrita no CNPJ sob o n.º {e.cnpj}" for e in data.abrangencia]
+            ] + [f"{e.razao_social}, inscrita no CNPJ sob o n.º {e.cnpj}" for e in data.abrangencia]
             lista = "; ".join(empresas[:-1]) + f" e {empresas[-1]}" if len(empresas) > 1 else empresas[0]
             doc.add_paragraph(
                 "A prestação dos serviços objeto deste aditivo abrangerá as pessoas jurídicas inscritas sob "
@@ -311,10 +315,15 @@ class DistratoGenerator(ComplementarGenerator):
             "assim o fazendo sem a incidência de qualquer ônus, penalidade, multa rescisória ou "
             "indenização de parte a parte."
         )
+        pagos = (
+            "foi executado a contento e que os valores devidos pela CONTRATANTE a título de "
+            "honorários fixos e eventuais despesas foram integralmente adimplidos a tempo e modo."
+            if not data.ressalva_exito
+            else "foi executado a contento."
+        )
         doc.add_paragraph(
             "1.2. As Partes reconhecem que o objeto da prestação de serviços sob responsabilidade da "
-            "CONTRATADA foi executado a contento e que os valores devidos pela CONTRATANTE a título de "
-            "honorários fixos e eventuais despesas foram integralmente adimplidos a tempo e modo."
+            f"CONTRATADA {pagos}"
         )
 
         doc.add_heading("CLÁUSULA SEGUNDA – DA QUITAÇÃO E REVOGAÇÃO DE PODERES", level=2)
@@ -375,7 +384,7 @@ class SubstabelecimentoGenerator(ComplementarGenerator):
         )
         for p in data.processos:
             sufixo = f" – {_sem_ponto(p.descricao)}" if p.descricao.strip() else ""
-            doc.add_paragraph(f"{p.classe} n.º {p.numero}{sufixo}.")
+            doc.add_paragraph(f"{p.tipo} n.º {p.numero}{sufixo}.")
         doc.add_paragraph(
             "Os efeitos do presente substabelecimento se estendem a todos os patronos cujos poderes foram "
             "outorgados à época que possuíam vínculo com o escritório Carvalho & Furtado Advogados, "
@@ -395,15 +404,7 @@ class SubstabelecimentoGenerator(ComplementarGenerator):
                 rotulo = [nome.upper()] + ([cadastro.oab] if cadastro else []) + ["Substabelecente"]
                 entries.append((f"{{{{Assinatura {nome};type=signature;role={sig['role']}}}}}", rotulo))
         else:
-            unico = len(data.substabelecentes) == 1
-            entries = [
-                (
-                    f"{{{{Assinatura {s.nome};type=signature;role="
-                    f"{'Substabelecente' if unico else f'Substabelecente {i}'}}}}}",
-                    [s.nome.upper(), s.oab, "Substabelecente"],
-                )
-                for i, s in enumerate(data.substabelecentes, 1)
-            ]
+            entries = [(LINHA, [s.nome.upper(), s.oab, "Substabelecente"]) for s in data.substabelecentes]
         self._grid_assinaturas(doc, entries)
 
 

@@ -412,7 +412,7 @@ async def send_for_signature(
 
         # Assign order for sequential signing:
         # Contratante(s) -> Contratado (C&F) -> Testemunha(s) -> Lilian por ultimo
-        _ROLE_ORDER = {"Contratante": 1, "Contratado": 3, "Testemunha": 4}
+        _ROLE_ORDER = {"Contratante": 1, "Substabelecente": 1, "Contratado": 3, "Testemunha": 4}
         for sig in all_signatarios:
             # Extract base role (without number suffix) for order lookup
             base_role = sig.get("role", "Contratante").rstrip(" 0123456789")
