@@ -43,10 +43,8 @@ def _mes_ano(iso: str | None) -> str:
 
 
 def _data(iso: str | None) -> date:
-    try:
-        return date.fromisoformat((iso or "")[:10])
-    except ValueError:
-        return date.today()
+    """Data ISO ja validada pelo request; vazia = hoje."""
+    return date.fromisoformat(iso[:10]) if iso else date.today()
 
 
 class ComplementarGenerator(ConsumidorGenerator):
@@ -83,7 +81,7 @@ class ComplementarGenerator(ConsumidorGenerator):
     def _cnpj_cpf(c: dict) -> str:
         if c.get("cnpj"):
             return f"inscrita no CNPJ sob o n.º {c['cnpj']}"
-        return f"inscrito(a) no CPF sob o n.º {c.get('cpf', '')}"
+        return f"CPF n.º {c.get('cpf', '')}"
 
     def _qualificar(self, c: dict, *, com_representantes: bool = True) -> str:
         """Qualificacao do contratante a partir do form_data do contrato de origem."""
@@ -181,9 +179,9 @@ class AditivoGenerator(ComplementarGenerator):
         )
 
         # Considerandos: contrato de origem, aditivos anteriores e o atual.
-        ano = _data(data.data_contrato_origem).year
+        quando = f" em {_data(data.data_contrato_origem).year}" if data.data_contrato_origem else ""
         doc.add_paragraph("Considerando que:")
-        doc.add_paragraph(f"As partes firmaram Contrato de Prestação de Serviços Advocatícios em {ano};")
+        doc.add_paragraph(f"As partes firmaram Contrato de Prestação de Serviços Advocatícios{quando};")
         for ant in data.aditivos_anteriores:
             doc.add_paragraph(
                 f"Em {_mes_ano(ant.data_documento)}, as partes firmaram o {ant.numero}º Aditivo "
@@ -270,10 +268,11 @@ class DistratoGenerator(ComplementarGenerator):
     def _corpo(self, doc: Document, data: DistratoRequest) -> None:
         doc.add_paragraph("São Partes:")
         for c in data.contratantes:
-            doc.add_paragraph(
-                f"{self._qualificar(c, com_representantes=False)}, neste ato representada na forma de seu Contrato Social, "
-                'doravante denominada simplesmente "CONTRATANTE"; e'
-            )
+            if c.get("cnpj"):
+                final = ', neste ato representada na forma de seu Contrato Social, doravante denominada simplesmente "CONTRATANTE"; e'
+            else:  # pessoa fisica nao tem contrato social
+                final = ', doravante denominado(a) simplesmente "CONTRATANTE"; e'
+            doc.add_paragraph(f"{self._qualificar(c, com_representantes=False)}{final}")
         doc.add_paragraph(
             f"{ESCRITORIO_NOME}, pessoa jurídica de direito privado, sociedade simples de prestação de "
             f"serviços advocatícios, inscrita no CNPJ sob o n.º {ESCRITORIO_CNPJ}, estabelecida na "
@@ -326,7 +325,8 @@ class DistratoGenerator(ComplementarGenerator):
             f"CONTRATADA {pagos}"
         )
 
-        doc.add_heading("CLÁUSULA SEGUNDA – DA QUITAÇÃO E REVOGAÇÃO DE PODERES", level=2)
+        titulo2 = "DA QUITAÇÃO E REVOGAÇÃO DE PODERES" if data.substabelecer_e_devolver else "DA QUITAÇÃO"
+        doc.add_heading(f"CLÁUSULA SEGUNDA – {titulo2}", level=2)
         if data.ressalva_exito:
             alcance = (
                 "seja a título de honorários fixos, reembolsos ou indenizações, ressalvados os honorários "
@@ -335,11 +335,13 @@ class DistratoGenerator(ComplementarGenerator):
             )
         else:
             alcance = "seja a título de honorários fixos, reembolsos, indenizações ou honorários de êxito futuros"
+        # "plena, geral, rasa, irrestrita e irrevogavel" so' na quitacao total: com ressalva se contradiz.
+        quitacao = "quitação" if data.ressalva_exito else "plena, geral, rasa, irrestrita e irrevogável quitação"
         doc.add_paragraph(
-            "2.1. Por este instrumento, as Partes concedem-se reciprocamente plena, geral, rasa, "
-            "irrestrita e irrevogável quitação de todas as obrigações principais, acessórias, diretas e "
-            "indiretas decorrentes do contrato originário e de eventuais aditivos celebrados, nada mais "
-            f"tendo a reclamar ou exigir uma da outra, {alcance}, em juízo ou fora dele."
+            f"2.1. Por este instrumento, as Partes concedem-se reciprocamente {quitacao}, em juízo ou "
+            "fora dele, de todas as obrigações principais, acessórias, diretas e indiretas decorrentes "
+            "do contrato originário e de eventuais aditivos celebrados, nada mais tendo a reclamar ou "
+            f"exigir uma da outra, {alcance}."
         )
         if data.substabelecer_e_devolver:
             doc.add_paragraph(
@@ -374,9 +376,15 @@ class SubstabelecimentoGenerator(ComplementarGenerator):
     def _corpo(self, doc: Document, data: SubstabelecimentoRequest) -> None:
         substabelecentes = "; ".join(f"{s.nome.upper()}, {s.oab}" for s in data.substabelecentes)
         substabelecidos = "; ".join(self._qualificar_substabelecido(s) for s in data.substabelecidos)
+        verbo = "substabelece" if len(data.substabelecentes) == 1 else "substabelecem"
+        if len(data.substabelecidos) == 1:
+            artigo = "à advogada" if data.substabelecidos[0].genero == "F" else "ao advogado"
+            endereco = "com endereço profissional à"
+        else:
+            artigo, endereco = "aos advogados", "todos com endereço profissional à"
         doc.add_paragraph(
-            f"Pelo presente instrumento, {substabelecentes}, substabelecem, SEM RESERVA DE PODERES, aos "
-            f"advogados {substabelecidos}, todos com endereço profissional à "
+            f"Pelo presente instrumento, {substabelecentes}, {verbo}, SEM RESERVA DE PODERES, {artigo} "
+            f"{substabelecidos}, {endereco} "
             f"{_sem_ponto(data.endereco_substabelecidos)}, os poderes que lhe foram conferidos por "
             f"{data.outorgante.exibicao}, no âmbito dos processos judiciais abaixo indicados, seus "
             "incidentes, desdobramentos e recursos correlatos, ressalvados os honorários contratuais e "

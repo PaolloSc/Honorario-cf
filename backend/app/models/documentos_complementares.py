@@ -10,6 +10,7 @@ regeneracao do .docx (edicao, DocuSeal) nao depender de consulta ao banco.
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -50,6 +51,17 @@ class _DocumentoComplementar(BaseModel):
     data_documento: Optional[str] = None  # ISO yyyy-mm-dd; vazio = hoje
     email_destinatario: Optional[str] = None
 
+    @field_validator("data_documento", "data_contrato_origem", check_fields=False)
+    @classmethod
+    def _data_iso(cls, v):
+        if v in (None, ""):
+            return None
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("Data inválida (use AAAA-MM-DD)")
+        return v
+
 
 class _ComOrigem(_DocumentoComplementar):
     contrato_origem_id: str = Field(min_length=1)
@@ -75,7 +87,9 @@ class AditivoRequest(_ComOrigem):
     remuneracao: Remuneracao
     compensacao_anual: bool = True
     abrangencia: list[Empresa] = Field(default_factory=list)
-    data_contrato_origem: Optional[str] = None  # vazio = data de criacao do contrato de origem
+    # Quando o contrato original foi firmado (nao a data de cadastro na plataforma). Se nao vier,
+    # nem do contrato de origem, o considerando fica sem o ano.
+    data_contrato_origem: Optional[str] = None
     numero: int = 1  # servidor: 1 + aditivos ja existentes
 
 

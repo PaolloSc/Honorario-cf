@@ -74,9 +74,13 @@ def _derivados(origem_id: str, db: Session, tipo: str | None = None) -> list[Con
     return q.order_by(ContractDB.created_at, ContractDB.id).all()
 
 
-def _aditivos_anteriores(origem_id: str, db: Session) -> list[AditivoAnterior]:
+def _aditivos_anteriores(origem_id: str, db: Session, so_assinados: bool = False) -> list[AditivoAnterior]:
+    """Aditivos validos com o numero que ocupam (rascunho conta na numeracao). O distrato so' cita
+    como celebrados os assinados, mantendo o numero de cada um."""
     anteriores = []
     for i, ad in enumerate(_derivados(origem_id, db, TIPO_ADITIVO), 1):
+        if so_assinados and ad.status != "assinado":
+            continue
         form = _form_data_atual(ad, db)
         anteriores.append(
             AditivoAnterior(
@@ -86,6 +90,11 @@ def _aditivos_anteriores(origem_id: str, db: Session) -> list[AditivoAnterior]:
             )
         )
     return anteriores
+
+
+def _data_contrato_origem(form: dict) -> str | None:
+    """Data em que o contrato foi firmado, se o form_data do pai a tiver (senao o advogado preenche)."""
+    return form.get("data_contrato_origem") or form.get("data_contrato") or None
 
 
 @router.get("/prefill/{contrato_origem_id}")
@@ -100,7 +109,7 @@ def prefill(
     return {
         "contratantes": form.get("contratantes") or [],
         "aditivos_existentes": len(_derivados(origem.contract_id, db, TIPO_ADITIVO)),
-        "data_contrato_origem": origem.created_at.date().isoformat(),
+        "data_contrato_origem": _data_contrato_origem(form),
         "status_origem": origem.status,
         "aviso": None if origem.status == "assinado" else "O contrato de origem ainda não foi assinado.",
     }
@@ -126,11 +135,14 @@ def gerar_documento(
         aviso = None if origem.status == "assinado" else "O contrato de origem ainda não foi assinado."
         if not isinstance(data, SubstabelecimentoRequest):
             # Servidor manda nos campos derivados do contrato de origem.
-            data.contratantes = _form_data_atual(origem, db).get("contratantes") or []
-            data.aditivos_anteriores = _aditivos_anteriores(origem.contract_id, db)
+            form_origem = _form_data_atual(origem, db)
+            data.contratantes = form_origem.get("contratantes") or []
+            data.aditivos_anteriores = _aditivos_anteriores(
+                origem.contract_id, db, so_assinados=tipo == TIPO_DISTRATO
+            )
             if tipo == TIPO_ADITIVO:
                 data.numero = len(data.aditivos_anteriores) + 1
-                data.data_contrato_origem = data.data_contrato_origem or origem.created_at.date().isoformat()
+                data.data_contrato_origem = data.data_contrato_origem or _data_contrato_origem(form_origem)
             if tipo == TIPO_DISTRATO and _derivados(origem.contract_id, db, TIPO_DISTRATO):
                 raise HTTPException(409, "Já existe um distrato para este contrato")
 
