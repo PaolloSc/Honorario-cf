@@ -10,12 +10,16 @@ import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { useAcessoConsumidor } from "@/components/AcessoConsumidor";
 import { formatarDataHora } from "@/app/lib/datas";
 import RascunhosPendentes from "@/components/RascunhosPendentes";
+import { TipoBadge } from "@/components/documentos/Selos";
+import { agruparDerivados } from "@/app/lib/documentos";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; dot: string }> = {
   rascunho: { label: "Rascunho", color: "border-muted/30 bg-muted/10 text-muted", dot: "bg-muted" },
   enviado: { label: "Enviado p/ Assinatura", color: "border-warning/30 bg-warning/10 text-warning", dot: "bg-warning" },
   assinado: { label: "Assinado", color: "border-primary/30 bg-primary/10 text-primary-dark", dot: "bg-primary-dark" },
   cancelado: { label: "Cancelado", color: "border-danger/30 bg-danger/10 text-danger", dot: "bg-danger" },
+  recusado: { label: "Recusado", color: "border-danger/30 bg-danger/10 text-danger", dot: "bg-danger" },
+  encerrado: { label: "Encerrado", color: "border-border bg-border/30 text-muted", dot: "bg-muted" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -23,22 +27,6 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 rounded-full text-xs font-medium ${info.color}`}>
       <span className={`size-1.5 rounded-full ${info.dot}`} />
-      {info.label}
-    </span>
-  );
-}
-
-const TIPO_LABELS: Record<string, { label: string; color: string }> = {
-  honorarios: { label: "Honorários", color: "bg-primary-light/40 text-primary-dark" },
-  consumidor_aereo: { label: "Ação de Consumo", color: "bg-brand-marrom/15 text-brand-marrom" },
-};
-
-// Cada tipo abre num wizard diferente ao editar — sem isso a pessoa clica
-// "Editar" achando que e' honorarios e cai na Acao de Consumo sem aviso.
-function TipoBadge({ tipo }: { tipo: string }) {
-  const info = TIPO_LABELS[tipo] || { label: tipo, color: "bg-border/35 text-muted" };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${info.color}`}>
       {info.label}
     </span>
   );
@@ -109,6 +97,13 @@ export default function ContractsPage() {
               + Ação de Consumo
             </a>
           )}
+          {/* Aditivo e distrato nascem na página do contrato; só o substabelecimento pode ser avulso. */}
+          <a
+            href="/documentos/novo?tipo=substabelecimento"
+            className="px-3 py-2.5 text-muted hover:text-primary-dark underline-offset-2 hover:underline text-sm self-center"
+          >
+            Novo substabelecimento
+          </a>
         </div>
       </div>
 
@@ -138,6 +133,7 @@ export default function ContractsPage() {
           <option value="rascunho">Rascunho</option>
           <option value="enviado">Enviado p/ Assinatura</option>
           <option value="assinado">Assinado</option>
+          <option value="encerrado">Encerrado</option>
           <option value="cancelado">Cancelado</option>
         </select>
       </div>
@@ -178,15 +174,24 @@ export default function ContractsPage() {
                 </tr>
               )}
               {!loading &&
-                data?.contracts.map((c: ContractSummary) => (
-                  <tr key={c.contract_id} className="border-b border-border/50 hover:bg-background/60 transition">
-                    <td className="px-4 py-3">
+                agruparDerivados(data?.contracts ?? []).map(({ item: c, derivado }: { item: ContractSummary; derivado: boolean }) => (
+                  <tr key={c.contract_id} className={`border-b border-border/50 hover:bg-background/60 transition ${derivado ? "bg-background/40" : ""}`}>
+                    <td className={`px-4 py-3 ${derivado ? "pl-8" : ""}`}>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {derivado && <span aria-hidden className="text-muted">↳</span>}
                           <p className="font-medium text-foreground">{c.client_name || "—"}</p>
                           <TipoBadge tipo={c.tipo_contrato} />
                         </div>
                         <p className="text-xs text-muted">{c.client_email || c.contract_id.slice(0, 8)}</p>
+                        {c.contrato_origem_id && !derivado && (
+                          <p className="text-xs text-muted">
+                            Derivado de{" "}
+                            <a href={`/contracts/${c.contrato_origem_id}`} className="text-primary hover:underline">
+                              {c.contrato_origem_id.slice(0, 8)}…
+                            </a>
+                          </p>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
