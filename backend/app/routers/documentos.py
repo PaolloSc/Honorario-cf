@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
+from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -35,6 +38,7 @@ from app.models.documentos_complementares import (
     email_contato,
     nome_exibicao,
 )
+from app.routers.contract import _docx_to_html
 from app.routers.contracts import _check_access
 from app.services.contract_dispatch import get_generator
 
@@ -115,13 +119,8 @@ def prefill(
     }
 
 
-@router.post("/{tipo}")
-def gerar_documento(
-    tipo: str,
-    corpo: dict = Body(...),
-    user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> dict:
+def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
+    """Valida o corpo e completa os campos que o servidor deriva do contrato de origem."""
     if tipo not in REQUESTS:
         raise HTTPException(404, f"Tipo de documento desconhecido: {tipo}")
     try:
@@ -143,6 +142,36 @@ def gerar_documento(
                 data.numero = len(_derivados(origem.contract_id, db, TIPO_ADITIVO)) + 1
             if tipo == TIPO_DISTRATO and _derivados(origem.contract_id, db, TIPO_DISTRATO):
                 raise HTTPException(409, "Já existe um distrato para este contrato")
+    return data, origem, aviso
+
+
+@router.post("/{tipo}/preview", response_class=HTMLResponse)
+def previa_documento(
+    tipo: str,
+    corpo: dict = Body(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Previa do documento antes de gravar: nada vai para o banco."""
+    data, _, _ = _montar(tipo, corpo, user, db)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        get_generator(tipo)._build_document(data).save(str(tmp_path))
+        return HTMLResponse(_docx_to_html(tmp_path))
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+@router.post("/{tipo}")
+def gerar_documento(
+    tipo: str,
+    corpo: dict = Body(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    data, origem, aviso = _montar(tipo, corpo, user, db)
 
     try:
         contract_id, filepath = get_generator(tipo).generate(data)

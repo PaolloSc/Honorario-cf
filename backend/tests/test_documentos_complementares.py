@@ -625,3 +625,37 @@ def test_substabelecimento_um_substabelecente_varios_substabelecidos(client):
     texto = _texto(client, _id(client, "substabelecimento", payload))
     assert "OAB/MG nº 111.111, substabelece, SEM RESERVA DE PODERES, aos advogados" in texto
     assert "substabelecem" not in texto and "todos com endereço profissional" in texto
+
+
+# ── Previa (nada e' gravado) ──────────────────────────────────────────────
+
+
+def _total_contratos() -> int:
+    db = SessionLocal()
+    try:
+        return db.query(ContractDB).count()
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("tipo,payload,trecho", [
+    ("aditivo", ADITIVO, "ADITIVO CONTRATUAL AO CONTRATO"),
+    ("distrato", DISTRATO, "DISTRATO AO CONTRATO"),
+    ("substabelecimento", SUBSTABELECIMENTO, "SUBSTABELECIMENTO SEM RESERVA DE PODERES"),
+])
+def test_previa_devolve_html_sem_gravar(client, tipo, payload, trecho):
+    antes = _total_contratos()
+    r = client.post(f"/api/documentos/{tipo}/preview", json=payload)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/html")
+    assert trecho in r.text
+    assert _total_contratos() == antes
+
+
+def test_previa_valida_como_a_geracao(client):
+    assert client.post("/api/documentos/aditivo/preview", json={**ADITIVO, "data_documento": "2026-13-45"}).status_code == 422
+    assert client.post("/api/documentos/procuracao/preview", json=ADITIVO).status_code == 404
+    _id(client, "distrato", DISTRATO)
+    assert client.post("/api/documentos/distrato/preview", json=DISTRATO).status_code == 409
+    _origem_de_outro_advogado()
+    assert client.post("/api/documentos/aditivo/preview", json=ADITIVO).status_code == 403
