@@ -570,6 +570,7 @@ export interface ContractSummary {
   client_name: string;
   client_email: string;
   tipo_contrato: string;
+  contrato_origem_id?: string | null;
   current_version: number;
   created_by?: string;
   created_at: string;
@@ -610,6 +611,7 @@ export interface ContractDetail {
   created_at: string;
   updated_at: string;
   tipo_contrato: string;
+  contrato_origem_id?: string | null;
   socio_sugerido?: string | null;
   versions: VersionSummary[];
   audit_log: AuditEntry[];
@@ -963,4 +965,52 @@ export async function rollbackContract(contractId: string, version: number) {
   }>(`/api/contracts/${contractId}/rollback?version=${version}`, {
     method: "POST",
   });
+}
+
+// ── Documentos complementares (aditivo, distrato, substabelecimento) ─────
+
+export interface PrefillDocumento {
+  contratantes: Array<Record<string, unknown>>;
+  aditivos_existentes: number;
+  data_contrato_origem: string | null;
+  status_origem: string;
+  aviso: string | null;
+}
+
+export interface DocumentoDerivado {
+  contract_id: string;
+  tipo_contrato: string;
+  status: string;
+  client_name: string;
+  created_at: string;
+}
+
+export async function prefillDocumento(origemId: string) {
+  return request<PrefillDocumento>(`/api/documentos/prefill/${origemId}`);
+}
+
+export async function listDocumentos(contractId: string) {
+  return request<{ documentos: DocumentoDerivado[] }>(`/api/contracts/${contractId}/documentos`);
+}
+
+// Previa: nada e' gravado. Erro volta como "API error NNN: corpo" (o corpo traz os 422 por campo).
+export async function previewDocumento(tipo: string, payload: unknown, signal?: AbortSignal) {
+  const res = await fetchAutenticado(`${API_BASE}/api/documentos/${tipo}/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  return res.text();
+}
+
+export async function gerarDocumento(tipo: string, payload: unknown) {
+  return request<{
+    success: boolean;
+    message: string;
+    contract_id: string;
+    download_url: string;
+    aviso: string | null;
+  }>(`/api/documentos/${tipo}`, { method: "POST", body: JSON.stringify(payload) });
 }
