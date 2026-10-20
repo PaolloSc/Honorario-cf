@@ -583,6 +583,9 @@ def test_distrato_com_ressalva_nao_contradiz_a_quitacao(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True,
                                                     "substabelecer_e_devolver": False}))
     assert "plena, geral, rasa" not in texto
+    # remete a regra do contrato de honorarios (clausula citada pelo nome, sem numero)
+    assert "na forma prevista no contrato originário para o caso de extinção (cláusula de Prazo, Rescisão e Outros Efeitos)" in texto
+    assert "proporção conforme a fase processual" in texto
     assert texto.index("em juízo ou fora dele") < texto.index(RESSALVA)  # qualifica a quitacao
     assert "DA QUITAÇÃO" in texto and "REVOGAÇÃO DE PODERES" not in texto
 
