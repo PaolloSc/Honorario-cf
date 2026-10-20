@@ -330,8 +330,10 @@ class DistratoGenerator(ComplementarGenerator):
         if data.ressalva_exito:
             alcance = (
                 "seja a título de honorários fixos, reembolsos ou indenizações, ressalvados os honorários "
-                "de êxito eventualmente devidos em razão de demandas em curso, que permanecem exigíveis "
-                "nos termos do contrato originário"
+                "de êxito vincendos relativos às demandas em curso, que continuarão devidos ao C&F na "
+                "forma prevista no contrato originário para o caso de extinção (cláusula de Prazo, "
+                "Rescisão e Outros Efeitos), inclusive quanto à proporção conforme a fase processual em "
+                "que se encontrar cada demanda na data deste distrato"
             )
         else:
             alcance = "seja a título de honorários fixos, reembolsos, indenizações ou honorários de êxito futuros"
