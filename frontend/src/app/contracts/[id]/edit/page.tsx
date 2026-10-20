@@ -6,6 +6,8 @@ import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { getContract, getContractFormData, type ContractFormDataResponse, type ContractDetail } from "@/app/lib/api";
 import ContractWizard from "@/components/ContractWizard";
 import ConsumidorWizard from "@/components/ConsumidorWizard";
+import FormularioDocumento from "@/components/documentos/FormularioDocumento";
+import { ehDocumentoComplementar } from "@/app/lib/documentos";
 import type { ContratoFormData } from "@/types/contract";
 import { TIPO_CONSUMIDOR_AEREO, type ConsumidorFormData } from "@/types/consumidor";
 import { formatarDataHora } from "@/app/lib/datas";
@@ -134,7 +136,15 @@ export default function EditContractPage() {
         </div>
       </div>
       {/* Cada tipo de contrato abre no seu proprio wizard. */}
-      {(formData as { tipo_contrato?: string }).tipo_contrato === TIPO_CONSUMIDOR_AEREO ? (
+      {ehDocumentoComplementar((formData as { tipo_contrato?: string }).tipo_contrato) ? (
+        <FormularioDocumento
+          key={`${selectedVersion || "latest"}-documento`}
+          tipo={(formData as unknown as { tipo_contrato: string }).tipo_contrato as "aditivo" | "distrato" | "substabelecimento"}
+          origemId={contract?.contrato_origem_id ?? null}
+          editContractId={contractId}
+          initialFormData={formData as unknown as Record<string, unknown>}
+        />
+      ) : (formData as { tipo_contrato?: string }).tipo_contrato === TIPO_CONSUMIDOR_AEREO ? (
         <ConsumidorWizard
           key={`${selectedVersion || "latest"}-consumidor`}
           initialData={formData as unknown as ConsumidorFormData}

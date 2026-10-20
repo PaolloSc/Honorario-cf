@@ -14,6 +14,9 @@ import {
   rollbackContract,
   listTestemunhas,
   listColaboradores,
+  listDocumentos,
+  getContractFormData,
+  type DocumentoDerivado,
   type ColaboradorWizard,
   type ContractDetail,
   type AuditEntry,
@@ -24,6 +27,10 @@ import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp from "@/components/EnvioWhatsApp";
 import { ComboBox } from "@/components/ui/FormField";
 import { formatarDataHora } from "@/app/lib/datas";
+import { ROTULO_TIPO, ehDocumentoComplementar, type TipoDocumento } from "@/app/lib/documentos";
+import { TipoBadge } from "@/components/documentos/Selos";
+import NovoDocumentoMenu from "@/components/documentos/NovoDocumentoMenu";
+import DocumentosDerivados from "@/components/documentos/DocumentosDerivados";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
@@ -31,6 +38,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   assinado: { label: "Assinado", color: "bg-primary/[0.16] text-primary-dark" },
   cancelado: { label: "Cancelado", color: "bg-danger/[0.14] text-danger" },
   recusado: { label: "Recusado", color: "bg-danger/[0.14] text-danger" },
+  encerrado: { label: "Encerrado", color: "bg-border/35 text-muted" },
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -47,6 +55,11 @@ const ACTION_LABELS: Record<string, string> = {
   sync_assinado: "Assinatura concluída (verificada no DocuSeal)",
   sync_recusado: "Assinatura recusada (verificada no DocuSeal)",
   webhook_recusado: "Assinatura recusada",
+  documento_complementar: "Documento complementar criado",
+  aditivo_assinado: "Aditivo assinado",
+  distrato_assinado: "Distrato assinado",
+  substabelecimento_assinado: "Substabelecimento assinado",
+  encerramento: "Contrato encerrado",
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -93,6 +106,7 @@ export default function ContractDetailPage() {
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [socioEscritorio, setSocioEscritorio] = useState("");
   const [sincronizando, setSincronizando] = useState(false);
+  const [documentos, setDocumentos] = useState<DocumentoDerivado[]>([]);
   const [pendentes, setPendentes] = useState<
     Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>
   >([]);
@@ -114,6 +128,14 @@ export default function ContractDetailPage() {
       fetchContract();
     }
   }, [fetchContract, sessionStatus]);
+
+  // Documentos derivados (aditivos, distrato, substabelecimentos) do contrato aberto.
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !contract || ehDocumentoComplementar(contract.tipo_contrato)) return;
+    listDocumentos(contractId)
+      .then((r) => setDocumentos(r.documentos))
+      .catch(() => setDocumentos([]));
+  }, [sessionStatus, contract, contractId]);
 
   // Contrato aguardando assinatura: confere com o DocuSeal ao abrir a pagina.
   // Sem isto o status so' mudava se o webhook chegasse — e quando ele nao esta'
@@ -220,7 +242,7 @@ export default function ContractDetailPage() {
     const signerEmail = contract.client_email;
     const signerName = contract.client_name;
 
-    if (!signerEmail) {
+    if (!ehSubstabelecimento && !signerEmail) {
       setNotification({type: "error", message: "E-mail do contratante não encontrado"});
       return;
     }
@@ -229,23 +251,32 @@ export default function ContractDetailPage() {
     setNotification(null);
 
     try {
-      const signatarios: Array<{email: string; name: string; role: string}> = [
-        { email: signerEmail, name: signerName, role: "Contratante" },
-      ];
+      let signatarios: Array<{email: string; name: string; role: string}>;
 
-      // Honorários: o sócio escolhido assina pelo escritório. No consumidor o backend
-      // injeta a contratada fixa.
-      const socio = colaboradores.find((c) => c.email === socioEscritorio);
-      if (ehHonorarios && socio) {
-        signatarios.push({ email: socio.email, name: socio.name, role: "Contratado" });
-      }
+      if (ehSubstabelecimento) {
+        // Só os substabelecentes assinam: sem contratante, sócio nem testemunha.
+        const fd = (await getContractFormData(contractId)).form_data as {
+          substabelecentes?: Array<{ nome: string; email: string }>;
+        };
+        signatarios = (fd.substabelecentes ?? []).map((s) => ({ email: s.email, name: s.nome, role: "Substabelecente" }));
+        if (signatarios.length === 0) throw new Error("Nenhum substabelecente no documento");
+      } else {
+        signatarios = [{ email: signerEmail, name: signerName, role: "Contratante" }];
 
-      // Testemunhas: do roster (selecionadas) + avulsas. Lilian (Testemunha 1) e injetada no backend.
-      for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
-        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
-      }
-      for (const t of extraTestemunhas) {
-        signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
+        // Honorários, aditivo e distrato: o sócio escolhido assina pelo escritório. No consumidor
+        // o backend injeta a contratada fixa.
+        const socio = colaboradores.find((c) => c.email === socioEscritorio);
+        if (exigeSocio && socio) {
+          signatarios.push({ email: socio.email, name: socio.name, role: "Contratado" });
+        }
+
+        // Testemunhas: do roster (selecionadas) + avulsas. Lilian (Testemunha 1) e injetada no backend.
+        for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
+          signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
+        }
+        for (const t of extraTestemunhas) {
+          signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
+        }
       }
 
       const result = await sendForSignature({
@@ -287,7 +318,9 @@ export default function ContractDetailPage() {
         contract_id: contractId,
         destinatario_email: recipientEmail,
         destinatario_nome: recipientName,
-        assunto: "Contrato de Honorários - C&F Advogados - Para Conferência",
+        assunto: ehDocumentoDerivado
+          ? `${ROTULO_TIPO[contract.tipo_contrato as TipoDocumento]} - C&F Advogados - Para Conferência`
+          : "Contrato de Honorários - C&F Advogados - Para Conferência",
       });
 
       if (!result.success) {
@@ -333,6 +366,11 @@ export default function ContractDetailPage() {
   const lastSignatureEntry = signatureEntries.length > 0 ? signatureEntries[0] : null;
   const canSendForSignature = contract.status === "rascunho" || contract.status === "enviado";
   const ehHonorarios = (contract.tipo_contrato ?? "honorarios") === "honorarios";
+  const ehDocumentoDerivado = ehDocumentoComplementar(contract.tipo_contrato);
+  const ehSubstabelecimento = contract.tipo_contrato === "substabelecimento";
+  // Escolha do sócio que assina pelo escritório: honorários, aditivo e distrato.
+  const exigeSocio = ehHonorarios || contract.tipo_contrato === "aditivo" || contract.tipo_contrato === "distrato";
+  const distratoExistente = documentos.some((d) => d.tipo_contrato === "distrato" && d.status !== "cancelado");
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -342,9 +380,18 @@ export default function ContractDetailPage() {
           <a href="/contracts" className="text-sm text-muted hover:text-foreground transition mb-2 inline-block">
             &larr; Voltar
           </a>
-          <h1 className="font-display text-xl font-semibold text-primary-dark tracking-wide">
+          <h1 className="font-display text-xl font-semibold text-primary-dark tracking-wide flex flex-wrap items-center gap-2">
             {contract.client_name || "Contrato"}
+            <TipoBadge tipo={contract.tipo_contrato ?? "honorarios"} />
           </h1>
+          {contract.contrato_origem_id && (
+            <p className="text-sm text-muted mt-1">
+              Derivado do contrato{" "}
+              <a href={`/contracts/${contract.contrato_origem_id}`} className="text-primary hover:underline">
+                {contract.contrato_origem_id.slice(0, 8)}…
+              </a>
+            </p>
+          )}
           <p className="text-sm text-muted mt-1">
             ID: {contract.contract_id.slice(0, 8)}... | Versão {contract.current_version}
           </p>
@@ -367,6 +414,10 @@ export default function ContractDetailPage() {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3 mb-8">
+        {/* Único ponto de entrada de aditivo, distrato e substabelecimento; derivados não geram derivados. */}
+        {!ehDocumentoDerivado && (
+          <NovoDocumentoMenu contratoId={contractId} distratoExistente={distratoExistente} />
+        )}
         <a
           href={`/contracts/${contractId}/edit`}
           className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition"
@@ -406,6 +457,7 @@ export default function ContractDetailPage() {
         >
           {downloading ? "Baixando..." : "Baixar DOCX"}
         </button>
+        {!ehSubstabelecimento && (
         <button
           onClick={handleResendEmail}
           disabled={sendingEmail}
@@ -413,6 +465,7 @@ export default function ContractDetailPage() {
         >
           {sendingEmail ? "Enviando..." : "Reenviar por E-mail"}
         </button>
+        )}
         {canSendForSignature && (
           <button
             onClick={() => setShowSignaturePanel(!showSignaturePanel)}
@@ -463,6 +516,8 @@ export default function ContractDetailPage() {
         </div>
       )}
 
+      {!ehDocumentoDerivado && <DocumentosDerivados documentos={documentos} />}
+
       {/* Inline contract preview */}
       {showPreview && previewHtml && (
         <div className="mb-8 border border-border rounded-xl overflow-hidden bg-white">
@@ -483,10 +538,12 @@ export default function ContractDetailPage() {
             Enviar para Assinatura Digital
           </h3>
           <p className="text-xs text-muted mb-3">
-            O contratante ({contract.client_email}) é incluído automaticamente.
+            {ehSubstabelecimento
+              ? "Assinam apenas os substabelecentes indicados no documento (sem contratante nem testemunhas)."
+              : `O contratante (${contract.client_email}) é incluído automaticamente.`}
           </p>
 
-          {ehHonorarios && (
+          {exigeSocio && (
             <SocioEscritorioSelect
               colaboradores={colaboradores}
               value={socioEscritorio}
@@ -495,6 +552,7 @@ export default function ContractDetailPage() {
           )}
 
           {/* Testemunhas */}
+          {!ehSubstabelecimento && (
           <div className="mb-4 pt-3 border-t border-border">
             <p className="text-xs font-semibold text-foreground mb-1">Testemunhas</p>
             <p className="text-xs text-muted mb-2">
@@ -571,22 +629,23 @@ export default function ContractDetailPage() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Send button */}
           <div className="flex gap-3 items-start">
             <div>
               <button
                 onClick={handleSendForSignature}
-                disabled={sendingSignature || (ehHonorarios && !socioEscritorio)}
+                disabled={sendingSignature || (exigeSocio && !socioEscritorio)}
                 className={`px-5 py-2 rounded-lg text-sm font-medium transition ${
-                  ehHonorarios && !socioEscritorio
+                  exigeSocio && !socioEscritorio
                     ? "bg-border/40 text-muted cursor-not-allowed"
                     : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
                 }`}
               >
                 {sendingSignature ? "Enviando..." : "Confirmar e Enviar"}
               </button>
-              {ehHonorarios && !socioEscritorio && (
+              {exigeSocio && !socioEscritorio && (
                 <p className="text-xs text-warning mt-1 max-w-64">
                   Escolha o sócio que assina pelo escritório (acima) para habilitar o envio.
                 </p>
