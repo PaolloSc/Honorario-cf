@@ -79,6 +79,11 @@ def schema(tmp_path_factory):
 
 @pytest.mark.parametrize("kw", [
     {}, {"ibscbs": False}, {"op_simp_nac": "3"}, {"aliquota_iss": Decimal("2.00")}, {"valor": Decimal("1234.50")},
+    # fatura de teste da producao restrita (E1235 em 21/10): tomador PF com endereco completo
+    {"ibscbs": False, "op_simp_nac": "3", "reg_ap_trib_sn": "1", "im": "03656630021", "c_trib_mun": "001",
+     "nbs": "113019000", "tomador_cpf": "52998224725", "tomador_nome": "TESTE - Tomador Homologação",
+     "tomador_end": {"cMun": "3106200", "CEP": "30130000", "xLgr": "Avenida Afonso Pena", "nro": "1000",
+                     "xBairro": "Centro"}},
 ])
 def test_dps_valida_no_xsd_oficial(schema, kw):
     schema.assertValid(etree.fromstring(montar_dps(_params(**kw))))
@@ -520,3 +525,10 @@ def test_tomador_cpf_e_endereco_completo_validam_no_xsd(schema):
 def test_endereco_incompleto_nao_entra():
     xml = montar_dps(_params(tomador_end={"cMun": "3106200", "CEP": "30130001"}))
     assert b"<end>" not in xml
+
+
+def test_erro_da_receita_guarda_o_complemento():
+    from workers.nfse_dps_smoke.sefin import erros_do_corpo
+    corpo = {"erros": [{"codigo": "E1235", "descricao": "Falha no esquema XML do DF-e.",
+                        "complemento": "Element 'xNome': invalid"}]}
+    assert erros_do_corpo(corpo) == [("E1235", "Falha no esquema XML do DF-e. [Element 'xNome': invalid]")]
