@@ -43,7 +43,11 @@ def erros_do_corpo(corpo: dict) -> list[tuple[str, str]]:
     saida = []
     for e in brutos if isinstance(brutos, list) else []:
         if isinstance(e, dict):
-            saida.append((str(campo(e, "Codigo") or "?"), str(campo(e, "Descricao") or campo(e, "Mensagem") or "")))
+            descricao = str(campo(e, "Descricao") or campo(e, "Mensagem") or "")
+            # E1235 (falha de esquema) so diz qual tag no Complemento
+            if complemento := campo(e, "Complemento"):
+                descricao = f"{descricao} [{complemento}]"
+            saida.append((str(campo(e, "Codigo") or "?"), descricao))
     return saida
 
 
