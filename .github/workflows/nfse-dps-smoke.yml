@@ -62,6 +62,18 @@ on:
         default: sha256
         type: choice
         options: [sha256, sha1]
+      valor:
+        description: 'Valor do servico (padrao 1.00)'
+        default: '1.00'
+      tomador_cpf:
+        description: 'CPF do tomador (11 digitos); vazio = CNPJ de teste'
+        required: false
+      descricao:
+        description: 'xDescServ; vazio = texto de teste sem acento'
+        required: false
+      ver_aplic:
+        description: 'verAplic; vazio = padrao do smoke'
+        required: false
       dry_run:
         description: 'So monta e assina, nao envia'
         type: boolean
@@ -112,6 +124,10 @@ jobs:
           NBS: ${{ inputs.nbs }}
           IBSCBS: ${{ inputs.ibscbs }}
           ASSINATURA: ${{ inputs.assinatura }}
+          VALOR: ${{ inputs.valor }}
+          TOMADOR_CPF: ${{ inputs.tomador_cpf }}
+          DESCRICAO: ${{ inputs.descricao }}
+          VER_APLIC: ${{ inputs.ver_aplic }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           ARGS=(--cnpj "$CNPJ" --serie "$SERIE" --op-simp-nac "$OP_SIMP_NAC" --reg-esp-trib "$REG_ESP_TRIB" \
@@ -126,5 +142,9 @@ jobs:
           [ -n "$NBS" ] && ARGS+=(--nbs "$NBS")
           [ -n "$ALIQUOTA_ISS" ] && ARGS+=(--aliquota-iss "$ALIQUOTA_ISS")
           [ "$IBSCBS" = "false" ] && ARGS+=(--sem-ibscbs)
+          ARGS+=(--valor "$VALOR")
+          [ -n "$TOMADOR_CPF" ] && ARGS+=(--tomador-cpf "$TOMADOR_CPF")
+          [ -n "$DESCRICAO" ] && ARGS+=(--descricao "$DESCRICAO")
+          [ -n "$VER_APLIC" ] && ARGS+=(--ver-aplic "$VER_APLIC")
           [ "$DRY_RUN" = "true" ] && ARGS+=(--dry-run)
           python -m workers.nfse_dps_smoke.run "${ARGS[@]}"
