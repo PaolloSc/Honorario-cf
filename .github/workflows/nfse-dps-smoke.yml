@@ -68,6 +68,9 @@ on:
       tomador_cpf:
         description: 'CPF do tomador (11 digitos); vazio = CNPJ de teste'
         required: false
+      tomador_end:
+        description: 'Endereco do tomador: CEP;logradouro;numero;bairro (BH). Obrigatorio com IBS/CBS (E0239)'
+        required: false
       descricao:
         description: 'xDescServ; vazio = texto de teste sem acento'
         required: false
@@ -126,6 +129,7 @@ jobs:
           ASSINATURA: ${{ inputs.assinatura }}
           VALOR: ${{ inputs.valor }}
           TOMADOR_CPF: ${{ inputs.tomador_cpf }}
+          TOMADOR_END: ${{ inputs.tomador_end }}
           DESCRICAO: ${{ inputs.descricao }}
           VER_APLIC: ${{ inputs.ver_aplic }}
           DRY_RUN: ${{ inputs.dry_run }}
@@ -144,6 +148,7 @@ jobs:
           [ "$IBSCBS" = "false" ] && ARGS+=(--sem-ibscbs)
           ARGS+=(--valor "$VALOR")
           [ -n "$TOMADOR_CPF" ] && ARGS+=(--tomador-cpf "$TOMADOR_CPF")
+          [ -n "$TOMADOR_END" ] && ARGS+=(--tomador-end "$TOMADOR_END")
           [ -n "$DESCRICAO" ] && ARGS+=(--descricao "$DESCRICAO")
           [ -n "$VER_APLIC" ] && ARGS+=(--ver-aplic "$VER_APLIC")
           [ "$DRY_RUN" = "true" ] && ARGS+=(--dry-run)
