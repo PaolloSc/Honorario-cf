@@ -87,6 +87,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--nbs", help="codigo NBS, 9 digitos (nao ha padrao)")
     ap.add_argument("--tomador-cnpj", default="11222333000181")
     ap.add_argument("--sem-ibscbs", action="store_true")
+    ap.add_argument("--tomador-cpf", help="usa CPF no lugar do CNPJ do tomador (11 digitos)")
+    ap.add_argument("--tomador-end", help="CEP;logradouro;numero;bairro (municipio = o da emissao); E0239 exige com IBS/CBS")
+    ap.add_argument("--descricao", help="xDescServ (padrao: texto de teste sem acento)")
+    ap.add_argument("--ver-aplic", help="verAplic (padrao do smoke)")
     ap.add_argument("--assinatura", default="sha256", choices=sorted(PERFIS))
     ap.add_argument("--dry-run", action="store_true", help="monta e assina, nao envia")
     a = ap.parse_args(argv)
@@ -139,6 +143,11 @@ def main(argv: list[str] | None = None) -> int:
         op_simp_nac=a.op_simp_nac, reg_esp_trib=a.reg_esp_trib, tomador_cnpj=re.sub(r"\D", "", a.tomador_cnpj),
         aliquota_iss=Decimal(a.aliquota_iss) if a.aliquota_iss else None, ibscbs=not a.sem_ibscbs, c_trib_mun=a.c_trib_mun, competencia=competencia, im=a.im or None, nbs=nbs or None,
         reg_ap_trib_sn=a.reg_ap_trib_sn, tp_ret_issqn=a.tp_ret_issqn, p_tot_trib_sn=a.p_tot_trib_sn,
+        **({"tomador_cpf": re.sub(r"\D", "", a.tomador_cpf)} if a.tomador_cpf else {}),
+        **({"descricao": a.descricao} if a.descricao else {}),
+        **({"tomador_end": dict(zip(("CEP", "xLgr", "nro", "xBairro"), (x.strip() for x in a.tomador_end.split(";"))), cMun="3106200")}
+           if a.tomador_end else {}),
+        **({"ver_aplic": a.ver_aplic} if a.ver_aplic else {}),
     )
     if erros := regras_locais(params):
         print("abortado: a DPS seria rejeitada pelas regras do Anexo I (nada foi enviado)")

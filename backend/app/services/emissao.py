@@ -235,7 +235,12 @@ def emitir(db: Session, fatura_id: int, idempotency_key: str, usuario: str,
 
     tom, srv = _snapshot_tomador(tomador), _snapshot_servico(servico, cfg)
     # valida as regras do Anexo I antes de gastar um numero de DPS
-    erros = regras_locais(_params(fatura, tom, srv, cfg.cnpj, 1, agora))
+    params = _params(fatura, tom, srv, cfg.cnpj, 1, agora)
+    erros = regras_locais(params)
+    # cIndOp 100301 (demais servicos onerosos, Anexo C): incidencia no domicilio do adquirente => E0239 sem endereco
+    if params.ibscbs and not all((params.tomador_end or {}).get(k) for k in ("cMun", "CEP", "xLgr", "nro", "xBairro")):
+        erros.append("E0239: com IBS/CBS o tomador precisa de endereco nacional completo "
+                     "(CEP, logradouro, numero, bairro e municipio): complete o cadastro do tomador")
     if erros:
         raise EmissaoErro(400, "A DPS seria rejeitada: " + "; ".join(erros))
     key, cert, ctx = _certificado(cfg)
