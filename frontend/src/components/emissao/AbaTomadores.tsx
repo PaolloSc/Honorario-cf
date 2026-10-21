@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { emissaoApi, type Tomador, type TomadorIn } from "@/app/lib/emissao-api";
-import { digitos, mensagemDeErro } from "@/app/lib/emissao";
+import { digitos, mensagemDeErro, semCamposDoServidor } from "@/app/lib/emissao";
 import { Aviso, Campo, botaoPrimario, botaoSecundario, inputCls } from "./ui";
 
 const VAZIO: TomadorIn = {
@@ -32,7 +32,7 @@ export function AbaTomadores() {
   const set = <K extends keyof TomadorIn>(k: K, v: TomadorIn[K]) => setF((x) => ({ ...x, [k]: v }));
   const abrir = (t?: Tomador) => {
     setEditando(t?.id ?? null);
-    setF(t ? { ...t } : VAZIO);
+    setF(t ? semCamposDoServidor(t) : VAZIO);
     setEmails((t?.emails ?? []).join(", "));
     setAberto(true);
     setAviso(null);

@@ -44,6 +44,13 @@ export function rotuloCompetencia(iso: string): string {
 }
 
 /** Só dígitos, para CPF, CNPJ, CEP e NBS digitados com máscara. */
+/** Cadastro vindo da API sem os campos que só o servidor controla: o backend rejeita (422, extra=forbid) id/origem/ativo no corpo. */
+export function semCamposDoServidor<T extends object>(t: T): Omit<T, "id" | "origem" | "ativo"> {
+  const { id: _id, origem: _origem, ativo: _ativo, ...resto } = t as Record<string, unknown>;
+  void _id; void _origem; void _ativo;
+  return resto as Omit<T, "id" | "origem" | "ativo">;
+}
+
 export function digitos(v: string): string {
   return v.replace(/\D/g, "");
 }
