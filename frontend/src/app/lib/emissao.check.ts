@@ -2,7 +2,7 @@
 //   node src/app/lib/emissao.check.ts
 import assert from "node:assert/strict";
 import {
-  acoesDaFatura, competenciaDoMes, digitos, ehErroDeRede, mensagemDeErro, resultadoDaEmissao, rotuloCompetencia,
+  acoesDaFatura, competenciaDoMes, digitos, ehErroDeRede, mensagemDeErro, resultadoDaEmissao, rotuloCompetencia, semCamposDoServidor,
   CLASSE_STATUS, ROTULO_STATUS, STATUS_FATURA,
 } from "./emissao.ts";
 
@@ -49,3 +49,6 @@ for (const s of [...STATUS_FATURA, "processando", "autorizada", "rejeitada"] as 
   assert.ok(CLASSE_STATUS[s] && !/#[0-9a-f]{3,6}/i.test(CLASSE_STATUS[s]), s);
 }
 console.log("emissao.check.ts ok");
+
+// editar tomador: o form não pode levar id/origem/ativo (PATCH daria 422)
+assert.deepEqual(semCamposDoServidor({ id: 1, origem: "manual", ativo: true, nome: "X", bairro: null }), { nome: "X", bairro: null });
