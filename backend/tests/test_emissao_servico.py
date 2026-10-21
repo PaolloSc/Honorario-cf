@@ -376,6 +376,20 @@ def test_regra_do_anexo_i_barra_antes_de_gastar_numero_de_dps(client, sefin):
     assert _status_fatura(f["id"]) == "aprovada"
 
 
+def test_ibscbs_sem_endereco_do_tomador_barra_antes_de_gastar_numero_de_dps(client, sefin):
+    # E0239 (smoke 21/10/2026): com IBS/CBS (cIndOp 100301) a incidencia e no endereco do adquirente
+    s, t = _cenario(client, servico_extra={"incluir_ibscbs": True, "c_ind_op": "100301", "cst_ibscbs": "000",
+                                           "c_class_trib": "000001"})
+    assert client.patch(f"/api/tomadores/{t['id']}", json={"bairro": ""}).status_code == 200
+    f = _fatura(client, s, t)
+    r = _emitir(client, f["id"])
+    assert r.status_code == 400 and "E0239" in r.json()["detail"]
+    assert sefin.posts == []
+    with SessionLocal() as db:
+        assert db.execute(text("SELECT count(*) FROM dps_sequence")).scalar() == 0
+    assert _status_fatura(f["id"]) == "aprovada"
+
+
 def test_servico_com_iss_retido_vai_com_tpretissqn_2_e_aliquota(client, sefin):
     s, t = _cenario(client, servico_extra={"aliquota_iss": "5.00", "iss_retido_padrao": True})
     assert _emitir(client, _fatura(client, s, t)["id"]).json()["status"] == "autorizada"
