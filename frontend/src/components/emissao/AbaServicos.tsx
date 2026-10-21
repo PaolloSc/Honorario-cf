@@ -27,7 +27,7 @@ export function AbaServicos() {
   const set = <K extends keyof ServicoIn>(k: K, v: ServicoIn[K]) => setF((x) => ({ ...x, [k]: v }));
   const abrir = (s?: Servico) => {
     setEditando(s?.id ?? null);
-    setF(s ? { ...s } : VAZIO);
+    setF(s ? (({ id: _id, ...resto }) => resto)(s) : VAZIO); // o backend rejeita id no corpo (422)
     setAberto(true);
     setAviso(null);
   };
