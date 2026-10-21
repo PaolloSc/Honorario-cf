@@ -315,7 +315,7 @@ def test_im_e_nbs_entram_no_lugar_do_leiaute_e_validam_no_xsd(schema):
     inf = raiz.find(f"{{{NS_DPS}}}infDPS")
     assert [e.tag.split("}")[1] for e in inf.find(f"{{{NS_DPS}}}prest")] == ["CNPJ", "IM", "regTrib"]
     assert [e.tag.split("}")[1] for e in inf.find(f"{{{NS_DPS}}}serv/{{{NS_DPS}}}cServ")] == [
-        "cTribNac", "xDescServ", "cNBS"]
+        "cTribNac", "cNBS", "xDescServ"]
 
 
 def test_sem_im_e_nbs_nada_e_emitido():
@@ -363,7 +363,7 @@ def test_ctribmun_entra_apos_ctribnac_e_valida_no_xsd(schema):
     raiz = etree.fromstring(montar_dps(_params(c_trib_mun="001", nbs="113019000")))
     schema.assertValid(raiz)
     c_serv = raiz.find(f"{{{NS_DPS}}}infDPS/{{{NS_DPS}}}serv/{{{NS_DPS}}}cServ")
-    assert [e.tag.split("}")[1] for e in c_serv] == ["cTribNac", "cTribMun", "xDescServ", "cNBS"]
+    assert [e.tag.split("}")[1] for e in c_serv] == ["cTribNac", "cTribMun", "cNBS", "xDescServ"]
     assert b"cTribMun" not in montar_dps(_params())
 
 
@@ -532,3 +532,16 @@ def test_erro_da_receita_guarda_o_complemento():
     corpo = {"erros": [{"codigo": "E1235", "descricao": "Falha no esquema XML do DF-e.",
                         "complemento": "Element 'xNome': invalid"}]}
     assert erros_do_corpo(corpo) == [("E1235", "Falha no esquema XML do DF-e. [Element 'xNome': invalid]")]
+
+
+def test_leiaute_prodrest_20261020_finnfse_no_infdps_e_fora_do_ibscbs(schema):
+    """SEFIN da producao restrita (XSD PRODREST v1.01 de 20/10/2026) recusava o DPS com E1235:
+    'invalid child cLocEmi; expected cMotivoEmisTI, finNFSe'."""
+    for kw in ({}, {"ibscbs": False}):
+        raiz = etree.fromstring(montar_dps(_params(**kw)))
+        schema.assertValid(raiz)
+        inf = raiz.find(f"{{{NS_DPS}}}infDPS")
+        tags = [e.tag.split("}")[1] for e in inf]
+        assert tags[tags.index("tpEmit") + 1:tags.index("tpEmit") + 3] == ["finNFSe", "cLocEmi"]
+        assert inf.findtext(f"{{{NS_DPS}}}finNFSe") == "0"
+        assert inf.find(f".//{{{NS_DPS}}}IBSCBS/{{{NS_DPS}}}finNFSe") is None

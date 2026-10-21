@@ -89,6 +89,7 @@ def montar_dps(p: DpsParams) -> bytes:
     _e(inf, "nDPS", p.n_dps)
     _e(inf, "dCompet", (p.competencia or agora.date()).isoformat())
     _e(inf, "tpEmit", 1)
+    _e(inf, "finNFSe", 0)  # leiaute PRODREST 20/10/2026: obrigatorio no infDPS; 0 = NFS-e regular (unico valor do XSD)
     _e(inf, "cLocEmi", p.c_mun)
 
     prest = _e(inf, "prest")
@@ -125,9 +126,9 @@ def montar_dps(p: DpsParams) -> bytes:
     _e(c_serv, "cTribNac", p.c_trib_nac)
     if p.c_trib_mun:
         _e(c_serv, "cTribMun", p.c_trib_mun)
-    _e(c_serv, "xDescServ", p.descricao)
-    if p.nbs:
+    if p.nbs:  # PRODREST 20/10/2026: cNBS vem antes de xDescServ
         _e(c_serv, "cNBS", p.nbs)
+    _e(c_serv, "xDescServ", p.descricao)
 
     valores = _e(inf, "valores")
     _e(_e(valores, "vServPrest"), "vServ", f"{p.valor:.2f}")
@@ -145,12 +146,11 @@ def montar_dps(p: DpsParams) -> bytes:
 
     if p.ibscbs:
         ib = _e(inf, "IBSCBS")
-        _e(ib, "finNFSe", 0)
         _e(ib, "indFinal", 0)
         _e(ib, "cIndOp", p.c_ind_op)
         _e(ib, "indDest", 0)
-        g = _e(_e(_e(ib, "valores"), "trib"), "gIBSCBS")
-        _e(g, "CST", p.cst)
-        _e(g, "cClassTrib", p.c_class_trib)
+        trib_ib = _e(_e(ib, "valores"), "trib")  # PRODREST 20/10/2026: CST/cClassTrib direto em trib (gIBSCBS virou opcional)
+        _e(trib_ib, "CST", p.cst)
+        _e(trib_ib, "cClassTrib", p.c_class_trib)
 
     return etree.tostring(dps, xml_declaration=True, encoding="UTF-8")
