@@ -18,6 +18,7 @@ class DocuSealService:
     def __init__(self) -> None:
         self.base_url = settings.docuseal_base_url.rstrip("/")
         self.api_key = settings.docuseal_api_key
+        self.nao_encontradas: list[str] = []  # submissoes que o DocuSeal respondeu 404 ao arquivar
  
     def _headers(self) -> dict[str, str]:
         return {
@@ -125,6 +126,8 @@ class DocuSealService:
                 headers=self._headers(),
                 timeout=30.0,
             )
+        if response.status_code == 404:
+            self.nao_encontradas.append(str(submission_id))
         return response.status_code in (200, 204, 404)
 
     async def get_submission_status(self, submission_id: int | str) -> dict:
