@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listColaboradores, type ColaboradorWizard } from "@/app/lib/api";
-import { formatarCNPJ } from "@/app/lib/cnpj";
+import { listColaboradores, lookupCNPJ, type ColaboradorWizard } from "@/app/lib/api";
+import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import {
   alteracaoVazia,
   cnjValido,
+  formatarOabNumero,
+  oabVazia,
+  UFS,
+  type Oab,
   processoVazio,
   ROTULO_ALTERACAO,
   type Alteracao,
@@ -107,7 +111,7 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
 
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Quitação</h3>
       <Checkbox
-        label="Ressalvar honorários de êxito"
+        label="Ressalvar honorários e reembolsos a vencer (inclusive êxito)"
         checked={estado.ressalva_exito}
         onChange={(v) => set({ ressalva_exito: v })}
         hint="Marcado (padrão), ressalva honorários e reembolsos vincendos, inclusive de êxito. Desmarcado, dá quitação total."
@@ -116,7 +120,7 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
         label="Substabelecer sem reserva de poderes e devolver documentos"
         checked={estado.substabelecer_e_devolver}
         onChange={(v) => set({ substabelecer_e_devolver: v })}
-        hint="Inclui a cláusula 2.2 do modelo."
+        hint="Marcado, o distrato também passa os processos aos novos advogados, sem reserva de poderes, e prevê a devolução dos documentos do cliente."
       />
     </>
   );
@@ -124,28 +128,119 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
 
 // ── Substabelecimento ─────────────────────────────────────────────────────
 
+/** Numero da OAB + UF (padrao MG, editavel). */
+function CampoOab({ valor, onChange, erro }: { valor: Oab; onChange: (o: Oab) => void; erro?: string }) {
+  return (
+    <FormField label="OAB" required error={erro} hint="Só o número. A UF é MG, se não for outra.">
+      <div className="flex gap-2">
+        <div className="flex-1 min-w-0">
+          <Input
+            inputMode="text"
+            value={valor.numero}
+            onChange={(e) => onChange({ ...valor, numero: formatarOabNumero(e.target.value) })}
+            error={!!erro}
+            placeholder="00.000"
+          />
+        </div>
+        <div className="w-24 shrink-0">
+          <Select
+            aria-label="UF da OAB"
+            value={valor.uf}
+            onChange={(e) => onChange({ ...valor, uf: e.target.value })}
+            options={UFS.map((u) => ({ value: u, label: u }))}
+          />
+        </div>
+      </div>
+    </FormField>
+  );
+}
+
+const formatarCEP = (d: string) => (d.length > 5 ? d.replace(/^(\d{5})(\d)/, "$1-$2") : d);
+
 export function CamposSubstabelecimento({ estado, onChange, erros }: Props<SubstabelecimentoForm>) {
   const set = (parcial: Partial<SubstabelecimentoForm>) => onChange({ ...estado, ...parcial });
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [escolhido, setEscolhido] = useState("");
-  const [oab, setOab] = useState("");
+  const [oab, setOab] = useState<Oab>(oabVazia());
+  const [msgCnpj, setMsgCnpj] = useState("");
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const [cep, setCep] = useState("");
+  const [numeroEnd, setNumeroEnd] = useState("");
+  const [msgCep, setMsgCep] = useState("");
+  const [logradouro, setLogradouro] = useState("");
 
   useEffect(() => {
     listColaboradores().then((r) => setColaboradores(r.colaboradores)).catch(() => setColaboradores([]));
   }, []);
 
-  const adicionarSubstabelecente = () => {
-    const c = colaboradores.find((x) => x.email === escolhido);
-    if (!c || !oab.trim() || estado.substabelecentes.some((s) => s.email === c.email)) return;
-    set({ substabelecentes: [...estado.substabelecentes, { nome: c.name, email: c.email, oab: oab.trim() }] });
-    setEscolhido("");
-    setOab("");
+  const doCadastro = colaboradores.find((x) => x.email === escolhido);
+  const oabsCadastradas = doCadastro?.oabs ?? [];
+  const escolherColaborador = (email: string) => {
+    setEscolhido(email);
+    const o = colaboradores.find((x) => x.email === email)?.oabs ?? [];
+    // Uma OAB cadastrada preenche sozinha; varias, a primeira, e o estado muda na lista; nenhuma: MG + digitar.
+    setOab(o.length ? { numero: formatarOabNumero(o[0].numero), uf: o[0].uf } : oabVazia());
   };
 
+  const adicionarSubstabelecente = () => {
+    const c = colaboradores.find((x) => x.email === escolhido);
+    if (!c || !oab.numero.trim() || estado.substabelecentes.some((s) => s.email === c.email)) return;
+    set({ substabelecentes: [...estado.substabelecentes, { nome: c.name, email: c.email, oab }] });
+    setEscolhido("");
+    setOab(oabVazia());
+  };
+
+  const setSubstabelecente = (i: number, parcial: Partial<SubstabelecimentoForm["substabelecentes"][number]>) =>
+    set({ substabelecentes: estado.substabelecentes.map((s, k) => (k === i ? { ...s, ...parcial } : s)) });
   const setSubstabelecido = (i: number, parcial: Partial<SubstabelecimentoForm["substabelecidos"][number]>) =>
     set({ substabelecidos: estado.substabelecidos.map((s, k) => (k === i ? { ...s, ...parcial } : s)) });
   const setProcesso = (i: number, parcial: Partial<SubstabelecimentoForm["processos"][number]>) =>
     set({ processos: estado.processos.map((p, k) => (k === i ? { ...p, ...parcial } : p)) });
+
+  // CNPJ completo e valido: busca razao social como no cadastro de contratos; sem achar, digita-se a mao.
+  const mudarDocumento = async (valor: string) => {
+    const documento = estado.outorgante_pj ? formatarCNPJ(valor) : valor;
+    set({ outorgante_documento: documento });
+    setMsgCnpj("");
+    if (!estado.outorgante_pj || limparCNPJ(documento).length !== 14 || !cnpjValido(documento)) return;
+    setBuscandoCnpj(true);
+    try {
+      const d = await lookupCNPJ(documento);
+      onChange({ ...estado, outorgante_documento: documento, outorgante_nome: d.razao_social });
+    } catch {
+      setMsgCnpj("CNPJ não encontrado na consulta. Preencha a razão social manualmente.");
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  };
+
+  // Endereco profissional (opcional): o CEP traz rua, bairro e cidade; numero e complemento entram a mao.
+  const montarEndereco = (rua: string, num: string, cepFmt: string, resto: string) =>
+    [rua, num && `nº ${num}`, resto].filter(Boolean).join(", ") + (cepFmt ? `, CEP ${cepFmt}` : "");
+  const [bairroCidade, setBairroCidade] = useState("");
+  const buscarCep = async (valor: string) => {
+    const digitos = valor.replace(/\D/g, "").slice(0, 8);
+    setCep(formatarCEP(digitos));
+    setMsgCep("");
+    if (digitos.length !== 8) return;
+    try {
+      const r = await (await fetch(`https://viacep.com.br/ws/${digitos}/json/`)).json();
+      if (r.erro) {
+        setMsgCep("CEP não encontrado. Digite o endereço no campo abaixo.");
+        return;
+      }
+      const resto = [r.bairro, r.localidade && r.uf ? `${r.localidade}/${r.uf}` : ""].filter(Boolean).join(", ");
+      setLogradouro(r.logradouro || "");
+      setBairroCidade(resto);
+      set({ endereco_substabelecidos: montarEndereco(r.logradouro || "", numeroEnd, formatarCEP(digitos), resto) });
+    } catch {
+      setMsgCep("Não foi possível buscar o CEP. Digite o endereço no campo abaixo.");
+    }
+  };
+  const mudarNumeroEnd = (valor: string) => {
+    setNumeroEnd(valor);
+    if (logradouro || bairroCidade) set({ endereco_substabelecidos: montarEndereco(logradouro, valor, cep, bairroCidade) });
+  };
 
   return (
     <>
@@ -153,60 +248,89 @@ export function CamposSubstabelecimento({ estado, onChange, erros }: Props<Subst
         <Input type="date" className="sm:max-w-xs" value={estado.data_documento} onChange={(e) => set({ data_documento: e.target.value })} error={!!erros.data_documento} />
       </FormField>
 
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-2">Outorgante (cliente)</h3>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Outorgante (cliente)</h3>
+      <p className="text-xs text-muted mb-2">O cliente que deu os poderes (procuração) que estão sendo substabelecidos.</p>
       <div className="flex gap-4 mb-2 text-sm">
-        <label className="flex items-center gap-2"><input type="radio" checked={estado.outorgante_pj} onChange={() => set({ outorgante_pj: true })} /> Empresa</label>
-        <label className="flex items-center gap-2"><input type="radio" checked={!estado.outorgante_pj} onChange={() => set({ outorgante_pj: false })} /> Pessoa física</label>
+        <label className="flex items-center gap-2"><input type="radio" checked={!estado.outorgante_pj} onChange={() => set({ outorgante_pj: false, outorgante_documento: "" })} /> Pessoa física</label>
+        <label className="flex items-center gap-2"><input type="radio" checked={estado.outorgante_pj} onChange={() => set({ outorgante_pj: true, outorgante_documento: "" })} /> Pessoa jurídica</label>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+        <FormField
+          label={estado.outorgante_pj ? "CNPJ" : "CPF"}
+          hint={estado.outorgante_pj ? (buscandoCnpj ? "Buscando…" : "Com o CNPJ completo, a razão social é buscada.") : "Opcional."}
+          error={msgCnpj || undefined}
+        >
+          <Input value={estado.outorgante_documento} onChange={(e) => mudarDocumento(e.target.value)} inputMode="numeric" />
+        </FormField>
         <FormField label={estado.outorgante_pj ? "Razão social" : "Nome"} required error={erros.outorgante}>
           <Input value={estado.outorgante_nome} onChange={(e) => set({ outorgante_nome: e.target.value })} error={!!erros.outorgante} />
-        </FormField>
-        <FormField label={estado.outorgante_pj ? "CNPJ" : "CPF"} hint="Opcional.">
-          <Input value={estado.outorgante_documento} onChange={(e) => set({ outorgante_documento: estado.outorgante_pj ? formatarCNPJ(e.target.value) : e.target.value })} />
         </FormField>
       </div>
 
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecentes (C&amp;F)</h3>
-      <p className="text-xs text-muted mb-2">Escolha no cadastro de colaboradores e informe a OAB como deve sair no texto (ex.: OAB/MG nº 36.959). Eles assinam o documento.</p>
+      <p className="text-xs text-muted mb-2">Quem passa os poderes: advogados do escritório. Escolha no cadastro de colaboradores; a OAB vem do cadastro, se houver. Eles assinam o documento.</p>
       {estado.substabelecentes.map((s, i) => (
-        <div key={s.email} className="flex flex-wrap items-center gap-2 text-sm mb-1">
-          <span className="flex-1 min-w-48">{s.nome} — {s.oab}</span>
+        <div key={s.email} className={cartao}>
+          <p className="text-sm font-medium mb-1">{s.nome}</p>
+          <CampoOab valor={s.oab} onChange={(o) => setSubstabelecente(i, { oab: o })} erro={erros[`substabelecentes.${i}.oab`]} />
           <button type="button" className={botaoRemover} onClick={() => set({ substabelecentes: estado.substabelecentes.filter((_, k) => k !== i) })}>Remover</button>
         </div>
       ))}
-      <div className="flex flex-col sm:flex-row gap-2 mt-2">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-2 mt-2">
         <Select
           className="sm:flex-1"
           value={escolhido}
-          onChange={(e) => setEscolhido(e.target.value)}
+          onChange={(e) => escolherColaborador(e.target.value)}
           placeholder="Colaborador…"
           options={colaboradores.filter((c) => c.email).map((c) => ({ value: c.email, label: c.name }))}
         />
-        <Input className="sm:flex-1" value={oab} onChange={(e) => setOab(e.target.value)} placeholder="OAB/MG nº 00.000" />
-        <button type="button" onClick={adicionarSubstabelecente} disabled={!escolhido || !oab.trim()} className="px-4 py-2 rounded-lg border border-primary text-primary text-sm font-medium disabled:opacity-40">
+        <div className="sm:flex-1">
+          <CampoOab valor={oab} onChange={setOab} />
+          {oabsCadastradas.length > 1 && (
+            <div className="-mt-2 mb-2 flex flex-wrap gap-2 text-xs">
+              {oabsCadastradas.map((o) => (
+                <button
+                  key={`${o.numero}-${o.uf}`}
+                  type="button"
+                  className={botaoLink}
+                  onClick={() => setOab({ numero: formatarOabNumero(o.numero), uf: o.uf })}
+                >
+                  OAB/{o.uf} {formatarOabNumero(o.numero)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button type="button" onClick={adicionarSubstabelecente} disabled={!escolhido || !oab.numero.trim()} className="px-4 py-2 rounded-lg border border-primary text-primary text-sm font-medium disabled:opacity-40">
           Adicionar
         </button>
       </div>
       {erros.substabelecentes && <p className="text-xs text-danger mt-1">{erros.substabelecentes}</p>}
 
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecidos (banca parceira)</h3>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecidos</h3>
+      <p className="text-xs text-muted mb-2">Quem recebe os poderes: os advogados que passam a atuar nos processos.</p>
       {erros.substabelecidos && <p className="text-xs text-danger mb-1">{erros.substabelecidos}</p>}
       {estado.substabelecidos.map((s, i) => (
         <div key={i} className={cartao}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
             <FormField label="Nome" required error={erros[`substabelecidos.${i}.nome`]}>
               <Input value={s.nome} onChange={(e) => setSubstabelecido(i, { nome: e.target.value })} error={!!erros[`substabelecidos.${i}.nome`]} />
+              {colaboradores.length > 0 && (
+                <Select
+                  className="mt-1"
+                  aria-label="Preencher do cadastro de colaboradores"
+                  value=""
+                  onChange={(e) => {
+                    const c = colaboradores.find((x) => x.name === e.target.value);
+                    const o = c?.oabs?.[0];
+                    if (c) setSubstabelecido(i, { nome: c.name, oab: o ? { numero: formatarOabNumero(o.numero), uf: o.uf } : s.oab });
+                  }}
+                  placeholder="Ou escolha do cadastro…"
+                  options={colaboradores.map((c) => ({ value: c.name, label: c.name }))}
+                />
+              )}
             </FormField>
-            <FormField label="Gênero" hint="Define Dr./Dra. e a concordância do texto.">
-              <Select value={s.genero} onChange={(e) => setSubstabelecido(i, { genero: e.target.value as "F" | "M" })} options={[{ value: "F", label: "Feminino" }, { value: "M", label: "Masculino" }]} />
-            </FormField>
-            <FormField label="Estado civil" required error={erros[`substabelecidos.${i}.estado_civil`]}>
-              <Input value={s.estado_civil} onChange={(e) => setSubstabelecido(i, { estado_civil: e.target.value })} error={!!erros[`substabelecidos.${i}.estado_civil`]} placeholder="casada" />
-            </FormField>
-            <FormField label="OAB" required error={erros[`substabelecidos.${i}.oab`]} hint="Como sai no texto: OAB/MG sob o nº 00.000">
-              <Input value={s.oab} onChange={(e) => setSubstabelecido(i, { oab: e.target.value })} error={!!erros[`substabelecidos.${i}.oab`]} />
-            </FormField>
+            <CampoOab valor={s.oab} onChange={(o) => setSubstabelecido(i, { oab: o })} erro={erros[`substabelecidos.${i}.oab`]} />
           </div>
           {estado.substabelecidos.length > 1 && (
             <button type="button" className={botaoRemover} onClick={() => set({ substabelecidos: estado.substabelecidos.filter((_, k) => k !== i) })}>Remover substabelecido</button>
@@ -215,8 +339,17 @@ export function CamposSubstabelecimento({ estado, onChange, erros }: Props<Subst
       ))}
       <button type="button" className={botaoLink} onClick={() => set({ substabelecidos: [...estado.substabelecidos, substabelecidoVazio()] })}>+ Adicionar substabelecido</button>
 
-      <FormField label="Endereço profissional dos substabelecidos" required error={erros.endereco_substabelecidos}>
-        <Input value={estado.endereco_substabelecidos} onChange={(e) => set({ endereco_substabelecidos: e.target.value })} error={!!erros.endereco_substabelecidos} placeholder="Rua …, nº, bairro, cidade/UF, CEP" />
+      <h4 className="text-sm font-medium text-foreground mt-5 mb-1">Endereço profissional dos substabelecidos <span className="text-muted font-normal">(opcional)</span></h4>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4">
+        <FormField label="CEP" error={msgCep || undefined}>
+          <Input value={cep} onChange={(e) => buscarCep(e.target.value)} inputMode="numeric" placeholder="00000-000" />
+        </FormField>
+        <FormField label="Número">
+          <Input value={numeroEnd} onChange={(e) => mudarNumeroEnd(e.target.value)} />
+        </FormField>
+      </div>
+      <FormField label="Endereço" hint="Preenchido pelo CEP; pode ser digitado ou ajustado. Vazio, a frase do endereço sai do documento.">
+        <Input value={estado.endereco_substabelecidos} onChange={(e) => set({ endereco_substabelecidos: e.target.value })} placeholder="Rua …, nº, bairro, cidade/UF, CEP" />
       </FormField>
 
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Processos</h3>
@@ -228,8 +361,8 @@ export function CamposSubstabelecimento({ estado, onChange, erros }: Props<Subst
         return (
           <div key={i} className={cartao}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4">
-              <FormField label="Tipo">
-                <Input value={p.tipo} onChange={(e) => setProcesso(i, { tipo: e.target.value })} placeholder="Processo" />
+              <FormField label="Tipo do feito" hint="Como o documento chama o caso.">
+                <Input value={p.tipo} onChange={(e) => setProcesso(i, { tipo: e.target.value })} placeholder="Processo, Agravo de Instrumento…" />
               </FormField>
               <div className="sm:col-span-2">
                 <FormField label="Número (CNJ)" required error={erros[`processos.${i}.numero`] ?? aviso}>

@@ -127,3 +127,33 @@ def test_delete_404(client, as_admin):
     assert client.delete("/api/colaboradores/9999").status_code == 404
 
 
+
+
+def test_oabs_sao_gravadas_e_devolvidas(client, as_admin):
+    r = client.post("/api/colaboradores", json={
+        "nome": "Caio", "papel": "socio",
+        "oabs": [{"numero": "36.959", "uf": "mg"}, {"numero": "1234", "uf": "SP"}],
+    })
+    assert r.status_code == 201
+    assert r.json()["oabs"] == [{"numero": "36959", "uf": "MG"}, {"numero": "1234", "uf": "SP"}]
+    cid = r.json()["id"]
+    assert client.patch(f"/api/colaboradores/{cid}", json={"oabs": []}).json()["oabs"] == []
+
+
+@pytest.mark.parametrize("oab", [
+    {"numero": "12A34", "uf": "MG"},
+    {"numero": "", "uf": "MG"},
+    {"numero": "123", "uf": "XX"},
+])
+def test_oab_invalida_e_rejeitada(client, as_admin, oab):
+    assert client.post("/api/colaboradores", json={"nome": "X", "oabs": [oab]}).status_code == 422
+
+
+def test_roster_do_wizard_traz_as_oabs(client, as_admin):
+    client.post("/api/colaboradores", json={
+        "nome": "Ana", "email": "ana@cf.com", "papel": "advogado", "oabs": [{"numero": "111", "uf": "MG"}],
+    })
+    client.post("/api/colaboradores", json={"nome": "Sem Oab", "email": "s@cf.com", "papel": "advogado"})
+    lista = {c["name"]: c for c in client.get("/api/users/colaboradores").json()["colaboradores"]}
+    assert lista["Ana"]["oabs"] == [{"numero": "111", "uf": "MG"}]
+    assert lista["Sem Oab"]["oabs"] == []

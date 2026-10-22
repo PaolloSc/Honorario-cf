@@ -703,3 +703,28 @@ def test_distrato_ressalva_e_o_padrao_do_modelo():
     from app.models.documentos_complementares import DistratoRequest
     d = {k: v for k, v in DISTRATO.items() if k != "ressalva_exito"}
     assert DistratoRequest(**d).ressalva_exito is True
+
+
+# ── Substabelecimento: formulario simplificado (22/10/2026) ────────────────
+
+
+def _neutro(**extra) -> dict:
+    """Substabelecido como o formulario atual envia: so nome e OAB."""
+    return {**SUBSTABELECIMENTO, "substabelecidos": [{"nome": "Beltrana de Tal", "oab": "OAB/MG sob o n.º 3.333"}], **extra}
+
+
+def test_substabelecido_sem_genero_nem_estado_civil_sai_neutro(client):
+    texto = _texto(client, _id(client, "substabelecimento", _neutro()))
+    assert "ao(à) advogado(a) Beltrana de Tal, inscrito(a) na OAB/MG sob o n.º 3.333" in texto
+    assert "Dra." not in texto and "brasileir" not in texto
+
+
+def test_substabelecimento_sem_endereco_omite_a_frase(client):
+    texto = _texto(client, _id(client, "substabelecimento", _neutro(endereco_substabelecidos="")))
+    assert "endereço profissional" not in texto
+    assert "OAB/MG sob o n.º 3.333, os poderes que lhe foram conferidos por" in texto
+
+
+def test_substabelecimento_com_endereco_mantem_a_frase(client):
+    texto = _texto(client, _id(client, "substabelecimento", _neutro()))
+    assert "com endereço profissional à Rua Parceira, 10, Belo Horizonte/MG, CEP 30.000-000, os poderes" in texto
