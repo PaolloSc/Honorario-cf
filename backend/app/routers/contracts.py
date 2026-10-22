@@ -493,6 +493,8 @@ def update_contract_status(
         raise HTTPException(409, "Contrato assinado não muda de status. Para alterar algo, crie um aditivo.")
     if old_status == "enviado" and status in ("rascunho", "cancelado"):
         raise HTTPException(409, "Para sair de \"enviado\" use \"Cancelar envio para assinatura\" (arquiva o link no DocuSeal).")
+    if status == "assinado" and old_status not in ("rascunho", "enviado", "assinado"):
+        raise HTTPException(409, f"Contrato {old_status} não pode ser marcado como assinado.")
     fora_do_sistema = status == "assinado" and old_status != "enviado"
     if status == "enviado" and old_status != "enviado":
         enviado_pelo_docuseal = (

@@ -441,6 +441,13 @@ def test_assinado_em_papel_rascunho_para_assinado_manual_fica_na_auditoria(clien
     assert _put(client, cid, _form(999), version=1).status_code == 409  # e fica travado
 
 
+def test_cancelado_nao_vira_assinado_manualmente(client):
+    cid = _criar(client)
+    assert client.patch(f"/api/contracts/{cid}/status", params={"status": "cancelado"}).status_code == 200
+    r = client.patch(f"/api/contracts/{cid}/status", params={"status": "assinado"})
+    assert r.status_code == 409 and _contrato(cid).status == "cancelado"
+
+
 def test_cancelar_envio_404_do_docuseal_fica_na_auditoria(client, monkeypatch):
     import httpx
 
