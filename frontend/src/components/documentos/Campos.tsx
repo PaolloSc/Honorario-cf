@@ -114,7 +114,7 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
         label="Ressalvar honorários de êxito"
         checked={estado.ressalva_exito}
         onChange={(v) => set({ ressalva_exito: v })}
-        hint="Sem marcar, a quitação é total, inclusive de honorários de êxito futuros. A redação da ressalva ainda será validada por um sócio."
+        hint="Marcado (padrão), ressalva honorários e reembolsos vincendos, inclusive de êxito. Desmarcado, dá quitação total."
       />
       <Checkbox
         label="Substabelecer sem reserva de poderes e devolver documentos"
