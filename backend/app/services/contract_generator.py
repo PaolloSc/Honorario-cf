@@ -91,6 +91,56 @@ CLAUSE_NUM_ID = 10
 ESPACO_ASSINATURA = Pt(16)
 
 
+# Secoes montadas a partir de dados das etapas anteriores: o texto sai do gerador e
+# o ajuste manual fica na etapa indicada (id da secao -> etapa do wizard).
+SECOES_BLOQUEADAS = {
+    "OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS": 3,
+    "DISPOSIÇÕES ADICIONAIS": 4,
+}
+
+
+class _ItensClausula:
+    """Contexto de uma montagem: numera cada clausula como o Word (sec.n / sec.n.m),
+    guarda o texto padrao e aplica os ajustes manuais. Vive no `doc` (o gerador e'
+    um singleton compartilhado entre requisicoes)."""
+
+    def __init__(self, ajustes: dict) -> None:
+        self.ajustes = ajustes
+        self.itens: list[dict] = []
+        self.sec = 0
+        self.secao = ""
+        self.n = [0, 0]
+
+    def nova_secao(self, titulo: str) -> None:
+        self.sec += 1
+        self.secao = titulo
+        self.n = [0, 0]
+
+    def registrar(self, padrao: str, ilvl: int) -> str:
+        self.n[ilvl - 1] += 1
+        for i in range(ilvl, len(self.n)):
+            self.n[i] = 0
+        id_ = ".".join(str(x) for x in [self.sec, *self.n[:ilvl]])
+        etapa = SECOES_BLOQUEADAS.get(self.secao)
+        ajuste = self.ajustes.get(id_) if etapa is None else None
+        texto = padrao
+        status = None
+        if ajuste is not None:
+            texto = " ".join(ajuste.texto.split()) or padrao
+            status = "padrao_mudou" if ajuste.padrao and ajuste.padrao != padrao else "ok"
+        self.itens.append({
+            "id": id_, "clausula": self.secao, "texto": texto, "padrao": padrao,
+            "ajustado": ajuste is not None, "status": status,
+            "editavel": etapa is None, "etapa": etapa,
+        })
+        return texto
+
+    def descartados(self) -> list[str]:
+        """Ajustes cujo item deixou de existir (ou ficou bloqueado)."""
+        vivos = {i["id"] for i in self.itens if i["ajustado"]}
+        return [k for k in self.ajustes if k not in vivos]
+
+
 class _Numerador:
     """Adiciona as clausulas de um bloco de honorario no nivel certo da lista.
 
@@ -154,6 +204,7 @@ class ContractGenerator:
         self._clear_headers_footers(doc)
         self._ensure_contract_styles(doc)
         self._ensure_clause_numbering(doc)
+        doc._cf_itens = _ItensClausula(data.ajustes_texto)
 
         self._add_title(doc)
         self._add_parties(doc, data)
@@ -311,10 +362,14 @@ class ContractGenerator:
 
     def _add_secao(self, doc: Document, titulo: str):
         """Título de seção (nível 0): o número sai automático."""
+        if (itens := getattr(doc, "_cf_itens", None)) is not None:
+            itens.nova_secao(titulo)
         return self._numerar(doc.add_heading(titulo, level=2), 0)
 
     def _add_clausula(self, doc: Document, texto: str, ilvl: int = 1):
         """Cláusula numerada automaticamente (1 = x.y, 2 = x.y.z)."""
+        if (itens := getattr(doc, "_cf_itens", None)) is not None:
+            texto = itens.registrar(texto, ilvl)
         return self._numerar(doc.add_paragraph(texto), ilvl)
 
     def _apply_document_standard(self, doc: DocxDocument) -> None:

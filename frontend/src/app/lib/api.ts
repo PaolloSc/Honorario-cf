@@ -232,6 +232,31 @@ async function request<T>(
   return res.json();
 }
 
+export interface ItemClausula {
+  id: string;
+  clausula: string;
+  texto: string;
+  padrao: string;
+  ajustado: boolean;
+  status: "ok" | "padrao_mudou" | null;
+  editavel: boolean;
+  etapa: number | null;
+}
+
+export interface PreviaTexto {
+  preview_html: string;
+  itens: ItemClausula[];
+  ajustes_descartados: string[];
+}
+
+// Previa + cláusulas ajustáveis, sem IA (usada ao salvar/desfazer um ajuste de texto).
+export async function previewTexto(data: unknown) {
+  return request<PreviaTexto>("/api/contract/preview-texto", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 // Varredura de portugues/padrao via DeepSeek antes de gerar o contrato definitivo.
 // Chamada pode demorar (LLM) — usa timeout proprio, maior que o default de 8s.
 export async function reviewContract(data: unknown) {
@@ -239,6 +264,8 @@ export async function reviewContract(data: unknown) {
     enabled: boolean;
     findings: Array<{ trecho: string; problema: string; sugestao: string }>;
     preview_html?: string;
+    itens?: ItemClausula[];
+    ajustes_descartados?: string[];
     error?: string;
   }>("/api/contract/review", {
     method: "POST",

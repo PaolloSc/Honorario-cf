@@ -353,6 +353,14 @@ class Participacao(BaseModel):
         return data
  
  
+class AjusteTexto(BaseModel):
+    """Texto de uma clausula reescrito na etapa 7. `padrao` guarda o texto que o
+    gerador produzia quando a pessoa ajustou (detecta mudanca posterior)."""
+
+    texto: str
+    padrao: str = ""
+
+
 class ContratoRequest(BaseModel):
     contratantes: list[ContratantePF | ContratantePJ]
     incluir_partes_relacionadas: bool = False
@@ -360,6 +368,8 @@ class ContratoRequest(BaseModel):
     acessorios: Acessorios
     participacao: Participacao
     email_destinatario: Optional[str] = None
+    # {id da clausula (ex.: "7.2"): ajuste}; aplicado pelo gerador ao montar o DOCX.
+    ajustes_texto: dict[str, AjusteTexto] = Field(default_factory=dict)
  
  
 class ContratoResponse(BaseModel):
