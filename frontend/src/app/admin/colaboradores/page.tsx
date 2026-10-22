@@ -10,6 +10,7 @@ import {
   PAPEIS_COLABORADOR,
   type Colaborador,
 } from "@/app/lib/api";
+import { oabsDoTexto, oabsParaTexto } from "@/app/lib/documentos";
 
 const PAPEL_LABEL: Record<string, string> = Object.fromEntries(
   PAPEIS_COLABORADOR.map((p) => [p.value, p.label])
@@ -84,6 +85,23 @@ export default function ColaboradoresAdminPage() {
       fetchRows();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao excluir");
+    }
+  };
+
+  // OABs como texto "36959/MG, 1234/SP"; salva ao sair do campo, so se mudou.
+  const salvarOabs = async (c: Colaborador, texto: string) => {
+    const novas = oabsDoTexto(texto);
+    if (novas === null) {
+      setError("OAB inválida. Use número/UF separados por vírgula, ex.: 36959/MG, 1234/SP");
+      return;
+    }
+    if (oabsParaTexto(novas) === oabsParaTexto(c.oabs ?? [])) return;
+    try {
+      await updateColaborador(c.id, { oabs: novas });
+      setError("");
+      fetchRows();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao salvar OABs");
     }
   };
 
@@ -173,6 +191,7 @@ export default function ColaboradoresAdminPage() {
                 <th className="text-left px-4 py-3 font-medium text-muted min-w-[16rem]">Nome</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">E-mail</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Papel</th>
+                <th className="text-left px-4 py-3 font-medium text-muted">OAB (número/UF)</th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
                 <th className="text-right px-4 py-3 font-medium text-muted">Ações</th>
               </tr>
@@ -196,6 +215,16 @@ export default function ColaboradoresAdminPage() {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      key={`${c.id}-${oabsParaTexto(c.oabs ?? [])}`}
+                      defaultValue={oabsParaTexto(c.oabs ?? [])}
+                      onBlur={(e) => salvarOabs(c, e.target.value)}
+                      placeholder="36959/MG"
+                      aria-label={`OABs de ${c.nome}`}
+                      className="w-36 text-xs border border-border bg-card text-foreground rounded px-2 py-1"
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <span

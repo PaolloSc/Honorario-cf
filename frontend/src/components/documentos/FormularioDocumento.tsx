@@ -160,7 +160,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
   };
 
   if (carregando) {
-    return <div className="max-w-3xl mx-auto px-4 py-12 text-center text-muted">Carregando contrato de origem...</div>;
+    return <div className="max-w-3xl mx-auto px-4 py-12 text-center text-muted">Carregando contrato original...</div>;
   }
 
   const bloqueado = tipo === "distrato" && distratoExistente;
@@ -175,13 +175,13 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
         {editando ? `Editar ${rotulo.toLowerCase()}` : `Novo ${rotulo.toLowerCase()}`}
       </h1>
       {tipo === "substabelecimento" && !origemId && !editando && (
-        <p className="text-sm text-muted mb-4">Sem contrato de origem: informe o cliente (outorgante) abaixo.</p>
+        <p className="text-sm text-muted mb-4">Sem contrato original: informe o cliente (outorgante) abaixo.</p>
       )}
 
       {prefill && !editando && (
         <div className="rounded-lg border border-border bg-card p-4 mb-4 text-sm">
           <p className="font-medium text-foreground mb-1">
-            {tipo === "substabelecimento" ? "Cliente do contrato de origem" : "Partes (do contrato de origem)"}
+            {tipo === "substabelecimento" ? "Cliente do contrato original" : "Partes (do contrato original)"}
           </p>
           <ul className="text-muted">
             {prefill.contratantes.map((c, i) => <li key={i}>{nomeDoc(c)}</li>)}
@@ -210,6 +210,12 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
       {previa !== null ? (
         <>
           <p className="text-sm text-muted mb-2">Confira o texto. O documento só é gerado depois desta prévia.</p>
+          {tipo === "substabelecimento" && (
+            <p role="note" className="rounded-lg border border-border bg-card p-3 mb-3 text-sm text-foreground">
+              Assinatura preferencialmente com o token do advogado, por sócio com poderes conforme o contrato social. Em caso de urgência ou indisponibilidade, use o procedimento alternativo do escritório.
+              <span className="block text-muted mt-1">Depois de gerar, use &quot;Baixar DOCX&quot; na página do documento para imprimir ou assinar direto. O envio pelo DocuSeal é opcional.</span>
+            </p>
+          )}
           <div className="mb-4 border border-border rounded-xl overflow-hidden bg-white">
             <iframe srcDoc={previa} title={`Prévia do ${rotulo.toLowerCase()}`} sandbox="" className="w-full" style={{ height: "65vh" }} />
           </div>

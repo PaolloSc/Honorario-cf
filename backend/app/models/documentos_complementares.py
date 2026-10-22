@@ -166,9 +166,11 @@ class Substabelecente(BaseModel):
 
 class Substabelecido(BaseModel):
     nome: str = Field(min_length=1)
-    genero: Literal["F", "M"] = "M"
+    # genero/nacionalidade/estado_civil: legado (documentos salvos antes de 22/10/2026).
+    # Sem genero, o texto sai neutro ("advogado(a)", "inscrito(a)").
+    genero: Optional[Literal["F", "M"]] = None
     nacionalidade: str = ""  # vazio => brasileiro(a) conforme o genero
-    estado_civil: str = Field(min_length=1)
+    estado_civil: str = ""
     oab: str = Field(min_length=1)  # ja redigida: "OAB/MG sob o n.º 101.728"
 
 
@@ -191,7 +193,7 @@ class SubstabelecimentoRequest(_DocumentoComplementar):
     outorgante: Outorgante
     substabelecentes: list[Substabelecente] = Field(min_length=1)
     substabelecidos: list[Substabelecido] = Field(min_length=1)
-    endereco_substabelecidos: str = Field(min_length=1)
+    endereco_substabelecidos: str = ""  # opcional: sem endereco, a frase some do texto
     processos: list[Processo] = Field(min_length=1)
 
 

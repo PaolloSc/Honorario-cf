@@ -38,8 +38,51 @@ export interface DistratoForm {
   ressalva_exito: boolean;
   substabelecer_e_devolver: boolean;
 }
-export interface Substabelecente { nome: string; email: string; oab: string }
-export interface Substabelecido { nome: string; genero: "F" | "M"; estado_civil: string; oab: string }
+export const UFS = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA",
+  "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+];
+export const OAB_UF_PADRAO = "MG";
+/** OAB do formulario: so o numero e a UF (padrao MG); o texto do documento e' montado no envio. */
+export interface Oab { numero: string; uf: string }
+export const oabVazia = (): Oab => ({ numero: "", uf: OAB_UF_PADRAO });
+
+/** "36959" -> "36.959" (numeros so com digitos); inscricoes com letra ficam como digitadas. */
+export function formatarOabNumero(valor: string): string {
+  const limpo = valor.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 8);
+  return /^\d+$/.test(limpo) ? limpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : limpo;
+}
+
+/** Texto da OAB no documento. Substabelecente: "OAB/MG n.º 36.959"; substabelecido: "OAB/MG sob o n.º 36.959". */
+export function oabTexto(o: Oab, sob = false): string {
+  return `OAB/${o.uf || OAB_UF_PADRAO} ${sob ? "sob o " : ""}n.º ${formatarOabNumero(o.numero)}`;
+}
+
+/** Texto salvo ("OAB/MG nº 36.959", "OAB/SP sob o n.º 1.234") -> numero e UF do formulario. */
+export function lerOab(texto: string | undefined | null): Oab {
+  const t = texto ?? "";
+  const m = t.match(/OAB\s*\/\s*([A-Za-z]{2})\D*?([0-9][0-9.\sA-Za-z]*)$/);
+  if (m) return { numero: formatarOabNumero(m[2]), uf: m[1].toUpperCase() };
+  return { numero: formatarOabNumero(t), uf: OAB_UF_PADRAO };
+}
+
+/** "36959/MG, 1234/SP" -> OABs do cadastro (numero so digitos, UF da lista); null se algum item for invalido. */
+export function oabsDoTexto(texto: string): { numero: string; uf: string }[] | null {
+  const itens = texto.split(/[,;]/).map((t) => t.trim()).filter(Boolean);
+  const saida: { numero: string; uf: string }[] = [];
+  for (const item of itens) {
+    const m = item.match(/^([\d.]+)\s*\/\s*([A-Za-z]{2})$/);
+    const numero = m ? m[1].replace(/\./g, "") : "";
+    const uf = m ? m[2].toUpperCase() : "";
+    if (!/^\d{1,7}$/.test(numero) || !UFS.includes(uf)) return null;
+    saida.push({ numero, uf });
+  }
+  return saida;
+}
+export const oabsParaTexto = (oabs: { numero: string; uf: string }[]) => oabs.map((o) => `${o.numero}/${o.uf}`).join(", ");
+
+export interface Substabelecente { nome: string; email: string; oab: Oab }
+export interface Substabelecido { nome: string; oab: Oab }
 export interface Processo { tipo: string; numero: string; descricao: string }
 export interface SubstabelecimentoForm {
   data_documento: string;
@@ -54,7 +97,7 @@ export interface SubstabelecimentoForm {
 export type EstadoDocumento = AditivoForm | DistratoForm | SubstabelecimentoForm;
 
 export const processoVazio = (): Processo => ({ tipo: "Processo", numero: "", descricao: "" });
-export const substabelecidoVazio = (): Substabelecido => ({ nome: "", genero: "F", estado_civil: "", oab: "" });
+export const substabelecidoVazio = (): Substabelecido => ({ nome: "", oab: oabVazia() });
 
 export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocumento {
   if (tipo === "aditivo") {
@@ -128,10 +171,8 @@ export function montarPayload(
     outorgante: e.outorgante_pj
       ? { razao_social: nome, cnpj: doc || null }
       : { nome, cpf: doc || null },
-    substabelecentes: e.substabelecentes.map((s) => ({ nome: s.nome, email: s.email, oab: s.oab.trim() })),
-    substabelecidos: e.substabelecidos.map((s) => ({
-      nome: s.nome.trim(), genero: s.genero, estado_civil: s.estado_civil.trim(), oab: s.oab.trim(),
-    })),
+    substabelecentes: e.substabelecentes.map((s) => ({ nome: s.nome, email: s.email, oab: oabTexto(s.oab) })),
+    substabelecidos: e.substabelecidos.map((s) => ({ nome: s.nome.trim(), oab: oabTexto(s.oab, true) })),
     endereco_substabelecidos: e.endereco_substabelecidos.trim(),
     processos: e.processos.map((p) => ({
       tipo: p.tipo.trim() || "Processo", numero: p.numero.trim(), descricao: p.descricao.trim(),
@@ -169,9 +210,12 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
     outorgante_pj: !o.nome || !!o.razao_social,
     outorgante_nome: o.razao_social ?? o.nome ?? "",
     outorgante_documento: o.cnpj ?? o.cpf ?? "",
-    substabelecentes: fd.substabelecentes ?? [],
-    substabelecidos: (fd.substabelecidos ?? []).map((s: Substabelecido) => ({
-      nome: s.nome, genero: s.genero, estado_civil: s.estado_civil, oab: s.oab,
+    // Salvos antes de 22/10/2026 trazem genero/estado civil: abrem sem eles (o texto salvo nao muda).
+    substabelecentes: (fd.substabelecentes ?? []).map((s: { nome: string; email: string; oab: string }) => ({
+      nome: s.nome, email: s.email, oab: lerOab(s.oab),
+    })),
+    substabelecidos: (fd.substabelecidos ?? []).map((s: { nome: string; oab: string }) => ({
+      nome: s.nome, oab: lerOab(s.oab),
     })),
     endereco_substabelecidos: fd.endereco_substabelecidos ?? "",
     processos: fd.processos ?? [],
@@ -210,10 +254,9 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     if (!s.substabelecidos.length) e.substabelecidos = "Informe ao menos um substabelecido";
     s.substabelecidos.forEach((x, i) => {
       obrig(`substabelecidos.${i}.nome`, x.nome);
-      obrig(`substabelecidos.${i}.estado_civil`, x.estado_civil);
-      obrig(`substabelecidos.${i}.oab`, x.oab);
+      obrig(`substabelecidos.${i}.oab`, x.oab.numero);
     });
-    obrig("endereco_substabelecidos", s.endereco_substabelecidos);
+    s.substabelecentes.forEach((x, i) => obrig(`substabelecentes.${i}.oab`, x.oab.numero));
     if (!s.processos.length) e.processos = "Informe ao menos um processo";
     s.processos.forEach((p, i) => {
       if (!cnjValido(p.numero)) e[`processos.${i}.numero`] = "Número fora do padrão CNJ ou com dígito verificador errado";

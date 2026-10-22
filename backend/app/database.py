@@ -126,6 +126,8 @@ class ColaboradorDB(Base):
     papel = Column(String(32), nullable=False, default="advogado")  # ver PAPEIS_VALIDOS
     ativo = Column(Boolean, nullable=False, default=True)
     ordem = Column(Integer, nullable=False, default=0)
+    # OABs do advogado: JSON '[{"numero": "36959", "uf": "MG"}]' (numero so com digitos).
+    oabs = Column(Text, nullable=True)
     created_by = Column(String(256), nullable=True)  # user email
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
