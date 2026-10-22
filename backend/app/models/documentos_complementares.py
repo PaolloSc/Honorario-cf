@@ -100,8 +100,8 @@ class DistratoRequest(_ComOrigem):
     tipo_contrato: Literal["distrato"] = TIPO_DISTRATO
     data_contrato_origem: str = Field(min_length=1)
     objeto_contrato_origem: str = Field(min_length=1)
-    # Quitacao total (False) ou com ressalva dos honorarios de exito (True).
-    ressalva_exito: bool = False
+    # Com ressalva dos honorarios e reembolsos vincendos, inclusive de exito (True, padrao) ou quitacao total (False).
+    ressalva_exito: bool = True
     # Inclui a clausula de substabelecer sem reserva e devolver documentos.
     substabelecer_e_devolver: bool = False
 

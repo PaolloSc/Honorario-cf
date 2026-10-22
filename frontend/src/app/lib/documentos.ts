@@ -62,7 +62,7 @@ export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocument
   if (tipo === "distrato") {
     return {
       data_documento: hoje, data_contrato_origem: "", objeto_contrato_origem: "",
-      ressalva_exito: false, substabelecer_e_devolver: false,
+      ressalva_exito: true, substabelecer_e_devolver: false,
     };
   }
   return {
