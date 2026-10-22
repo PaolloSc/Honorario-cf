@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user, require_admin
+from app.models.oab import OabItem, oabs_de_json
 from app.database import (
     ColaboradorDB,
     PAPEIS_PARTICIPAVEIS,
@@ -42,6 +43,7 @@ class ColaboradorOut(BaseModel):
     name: str
     email: str
     role: str
+    oabs: list[OabItem] = []
 
 
 class ColaboradoresResponse(BaseModel):
@@ -85,7 +87,7 @@ def list_colaboradores(
     rows = q.order_by(ColaboradorDB.ordem, ColaboradorDB.nome).all()
     return ColaboradoresResponse(
         colaboradores=[
-            ColaboradorOut(name=c.nome, email=c.email or "", role=c.papel)
+            ColaboradorOut(name=c.nome, email=c.email or "", role=c.papel, oabs=oabs_de_json(c.oabs))
             for c in rows
         ]
     )
