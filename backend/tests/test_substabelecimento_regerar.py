@@ -294,3 +294,18 @@ def test_distrato_origem_id_inexistente_ou_de_outro_cliente_da_422(client):
     assert _todos_substabelecimentos() == antes
     mesmo = _sub(distrato_origem_id=distrato, processos=[PROC_B])
     assert client.post("/api/documentos/substabelecimento", json=mesmo).status_code == 200
+
+
+def test_acrescentar_sem_mexer_nas_partes_nao_muda_as_partes(client):
+    cid = _id(client, "substabelecimento", _sub())
+    antes = _form(cid)
+    ex = client.get("/api/documentos/substabelecimento-existente", params={"documento": CNPJ}).json()
+    # a tela pre-preenche o formulario com as partes do documento existente
+    partes = {k: ex[k] for k in ("substabelecentes", "substabelecidos", "endereco_substabelecidos")}
+    assert partes["substabelecentes"] == antes["substabelecentes"] and partes["substabelecidos"] == antes["substabelecidos"]
+    r = client.post(f"/api/documentos/substabelecimento?acrescentar_a={cid}", json=_sub(processos=[PROC_B], **partes))
+    assert r.status_code == 200 and r.json()["processos_novos"] == 1
+    depois = _form(cid)
+    for k in ("substabelecentes", "substabelecidos", "endereco_substabelecidos"):
+        assert depois[k] == antes[k]
+    assert [p["numero"] for p in depois["processos"]] == [PROC_A["numero"], PROC_B["numero"]]

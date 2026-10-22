@@ -227,6 +227,10 @@ def substabelecimento_existente(
             "pode_acrescentar": not lock,
             "motivo": MOTIVO_TRAVADO if lock else None,
             "processos": [p.get("numero", "") for p in form.get("processos", [])],
+            # A tela pre-preenche as partes com estas (no modo acrescentar elas valem para o documento todo).
+            "substabelecentes": form.get("substabelecentes", []),
+            "substabelecidos": form.get("substabelecidos", []),
+            "endereco_substabelecidos": form.get("endereco_substabelecidos", ""),
         }
     return {"existe": False}
 
