@@ -8,6 +8,7 @@ modelos de referencia (clientes, valores, processos) nao entram no codigo.
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import date, datetime
 
 from docx import Document
@@ -223,12 +224,29 @@ class AditivoGenerator(ComplementarGenerator):
             "igual teor e forma, para um só efeito."
         )
 
-    @staticmethod
-    def _redacao_alteracao(alt) -> str:
+    _MASCULINOS = {"item", "subitem", "paragrafo", "inciso", "artigo", "anexo", "capitulo", "trecho"}
+    _FEMININOS = {"clausula", "subclausula", "alinea", "secao", "tabela", "parte", "disposicao"}
+
+    @classmethod
+    def _dispositivo(cls, texto: str, participio: str) -> str:
+        """'Fica alterada a Cláusula 3ª' / 'Fica alterado o item 3.2', pelo que a pessoa digitou.
+
+        Palavra inicial desconhecida (ex.: só '3.2'): 'a disposição' como substantivo neutro.
+        """
+        texto = texto.strip()
+        primeira = unicodedata.normalize("NFD", texto.split(" ", 1)[0]).encode("ascii", "ignore").decode().lower().strip(",.")
+        if primeira in cls._MASCULINOS:
+            return f"Fica {participio}o o {texto}"
+        if primeira in cls._FEMININOS:
+            return f"Fica {participio}a a {texto}"
+        return f"Fica {participio}a a disposição {texto}"
+
+    @classmethod
+    def _redacao_alteracao(cls, alt) -> str:
         if alt.tipo == "alterar":
-            return f"Fica alterada a {alt.clausula}, que passa a vigorar com a seguinte redação: “{alt.texto}”"
+            return f"{cls._dispositivo(alt.clausula, 'alterad')}, que passa a vigorar com a seguinte redação: “{alt.texto}”"
         if alt.tipo == "excluir":
-            return f"Fica excluída a {alt.clausula} do contrato original."
+            return f"{cls._dispositivo(alt.clausula, 'excluíd')} do contrato original."
         return f"Fica incluída no contrato original a seguinte cláusula: “{alt.texto}”"
 
     def _fechamento(self, doc: Document, data: AditivoRequest, signatario_roles) -> None:
@@ -363,7 +381,7 @@ class SubstabelecimentoGenerator(ComplementarGenerator):
         onde = f", {endereco} {local}," if local else ","
         doc.add_paragraph(
             f"Pelo presente instrumento, {substabelecentes}, {verbo}, SEM RESERVA DE PODERES, {artigo} "
-            f"{substabelecidos}{onde} os poderes que lhe foram conferidos por "
+            f"{substabelecidos}{onde} os poderes que {'lhe foram conferidos' if len(data.substabelecentes) == 1 else 'lhes foram conferidos'} por "
             f"{data.outorgante.exibicao}, no âmbito dos processos judiciais abaixo indicados, seus "
             "incidentes, desdobramentos e recursos correlatos, ressalvados os honorários contratuais e "
             "sucumbenciais:"
