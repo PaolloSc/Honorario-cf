@@ -1042,6 +1042,8 @@ async def cancelar_envio_assinatura(
             )
 
     ids = ", ".join(v.docuseal_submission_id for v in versoes)
+    nao_encontradas = [s for s in getattr(service, "nao_encontradas", []) if s in {v.docuseal_submission_id for v in versoes}]
+    nota_404 = f" O DocuSeal respondeu 404 para a submissão {', '.join(nao_encontradas)} (já apagada lá)." if nao_encontradas else ""
     for v in versoes:
         v.docuseal_submission_id = None
     contract.status = "rascunho"
@@ -1049,7 +1051,7 @@ async def cancelar_envio_assinatura(
     contract.updated_at = utcnow()
     db.add(AuditLogDB(
         contract_id=contract_id, action="cancelamento_envio",
-        detail=f"Envio para assinatura cancelado (submissão DocuSeal {ids}); contrato voltou a rascunho",
+        detail=f"Envio para assinatura cancelado (submissão DocuSeal {ids}); contrato voltou a rascunho.{nota_404}",
         version_number=contract.current_version, user_email=user.email, created_at=utcnow(),
     ))
     db.commit()

@@ -242,14 +242,21 @@ export default function ContractDetailPage() {
     }
   };
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!window.confirm(`Tem certeza que deseja alterar o status para "${newStatus}"?`)) return;
+  const handleStatusChange = async (newStatus: string, confirmacao?: string) => {
+    if (!window.confirm(confirmacao ?? `Tem certeza que deseja alterar o status para "${newStatus}"?`)) return;
     try {
       await updateContractStatus(contractId, newStatus);
       fetchContract();
       setNotification({type: "success", message: "Status alterado com sucesso"});
-    } catch {
-      setNotification({type: "error", message: "Erro ao alterar status"});
+    } catch (e) {
+      // 409 traz o motivo em {"detail": "..."}: mostra o motivo em vez de um erro generico.
+      const m = e instanceof Error ? e.message : "";
+      let motivo = "Erro ao alterar status";
+      try {
+        const d = JSON.parse(m.slice(m.indexOf("{"))).detail;
+        if (typeof d === "string" && d) motivo = d;
+      } catch { /* sem JSON: mantem a mensagem generica */ }
+      setNotification({type: "error", message: motivo});
     }
   };
 
@@ -494,6 +501,15 @@ export default function ContractDetailPage() {
             className="px-5 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {sendingSignature ? "Enviando..." : "Enviar para Assinatura"}
+          </button>
+        )}
+        {contract.status === "rascunho" && (
+          <button
+            onClick={() => handleStatusChange("assinado", "Marcar como assinado FORA do sistema (ex.: assinado em papel)? Fica registrado na auditoria quem marcou e quando. O contrato não poderá mais ser editado.")}
+            title="Para contrato assinado em papel ou fora do DocuSeal"
+            className="px-5 py-2.5 border border-primary/40 text-primary-dark rounded-lg text-sm font-medium hover:bg-primary/10 transition"
+          >
+            Marcar como assinado (fora do sistema)
           </button>
         )}
         {contract.status === "rascunho" && (
