@@ -334,26 +334,36 @@ class SubstabelecimentoGenerator(ComplementarGenerator):
 
     @staticmethod
     def _qualificar_substabelecido(s) -> str:
+        """Sem genero (formulario atual) o texto sai neutro; com genero (legado), como antes."""
+        if s.genero is None:
+            return f"{s.nome}, inscrito(a) na {s.oab}"
         f = s.genero == "F"
         nacionalidade = s.nacionalidade.strip() or ("brasileira" if f else "brasileiro")
-        return (
-            f"{'Dra.' if f else 'Dr.'} {s.nome}, {nacionalidade}, {s.estado_civil}, "
-            f"{'inscrita' if f else 'inscrito'} na {s.oab}"
-        )
+        partes = [f"{'Dra.' if f else 'Dr.'} {s.nome}", nacionalidade]
+        if s.estado_civil.strip():
+            partes.append(s.estado_civil.strip())
+        partes.append(f"{'inscrita' if f else 'inscrito'} na {s.oab}")
+        return ", ".join(partes)
 
     def _corpo(self, doc: Document, data: SubstabelecimentoRequest) -> None:
         substabelecentes = "; ".join(f"{s.nome.upper()}, {s.oab}" for s in data.substabelecentes)
         substabelecidos = "; ".join(self._qualificar_substabelecido(s) for s in data.substabelecidos)
         verbo = "substabelece" if len(data.substabelecentes) == 1 else "substabelecem"
+        sem_genero = all(s.genero is None for s in data.substabelecidos)
         if len(data.substabelecidos) == 1:
-            artigo = "à advogada" if data.substabelecidos[0].genero == "F" else "ao advogado"
+            if sem_genero:
+                artigo = "ao(à) advogado(a)"
+            else:
+                artigo = "à advogada" if data.substabelecidos[0].genero == "F" else "ao advogado"
             endereco = "com endereço profissional à"
         else:
             artigo, endereco = "aos advogados", "todos com endereço profissional à"
+        local = _sem_ponto(data.endereco_substabelecidos)
+        # Endereco e' opcional: sem ele a oracao segue direto para os poderes.
+        onde = f", {endereco} {local}," if local else ","
         doc.add_paragraph(
             f"Pelo presente instrumento, {substabelecentes}, {verbo}, SEM RESERVA DE PODERES, {artigo} "
-            f"{substabelecidos}, {endereco} "
-            f"{_sem_ponto(data.endereco_substabelecidos)}, os poderes que lhe foram conferidos por "
+            f"{substabelecidos}{onde} os poderes que lhe foram conferidos por "
             f"{data.outorgante.exibicao}, no âmbito dos processos judiciais abaixo indicados, seus "
             "incidentes, desdobramentos e recursos correlatos, ressalvados os honorários contratuais e "
             "sucumbenciais:"

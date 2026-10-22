@@ -374,10 +374,13 @@ export async function sendParticipacao(data: {
   });
 }
 
+export interface OabCadastro { numero: string; uf: string }
+
 export interface ColaboradorWizard {
   name: string;
   email: string;
   role: string;
+  oabs?: OabCadastro[];
 }
 
 export async function listColaboradores(opts?: { participavel?: boolean }) {
@@ -460,6 +463,7 @@ export interface Colaborador {
   ativo: boolean;
   ordem: number;
   participavel: boolean;
+  oabs?: OabCadastro[];
   created_at: string;
 }
 
@@ -491,7 +495,7 @@ export async function createColaborador(body: {
 
 export async function updateColaborador(
   id: number,
-  body: { nome?: string; email?: string | null; papel?: string; ativo?: boolean; ordem?: number }
+  body: { nome?: string; email?: string | null; papel?: string; ativo?: boolean; ordem?: number; oabs?: OabCadastro[] }
 ) {
   return request<Colaborador>(`/api/colaboradores/${id}`, {
     method: "PATCH",

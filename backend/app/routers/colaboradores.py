@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, require_admin
 from app.database import PAPEIS_VALIDOS, ColaboradorDB, get_db, utcnow
+from app.models.oab import OabItem, oabs_de_json, oabs_para_json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/colaboradores", tags=["Colaboradores"])
@@ -25,6 +26,7 @@ class ColaboradorOut(BaseModel):
     ativo: bool
     ordem: int
     participavel: bool
+    oabs: list[OabItem] = []
     created_at: str
 
 
@@ -54,6 +56,7 @@ class CreateColaboradorRequest(BaseModel):
     email: str | None = None
     papel: str = "advogado"
     ordem: int = 0
+    oabs: list[OabItem] = []
 
     @field_validator("nome")
     @classmethod
@@ -80,6 +83,7 @@ class UpdateColaboradorRequest(BaseModel):
     papel: str | None = None
     ativo: bool | None = None
     ordem: int | None = None
+    oabs: list[OabItem] | None = None
 
     @field_validator("papel")
     @classmethod
@@ -103,6 +107,7 @@ def _to_out(c: ColaboradorDB) -> ColaboradorOut:
         ativo=c.ativo,
         ordem=c.ordem,
         participavel=c.participavel,
+        oabs=oabs_de_json(c.oabs),
         created_at=c.created_at.isoformat(),
     )
 
@@ -133,6 +138,7 @@ def create_colaborador(
         papel=body.papel,
         ativo=True,
         ordem=body.ordem,
+        oabs=oabs_para_json(body.oabs),
         created_by=admin.email,
         created_at=utcnow(),
         updated_at=utcnow(),
@@ -169,6 +175,8 @@ def update_colaborador(
         c.ativo = body.ativo
     if body.ordem is not None:
         c.ordem = body.ordem
+    if body.oabs is not None:
+        c.oabs = oabs_para_json(body.oabs)
 
     db.commit()
     db.refresh(c)

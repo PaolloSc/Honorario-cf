@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { cnpjValido } from "./cnpj.ts";
 import {
   agruparDerivados, cnjValido, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
-  montarPayload, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
+  formatarOabNumero, lerOab, oabsDoTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
 } from "./documentos.ts";
 
 const validar = (t: any, e: any) => validarBase(t, e, cnpjValido);
@@ -50,25 +50,46 @@ assert.deepEqual(Object.keys(validar("distrato", estadoInicial("distrato", "2026
   ["data_contrato_origem", "objeto_contrato_origem"]);
 
 // Substabelecimento sem origem: processo precisa de CNJ válido; listas vazias recusadas.
+// Endereço e estado civil/gênero não são mais exigidos; OAB é só número + UF (padrão MG).
 const sub = estadoInicial("substabelecimento", "2026-10-16") as SubstabelecimentoForm;
 const erros = validar("substabelecimento", sub);
-for (const k of ["outorgante", "substabelecentes", "endereco_substabelecidos", "processos.0.numero",
-  "substabelecidos.0.nome", "substabelecidos.0.oab", "substabelecidos.0.estado_civil"]) assert.ok(erros[k], k);
+for (const k of ["outorgante", "substabelecentes", "processos.0.numero",
+  "substabelecidos.0.nome", "substabelecidos.0.oab"]) assert.ok(erros[k], k);
+assert.ok(!erros.endereco_substabelecidos && !erros["substabelecidos.0.estado_civil"]);
 const ok: SubstabelecimentoForm = {
-  ...sub, outorgante_nome: "OUTORGANTE LTDA", endereco_substabelecidos: "Rua A, 1",
-  substabelecentes: [{ nome: "Sócia", email: "s@cf.com", oab: "OAB/MG nº 1" }],
-  substabelecidos: [{ nome: "Beltrana", genero: "F", estado_civil: "casada", oab: "OAB/MG sob o nº 3" }],
+  ...sub, outorgante_nome: "OUTORGANTE LTDA", endereco_substabelecidos: "",
+  substabelecentes: [{ nome: "Sócia", email: "s@cf.com", oab: { numero: "36.959", uf: "MG" } }],
+  substabelecidos: [{ nome: "Beltrana", oab: { numero: "3.333", uf: "SP" } }],
   processos: [{ tipo: "", numero: "1234567-49.2020.8.13.0024", descricao: "A x B" }],
 };
 assert.deepEqual(validar("substabelecimento", ok), {});
+assert.ok(validar("substabelecimento", { ...ok, substabelecentes: [{ nome: "S", email: "s", oab: { numero: "", uf: "MG" } }] })["substabelecentes.0.oab"]);
 const ps = montarPayload("substabelecimento", ok, null) as any;
 assert.equal(ps.contrato_origem_id, null);
 assert.deepEqual(ps.outorgante, { razao_social: "OUTORGANTE LTDA", cnpj: null });
 assert.equal(ps.processos[0].tipo, "Processo");
+assert.equal(ps.substabelecentes[0].oab, "OAB/MG n.º 36.959");
+assert.deepEqual(ps.substabelecidos, [{ nome: "Beltrana", oab: "OAB/SP sob o n.º 3.333" }]);
+assert.equal(ps.endereco_substabelecidos, "");
 assert.deepEqual((montarPayload("substabelecimento", { ...ok, outorgante_pj: false, outorgante_documento: "123" }, null) as any).outorgante,
   { nome: "OUTORGANTE LTDA", cpf: "123" });
 
-// Ida e volta do form salvo (edição de rascunho).
+// OAB: número formatado, UF padrão MG, leitura do texto salvo (formas antigas e novas).
+assert.equal(formatarOabNumero("36959"), "36.959");
+assert.equal(formatarOabNumero("1234567"), "1.234.567");
+assert.deepEqual(oabVazia(), { numero: "", uf: "MG" });
+assert.deepEqual(lerOab("OAB/MG nº 36.959"), { numero: "36.959", uf: "MG" });
+assert.deepEqual(lerOab("OAB/SP sob o n.º 101.728"), { numero: "101.728", uf: "SP" });
+assert.deepEqual(lerOab("123456"), { numero: "123.456", uf: "MG" });
+
+// OABs do cadastro de colaboradores: texto "numero/UF" (admin) <-> lista validada.
+assert.deepEqual(oabsDoTexto("36.959/mg, 1234/SP"), [{ numero: "36959", uf: "MG" }, { numero: "1234", uf: "SP" }]);
+assert.deepEqual(oabsDoTexto(""), []);
+assert.equal(oabsDoTexto("12A/MG"), null);
+assert.equal(oabsDoTexto("123/XX"), null);
+assert.equal(oabsParaTexto([{ numero: "36959", uf: "MG" }]), "36959/MG");
+
+// Ida e volta do form salvo (edição de rascunho), inclusive documento salvo com gênero/estado civil.
 assert.deepEqual(estadoDoFormData("substabelecimento", ps, "h"), {
   ...ok, processos: [{ tipo: "Processo", numero: "1234567-49.2020.8.13.0024", descricao: "A x B" }],
   outorgante_documento: "",
@@ -77,6 +98,8 @@ const ad2 = estadoDoFormData("aditivo", p, "h") as AditivoForm;
 assert.deepEqual(ad2.alteracoes[1], { tipo: "excluir", clausula: "Cláusula 5ª", texto: "" });
 // Aditivo legado (remuneracao/abrangencia): abre, sem alteracoes herdadas.
 assert.deepEqual((estadoDoFormData("aditivo", { objeto: "x", remuneracao: { valor_mensal: 1 }, abrangencia: [] }, "h") as AditivoForm).alteracoes, []);
+const antigo = estadoDoFormData("substabelecimento", { ...ps, substabelecidos: [{ nome: "B", genero: "F", estado_civil: "casada", oab: "OAB/MG sob o nº 333.333" }] }, "h") as SubstabelecimentoForm;
+assert.deepEqual(antigo.substabelecidos, [{ nome: "B", oab: { numero: "333.333", uf: "MG" } }]);
 
 // Erros 422 do backend em português, por campo.
 const r = errosDaApi(new Error('API error 422: {"detail":[{"loc":["processos",0,"numero"],"msg":"Value error, Número de processo inválido","type":"value_error"},'
