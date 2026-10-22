@@ -203,3 +203,41 @@ def test_previa_com_ia_manda_frase_de_contexto_e_separa_avisos(client, monkeypat
     assert [f["trecho"] for f in r["findings"]] == ["a gente"]
     assert [a["trecho"] for a in r["avisos"]] == ["perca a ação"]
     assert "<del" in r["html"] and "perca a ação" in r["html"]
+
+
+@pytest.mark.parametrize("tipos", [
+    ["pro_labore", "mensalidade"],
+    ["pro_labore", "mensalidade", "exito"],
+])
+def test_previa_com_varios_honorarios_traz_cada_desconto_livre(client, monkeypatch, tipos):
+    """Vários honorários no mesmo escopo, cada um com desconto livre próprio (e um
+    percentual): todos vão à IA e aparecem destacados na prévia."""
+    from app.services import contract_reviewer
+
+    enviado = {}
+    monkeypatch.setattr(contract_reviewer, "is_configured", lambda: True)
+    monkeypatch.setattr(contract_reviewer, "review_text", lambda t, avisar_ambiguidade=False: enviado.setdefault("t", t) and [])
+    e = _escopo(tipos[0])
+    e["honorarios"] = tipos
+    e["exito"] = {"percentual": 20, "base_calculo": "benefício econômico"}
+    e["mensalidade"] = {**_escopo("mensalidade")["mensalidade"]}
+    livres = {}
+    for i, t in enumerate(tipos):
+        if t == tipos[-1] and len(tipos) == 3:
+            e[t].update(DESCONTO_PCT)
+            continue
+        livres[t] = f"Até R$ {500 + i},00 de abatimento sobre {t}"  # inicial maiúscula: o contrato a desce
+        e[t].update(tem_desconto=True, desconto_tipo="livre", desconto_livre=livres[t])
+    req = _base_req(honorario=tipos[0], extra_escopo=e)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        azure_id="x", email="lawyer@test.com", name="Lawyer", role="user"
+    )
+    try:
+        r = client.post("/api/contract/preview-honorarios", json={"escopos": req["escopos"], "revisar": True}).json()
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+    for texto in livres.values():
+        assert f"{texto[0].lower()}{texto[1:]}</mark>" in r["html"], texto
+        assert texto in enviado.get("t", ""), texto
+    if len(tipos) == 3:
+        assert "10% (dez por cento)" in r["html"] and "<mark" in r["html"].split("10% (dez por cento)")[0][-200:]
