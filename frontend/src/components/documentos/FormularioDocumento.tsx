@@ -87,6 +87,19 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
 
   const acrescentando = !!existente?.pode_acrescentar && acrescentar;
 
+  // Ao acrescentar, as partes e o endereço do documento existente já vêm preenchidos (o que for
+  // informado aqui substitui o de lá).
+  useEffect(() => {
+    if (!acrescentando || !existente) return;
+    const doc = estadoDoFormData("substabelecimento", { ...existente }, "") as SubstabelecimentoForm;
+    setEstado((atual) => ({
+      ...(atual as SubstabelecimentoForm),
+      substabelecentes: doc.substabelecentes,
+      substabelecidos: doc.substabelecidos,
+      endereco_substabelecidos: doc.endereco_substabelecidos,
+    }));
+  }, [acrescentando, existente]);
+
   // Pré-preenchimento pelo contrato de origem (partes só leitura; data do contrato editável).
   useEffect(() => {
     if (sessionStatus !== "authenticated" || !origemId || editando) return;
@@ -235,7 +248,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
           <p className="text-sm text-muted mb-2">Confira o texto. O documento só é gerado depois desta prévia.</p>
           {acrescentando && (
             <p role="note" className="rounded-lg border border-warning bg-warning/[0.08] p-3 mb-3 text-sm text-warning">
-              Ao gerar, o(s) processo(s) abaixo serão acrescentados ao substabelecimento que este cliente já tem (nova versão do mesmo documento). Se você informou substabelecentes, substabelecidos ou endereço, eles passam a valer para o documento inteiro.
+              Ao gerar, o(s) processo(s) abaixo serão acrescentados ao substabelecimento que este cliente já tem (nova versão do mesmo documento).
             </p>
           )}
           {tipo === "substabelecimento" && (
@@ -272,6 +285,11 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
                     <input type="radio" checked={acrescentar} onChange={() => setAcrescentar(true)} />
                     Acrescentar o processo a ele
                   </label>
+                  {acrescentar && (
+                    <p className="text-xs text-foreground ml-6 mb-1">
+                      As partes e o endereço deste formulário substituem os do substabelecimento existente.
+                    </p>
+                  )}
                   <label className="flex items-center gap-2">
                     <input type="radio" checked={!acrescentar} onChange={() => setAcrescentar(false)} />
                     Criar um novo

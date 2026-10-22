@@ -1053,6 +1053,9 @@ export interface SubstabelecimentoExistente {
   pode_acrescentar?: boolean;
   motivo?: string | null;
   processos?: string[];
+  substabelecentes?: Array<{ nome: string; email: string; oab: string }>;
+  substabelecidos?: Array<{ nome: string; oab: string }>;
+  endereco_substabelecidos?: string;
 }
 
 // O cliente (CPF/CNPJ) já tem substabelecimento? Orienta "acrescentar o processo" ou "criar novo".
