@@ -64,10 +64,10 @@ def _form_data_atual(contract: ContractDB, db: Session) -> dict:
 def _origem(contrato_id: str, user: CurrentUser, db: Session) -> ContractDB:
     origem = db.query(ContractDB).filter(ContractDB.contract_id == contrato_id).first()
     if not origem:
-        raise HTTPException(404, "Contrato de origem não encontrado")
+        raise HTTPException(404, "Contrato original não encontrado")
     _check_access(origem, user)
     if origem.tipo_contrato in TIPOS_COMPLEMENTARES:
-        raise HTTPException(422, "O contrato de origem não pode ser outro documento complementar")
+        raise HTTPException(422, "O contrato original não pode ser outro documento complementar")
     return origem
 
 
@@ -118,7 +118,7 @@ def prefill(
         "aditivos_existentes": len(_derivados(origem.contract_id, db, TIPO_ADITIVO)),
         "data_contrato_origem": _data_contrato_origem(form),
         "status_origem": origem.status,
-        "aviso": None if origem.status == "assinado" else "O contrato de origem ainda não foi assinado.",
+        "aviso": None if origem.status == "assinado" else "O contrato original ainda não foi assinado.",
     }
 
 
@@ -140,7 +140,7 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
     origem = _origem(data.contrato_origem_id, user, db) if data.contrato_origem_id else None
     aviso = None
     if origem is not None:
-        aviso = None if origem.status == "assinado" else "O contrato de origem ainda não foi assinado."
+        aviso = None if origem.status == "assinado" else "O contrato original ainda não foi assinado."
         if not isinstance(data, SubstabelecimentoRequest):
             # Servidor manda nos campos derivados do contrato de origem.
             form_origem = _form_data_atual(origem, db)
