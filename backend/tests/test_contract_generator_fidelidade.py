@@ -6,9 +6,10 @@ from app.models.contract import ContratoRequest
 from app.services.contract_generator import ContractGenerator
 
 
-def _paras_for(req: dict) -> list[str]:
-    """Gera o contrato e devolve os parágrafos de texto do .docx."""
-    data = ContratoRequest(**req)
+def _paras_for(req: dict, solto: bool = False) -> list[str]:
+    """Gera o contrato e devolve os parágrafos de texto do .docx. solto=True pula a
+    validação de valores (o gerador continua tolerante a valor zerado)."""
+    data = ContratoRequest.model_validate(req, context={"previa": True}) if solto else ContratoRequest(**req)
     gen = ContractGenerator()
     _, path = gen.generate(data, contract_id="FIDELIDADE_TEST")
     xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
@@ -610,7 +611,7 @@ def test_hora_trabalhada_texto_corrido_com_acrescimos_por_extenso():
 
 
 def test_valor_zero_nao_aparece():
-    paras = _paras_for(_req_escopos([_hora(valor_hora=0)]))
+    paras = _paras_for(_req_escopos([_hora(valor_hora=0)]), solto=True)
     assert not _has(paras, "R$ 0,00")
     assert not _has(paras, "zero reais")
     assert _has(paras, "Os serviços serão remunerados por hora trabalhada, sendo as horas apuradas")
@@ -640,7 +641,9 @@ def test_mensalidade_por_pasta_concorda_no_feminino():
 
 
 def test_clausulas_gerais_com_numeros_por_extenso():
-    paras = _paras_for(_base_req())
+    req = _base_req()
+    req["acessorios"]["tem_penalidade_inadimplemento"] = True
+    paras = _paras_for(req)
     assert _has(paras, "juros de 1% (um por cento) ao mês, multa de 10% (dez por cento)")
     assert _has(paras, "no prazo de até 5 (cinco) dias")
     assert _has(paras, "durante os 10 (dez) dias seguintes à notificação")

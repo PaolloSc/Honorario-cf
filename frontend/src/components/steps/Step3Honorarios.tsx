@@ -732,6 +732,8 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           <Input
                             type="number"
                             step="0.1"
+                            min={0}
+                            max={100}
                             value={escopo.exito.percentual || ""}
                             onChange={(e) =>
                               updateExito(idx, { percentual: parseFloat(e.target.value) || 0 })
