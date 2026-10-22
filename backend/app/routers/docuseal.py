@@ -996,6 +996,66 @@ class SincronizacaoResponse(BaseModel):
     pendentes: list[PendenteSigner] = []
 
 
+@router.post("/{contract_id}/cancelar-envio")
+async def cancelar_envio_assinatura(
+    contract_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Arquiva a submissao no DocuSeal (o link enviado deixa de valer) e volta o contrato a rascunho.
+
+    So para contrato 'enviado'. Se o DocuSeal recusar ou falhar, nada muda aqui.
+    """
+    from app.routers.contracts import _check_access
+
+    contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contrato não encontrado")
+    _check_access(contract, user)
+    if contract.status != "enviado":
+        raise HTTPException(status_code=409, detail="Só dá para cancelar o envio de um contrato que está aguardando assinaturas.")
+
+    versoes = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract_id, ContractVersionDB.docuseal_submission_id.isnot(None))
+        .order_by(ContractVersionDB.version_number.desc())
+        .all()
+    )
+    if not versoes:
+        raise HTTPException(status_code=409, detail="Este contrato não tem envio para assinatura registrado.")
+
+    service = get_docuseal_service()
+    arquivadas: list[str] = []
+    for i, v in enumerate(versoes):
+        sid = v.docuseal_submission_id
+        try:
+            ok = await service.archive_submission(sid)
+        except Exception as e:
+            logger.warning("Falha ao arquivar a submissao %s: %s", sid, e)
+            ok = False
+        if ok:
+            arquivadas.append(sid)
+        elif i == 0:  # a do envio atual precisa ser cancelada; as antigas ja' foram arquivadas no reenvio
+            raise HTTPException(
+                status_code=502,
+                detail="O DocuSeal não confirmou o cancelamento do envio. Nada foi alterado; tente de novo em instantes.",
+            )
+
+    ids = ", ".join(v.docuseal_submission_id for v in versoes)
+    for v in versoes:
+        v.docuseal_submission_id = None
+    contract.status = "rascunho"
+    contract.updated_by = user.email
+    contract.updated_at = utcnow()
+    db.add(AuditLogDB(
+        contract_id=contract_id, action="cancelamento_envio",
+        detail=f"Envio para assinatura cancelado (submissão DocuSeal {ids}); contrato voltou a rascunho",
+        version_number=contract.current_version, user_email=user.email, created_at=utcnow(),
+    ))
+    db.commit()
+    return {"success": True, "status": contract.status}
+
+
 @router.post("/{contract_id}/sincronizar", response_model=SincronizacaoResponse)
 async def sincronizar_status_assinatura(
     contract_id: str,

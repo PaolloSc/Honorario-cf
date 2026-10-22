@@ -227,3 +227,155 @@ def test_substabelecimento_assinado_nao_volta_a_rascunho_e_sugere_criar_novo(cli
     d = resp.json()["detail"]
     assert d["codigo"] == "contrato_travado" and "novo substabelecimento" in d["sugestao"]
     assert _contrato(cid).status == "assinado"
+
+
+# ── parecer da Angela: cancelar envio, regeneracao por versao, contrato antigo, ficha ──
+
+
+class _DocuSealFalso:
+    def __init__(self, ok=True):
+        self.ok, self.arquivadas = ok, []
+
+    async def archive_submission(self, sid):
+        self.arquivadas.append(sid)
+        if not self.ok:
+            raise RuntimeError("DocuSeal fora do ar")
+        return True
+
+
+def _marcar_enviado(cid: str, sid="777"):
+    db = SessionLocal()
+    try:
+        c = db.query(ContractDB).filter_by(contract_id=cid).one()
+        c.status = "enviado"
+        db.query(ContractVersionDB).filter_by(contract_id=cid, version_number=c.current_version).one().docuseal_submission_id = sid
+        db.commit()
+    finally:
+        db.close()
+
+
+def _sid(cid: str):
+    db = SessionLocal()
+    try:
+        return [v.docuseal_submission_id for v in db.query(ContractVersionDB).filter_by(contract_id=cid)]
+    finally:
+        db.close()
+
+
+def test_cancelar_envio_arquiva_limpa_o_id_volta_a_rascunho_e_libera_a_edicao(client, monkeypatch):
+    cid = _criar(client)
+    _marcar_enviado(cid)
+    assert _put(client, cid, _form(999), version=1).status_code == 409
+    falso = _DocuSealFalso()
+    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: falso)
+    r = client.post(f"/api/docuseal/{cid}/cancelar-envio")
+    assert r.status_code == 200, r.text
+    assert falso.arquivadas == ["777"] and _contrato(cid).status == "rascunho" and _sid(cid) == [None]
+    db = SessionLocal()
+    try:
+        from app.database import AuditLogDB
+        log = db.query(AuditLogDB).filter_by(contract_id=cid, action="cancelamento_envio").one()
+        assert "777" in log.detail  # id antigo fica no historico
+    finally:
+        db.close()
+    assert _put(client, cid, _form(999), version=1).status_code == 200
+
+
+def test_cancelar_envio_com_falha_no_docuseal_nao_muda_nada(client, monkeypatch):
+    cid = _criar(client)
+    _marcar_enviado(cid)
+    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: _DocuSealFalso(ok=False))
+    r = client.post(f"/api/docuseal/{cid}/cancelar-envio")
+    assert r.status_code == 502 and "DocuSeal" in r.json()["detail"]
+    assert _contrato(cid).status == "enviado" and _sid(cid) == ["777"]
+
+
+def test_cancelar_envio_so_vale_para_enviado_e_assinado_continua_travado(client, monkeypatch):
+    cid = _criar(client)
+    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: _DocuSealFalso())
+    assert client.post(f"/api/docuseal/{cid}/cancelar-envio").status_code == 409  # rascunho
+    _marcar_enviado(cid)
+    _travar(cid, "assinado")
+    assert client.post(f"/api/docuseal/{cid}/cancelar-envio").status_code == 409
+    assert _put(client, cid, _form(999), version=1).status_code == 409
+
+
+def test_travado_olha_so_o_estado_atual_submission_antiga_nao_trava(client):
+    cid = _criar(client)
+    _marcar_enviado(cid)
+    _travar(cid, "rascunho")  # status corrigido; o id da submissao continua gravado
+    assert _put(client, cid, _form(999), version=1).status_code == 200
+
+
+def _apagar_docx(cid: str):
+    import os
+
+    db = SessionLocal()
+    try:
+        for v in db.query(ContractVersionDB).filter_by(contract_id=cid):
+            if v.file_path and os.path.exists(v.file_path):
+                os.remove(v.file_path)
+    finally:
+        db.close()
+    from app.routers.contract import get_generator
+
+    gen = get_generator().output_dir / f"contrato_{cid}.docx"
+    gen.unlink(missing_ok=True)
+
+
+def test_arquivos_apagados_baixar_v1_e_depois_a_ultima_traz_cada_texto(client):
+    cid = _criar(client, valor=100)
+    _put(client, cid, _form(555), version=1)
+    _apagar_docx(cid)
+    assert "R$ 100,00" in _texto(client, cid, 1)
+    assert "R$ 555,00" in _texto(client, cid)  # a ultima, depois da v1 regenerada
+    assert "R$ 100,00" in _texto(client, cid, 1)
+    _apagar_docx(cid)
+    assert "R$ 555,00" in _texto(client, cid)
+    assert "R$ 100,00" in _texto(client, cid, 1)
+
+
+def test_contrato_antigo_com_versoes_no_mesmo_arquivo_regenera_a_antiga(client):
+    """Antes deste PR todas as versoes apontavam para contrato_<id>.docx (so com o texto da mais nova)."""
+    from app.routers.contract import get_generator
+
+    cid = _criar(client, valor=100)
+    _put(client, cid, _form(999), version=1)
+    generico = str(get_generator().output_dir / f"contrato_{cid}.docx")
+    db = SessionLocal()
+    try:
+        for v in db.query(ContractVersionDB).filter_by(contract_id=cid):
+            v.file_path = generico
+        db.commit()
+    finally:
+        db.close()
+    assert "R$ 100,00" in _texto(client, cid, 1) and "R$ 999,00" not in _texto(client, cid, 1)
+    assert "R$ 999,00" in _texto(client, cid)
+
+
+def test_ficha_rascunho_complementada_pelo_financeiro_so_muda_cliente(client):
+    cid = _criar(client, cpf=CPF_A)
+    db = SessionLocal()
+    try:
+        f = db.query(ParticipacaoDB).filter_by(contract_id=cid).one()
+        f.percentual_captacao, f.observacoes, f.beneficiario_email = 5.0, "ajuste do financeiro", "fin@cf.com"
+        db.commit()
+    finally:
+        db.close()
+    assert _put(client, cid, _form(cpf=CPF_B), version=1).status_code == 200
+    db = SessionLocal()
+    try:
+        f = db.query(ParticipacaoDB).filter_by(contract_id=cid).one()
+        assert (f.percentual_captacao, f.observacoes, f.beneficiario_email) == (5.0, "ajuste do financeiro", "fin@cf.com")
+        assert f.cliente_cpf_cnpj == "529.982.247-25"
+    finally:
+        db.close()
+
+
+def test_status_manual_nao_destrava_assinado_nem_volta_enviado_a_rascunho(client):
+    cid = _criar(client)
+    _travar(cid, "assinado")
+    assert client.patch(f"/api/contracts/{cid}/status", params={"status": "rascunho"}).status_code == 409
+    _travar(cid, "enviado")
+    assert client.patch(f"/api/contracts/{cid}/status", params={"status": "rascunho"}).status_code == 409
+    assert client.patch(f"/api/contracts/{cid}/status", params={"status": "assinado"}).status_code == 200

@@ -102,15 +102,11 @@ class UpdateContractRequest(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _travado(contract: ContractDB, db: Session) -> bool:
-    """Ja foi enviado para assinatura (ou assinado): nao se grava por cima."""
-    if contract.status in ("enviado", "assinado"):
-        return True
-    return (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract.contract_id, ContractVersionDB.docuseal_submission_id.isnot(None))
-        .first()
-        is not None
-    )
+    """Enviado para assinatura ou assinado AGORA: nao se grava por cima.
+
+    So o estado atual conta: 'Cancelar envio' arquiva a submissao e volta a rascunho.
+    """
+    return contract.status in ("enviado", "assinado")
 
 
 def _exigir_editavel(contract: ContractDB, db: Session) -> None:
@@ -123,7 +119,7 @@ def _exigir_editavel(contract: ContractDB, db: Session) -> None:
         else "Este contrato já foi enviado para assinatura e não pode ser alterado.",
         "sugestao": "Crie um novo substabelecimento com os dados corretos." if contract.tipo_contrato == "substabelecimento"
         else "Crie um aditivo para mudar o que foi assinado." if assinado
-        else "Cancele o envio para assinatura ou crie um novo contrato a partir dele.",
+        else "Use \"Cancelar envio para assinatura\" na página do contrato para voltar a editar.",
     })
 
 
@@ -184,10 +180,13 @@ def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_dat
     except Exception as e:  # nao bloqueia a edicao
         logger.warning("Falha ao atualizar ficha de participacao de %s: %s", contract.contract_id, e)
         return
+    # So o que vem do contrato (cliente e tipo de honorario): percentuais, e-mail e observacoes
+    # que o financeiro complementou no rascunho ficam como estao.
+    do_contrato = {k: campos[k] for k in ("cliente_cpf_cnpj", "tipo_honorario")}
     for ficha in db.query(ParticipacaoDB).filter(
         ParticipacaoDB.contract_id == contract.contract_id, ParticipacaoDB.aprovada.is_(False)
     ):
-        for k, v in campos.items():
+        for k, v in do_contrato.items():
             setattr(ficha, k, v)
 
 
@@ -490,6 +489,10 @@ def update_contract_status(
         raise HTTPException(422, f"Status invalido. Validos: {valid_statuses}")
 
     old_status = contract.status
+    if old_status == "assinado" and status != "assinado":
+        raise HTTPException(409, "Contrato assinado não muda de status. Para alterar algo, crie um aditivo.")
+    if old_status == "enviado" and status == "rascunho":
+        raise HTTPException(409, "Para voltar a rascunho use \"Cancelar envio para assinatura\" (arquiva o link no DocuSeal).")
     contract.status = status
     contract.updated_by = user.email
     contract.updated_at = utcnow()

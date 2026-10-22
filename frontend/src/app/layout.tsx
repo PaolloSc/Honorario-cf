@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { Lexend_Zetta } from "next/font/google";
+import AvisoVersaoDesatualizada from "@/components/AvisoVersaoDesatualizada";
 import Logo from "@/components/ui/Logo";
 import NavConsumidor from "@/components/NavConsumidor";
 import Providers from "@/components/Providers";
@@ -80,6 +81,7 @@ export default async function RootLayout({
           </header>
 
           <main className="flex-1">{children}</main>
+          <AvisoVersaoDesatualizada />
 
           <footer className="bg-header-bg text-brand-verde-claro/90 mt-12">
             <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
