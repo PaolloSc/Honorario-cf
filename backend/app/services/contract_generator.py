@@ -1103,12 +1103,13 @@ class ContractGenerator:
         ]
         if data.acessorios.tem_penalidade_inadimplemento:
             # entra antes das mudancas legislativas (ultimas duas do bloco)
-            clauses.insert(len(clauses) - 2, (
-            f"O atraso no pagamento sujeitará a CONTRATANTE a juros de {percentual_com_extenso(1)} "
-            f"ao mês, multa de {percentual_com_extenso(10)} sobre o valor em atraso e "
-            "atualização monetária pelo IPCA, sem prejuízo da suspensão dos serviços ou da "
-            "rescisão contratual, a critério do C&F."
-            ))
+            clauses.insert(
+                len(clauses) - 2,
+                f"O atraso no pagamento sujeitará a CONTRATANTE a juros de {percentual_com_extenso(1)} "
+                f"ao mês, multa de {percentual_com_extenso(10)} sobre o valor em atraso e "
+                "atualização monetária pelo IPCA, sem prejuízo da suspensão dos serviços ou da "
+                "rescisão contratual, a critério do C&F.",
+            )
 
         if com_parte_relacionada:
             clauses.append(
