@@ -384,15 +384,16 @@ class ContratoRequest(BaseModel):
             raise ValueError("Informe pelo menos um contratante.")
         if not self.escopos:
             raise ValueError("Informe pelo menos um escopo.")
-        for c in self.contratantes:
+        for n, c in enumerate(self.contratantes, 1):
+            pre = f"Contratante {n}: "
             if isinstance(c, ContratantePF):
                 if not re.fullmatch(r"\d{11}", normalizar_doc(c.cpf)):
-                    raise ValueError("CPF inválido: deve ter 11 dígitos.")
+                    raise ValueError(pre + "CPF inválido: deve ter 11 dígitos.")
             # CNPJ alfanumerico (Receita, jul/2026): 12 posicoes 0-9/A-Z + 2 digitos
             elif not re.fullmatch(r"[0-9A-Z]{12}\d{2}", normalizar_doc(c.cnpj)):
-                raise ValueError("CNPJ inválido: 12 caracteres (números ou letras) e 2 dígitos verificadores.")
+                raise ValueError(pre + "CNPJ inválido: 12 caracteres (números ou letras) e 2 dígitos verificadores.")
             if not _EMAIL.match((c.email or "").strip()):
-                raise ValueError("E-mail do contratante inválido.")
+                raise ValueError(pre + "e-mail inválido.")
         for i, e in enumerate(self.escopos, 1):
             _conferir_honorarios(i, e)
         _conferir_participacao(self.participacao)
