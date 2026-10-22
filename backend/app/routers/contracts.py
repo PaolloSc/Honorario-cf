@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,7 +15,9 @@ from app.database import (
     AuditLogDB,
     ContractDB,
     ContractVersionDB,
+    ParticipacaoDB,
     get_db,
+    serialize_cliente_docs,
     utcnow,
 )
 from app.models.documentos_complementares import (
@@ -90,9 +94,83 @@ class ContractFormDataResponse(BaseModel):
 
 class UpdateContractRequest(BaseModel):
     form_data: dict
+    version: Optional[int] = None  # versao que a tela carregou; diferente da atual = aba desatualizada
 
 
 # ── Helpers ───────────────────────────────────────────────────────
+
+def _travado(contract: ContractDB, db: Session) -> bool:
+    """Ja foi enviado para assinatura (ou assinado): nao se grava por cima."""
+    if contract.status in ("enviado", "assinado"):
+        return True
+    return (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract.contract_id, ContractVersionDB.docuseal_submission_id.isnot(None))
+        .first()
+        is not None
+    )
+
+
+def _exigir_editavel(contract: ContractDB, db: Session) -> None:
+    if not _travado(contract, db):
+        return
+    assinado = contract.status == "assinado"
+    raise HTTPException(409, {
+        "codigo": "contrato_travado",
+        "motivo": "Este contrato já foi assinado e não pode ser alterado." if assinado
+        else "Este contrato já foi enviado para assinatura e não pode ser alterado.",
+        "sugestao": "Crie um aditivo para mudar o que foi assinado." if assinado
+        else "Cancele o envio para assinatura ou crie um novo contrato a partir dele.",
+    })
+
+
+def _exigir_versao_atual(contract: ContractDB, versao: int | None) -> None:
+    if versao is not None and versao != contract.current_version:
+        raise HTTPException(409, {
+            "codigo": "versao_desatualizada",
+            "motivo": f"Este contrato foi alterado por outra pessoa ou aba (você abriu a versão {versao}; a atual é a {contract.current_version}).",
+            "versao_atual": contract.current_version,
+        })
+
+
+def _arquivo_da_versao(filepath: str | Path, contract_id: str, versao: int) -> str:
+    """Copia o DOCX para um nome proprio da versao (o gerador reaproveita sempre o mesmo nome)."""
+    origem = Path(filepath)
+    destino = origem.with_name(f"contrato_{contract_id}_v{versao}.docx")
+    if origem != destino:
+        shutil.copyfile(origem, destino)
+    return str(destino)
+
+
+def _congelar_versao_atual(db: Session, contract: ContractDB) -> None:
+    """Antes de gerar a proxima versao, prende o DOCX da atual a um nome proprio."""
+    ver = (
+        db.query(ContractVersionDB)
+        .filter(ContractVersionDB.contract_id == contract.contract_id, ContractVersionDB.version_number == contract.current_version)
+        .first()
+    )
+    if ver and ver.file_path and Path(ver.file_path).exists():
+        ver.file_path = _arquivo_da_versao(ver.file_path, contract.contract_id, ver.version_number)
+
+
+def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_data: dict, contrato_data, user: CurrentUser) -> None:
+    """Mantem a busca por CPF/CNPJ e a ficha de participacao (rascunho) iguais ao contrato salvo."""
+    contract.cliente_docs = serialize_cliente_docs(form_data)
+    if contract.tipo_contrato in REQUESTS_COMPLEMENTARES or not hasattr(contrato_data, "participacao"):
+        return
+    from app.routers.contract import campos_rascunho_participacao
+
+    try:
+        campos = campos_rascunho_participacao(contrato_data, user.email, user.name)
+    except Exception as e:  # nao bloqueia a edicao
+        logger.warning("Falha ao atualizar ficha de participacao de %s: %s", contract.contract_id, e)
+        return
+    for ficha in db.query(ParticipacaoDB).filter(
+        ParticipacaoDB.contract_id == contract.contract_id, ParticipacaoDB.aprovada.is_(False)
+    ):
+        for k, v in campos.items():
+            setattr(ficha, k, v)
+
 
 def _extract_client_info(data: dict) -> tuple[str, str]:
     tipo = data.get("tipo_contrato")
@@ -324,6 +402,8 @@ def update_contract(
         raise HTTPException(404, "Contrato nao encontrado")
 
     _check_access(contract, user)
+    _exigir_versao_atual(contract, body.version)
+    _exigir_editavel(contract, db)
 
     if contract.tipo_contrato in REQUESTS_COMPLEMENTARES:
         # O vinculo e' a coluna; o form_data nao pode divergir dela.
@@ -334,9 +414,11 @@ def update_contract(
     except Exception as e:
         raise HTTPException(422, f"Dados invalidos: {e}")
 
+    _congelar_versao_atual(db, contract)
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
 
     new_version = contract.current_version + 1
+    filepath = _arquivo_da_versao(filepath, contract_id, new_version)
     client_name, client_email = _extract_client_info(body.form_data)
 
     version_entry = ContractVersionDB(
@@ -355,6 +437,7 @@ def update_contract(
     contract.status = "rascunho"
     contract.updated_by = user.email
     contract.updated_at = utcnow()
+    _atualizar_documentos_do_cliente(db, contract, body.form_data, contrato_data, user)
 
     _log_action(db, contract_id, "edicao", f"Nova versao {new_version} gerada por {user.name}", new_version, user.email)
 
@@ -411,6 +494,7 @@ def rollback_contract(
         raise HTTPException(404, "Contrato nao encontrado")
 
     _check_access(contract, user)
+    _exigir_editavel(contract, db)
 
     # Find the target version
     target_ver = (
@@ -431,10 +515,12 @@ def rollback_contract(
     except Exception as e:
         raise HTTPException(422, f"Dados da versao {version} invalidos: {e}")
 
+    _congelar_versao_atual(db, contract)
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
 
     # Create a new version based on the old data
     new_version = contract.current_version + 1
+    filepath = _arquivo_da_versao(filepath, contract_id, new_version)
     client_name, client_email = _extract_client_info(form_data)
 
     version_entry = ContractVersionDB(
@@ -453,6 +539,7 @@ def rollback_contract(
     contract.status = "rascunho"
     contract.updated_by = user.email
     contract.updated_at = utcnow()
+    _atualizar_documentos_do_cliente(db, contract, form_data, contrato_data, user)
 
     _log_action(
         db, contract_id, "rollback",
