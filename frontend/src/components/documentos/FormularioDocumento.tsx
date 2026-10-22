@@ -235,7 +235,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
           <p className="text-sm text-muted mb-2">Confira o texto. O documento só é gerado depois desta prévia.</p>
           {acrescentando && (
             <p role="note" className="rounded-lg border border-warning bg-warning/[0.08] p-3 mb-3 text-sm text-warning">
-              Ao gerar, o(s) processo(s) abaixo serão acrescentados ao substabelecimento que este cliente já tem (nova versão do mesmo documento).
+              Ao gerar, o(s) processo(s) abaixo serão acrescentados ao substabelecimento que este cliente já tem (nova versão do mesmo documento). Se você informou substabelecentes, substabelecidos ou endereço, eles passam a valer para o documento inteiro.
             </p>
           )}
           {tipo === "substabelecimento" && (

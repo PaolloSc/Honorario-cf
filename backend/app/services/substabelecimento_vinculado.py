@@ -218,7 +218,13 @@ def sincronizar_do_distrato(
         return [], [], []
     atual = vinculados[0]
     novo = substabelecimento_do_distrato(data, distrato.contract_id)
-    salvo = SubstabelecimentoRequest(**form_data_atual(atual, db)).model_dump(mode="json")
+    salvo_req = SubstabelecimentoRequest(**form_data_atual(atual, db))
+    # Processos acrescentados depois (nao vieram do distrato) continuam: distrato + acrescentados, sem repetir.
+    do_distrato_antes = DistratoRequest(**form_data_atual(distrato, db)).substabelecimento
+    vindos_do_distrato = {_numero_normalizado(p.numero) for p in (do_distrato_antes.processos if do_distrato_antes else [])}
+    acrescentados = [p for p in salvo_req.processos if _numero_normalizado(p.numero) not in vindos_do_distrato]
+    novo = novo.model_copy(update={"processos": acrescentar_processos(novo.processos, acrescentados)})
+    salvo = salvo_req.model_dump(mode="json")
     if salvo == novo.model_dump(mode="json"):
         return [], [], []
     if travado(atual, db):

@@ -111,6 +111,33 @@ def prefill(
     }
 
 
+def _erro_campo(campo: str, msg: str) -> RequestValidationError:
+    return RequestValidationError([{"loc": ("body", campo), "msg": msg, "type": "value_error", "input": None}])
+
+
+def _validar_distrato_origem(data: SubstabelecimentoRequest, user: CurrentUser, db: Session) -> None:
+    """O distrato de onde o substabelecimento diz nascer existe e e' do mesmo cliente; senao 422."""
+    distrato = db.query(ContractDB).filter(
+        ContractDB.contract_id == data.distrato_origem_id, ContractDB.tipo_contrato == TIPO_DISTRATO,
+        ContractDB.status != "cancelado",
+    ).first()
+    if not distrato:
+        raise _erro_campo("distrato_origem_id", "Distrato de origem não encontrado")
+    try:
+        _check_access(distrato, user)
+    except HTTPException:
+        raise _erro_campo("distrato_origem_id", "Distrato de origem não encontrado")
+    if data.contrato_origem_id and data.contrato_origem_id != distrato.contrato_origem_id:
+        raise _erro_campo("distrato_origem_id", "O distrato é de outro contrato")
+    docs = {
+        so_digitos(c.get("cnpj") or c.get("cpf"))
+        for c in (form_data_atual(distrato, db).get("contratantes") or [])
+    }
+    doc_outorgante = so_digitos(data.outorgante.cnpj or data.outorgante.cpf)
+    if doc_outorgante and doc_outorgante not in docs:
+        raise _erro_campo("distrato_origem_id", "O distrato é de outro cliente")
+
+
 def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
     """Valida o corpo e completa os campos que o servidor deriva do contrato de origem."""
     if tipo not in REQUESTS:
@@ -127,6 +154,8 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
         }])
 
     origem = _origem(data.contrato_origem_id, user, db) if data.contrato_origem_id else None
+    if isinstance(data, SubstabelecimentoRequest) and data.distrato_origem_id:
+        _validar_distrato_origem(data, user, db)
     aviso = None
     if origem is not None:
         aviso = None if origem.status == "assinado" else "O contrato de origem ainda não foi assinado."
@@ -166,7 +195,14 @@ def _processos_novos(existente: ContractDB, data: SubstabelecimentoRequest, db: 
     """O substabelecimento existente com os processos de `data` que ainda nao constam nele."""
     atual = SubstabelecimentoRequest(**form_data_atual(existente, db))
     todos = acrescentar_processos(atual.processos, data.processos)
-    return atual.model_copy(update={"processos": todos}), len(todos) - len(atual.processos)
+    # Quem assina/recebe e o endereco informados agora valem para o documento todo (a tela avisa antes).
+    campos = {"processos": todos}
+    for nome in ("substabelecentes", "substabelecidos"):
+        if getattr(data, nome):
+            campos[nome] = getattr(data, nome)
+    if data.endereco_substabelecidos.strip():
+        campos["endereco_substabelecidos"] = data.endereco_substabelecidos
+    return atual.model_copy(update=campos), len(todos) - len(atual.processos)
 
 
 @router.get("/substabelecimento-existente")
@@ -218,7 +254,8 @@ def gerar_documento(
             aviso = f"Foi criado um novo substabelecimento porque {MOTIVO_TRAVADO}."
         else:
             combinado, novos = _processos_novos(alvo, data, db)
-            if novos == 0:
+            atual = SubstabelecimentoRequest(**form_data_atual(alvo, db))
+            if novos == 0 and combinado.model_dump(mode="json") == atual.model_dump(mode="json"):
                 return {
                     "success": True, "message": "Os processos já constavam no substabelecimento",
                     "contract_id": alvo.contract_id, "download_url": f"/api/contract/{alvo.contract_id}/download",
