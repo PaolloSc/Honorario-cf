@@ -4,6 +4,7 @@ import re
 from enum import Enum
 from typing import Literal, Optional
  
+from app.utils.documento import normalizar_doc
 from pydantic import BaseModel, Field, ValidationInfo, model_validator
  
  
@@ -384,9 +385,12 @@ class ContratoRequest(BaseModel):
         if not self.escopos:
             raise ValueError("Informe pelo menos um escopo.")
         for c in self.contratantes:
-            doc, esperado, rotulo = (c.cpf, 11, "CPF") if isinstance(c, ContratantePF) else (c.cnpj, 14, "CNPJ")
-            if len(re.sub(r"\D", "", doc or "")) != esperado:
-                raise ValueError(f"{rotulo} inválido: deve ter {esperado} dígitos.")
+            if isinstance(c, ContratantePF):
+                if not re.fullmatch(r"\d{11}", normalizar_doc(c.cpf)):
+                    raise ValueError("CPF inválido: deve ter 11 dígitos.")
+            # CNPJ alfanumerico (Receita, jul/2026): 12 posicoes 0-9/A-Z + 2 digitos
+            elif not re.fullmatch(r"[0-9A-Z]{12}\d{2}", normalizar_doc(c.cnpj)):
+                raise ValueError("CNPJ inválido: 12 caracteres (números ou letras) e 2 dígitos verificadores.")
             if not _EMAIL.match((c.email or "").strip()):
                 raise ValueError("E-mail do contratante inválido.")
         for i, e in enumerate(self.escopos, 1):

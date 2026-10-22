@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { ValidacaoError, generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
+import { ehErro422, textoDoErro } from "@/app/lib/erro422";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
 import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
@@ -379,7 +380,7 @@ export default function Step7Envio({
       })
       .catch((e) => {
         // regra do contrato (422): diz qual campo corrigir em vez do aviso genérico
-        setReviewErro(e instanceof ValidacaoError ? e.message : "");
+        setReviewErro(ehErro422(e) ? textoDoErro(e) : "");
         setReviewStatus("error");
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -519,7 +520,7 @@ export default function Step7Envio({
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -565,7 +566,7 @@ export default function Step7Envio({
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -637,7 +638,7 @@ export default function Step7Envio({
       }
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
