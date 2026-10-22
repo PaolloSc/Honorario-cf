@@ -1392,15 +1392,9 @@ class ContractGenerator:
         if not has_digital_testemunhas:
             doc.add_paragraph()
             doc.add_paragraph("TESTEMUNHAS:")
-            doc.add_paragraph()
-            doc.add_paragraph("_" * 50)
-            doc.add_paragraph("Nome:")
-            doc.add_paragraph("CPF:")
-            doc.add_paragraph()
-            doc.add_paragraph("_" * 50)
-            doc.add_paragraph("Nome:")
-            doc.add_paragraph("CPF:")
- 
+            # Duas testemunhas lado a lado, mesma grade das assinaturas digitais.
+            self._render_signature_grid(doc, [("", "Nome:" + chr(10) + "CPF:")] * 2)
+
     def _render_signature_grid(self, doc: Document, entries: list[tuple[str, str]]) -> None:
         """Dispoe campos de assinatura lado a lado, 2 por linha, em tabela sem borda.
 
@@ -1422,7 +1416,8 @@ class ContractGenerator:
             # polui o DOCX que o advogado abre no Word (aparecia como texto solto).
             cell.paragraphs[0].text = tag
             cell.add_paragraph("_" * 32)
-            cell.add_paragraph(label)
+            for linha in label.split(chr(10)):
+                cell.add_paragraph(linha)
 
     def _escopo_description(self, escopo: EscopoItem) -> str:
         if escopo.tipo == TipoEscopo.OUTRO and escopo.descricao_custom:
