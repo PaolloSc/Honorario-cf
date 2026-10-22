@@ -370,7 +370,7 @@ export default function ContractDetailPage() {
   const ehSubstabelecimento = contract.tipo_contrato === "substabelecimento";
   // Escolha do sócio que assina pelo escritório: honorários, aditivo e distrato.
   const exigeSocio = ehHonorarios || contract.tipo_contrato === "aditivo" || contract.tipo_contrato === "distrato";
-  const distratoExistente = documentos.some((d) => d.tipo_contrato === "distrato" && d.status !== "cancelado");
+  const distratoId = documentos.find((d) => d.tipo_contrato === "distrato" && d.status !== "cancelado")?.contract_id;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -414,10 +414,6 @@ export default function ContractDetailPage() {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3 mb-8">
-        {/* Único ponto de entrada de aditivo, distrato e substabelecimento; derivados não geram derivados. */}
-        {!ehDocumentoDerivado && (
-          <NovoDocumentoMenu contratoId={contractId} distratoExistente={distratoExistente} />
-        )}
         <a
           href={`/contracts/${contractId}/edit`}
           className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition"
@@ -516,6 +512,8 @@ export default function ContractDetailPage() {
         </div>
       )}
 
+      {/* Único ponto de entrada de aditivo, substabelecimento e distrato; derivados não geram derivados. */}
+      {!ehDocumentoDerivado && <NovoDocumentoMenu contratoId={contractId} distratoId={distratoId} />}
       {!ehDocumentoDerivado && <DocumentosDerivados documentos={documentos} />}
 
       {/* Inline contract preview */}
