@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
+import { ValidacaoError, generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
 import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
@@ -315,6 +315,7 @@ export default function Step7Envio({
   // Varredura de português/padrão via DeepSeek, roda sozinha ao chegar neste passo.
   const [reviewFindings, setReviewFindings] = useState<Array<{ trecho: string; problema: string; sugestao: string }>>([]);
   const [reviewStatus, setReviewStatus] = useState<"idle" | "checking" | "done" | "error">("idle");
+  const [reviewErro, setReviewErro] = useState("");
   // Indice do achado com "Aplicar correção" em andamento (desabilita só aquele botão).
   const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
 
@@ -373,7 +374,11 @@ export default function Step7Envio({
         setReviewFindings(r.findings);
         setReviewStatus("done");
       })
-      .catch(() => setReviewStatus("error"));
+      .catch((e) => {
+        // regra do contrato (422): diz qual campo corrigir em vez do aviso genérico
+        setReviewErro(e instanceof ValidacaoError ? e.message : "");
+        setReviewStatus("error");
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -769,7 +774,9 @@ export default function Step7Envio({
 
       {reviewStatus === "error" && (
         <div className="bg-warning/[0.1] border border-warning rounded-lg p-4 text-sm text-foreground">
-          Não foi possível concluir a verificação de português. Você pode revisar manualmente e prosseguir.
+          {reviewErro
+            ? `Este contrato não passa nas regras atuais: ${reviewErro} Volte à etapa correspondente e corrija.`
+            : "Não foi possível concluir a verificação de português. Você pode revisar manualmente e prosseguir."}
         </div>
       )}
 

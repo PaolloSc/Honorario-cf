@@ -379,7 +379,8 @@ class ContratoRequest(BaseModel):
             return self
         for i, e in enumerate(self.escopos, 1):
             h = e.honorarios
-            if TipoHonorario.EXITO in h and e.exito and e.exito.percentual is not None                     and not 0 <= e.exito.percentual <= 100:
+            pct = e.exito.percentual if TipoHonorario.EXITO in h and e.exito else None
+            if pct is not None and not 0 <= pct <= 100:
                 raise ValueError(f"Escopo {i}: o percentual de êxito deve ficar entre 0 e 100.")
             checks = [(TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada and e.hora_trabalhada.valor_hora, "hora trabalhada")]
             # pro-labore com parcelamento descrito em texto pode ficar sem total

@@ -1,5 +1,9 @@
 import { limparCNPJ } from "./cnpj";
+import { mensagemDo422 } from "./erro422";
 import type { Contratante, TipoPessoa } from "@/types/contract";
+
+/** 422 do backend: regra do contrato violada; a mensagem diz o que corrigir. */
+export class ValidacaoError extends Error {}
 
 function resolveApiBase(): string {
   // 1. Vercel environment variable takes priority
@@ -226,6 +230,10 @@ async function request<T>(
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 409) throw new ConflitoError(`API error ${res.status}: ${body}`);
+    if (res.status === 422) {
+      const motivo = mensagemDo422(body);
+      if (motivo) throw new ValidacaoError(motivo);
+    }
     throw new Error(`API error ${res.status}: ${body}`);
   }
 
