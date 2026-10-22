@@ -374,7 +374,14 @@ def update_contract(
 
     _log_action(db, contract_id, "edicao", f"Nova versao {new_version} gerada por {user.name}", new_version, user.email)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        for f in arquivos_novos:  # nada de .docx sem registro
+            Path(f).unlink(missing_ok=True)
+        logger.error("Falha ao gravar a edicao de %s: %s", contract_id, e)
+        raise HTTPException(500, f"Falha ao salvar: {e}")
 
     return {
         "success": True,

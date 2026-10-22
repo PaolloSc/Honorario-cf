@@ -219,3 +219,78 @@ def test_falha_ao_gravar_no_banco_apaga_o_docx(client, monkeypatch):
     r = _gerar(client, "substabelecimento", _sub())
     monkeypatch.setattr(sv, "AuditLogDB", original)
     assert r.status_code == 500 and _docx_no_disco() == antes and _todos_substabelecimentos() == 0
+
+
+# ── ajustes da revisao da Angela (#143) ─────────────────────────────────────
+
+
+def _numeros(cid: str) -> list[str]:
+    return [p["numero"] for p in _form(cid)["processos"]]
+
+
+def test_editar_o_distrato_mantem_processo_acrescentado_depois(client, monkeypatch):
+    r = _gerar(client, "distrato", DISTRATO)
+    distrato, sub = r.json()["contract_id"], r.json()["documentos_gerados_junto"][0]
+    ac = client.post(f"/api/documentos/substabelecimento?acrescentar_a={sub}", json=_sub(processos=[PROC_C]))
+    assert ac.status_code == 200 and _numeros(sub) == [PROC_A["numero"], PROC_C["numero"]]
+    # muda outra coisa no distrato: nada some e nao gera versao
+    _editar(client, distrato, objeto_contrato_origem="outro objeto")
+    assert _numeros(sub) == [PROC_A["numero"], PROC_C["numero"]]
+    # distrato passa a ter A e B: B entra, C continua, sem repetir
+    novo = {**_form(distrato)["substabelecimento"], "processos": [PROC_A, PROC_B]}
+    resp = _editar(client, distrato, substabelecimento=novo)
+    assert resp["documentos_regerados"] == [sub]
+    assert _numeros(sub) == [PROC_A["numero"], PROC_B["numero"], PROC_C["numero"]]
+    # distrato tira o B: B sai (veio do distrato), C (acrescentado) fica
+    so_a = {**_form(distrato)["substabelecimento"], "processos": [PROC_A]}
+    _editar(client, distrato, substabelecimento=so_a)
+    assert _numeros(sub) == [PROC_A["numero"], PROC_C["numero"]]
+
+
+def test_acrescentar_aplica_substabelecidos_e_endereco_informados(client):
+    cid = _id(client, "substabelecimento", _sub())
+    novos = [{"nome": "Outro Patrono", "oab": "OAB/SP sob o n.º 9.999"}]
+    r = client.post(
+        f"/api/documentos/substabelecimento?acrescentar_a={cid}",
+        json=_sub(processos=[PROC_A], substabelecidos=novos, endereco_substabelecidos="Rua Nova, 1"),
+    )
+    assert r.status_code == 200 and r.json()["processos_novos"] == 0
+    assert _versao(cid) == 2  # mudou quem recebe: nova versao mesmo sem processo novo
+    f = _form(cid)
+    assert [s["nome"] for s in f["substabelecidos"]] == ["Outro Patrono"] and f["endereco_substabelecidos"] == "Rua Nova, 1"
+    assert "Outro Patrono" in _texto(client, cid)
+
+
+def test_put_do_distrato_com_substab_travado_falha_no_commit_nao_deixa_docx(client, monkeypatch):
+    from sqlalchemy.orm import Session
+
+    r = _gerar(client, "distrato", DISTRATO)
+    distrato, sub = r.json()["contract_id"], r.json()["documentos_gerados_junto"][0]
+    _travar(sub, "assinado")
+    antes = _docx_no_disco()
+    novo = {**_form(distrato)["substabelecimento"], "processos": [PROC_B]}
+    form = {**_form(distrato), "substabelecimento": novo}
+
+    def quebra(self):
+        raise RuntimeError("falha no commit")
+
+    monkeypatch.setattr(Session, "commit", quebra)
+    resp = client.put(f"/api/contracts/{distrato}", json={"form_data": form})
+    monkeypatch.undo()
+    assert resp.status_code == 500
+    assert _docx_no_disco() == antes  # o DOCX do substabelecimento novo foi apagado
+    assert _todos_substabelecimentos() == 1
+
+
+def test_distrato_origem_id_inexistente_ou_de_outro_cliente_da_422(client):
+    r = client.post("/api/documentos/substabelecimento", json=_sub(distrato_origem_id="nao-existe"))
+    assert r.status_code == 422 and _todos_substabelecimentos() == 0
+    distrato = _gerar(client, "distrato", DISTRATO).json()["contract_id"]
+    outro_cliente = _sub(
+        distrato_origem_id=distrato, outorgante={"razao_social": "OUTRA LTDA", "cnpj": "44.555.666/0001-77"},
+    )
+    antes = _todos_substabelecimentos()
+    assert client.post("/api/documentos/substabelecimento", json=outro_cliente).status_code == 422
+    assert _todos_substabelecimentos() == antes
+    mesmo = _sub(distrato_origem_id=distrato, processos=[PROC_B])
+    assert client.post("/api/documentos/substabelecimento", json=mesmo).status_code == 200
