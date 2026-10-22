@@ -1009,12 +1009,34 @@ export async function previewDocumento(tipo: string, payload: unknown, signal?: 
   return res.text();
 }
 
-export async function gerarDocumento(tipo: string, payload: unknown) {
+export interface SubstabelecimentoExistente {
+  existe: boolean;
+  contract_id?: string;
+  client_name?: string;
+  status?: string;
+  pode_acrescentar?: boolean;
+  motivo?: string | null;
+  processos?: string[];
+}
+
+// O cliente (CPF/CNPJ) já tem substabelecimento? Orienta "acrescentar o processo" ou "criar novo".
+export async function substabelecimentoExistente(documento: string) {
+  return request<SubstabelecimentoExistente>(
+    `/api/documentos/substabelecimento-existente?documento=${encodeURIComponent(documento)}`,
+  );
+}
+
+// acrescentarA: contract_id de um substabelecimento do mesmo outorgante, que recebe os processos.
+export async function gerarDocumento(tipo: string, payload: unknown, acrescentarA?: string) {
   return request<{
     success: boolean;
     message: string;
     contract_id: string;
     download_url: string;
     aviso: string | null;
-  }>(`/api/documentos/${tipo}`, { method: "POST", body: JSON.stringify(payload) });
+    acrescentado?: boolean;
+  }>(`/api/documentos/${tipo}${acrescentarA ? `?acrescentar_a=${encodeURIComponent(acrescentarA)}` : ""}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
