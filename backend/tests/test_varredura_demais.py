@@ -115,3 +115,23 @@ def test_ficha_traz_etiquetas():
 
     linhas = dict(linhas_participacao({"etiquetas": ["VIP", "Contencioso"]}))
     assert linhas.get("Etiquetas") == "VIP, Contencioso"
+
+
+# ── CNPJ: numérico e alfanumérico (Receita, jul/2026) ─────────────────────
+
+
+def _pj(cnpj):
+    req = _base_req()
+    req["contratantes"] = [{"tipo": "PJ", "cnpj": cnpj, "razao_social": "X Ltda", "endereco": "rua", "email": "a@a.com"}]
+    return req
+
+
+@pytest.mark.parametrize("cnpj", ["11.222.333/0001-81", "11222333000181", "12.ABC.345/01DE-35", "12abc34501de35"])
+def test_cnpj_numerico_e_alfanumerico_passam(cnpj):
+    ContratoRequest(**_pj(cnpj))
+
+
+@pytest.mark.parametrize("cnpj", ["123", "12.ABC.345/01DE-AB", "12.ABC.345/01DE", ""])
+def test_cnpj_invalido_e_recusado(cnpj):
+    with pytest.raises(ValidationError, match="CNPJ"):
+        ContratoRequest(**_pj(cnpj))

@@ -13,3 +13,14 @@ export function mensagemDo422(corpo: string): string | null {
     return null;
   }
 }
+
+/** Texto para mostrar ao usuário: o 422 do backend vira só a regra violada; o resto passa. */
+export function textoDoErro(erro: unknown): string {
+  const bruto = erro instanceof Error ? erro.message : "Erro desconhecido";
+  const m = /^API error 422: ([\s\S]*)$/.exec(bruto);
+  return (m && mensagemDo422(m[1])) || bruto;
+}
+
+export function ehErro422(erro: unknown): boolean {
+  return erro instanceof Error && /^API error 422: /.test(erro.message) && textoDoErro(erro) !== erro.message;
+}
