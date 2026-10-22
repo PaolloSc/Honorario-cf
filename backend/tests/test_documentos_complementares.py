@@ -60,6 +60,16 @@ ADITIVO = {
     "data_documento": "2026-10-05",
     "data_contrato_origem": "2020-01-15",
     "objeto": "prestação de serviços de auditoria trabalhista",
+    "alteracoes": [
+        {"tipo": "alterar", "clausula": "Cláusula 3ª, item 3.2", "texto": "O valor mensal passa a ser de R$ 2.000,00."},
+        {"tipo": "excluir", "clausula": "Cláusula 5ª"},
+        {"tipo": "adicionar", "texto": "As partes poderão ajustar metas por escrito."},
+    ],
+}
+
+# Aditivo salvo antes de 22/10/2026 (remuneracao/abrangencia): precisa continuar abrindo e gerando.
+ADITIVO_LEGADO = {
+    **{k: v for k, v in ADITIVO.items() if k != "alteracoes"},
     "remuneracao": {"valor_mensal": 1250.5, "franquia_horas": 1, "valor_hora_excedente": 210.0},
     "compensacao_anual": True,
     "abrangencia": [{"razao_social": "FILIAL ÁGUA BRANCA LTDA", "cnpj": "44.555.666/0001-77"}],
@@ -220,7 +230,7 @@ def test_prefill_traz_partes_do_contrato_de_origem(client):
 # ── Aditivo ───────────────────────────────────────────────────────────────
 
 
-def test_aditivo_gera_docx_com_partes_valores_e_abrangencia(client):
+def test_aditivo_gera_docx_com_partes_e_alteracoes_dos_tres_tipos(client):
     texto = _texto(client, _id(client, "aditivo", ADITIVO))
 
     assert "ADITIVO CONTRATUAL AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS" in texto
@@ -228,35 +238,54 @@ def test_aditivo_gera_docx_com_partes_valores_e_abrangencia(client):
     assert "EMPRESA EXEMPLO LTDA" in texto and "11.222.333/0001-81" in texto
     assert "CARVALHO & FURTADO ADVOGADOS" in texto
     assert "prestação de serviços de auditoria trabalhista" in texto
-    assert "R$ 1.250,50 (mil, duzentos e cinquenta reais e cinquenta centavos)" in texto
-    assert "1 (uma) hora mensal" in texto
-    assert "O valor da hora excedente será de R$ 210,00 (duzentos e dez reais)" in texto
-    assert "Compensação e Faturamento" in texto and "12 (doze) meses" in texto
-    assert "FILIAL ÁGUA BRANCA LTDA" in texto and "44.555.666/0001-77" in texto
+    assert ("2.1 – Fica alterada a Cláusula 3ª, item 3.2, que passa a vigorar com a seguinte redação: "
+            "“O valor mensal passa a ser de R$ 2.000,00.”") in texto
+    assert "2.2 – Fica excluída a Cláusula 5ª do contrato original." in texto
+    assert ("2.3 – Fica incluída no contrato original a seguinte cláusula: "
+            "“As partes poderão ajustar metas por escrito.”") in texto
     assert "Permanecem inalteradas as demais cláusulas" in texto
     assert "vias de igual teor" in texto
     assert "05 de outubro de 2026" in texto
+    # secoes removidas
+    assert "Remuneração" not in texto and "Abrangência" not in texto and "Compensação" not in texto
+
+
+def test_aditivo_varias_alteracoes_do_mesmo_tipo_ficam_numeradas(client):
+    payload = {**ADITIVO, "alteracoes": [
+        {"tipo": "excluir", "clausula": "Cláusula 4ª"},
+        {"tipo": "excluir", "clausula": "Cláusula 6ª, item 6.1"},
+    ]}
+    texto = _texto(client, _id(client, "aditivo", payload))
+    assert "2.1 – Fica excluída a Cláusula 4ª do contrato original." in texto
+    assert "2.2 – Fica excluída a Cláusula 6ª, item 6.1 do contrato original." in texto
+
+
+def test_aditivo_legado_com_remuneracao_ainda_gera_sem_as_secoes_antigas(client):
+    texto = _texto(client, _id(client, "aditivo", ADITIVO_LEGADO))
+    assert "prestação de serviços de auditoria trabalhista" in texto
+    assert "Remuneração" not in texto and "FILIAL ÁGUA BRANCA" not in texto
+    assert "Permanecem inalteradas as demais cláusulas" in texto
+
+
+@pytest.mark.parametrize("alteracao", [
+    {"tipo": "alterar", "clausula": "Cláusula 3ª"},  # sem novo texto
+    {"tipo": "alterar", "texto": "novo"},  # sem clausula
+    {"tipo": "excluir"},
+    {"tipo": "adicionar", "texto": "  "},
+    {"tipo": "inventar", "texto": "x"},
+])
+def test_aditivo_alteracao_invalida_e_rejeitada(client, alteracao):
+    assert _gerar(client, "aditivo", {**ADITIVO, "alteracoes": [alteracao]}).status_code == 422
+
+
+def test_aditivo_novo_exige_ao_menos_uma_alteracao(client):
+    assert _gerar(client, "aditivo", {**ADITIVO, "alteracoes": []}).status_code == 422
 
 
 def test_aditivo_pf_qualifica_com_cpf(client):
     _semear_origem(CLIENTE_PF)
     texto = _texto(client, _id(client, "aditivo", ADITIVO))
     assert "Mônica Exemplo da Silva" in texto and "987.654.321-00" in texto
-
-
-def test_aditivo_sem_franquia_e_sem_compensacao(client):
-    payload = {**ADITIVO, "remuneracao": {"valor_mensal": 1.0}, "compensacao_anual": False,
-               "abrangencia": []}
-    texto = _texto(client, _id(client, "aditivo", payload))
-    assert "R$ 1,00 (um real)" in texto
-    assert "franquia" not in texto.lower() and "hora excedente" not in texto
-    assert "Compensação e Faturamento" not in texto
-    assert "Abrangência" not in texto
-
-
-def test_aditivo_franquia_no_plural_feminino(client):
-    payload = {**ADITIVO, "remuneracao": {**ADITIVO["remuneracao"], "franquia_horas": 2}}
-    assert "2 (duas) horas mensais" in _texto(client, _id(client, "aditivo", payload))
 
 
 def _assinar(contract_id: str):

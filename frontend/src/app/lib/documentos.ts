@@ -17,15 +17,19 @@ export function ehDocumentoComplementar(tipo: string | undefined | null): tipo i
 // ── Estado dos formulários ────────────────────────────────────────────────
 
 export interface Empresa { razao_social: string; cnpj: string }
+export type TipoAlteracao = "alterar" | "excluir" | "adicionar";
+export const ROTULO_ALTERACAO: Record<TipoAlteracao, string> = {
+  alterar: "Alterar cláusula",
+  excluir: "Excluir cláusula",
+  adicionar: "Adicionar cláusula",
+};
+export interface Alteracao { tipo: TipoAlteracao; clausula: string; texto: string }
+export const alteracaoVazia = (): Alteracao => ({ tipo: "alterar", clausula: "", texto: "" });
 export interface AditivoForm {
   data_documento: string;
   data_contrato_origem: string;
   objeto: string;
-  valor_mensal?: number;
-  franquia_horas: string; // texto do input; vazio = sem franquia
-  valor_hora_excedente?: number;
-  compensacao_anual: boolean;
-  abrangencia: Empresa[];
+  alteracoes: Alteracao[];
 }
 export interface DistratoForm {
   data_documento: string;
@@ -55,8 +59,7 @@ export const substabelecidoVazio = (): Substabelecido => ({ nome: "", genero: "F
 export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocumento {
   if (tipo === "aditivo") {
     return {
-      data_documento: hoje, data_contrato_origem: "", objeto: "", franquia_horas: "",
-      compensacao_anual: false, abrangencia: [],
+      data_documento: hoje, data_contrato_origem: "", objeto: "", alteracoes: [alteracaoVazia()],
     };
   }
   if (tipo === "distrato") {
@@ -96,18 +99,15 @@ export function montarPayload(
   const base = { contrato_origem_id: origemId, data_documento: estado.data_documento || null };
   if (tipo === "aditivo") {
     const e = estado as AditivoForm;
-    const franquia = parseInt(e.franquia_horas, 10);
     return {
       ...base,
       data_contrato_origem: e.data_contrato_origem,
       objeto: e.objeto.trim(),
-      remuneracao: {
-        valor_mensal: e.valor_mensal ?? null,
-        franquia_horas: Number.isFinite(franquia) && franquia > 0 ? franquia : null,
-        valor_hora_excedente: e.valor_hora_excedente ?? null,
-      },
-      compensacao_anual: e.compensacao_anual,
-      abrangencia: e.abrangencia.map((a) => ({ razao_social: a.razao_social.trim(), cnpj: a.cnpj.trim() })),
+      alteracoes: e.alteracoes.map((a) => ({
+        tipo: a.tipo,
+        clausula: a.tipo === "adicionar" ? null : a.clausula.trim(),
+        texto: a.tipo === "excluir" ? null : a.texto.trim(),
+      })),
     };
   }
   if (tipo === "distrato") {
@@ -143,17 +143,15 @@ export function montarPayload(
 export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, hoje: string): EstadoDocumento { // eslint-disable-line @typescript-eslint/no-explicit-any
   const base = estadoInicial(tipo, hoje);
   if (tipo === "aditivo") {
-    const r = fd.remuneracao ?? {};
     return {
       ...(base as AditivoForm),
       data_documento: fd.data_documento ?? hoje,
       data_contrato_origem: fd.data_contrato_origem ?? "",
       objeto: fd.objeto ?? "",
-      valor_mensal: r.valor_mensal ?? undefined,
-      franquia_horas: r.franquia_horas ? String(r.franquia_horas) : "",
-      valor_hora_excedente: r.valor_hora_excedente ?? undefined,
-      compensacao_anual: !!fd.compensacao_anual,
-      abrangencia: fd.abrangencia ?? [],
+      // Aditivo salvo com remuneracao/abrangencia (legado): abre sem alteracoes; o advogado lista as mudancas.
+      alteracoes: (fd.alteracoes ?? []).map((x: Partial<Alteracao>) => ({
+        tipo: x.tipo ?? "alterar", clausula: x.clausula ?? "", texto: x.texto ?? "",
+      })),
     };
   }
   if (tipo === "distrato") {
@@ -196,12 +194,10 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     const a = estado as AditivoForm;
     obrig("data_contrato_origem", a.data_contrato_origem);
     obrig("objeto", a.objeto);
-    if (!a.valor_mensal || a.valor_mensal <= 0) e["remuneracao.valor_mensal"] = "Informe o valor mensal";
-    if (a.franquia_horas && !(parseInt(a.franquia_horas, 10) > 0)) e["remuneracao.franquia_horas"] = "Use um número inteiro maior que zero";
-    if (a.valor_hora_excedente !== undefined && a.valor_hora_excedente <= 0) e["remuneracao.valor_hora_excedente"] = "Deve ser maior que zero";
-    a.abrangencia.forEach((emp, i) => {
-      obrig(`abrangencia.${i}.razao_social`, emp.razao_social);
-      if (!cnpjOk(emp.cnpj)) e[`abrangencia.${i}.cnpj`] = "CNPJ inválido";
+    if (!a.alteracoes.length) e.alteracoes = "Inclua ao menos uma alteração";
+    a.alteracoes.forEach((alt, i) => {
+      if (alt.tipo !== "adicionar") obrig(`alteracoes.${i}.clausula`, alt.clausula, "Informe a cláusula do contrato original");
+      if (alt.tipo !== "excluir") obrig(`alteracoes.${i}.texto`, alt.texto, "Informe o novo texto");
     });
   } else if (tipo === "distrato") {
     const d = estado as DistratoForm;

@@ -21,7 +21,6 @@ from app.models.documentos_complementares import (
 )
 from app.services.consumidor_generator import ConsumidorGenerator
 from app.services.contract_generator import MESES_PT_BR
-from app.utils.currency import numero_com_extenso, valor_com_extenso
 
 ESCRITORIO_NOME = "CARVALHO & FURTADO ADVOGADOS"
 ESCRITORIO_CNPJ = "25.463.159/0001-73"
@@ -209,43 +208,10 @@ class AditivoGenerator(ComplementarGenerator):
             f"O presente aditivo tem por objeto a formalização de {_sem_ponto(data.objeto)}."
         )
 
-        r = data.remuneracao
-        clausula("Remuneração")
-        franquia = ""
-        if r.franquia_horas:
-            horas = numero_com_extenso(r.franquia_horas, "hora mensal" if r.franquia_horas == 1 else "horas mensais", fem=True)
-            franquia = f", correspondente a uma franquia de {horas} de trabalho"
-        doc.add_paragraph(
-            f"Pelos serviços objeto deste aditivo, o CONTRATANTE pagará ao CONTRATADO o valor fixo "
-            f"mensal de {valor_com_extenso(r.valor_mensal)}{franquia}."
-        )
-        if r.valor_hora_excedente:
-            doc.add_paragraph(
-                f"Parágrafo único: O valor da hora excedente será de {valor_com_extenso(r.valor_hora_excedente)}."
-            )
-
-        if data.compensacao_anual:
-            clausula("Compensação e Faturamento")
-            doc.add_paragraph(
-                "Será admitida a compensação de horas entre os meses, com apuração do saldo (crédito ou "
-                "débito) ao final de cada período de 12 (doze) meses da contratação."
-            )
-            doc.add_paragraph(
-                "§1º – A apuração será acompanhada do envio de fatura discriminada e boleto bancário para "
-                "pagamento à vista."
-            )
-
-        if data.abrangencia:
-            clausula("Abrangência")
-            empresas = [
-                f"{nome_contratante(c)}, inscrita no CNPJ sob o n.º {c['cnpj']}"
-                for c in data.contratantes if c.get("cnpj")
-            ] + [f"{e.razao_social}, inscrita no CNPJ sob o n.º {e.cnpj}" for e in data.abrangencia]
-            lista = "; ".join(empresas[:-1]) + f" e {empresas[-1]}" if len(empresas) > 1 else empresas[0]
-            doc.add_paragraph(
-                "A prestação dos serviços objeto deste aditivo abrangerá as pessoas jurídicas inscritas sob "
-                f"os respectivos CNPJs: {lista}."
-            )
+        if data.alteracoes:
+            clausula("Alterações")
+            for i, alt in enumerate(data.alteracoes, 1):
+                doc.add_paragraph(f"{n}.{i} – {self._redacao_alteracao(alt)}")
 
         clausula("Ratificação")
         doc.add_paragraph(
@@ -256,6 +222,14 @@ class AditivoGenerator(ComplementarGenerator):
             "E, por estarem assim justas e contratadas, firmam o presente aditivo em 2 (duas) vias de "
             "igual teor e forma, para um só efeito."
         )
+
+    @staticmethod
+    def _redacao_alteracao(alt) -> str:
+        if alt.tipo == "alterar":
+            return f"Fica alterada a {alt.clausula}, que passa a vigorar com a seguinte redação: “{alt.texto}”"
+        if alt.tipo == "excluir":
+            return f"Fica excluída a {alt.clausula} do contrato original."
+        return f"Fica incluída no contrato original a seguinte cláusula: “{alt.texto}”"
 
     def _fechamento(self, doc: Document, data: AditivoRequest, signatario_roles) -> None:
         self._data_e_local(doc, data)
