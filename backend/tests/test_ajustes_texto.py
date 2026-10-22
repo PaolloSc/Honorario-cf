@@ -67,13 +67,28 @@ def test_texto_padrao_mudou_avisa_mas_mantem_ajuste():
     assert "Meu texto." in _texto_docx(doc)
 
 
-def test_secao_de_honorarios_nao_aceita_ajuste():
+def test_secao_de_honorarios_aceita_ajuste_e_avisa_se_o_padrao_mudar():
     _, base = _build()
     fee = next(i for i in base.itens if i["clausula"].startswith("OUTRAS DISPOSIÇÕES"))
-    assert not fee["editavel"] and fee["etapa"] == 3
-    doc, ctx = _build(ajustes_texto={fee["id"]: {"texto": "burlado", "padrao": fee["padrao"]}})
-    assert "burlado" not in _texto_docx(doc)
-    assert ctx.descartados() == [fee["id"]]
+    assert fee["editavel"] and fee["etapa"] is None
+    doc, ctx = _build(ajustes_texto={fee["id"]: {"texto": "Honorario reescrito.", "padrao": fee["padrao"]}})
+    assert "Honorario reescrito." in _texto_docx(doc)
+    assert _por_id(ctx.itens)[fee["id"]]["status"] == "ok"
+    # valor mudou nas etapas: o texto padrao muda e o ajuste e' mantido com aviso
+    _, ctx2 = _build(ajustes_texto={fee["id"]: {"texto": "Honorario reescrito.", "padrao": "R$ 1,00"}})
+    assert _por_id(ctx2.itens)[fee["id"]]["status"] == "padrao_mudou"
+
+
+def test_clausulas_adicionais_aceitam_ajuste():
+    doc0, base = _build(acessorios={"tem_reembolso": True, "tem_penalidade_inadimplemento": False,
+                                    "clausulas_adicionais": "Clausula livre um."})
+    extra = next(i for i in base.itens if i["clausula"] == "DISPOSIÇÕES ADICIONAIS")
+    assert extra["editavel"]
+    doc, _ = _build(
+        acessorios={"tem_reembolso": True, "tem_penalidade_inadimplemento": False, "clausulas_adicionais": "Clausula livre um."},
+        ajustes_texto={extra["id"]: {"texto": "Livre ajustada.", "padrao": extra["padrao"]}},
+    )
+    assert "Livre ajustada." in _texto_docx(doc)
 
 
 def test_generate_grava_docx_com_ajuste(tmp_path):

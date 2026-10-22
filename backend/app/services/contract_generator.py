@@ -91,12 +91,10 @@ CLAUSE_NUM_ID = 10
 ESPACO_ASSINATURA = Pt(16)
 
 
-# Secoes montadas a partir de dados das etapas anteriores: o texto sai do gerador e
-# o ajuste manual fica na etapa indicada (id da secao -> etapa do wizard).
-SECOES_BLOQUEADAS = {
-    "OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS": 3,
-    "DISPOSIÇÕES ADICIONAIS": 4,
-}
+# Secoes cujo texto nao pode ser ajustado na etapa 7 (id da secao -> etapa do wizard onde
+# se altera). Hoje todas as clausulas sao editaveis: o paragrafo inteiro, valores incluidos;
+# se o valor mudar nas etapas, o aviso "texto padrao mudou" pede a revisao do ajuste.
+SECOES_BLOQUEADAS: dict[str, int] = {}
 
 
 class _ItensClausula:
