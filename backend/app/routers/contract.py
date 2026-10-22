@@ -768,8 +768,11 @@ def preview_honorarios(
     dump = {"escopos": [e.model_dump(mode="json") for e in body.escopos]}
     # O gerador tira a pontuacao final do que foi digitado; o destaque tem de casar.
     completos = contract_reviewer.campos_abertos(dump)
-    completos = [c for c in completos if len(c[1].rstrip(".;, ").strip()) >= 3 and escape(c[1].rstrip(".;, ").strip()) in html]
-    textos = [t.rstrip(".;, ").strip() for _, t, _ in completos]
+    # O contrato desce a inicial de "Até R$ 500" / "Um desconto de 5%"; a busca no html
+    # (e o destaque) tem de usar o texto como o gerador o escreveu, nao como foi digitado.
+    como_sai = ContractGenerator._texto_livre
+    completos = [c for c in completos if len(como_sai(c[1])) >= 3 and escape(como_sai(c[1])) in html]
+    textos = [como_sai(t) for _, t, _ in completos]
     # Desconto percentual nao e' texto livre, mas e' a "especificacao" que a pessoa preencheu.
     for h in (e.model_dump(mode="json").get(k) or {} for e in body.escopos for k in contract_reviewer.HONORARIO_ROTULOS):
         if h.get("tem_desconto") and h.get("desconto_tipo") != "livre" and h.get("desconto_percentual"):
