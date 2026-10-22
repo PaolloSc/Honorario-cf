@@ -115,14 +115,17 @@ class DocuSealService:
         }
  
     async def archive_submission(self, submission_id: int | str) -> bool:
-        """Arquiva a submissao: o link de assinatura dela deixa de valer."""
+        """Arquiva a submissao: o link de assinatura dela deixa de valer.
+
+        404 conta como arquivada: a submissao ja' foi apagada no DocuSeal.
+        """
         async with httpx.AsyncClient() as client:
             response = await client.delete(
                 f"{self.base_url}/submissions/{submission_id}",
                 headers=self._headers(),
                 timeout=30.0,
             )
-        return response.status_code in (200, 204)
+        return response.status_code in (200, 204, 404)
 
     async def get_submission_status(self, submission_id: int | str) -> dict:
         """Check the status of a submission."""
