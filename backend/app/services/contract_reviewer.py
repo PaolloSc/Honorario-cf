@@ -209,6 +209,8 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
     add("Limitação do reembolso", acessorios.get("descricao_limitacao_reembolso"))
     add("Critério de extinção do êxito", acessorios.get("criterio_extincao_exito"))
     add("Cláusulas adicionais", acessorios.get("clausulas_adicionais"))
+    for id_, ajuste in (data.get("ajustes_texto") or {}).items():
+        add(f"Cláusula {id_} (ajustada à mão)", ajuste.get("texto"))
 
     return lines
 

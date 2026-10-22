@@ -312,6 +312,33 @@ def generate_contract(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _previa_com_itens(data: ContratoRequest) -> dict:
+    """Monta o DOCX em arquivo temporario e devolve a previa em HTML + a lista de
+    clausulas (id, texto atual/padrao, ajuste) para o painel 'Ajustar texto'."""
+    import tempfile
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        doc = get_generator()._build_document(data)
+        doc.save(str(tmp_path))
+        ctx = doc._cf_itens
+        html = _docx_to_html(tmp_path, frozenset(i["texto"] for i in ctx.itens if i["ajustado"]))
+        return {"preview_html": html, "itens": ctx.itens, "ajustes_descartados": ctx.descartados()}
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+@router.post("/preview-texto")
+def preview_texto(data: ContratoRequest, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Previa + clausulas ajustaveis, sem IA e sem gravar (usada ao salvar um ajuste)."""
+    return _previa_com_itens(data)
+
+
 @router.post("/review")
 def review_contract(
     data: ContratoRequest,
@@ -323,34 +350,22 @@ def review_contract(
     (nao a clausula padrao do contrato, que nao ha' onde editar ali). A previa
     (preview_html) e' sempre retornada; achados so' quando DEEPSEEK_API_KEY esta
     configurada (enabled=False caso contrario, sem erro)."""
-    import tempfile
-
-    gen = get_generator()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-    tmp_path = Path(tmp.name)
-    tmp.close()
     try:
-        gen._build_document(data).save(str(tmp_path))
-        preview_html = _docx_to_html(tmp_path)
+        previa = _previa_com_itens(data)
 
         if not contract_reviewer.is_configured():
-            return {"enabled": False, "findings": [], "preview_html": preview_html}
+            return {"enabled": False, "findings": [], **previa}
 
         text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"))
         findings = contract_reviewer.review_text(text) if text.strip() else []
         findings = contract_reviewer.so_do_digitado(findings, data.model_dump(mode="json"))
-        return {"enabled": True, "findings": findings, "preview_html": preview_html}
+        return {"enabled": True, "findings": findings, **previa}
     except contract_reviewer.ContractReviewError as e:
         logger.warning("Revisao do contrato indisponivel: %s", e)
-        return {"enabled": True, "findings": [], "preview_html": preview_html, "error": str(e)}
+        return {"enabled": True, "findings": [], **previa, "error": str(e)}
     except Exception as e:
         logger.error("Falha na revisao do contrato: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        try:
-            tmp_path.unlink()
-        except OSError:
-            pass
 
 
 @router.post("/generate-consumidor", response_model=ContratoResponse)
@@ -576,8 +591,9 @@ def _inline_html(paragraph) -> str:
     return "".join(bits) or escape(_clean_preview_text(paragraph.text))
 
 
-def _docx_to_html(filepath: Path) -> str:
-    """Render the generated DOCX as simple HTML for inline preview (no external deps)."""
+def _docx_to_html(filepath: Path, ajustados: frozenset[str] = frozenset()) -> str:
+    """Render the generated DOCX as simple HTML for inline preview (no external deps).
+    Paragrafos cujo texto esta em `ajustados` (editados na etapa 7) saem com class="ajustado"."""
     from html import escape
 
     from docx import Document
@@ -605,6 +621,8 @@ def _docx_to_html(filepath: Path) -> str:
                 parts.append(f"<h1>{text}</h1>")
             elif style.startswith("Heading"):
                 parts.append(f"<h3>{text}</h3>")
+            elif p.text.strip() in ajustados:
+                parts.append(f'<p class="ajustado">{text}</p>')
             else:
                 parts.append(f"<p>{text}</p>")
         elif child.tag == qn("w:tbl"):
@@ -643,6 +661,7 @@ def _docx_to_html(filepath: Path) -> str:
         "h1{text-align:center;font-size:1.1rem}"
         "h3{font-size:1rem;margin-top:1.2rem}"
         "p{text-align:justify}"
+        "p.ajustado{background:#fef3c7;border-left:3px solid #d97706;padding:2px 6px}"
         "table{border-collapse:collapse;width:100%;margin:.5rem 0}"
         "td,th{border:1px solid #000;padding:6px}"
         "th{text-align:center}"
