@@ -843,9 +843,10 @@ def _tirar_texto(obj, texto: str):
     return "" if obj == texto else obj
 
 
-def _trechos_do_campo(html: str, body: "PreviaHonorariosRequest", texto: str) -> list[tuple[int, int]]:
+def _trechos_do_campo(html: str, body: "PreviaHonorariosRequest", texto: str) -> list[tuple[int, int]] | None:
     """Onde o gerador escreveu o campo: gera o contrato de novo sem o texto e fica com
-    os blocos que sumiram ou mudaram. Falhou = lista vazia (sem destaque, nunca no lugar errado)."""
+    os blocos que sumiram ou mudaram. Falhou = None (sem destaque, nunca no lugar errado;
+    o campo continua indo a IA)."""
     from collections import Counter
 
     try:
@@ -854,7 +855,7 @@ def _trechos_do_campo(html: str, body: "PreviaHonorariosRequest", texto: str) ->
         html_sem = _html_honorarios(sem.escopos, sem.acessorios)
     except Exception:
         logger.warning("Previa: nao foi possivel localizar o campo no contrato", exc_info=True)
-        return []
+        return None
     restam = Counter(html_sem[i:f] for i, f in _blocos(html_sem))
     spans = []
     for i, f in _blocos(html):
@@ -882,13 +883,18 @@ def preview_honorarios(
     # O contrato pode escrever o texto diferente do digitado (inicial, ponto final,
     # espacos); a busca no html e o destaque usam o texto como saiu no contrato.
     # Cada campo so' vale dentro dos blocos onde o gerador o escreveu.
-    trechos: dict[str, list[tuple[int, int]]] = {}
+    trechos: dict = {}
     como_sai = []
     for c in completos:
         if c[1] not in trechos:
             trechos[c[1]] = _trechos_do_campo(html, body, c[1])
-        regiao = "".join(html[i:f] for i, f in trechos[c[1]])
-        como_sai.append((c, _achar_no_html(regiao, c[1], destaque=False), _achar_no_html(regiao, c[1]), trechos[c[1]]))
+        sp = trechos[c[1]]
+        if sp is None:
+            # nao deu para localizar: o campo vai a IA (procurado no html todo), sem destaque
+            como_sai.append((c, _achar_no_html(html, c[1], destaque=False), None, []))
+            continue
+        regiao = "".join(html[i:f] for i, f in sp)
+        como_sai.append((c, _achar_no_html(regiao, c[1], destaque=False), _achar_no_html(regiao, c[1]), sp))
     # Vai a IA o que foi escrito no contrato; so' recebe destaque o que se acha sem duvida.
     completos = [c for c, escrito, _, _ in como_sai if escrito and len(escrito) >= 3]
     textos: list = [(achado, sp) for _, _, achado, sp in como_sai if achado and len(achado) >= 3]

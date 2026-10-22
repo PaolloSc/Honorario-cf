@@ -192,3 +192,14 @@ def test_achar_sem_destaque_aceita_texto_curto_repetido():
     duas = "<p>Desconto de 10% na parcela 1.</p><p>Multa de 10% ao ano.</p>"
     assert _achar_no_html(duas, "10%") is None
     assert _achar_no_html(duas, "10%", destaque=False) == "10%"
+
+
+def test_falha_de_localizacao_tira_so_o_destaque(client, monkeypatch):
+    from app.routers import contract as c
+
+    monkeypatch.setattr(c, "_trechos_do_campo", lambda *a, **k: None)
+    e = _escopo("pro_labore")
+    e["pro_labore"].update(tem_desconto=True, desconto_tipo="livre", desconto_livre="abatimento combinado com o financeiro", desconto_condicao="pagamento em dia")
+    html, ia = _previa(client, monkeypatch, e)
+    assert "abatimento combinado com o financeiro" in ia and "pagamento em dia" in ia
+    assert "<mark" not in html
