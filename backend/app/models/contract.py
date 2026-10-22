@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Literal, Optional
  
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, model_validator
  
  
 class TipoPessoa(str, Enum):
@@ -370,6 +370,29 @@ class ContratoRequest(BaseModel):
     email_destinatario: Optional[str] = None
     # {id da clausula (ex.: "7.2"): ajuste}; aplicado pelo gerador ao montar o DOCX.
     ajustes_texto: dict[str, AjusteTexto] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _valores_dos_honorarios(self, info: ValidationInfo) -> "ContratoRequest":
+        """Percentual de exito entre 0 e 100; hora, pro-labore e mensalidade com valor
+        maior que zero. A previa do pop-up (context previa) aceita o formulario pela metade."""
+        if (info.context or {}).get("previa"):
+            return self
+        for i, e in enumerate(self.escopos, 1):
+            h = e.honorarios
+            if TipoHonorario.EXITO in h and e.exito and e.exito.percentual is not None                     and not 0 <= e.exito.percentual <= 100:
+                raise ValueError(f"Escopo {i}: o percentual de êxito deve ficar entre 0 e 100.")
+            checks = [(TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada and e.hora_trabalhada.valor_hora, "hora trabalhada")]
+            # pro-labore com parcelamento descrito em texto pode ficar sem total
+            pl = e.pro_labore
+            if pl and not (pl.tipo_parcelamento == "customizado" and (pl.parcelamento_customizado or "").strip()):
+                checks.append((TipoHonorario.PRO_LABORE, pl.valor_total, "pró-labore"))
+            # mensalidade por faixas de preco pode ficar sem valor unico
+            if e.mensalidade and not e.mensalidade.faixas_preco:
+                checks.append((TipoHonorario.MENSALIDADE, e.mensalidade.valor, "mensalidade"))
+            for tipo, valor, rotulo in checks:
+                if tipo in h and valor is not None and valor <= 0:
+                    raise ValueError(f"Escopo {i}: o valor de {rotulo} deve ser maior que zero.")
+        return self
  
  
 class ContratoResponse(BaseModel):

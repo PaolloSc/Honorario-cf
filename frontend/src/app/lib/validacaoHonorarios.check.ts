@@ -34,4 +34,26 @@ assert.deepEqual(
   [],
 );
 
+// Êxito de 0 a 100 e valores maiores que zero (achados 4 e 10 da varredura).
+const exito = (percentual: number) => ({ honorarios: ["exito"], exito: { percentual } }) as never;
+assert.deepEqual(errosDoEscopo(exito(150), "E1"), ["E1: o percentual de êxito deve ficar entre 0 e 100."]);
+assert.equal(errosDoEscopo(exito(-5), "E").length, 1);
+assert.deepEqual(errosDoEscopo(exito(100), "E"), []);
+assert.deepEqual(errosDoEscopo(exito(0), "E"), []);
+const hora = (valor_hora: number) => ({ honorarios: ["hora_trabalhada"], hora_trabalhada: { valor_hora } }) as never;
+assert.deepEqual(errosDoEscopo(hora(0), "E1"), ["E1: informe o valor de hora trabalhada (maior que zero)."]);
+assert.equal(errosDoEscopo(hora(-1), "E").length, 1);
+assert.deepEqual(errosDoEscopo(hora(300), "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["mensalidade"], mensalidade: { valor: 0 } } as never, "E").length, 1);
+assert.deepEqual(
+  errosDoEscopo({ honorarios: ["mensalidade"], mensalidade: { valor: 0, faixas_preco: [{ faixa: "a", valor: "1" }] } } as never, "E"),
+  [],
+);
+assert.equal(errosDoEscopo(escopo(pl({ valor_total: -500 })), "E").length, 1);
+assert.deepEqual(
+  errosDoEscopo(escopo(pl({ valor_total: 0, tipo_parcelamento: "customizado", parcelamento_customizado: "a combinar" })), "E"),
+  [],
+);
+assert.deepEqual(errosDoEscopo({ honorarios: [], hora_trabalhada: { valor_hora: 0 } } as never, "E"), []);
+
 console.log("validacaoHonorarios.ts ok");

@@ -26,6 +26,25 @@ export function errosDoEscopo(
     // Sem o texto, o contrato cairia em "parcela única": descreva o parcelamento.
     errors.push(`${label}: descreva o parcelamento customizado do pró-labore.`);
   }
+  // Mesmas regras do backend (422): êxito de 0 a 100 e valor maior que zero.
+  const pct = escopo.exito?.percentual;
+  if (escopo.honorarios.includes("exito") && pct != null && (pct < 0 || pct > 100)) {
+    errors.push(`${label}: o percentual de êxito deve ficar entre 0 e 100.`);
+  }
+  const valores: [Honorario, number | null | undefined, string][] = [
+    ["hora_trabalhada", escopo.hora_trabalhada?.valor_hora, "hora trabalhada"],
+    ["mensalidade", escopo.mensalidade?.faixas_preco?.length ? undefined : escopo.mensalidade?.valor, "mensalidade"],
+    [
+      "pro_labore",
+      pl?.tipo_parcelamento === "customizado" && pl.parcelamento_customizado?.trim() ? undefined : pl?.valor_total,
+      "pró-labore",
+    ],
+  ];
+  for (const [hon, valor, rotulo] of valores) {
+    if (escopo.honorarios.includes(hon) && valor != null && valor <= 0) {
+      errors.push(`${label}: informe o valor de ${rotulo} (maior que zero).`);
+    }
+  }
   for (const hon of Object.keys(ROTULOS) as Honorario[]) {
     const h = escopo[hon];
     if (

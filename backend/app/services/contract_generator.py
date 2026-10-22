@@ -1091,10 +1091,6 @@ class ContractGenerator:
             "previsto neste Contrato será considerado inválido e ineficaz.",
             "As obrigações de pagamento previstas neste Contrato serão devidas, independentemente "
             "de notificação, tão logo se dê o seu vencimento.",
-            f"O atraso no pagamento sujeitará a CONTRATANTE a juros de {percentual_com_extenso(1)} "
-            f"ao mês, multa de {percentual_com_extenso(10)} sobre o valor em atraso e "
-            "atualização monetária pelo IPCA, sem prejuízo da suspensão dos serviços ou da "
-            "rescisão contratual, a critério do C&F.",
             "Em caso de mudanças legislativas/regulatórias relevantes que alterem a carga "
             "tributária, os custos de conformidade, ou a forma de incidência/retenção de "
             "tributos aplicáveis aos serviços, as Partes renegociarão, de boa-fé, os valores "
@@ -1105,6 +1101,14 @@ class ContractGenerator:
             "fiscal (inclusive em eventual migração de regime tributário), sem alteração do "
             "escopo ou do valor líquido pactuado.",
         ]
+        if data.acessorios.tem_penalidade_inadimplemento:
+            # entra antes das mudancas legislativas (ultimas duas do bloco)
+            clauses.insert(len(clauses) - 2, (
+            f"O atraso no pagamento sujeitará a CONTRATANTE a juros de {percentual_com_extenso(1)} "
+            f"ao mês, multa de {percentual_com_extenso(10)} sobre o valor em atraso e "
+            "atualização monetária pelo IPCA, sem prejuízo da suspensão dos serviços ou da "
+            "rescisão contratual, a critério do C&F."
+            ))
 
         if com_parte_relacionada:
             clauses.append(

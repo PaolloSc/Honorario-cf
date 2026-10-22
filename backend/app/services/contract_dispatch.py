@@ -55,4 +55,4 @@ def parse_form_data(form_data: dict) -> tuple[Any, ContractGenerator]:
         return ContratoConsumidorRequest(**form_data), get_generator(tipo)
     if tipo in REQUESTS_COMPLEMENTARES:
         return REQUESTS_COMPLEMENTARES[tipo](**form_data), get_generator(tipo)
-    return ContratoRequest(**form_data), get_generator(TIPO_HONORARIOS)
+    return ContratoRequest.model_validate(form_data, context={"previa": True}), get_generator(TIPO_HONORARIOS)
