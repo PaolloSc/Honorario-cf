@@ -66,6 +66,11 @@ export function oabTexto(o: Oab, sob = false): string {
   return `OAB/${o.uf || OAB_UF_PADRAO} ${sob ? "sob o " : ""}n.º ${formatarOabNumero(o.numero)}`;
 }
 
+/** Troca a UF. Num texto "original" (fora do padrao) o numero nao e' aproveitavel com outra UF: limpa. */
+export function trocarUfOab(o: Oab, uf: string): Oab {
+  return o.original ? { numero: "", uf } : { ...o, uf };
+}
+
 /** Texto salvo ("OAB/MG nº 36.959", "OAB/SP sob o n.º 1.234") -> numero e UF do formulario. */
 export function lerOab(texto: string | undefined | null): Oab {
   const t = (texto ?? "").trim();

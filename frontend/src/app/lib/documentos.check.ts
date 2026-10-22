@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { cnpjValido } from "./cnpj.ts";
 import {
   agruparDerivados, cnjValido, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
-  formatarOabNumero, lerOab, oabsDoTexto, oabTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
+  formatarOabNumero, lerOab, trocarUfOab, oabsDoTexto, oabTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
 } from "./documentos.ts";
 
 const validar = (t: any, e: any) => validarBase(t, e, cnpjValido);
@@ -113,6 +113,9 @@ const livre = "advogado inscrito na OAB 36.959 (MG)";
 assert.equal(oabTexto(lerOab(livre)), livre);
 assert.equal(oabTexto({ ...lerOab(duas), numero: "333" }), "OAB/MG n.º 333"); // editou: vale o que digitou
 assert.deepEqual(lerOab(""), { numero: "", uf: "MG" });
+// Trocar so a UF de um texto original limpa o numero (nao gera "OAB/SP n.º OABMGN11").
+assert.deepEqual(trocarUfOab(lerOab(duas), "SP"), { numero: "", uf: "SP" });
+assert.deepEqual(trocarUfOab({ numero: "36.959", uf: "MG" }, "SP"), { numero: "36.959", uf: "SP" });
 assert.equal(formatarOabNumero("36959-a"), "36.959-A");
 
 // OABs do cadastro de colaboradores: texto "numero/UF" (admin) <-> lista validada.
