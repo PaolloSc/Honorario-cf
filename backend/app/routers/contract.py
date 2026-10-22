@@ -745,17 +745,20 @@ def _achar_no_html(html: str, digitado: str) -> str | None:
     return unescape(achados[0])
 
 
-def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
+def _marcar_digitados(html: str, textos: list, achados: list[dict]) -> str:
     """Amarelo = o que a pessoa digitou. Onde a IA propoe outro texto, o digitado sai
     riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar).
     O mesmo texto digitado em mais de um honorario e' destacado em cada ocorrencia."""
-    from collections import Counter
     from html import escape
 
     # Cada trecho vira um intervalo; o mais longo vence quando dois se sobrepoem
     # (nada de <mark> dentro de <mark>), e o texto curto nunca cai dentro de tag.
+    # Um item e' o texto ou (texto, trechos do html onde o gerador o escreveu): fora
+    # desses trechos nunca marca. Cada item usa uma ocorrencia (texto igual em dois
+    # honorarios = dois itens = duas marcas).
+    itens = [(t, None) if isinstance(t, str) else t for t in textos]
     escolhidos: list[tuple[int, int, str]] = []
-    for texto, vezes in sorted(Counter(textos).items(), key=lambda kv: -len(kv[0])):
+    for texto, spans in sorted(itens, key=lambda it: -len(it[0])):
         alvo = escape(texto)
         dentro = alvo
         for a in achados:
@@ -772,35 +775,34 @@ def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
                     1,
                 )
         marcado = f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>'
-        usados = 0
         for m in re.finditer(re.escape(alvo) + r"(?![^<]*>)", html):
-            if usados == vezes:
-                break
+            if spans is not None and not any(i0 <= m.start() and m.end() <= f for i0, f in spans):
+                continue
             if any(m.start() < f and i0 < m.end() for i0, f, _ in escolhidos):
                 continue
             escolhidos.append((m.start(), m.end(), marcado))
-            usados += 1
+            break
     for ini, fim, marcado in sorted(escolhidos, reverse=True):
         html = html[:ini] + marcado + html[fim:]
     return html
 
 
-@router.post("/preview-honorarios")
-def preview_honorarios(
-    body: PreviaHonorariosRequest,
-    user: CurrentUser = Depends(get_current_user),
-) -> dict:
-    """Previa so' da secao de honorarios, para o pop-up do wizard: o texto digitado
-    vem destacado e, com revisar=True, a correcao da IA aparece no lugar. Nada e' gravado."""
-    import tempfile
-    from html import escape
+_BLOCO = re.compile(r"<(?:p|h1|h3|table)(?=[\s>])")
 
-    from app.utils.currency import percentual_com_extenso
+
+def _blocos(html: str) -> list[tuple[int, int]]:
+    """Intervalos (inicio, fim) dos paragrafos/titulos/tabelas do html do contrato."""
+    ini = [m.start() for m in _BLOCO.finditer(html)]
+    return list(zip(ini, ini[1:] + [len(html)]))
+
+
+def _html_honorarios(escopos: list, acessorios) -> str:
+    import tempfile
 
     data = ContratoRequest(
         contratantes=[_CONTRATANTE_PREVIA],
-        escopos=body.escopos,
-        acessorios=body.acessorios or Acessorios(),
+        escopos=escopos,
+        acessorios=acessorios or Acessorios(),
         participacao={"tem_participacao": False},
     )
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
@@ -817,16 +819,66 @@ def preview_honorarios(
     # Secoes saem como <h3> numerado; recorta da secao 3 ate a seguinte.
     inicio = html.rfind("<h3>", 0, html.find("OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS"))
     fim = html.rfind("<h3>", 0, html.find("CLÁUSULAS GERAIS"))
-    html = html[inicio:fim]
+    return html[inicio:fim]
+
+
+def _tirar_texto(obj, texto: str):
+    """Copia do dump com todo valor igual a `texto` esvaziado."""
+    if isinstance(obj, dict):
+        return {k: _tirar_texto(v, texto) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_tirar_texto(v, texto) for v in obj]
+    return "" if obj == texto else obj
+
+
+def _trechos_do_campo(html: str, body: "PreviaHonorariosRequest", texto: str) -> list[tuple[int, int]]:
+    """Onde o gerador escreveu o campo: gera o contrato de novo sem o texto e fica com
+    os blocos que sumiram ou mudaram. Falhou = lista vazia (sem destaque, nunca no lugar errado)."""
+    from collections import Counter
+
+    try:
+        sem = body.model_dump(mode="json")
+        sem = PreviaHonorariosRequest(**_tirar_texto(sem, texto))
+        html_sem = _html_honorarios(sem.escopos, sem.acessorios)
+    except Exception:
+        logger.warning("Previa: nao foi possivel localizar o campo no contrato", exc_info=True)
+        return []
+    restam = Counter(html_sem[i:f] for i, f in _blocos(html_sem))
+    spans = []
+    for i, f in _blocos(html):
+        if restam[html[i:f]] > 0:
+            restam[html[i:f]] -= 1
+        else:
+            spans.append((i, f))
+    return spans
+
+
+@router.post("/preview-honorarios")
+def preview_honorarios(
+    body: PreviaHonorariosRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Previa so' da secao de honorarios, para o pop-up do wizard: o texto digitado
+    vem destacado e, com revisar=True, a correcao da IA aparece no lugar. Nada e' gravado."""
+    from app.utils.currency import percentual_com_extenso
+
+    html = _html_honorarios(body.escopos, body.acessorios)
 
     dump = {"escopos": [e.model_dump(mode="json") for e in body.escopos]}
     # O gerador tira a pontuacao final do que foi digitado; o destaque tem de casar.
     completos = contract_reviewer.campos_abertos(dump)
     # O contrato pode escrever o texto diferente do digitado (inicial, ponto final,
     # espacos); a busca no html e o destaque usam o texto como saiu no contrato.
-    como_sai = [(c, _achar_no_html(html, c[1])) for c in completos]
-    completos = [c for c, achado in como_sai if achado and len(achado) >= 3]
-    textos = [achado for _, achado in como_sai if achado and len(achado) >= 3]
+    # Cada campo so' vale dentro dos blocos onde o gerador o escreveu.
+    trechos: dict[str, list[tuple[int, int]]] = {}
+    como_sai = []
+    for c in completos:
+        if c[1] not in trechos:
+            trechos[c[1]] = _trechos_do_campo(html, body, c[1])
+        achado = _achar_no_html("".join(html[i:f] for i, f in trechos[c[1]]), c[1])
+        como_sai.append((c, achado, trechos[c[1]]))
+    completos = [c for c, achado, _ in como_sai if achado and len(achado) >= 3]
+    textos: list = [(achado, sp) for _, achado, sp in como_sai if achado and len(achado) >= 3]
     # Desconto percentual nao e' texto livre, mas e' a "especificacao" que a pessoa preencheu.
     for h in (e.model_dump(mode="json").get(k) or {} for e in body.escopos for k in contract_reviewer.HONORARIO_ROTULOS):
         if h.get("tem_desconto") and h.get("desconto_tipo") != "livre" and h.get("desconto_percentual"):
