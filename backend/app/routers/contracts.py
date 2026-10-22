@@ -491,8 +491,16 @@ def update_contract_status(
     old_status = contract.status
     if old_status == "assinado" and status != "assinado":
         raise HTTPException(409, "Contrato assinado não muda de status. Para alterar algo, crie um aditivo.")
-    if old_status == "enviado" and status == "rascunho":
-        raise HTTPException(409, "Para voltar a rascunho use \"Cancelar envio para assinatura\" (arquiva o link no DocuSeal).")
+    if old_status == "enviado" and status in ("rascunho", "cancelado"):
+        raise HTTPException(409, "Para sair de \"enviado\" use \"Cancelar envio para assinatura\" (arquiva o link no DocuSeal).")
+    if status in ("enviado", "assinado") and old_status != "enviado":
+        enviado_pelo_docuseal = (
+            db.query(ContractVersionDB)
+            .filter(ContractVersionDB.contract_id == contract_id, ContractVersionDB.docuseal_submission_id.isnot(None))
+            .first()
+        )
+        if not enviado_pelo_docuseal:
+            raise HTTPException(409, "Este contrato não foi enviado para assinatura pelo sistema; use o envio pelo DocuSeal.")
     contract.status = status
     contract.updated_by = user.email
     contract.updated_at = utcnow()

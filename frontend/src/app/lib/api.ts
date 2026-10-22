@@ -687,6 +687,11 @@ export async function getContract(contractId: string) {
 const versaoCarregada: Record<string, number> = {};
 export const EVENTO_VERSAO_DESATUALIZADA = "contrato-versao-desatualizada";
 
+/** "Salvar sobre a versão atual": o próximo Salvar desta aba parte da versão que está no servidor. */
+export function adotarVersaoAtual(contractId: string, versaoAtual: number) {
+  versaoCarregada[contractId] = versaoAtual;
+}
+
 export async function getContractFormData(contractId: string, version?: number) {
   const qs = version ? `?version=${version}` : "";
   const r = await request<ContractFormDataResponse>(`/api/contracts/${contractId}/form-data${qs}`);
@@ -710,7 +715,7 @@ export async function updateContract(contractId: string, formData: Record<string
     return r;
   } catch (e) {
     if (!(e instanceof ConflitoError)) throw e;
-    let detail: { codigo?: string; motivo?: string; sugestao?: string } = {};
+    let detail: { codigo?: string; motivo?: string; sugestao?: string; versao_atual?: number } = {};
     try {
       detail = JSON.parse(e.message.slice(e.message.indexOf("{"))).detail ?? {};
     } catch {
@@ -719,7 +724,7 @@ export async function updateContract(contractId: string, formData: Record<string
     if (detail.codigo === "versao_desatualizada") {
       // Nada foi gravado e a tela NÃO recarrega sozinha (o digitado seria perdido): o aviso
       // global (AvisoVersaoDesatualizada) oferece o botão "Recarregar".
-      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(EVENTO_VERSAO_DESATUALIZADA, { detail: detail.motivo }));
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(EVENTO_VERSAO_DESATUALIZADA, { detail: { motivo: detail.motivo, contractId, versaoAtual: (detail as { versao_atual?: number }).versao_atual } }));
       throw new Error(`${detail.motivo ?? "Este contrato foi alterado em outra aba."} Nada foi salvo; o que você digitou continua na tela.`);
     }
     if (detail.codigo === "contrato_travado") throw new Error(`${detail.motivo} ${detail.sugestao ?? ""}`.trim());

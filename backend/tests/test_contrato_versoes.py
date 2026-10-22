@@ -379,3 +379,48 @@ def test_status_manual_nao_destrava_assinado_nem_volta_enviado_a_rascunho(client
     _travar(cid, "enviado")
     assert client.patch(f"/api/contracts/{cid}/status", params={"status": "rascunho"}).status_code == 409
     assert client.patch(f"/api/contracts/{cid}/status", params={"status": "assinado"}).status_code == 200
+
+
+# ── ajustes da segunda revisao ──────────────────────────────────────────────
+
+
+def test_apos_409_de_versao_salvar_sobre_a_atual_com_a_versao_nova_funciona(client):
+    cid = _criar(client)
+    assert _put(client, cid, _form(999), version=1).status_code == 200
+    r = _put(client, cid, _form(5), version=1)
+    assert r.status_code == 409
+    atual = r.json()["detail"]["versao_atual"]  # a tela adota esta versao e reenvia
+    assert _put(client, cid, _form(5), version=atual).json()["version"] == atual + 1
+
+
+def test_status_manual_enviado_para_cancelado_e_bloqueado_e_sem_submissao_nao_marca(client):
+    cid = _criar(client)
+    for alvo in ("enviado", "assinado"):  # nunca foi enviado pelo DocuSeal
+        assert client.patch(f"/api/contracts/{cid}/status", params={"status": alvo}).status_code == 409
+    assert _contrato(cid).status == "rascunho"
+    _marcar_enviado(cid)
+    r = client.patch(f"/api/contracts/{cid}/status", params={"status": "cancelado"})
+    assert r.status_code == 409 and "Cancelar envio" in r.json()["detail"]
+    assert _contrato(cid).status == "enviado" and _sid(cid) == ["777"]
+    assert client.patch(f"/api/contracts/{cid}/status", params={"status": "assinado"}).status_code == 200
+
+
+def test_cancelar_envio_404_do_docuseal_conta_como_ja_arquivada(client, monkeypatch):
+    import httpx
+
+    from app.services.docuseal import DocuSealService
+
+    class Resp:
+        status_code = 404
+
+    async def delete(self, *a, **k):
+        return Resp()
+
+    monkeypatch.setattr(httpx.AsyncClient, "delete", delete)
+    servico = DocuSealService()
+    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: servico)
+    cid = _criar(client)
+    _marcar_enviado(cid)
+    r = client.post(f"/api/docuseal/{cid}/cancelar-envio")
+    assert r.status_code == 200, r.text
+    assert _contrato(cid).status == "rascunho" and _sid(cid) == [None]
