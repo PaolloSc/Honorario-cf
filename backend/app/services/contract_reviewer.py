@@ -119,7 +119,7 @@ def _frases_do_honorario(chave: str, h: dict) -> list[str]:
         obj = modelos[chave](**h)
         # Os metodos dos blocos nao usam estado do gerador (template/saida).
         gen = ContractGenerator.__new__(ContractGenerator)
-        getattr(gen, f"_add_{chave}")(Document(), obj, frases.append)
+        getattr(gen, f"_add_{chave}")(Document(), obj, lambda texto, **_: frases.append(texto))
     except Exception as e:  # dado incompleto no meio do wizard
         logger.info("Revisao sem frase de contexto para %s: %s", chave, e)
         return []
