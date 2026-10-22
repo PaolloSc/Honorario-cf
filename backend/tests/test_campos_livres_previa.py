@@ -1,6 +1,8 @@
 """Campo livre digitado tem de chegar à IA e ao destaque da prévia mesmo quando o
 contrato o escreve diferente (inicial, ponto final, espaços), e nenhum campo/honorário
 pode ser pulado na coleta."""
+import re
+
 import pytest
 
 from app.auth import CurrentUser, get_current_user
@@ -126,3 +128,34 @@ def test_destaques_sobrepostos_marcam_so_o_mais_longo():
     )
     assert out.count("<mark") == 1 and "<mark" in out and out.count("</mark>") == 1
     assert ">pagamento em dia sempre</mark>" in out
+
+
+def test_destaque_so_dentro_do_trecho_do_campo():
+    from app.routers.contract import _marcar_digitados
+
+    html = "<p>Cláusula A: pagamento em dia sempre.</p><p>Cláusula B: pagamento em dia sempre.</p>"
+    b = html.index("<p>Cláusula B")
+    out = _marcar_digitados(html, [("pagamento em dia sempre", [(b, len(html))])], [])
+    assert out.count("<mark") == 1
+    assert out.index("<mark") > out.index("Cláusula B")
+
+
+def test_trecho_vazio_nao_marca_nada():
+    from app.routers.contract import _marcar_digitados
+
+    assert "<mark" not in _marcar_digitados("<p>pagamento em dia</p>", [("pagamento em dia", [])], [])
+
+
+def test_campo_so_e_marcado_no_bloco_gerado_por_ele(client, monkeypatch):
+    # o texto do desconto tambem aparece, igual, numa frase fixa de outra clausula
+    # (permuta): so' o paragrafo do desconto leva o destaque.
+    fixa = "serão remunerados mediante permuta"
+    e = _escopo("pro_labore")
+    e["permuta"] = _escopo("permuta")["permuta"]
+    e["honorarios"] = ["pro_labore", "permuta"]
+    e["pro_labore"].update(tem_desconto=True, desconto_tipo="livre", desconto_livre=fixa)
+    html, _ = _previa(client, monkeypatch, e)
+    marcas = [m for m in re.finditer(r"<mark[^>]*>([^<]*)</mark>", html) if m.group(1) == fixa]
+    assert len(marcas) == 1
+    inicio = html.rfind("<p>", 0, marcas[0].start())
+    assert "permuta com os" not in html[inicio:html.index("</p>", marcas[0].start())]
