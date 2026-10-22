@@ -121,7 +121,8 @@ def _exigir_editavel(contract: ContractDB, db: Session) -> None:
         "codigo": "contrato_travado",
         "motivo": "Este contrato já foi assinado e não pode ser alterado." if assinado
         else "Este contrato já foi enviado para assinatura e não pode ser alterado.",
-        "sugestao": "Crie um aditivo para mudar o que foi assinado." if assinado
+        "sugestao": "Crie um novo substabelecimento com os dados corretos." if contract.tipo_contrato == "substabelecimento"
+        else "Crie um aditivo para mudar o que foi assinado." if assinado
         else "Cancele o envio para assinatura ou crie um novo contrato a partir dele.",
     })
 
