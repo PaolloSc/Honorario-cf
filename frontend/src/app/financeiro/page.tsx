@@ -197,7 +197,7 @@ export default function FinanceiroPage() {
                 : "border-transparent text-muted hover:text-foreground"
             }`}
           >
-            {t === "pendentes" && `Aguardando participação (${pendentes.length})`}
+            {t === "pendentes" && `Participação a cadastrar ou aprovar (${pendentes.length})`}
             {t === "lista" && `Participações (${items.length})`}
             {t === "nova" && "Nova Participação"}
             {t === "simular" && "Simulador"}
@@ -307,7 +307,7 @@ function PendentesLista({
   if (!pendentes.length)
     return (
       <div className="text-muted p-6 text-center border border-dashed border-border rounded-lg">
-        Nenhum contrato aguardando participação. Todos foram tratados.
+        Nenhuma participação a cadastrar ou aprovar. Todas foram tratadas.
       </div>
     );
 

@@ -23,10 +23,10 @@ export function SyncButton({ cnpj }: { cnpj: string }) {
           }
         }}
         disabled={loading || !cnpj}
-        title="Pede ao robô para trazer do portal da prefeitura as notas novas deste CNPJ. Pode levar alguns minutos."
+        title="As notas são buscadas automaticamente no Ambiente Nacional da NFS-e toda madrugada (3h)."
         className="px-3 py-1.5 text-xs bg-primary-dark text-white rounded font-medium disabled:opacity-50"
       >
-        {loading ? "Pedindo a busca..." : "Buscar notas agora"}
+        {loading ? "Agendando..." : "Sincronizar agora"}
       </button>
       {msg && <span className="text-xs text-muted">{msg}</span>}
     </div>
