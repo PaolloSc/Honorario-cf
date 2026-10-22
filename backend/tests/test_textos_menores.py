@@ -33,6 +33,9 @@ from tests.test_documentos_complementares import (  # noqa: F401  (auth_e_origem
     ("alterar", "o item 3", "Fica alterado o item 3, que passa"),
     ("alterar", "a Cláusula 3ª", "Fica alterada a Cláusula 3ª, que passa"),
     ("excluir", "os itens 4 e 5", "Ficam excluídos os itens 4 e 5 do contrato original."),
+    ("alterar", "O item 3", "Fica alterado o item 3, que passa"),
+    ("alterar", "A Cláusula 3ª", "Fica alterada a Cláusula 3ª, que passa"),
+    ("excluir", "Os itens 4 e 5", "Ficam excluídos os itens 4 e 5 do contrato original."),
     ("excluir", "as alíneas a e b", "Ficam excluídas as alíneas a e b do contrato original."),
 ])
 def test_aditivo_concorda_com_o_que_foi_digitado(tipo, clausula, esperado):

@@ -244,7 +244,8 @@ class AditivoGenerator(ComplementarGenerator):
         verbo = lambda plural: "Ficam" if plural else "Fica"  # noqa: E731
         if palavra in cls._ARTIGOS:  # ja vem com artigo definido: nao duplica
             numero, genero = cls._ARTIGOS[palavra]
-            return f"{verbo(numero == 'p')} {participio}{'o' if genero == 'm' else 'a'}{'s' if numero == 'p' else ''} {texto}", numero == "p"
+            artigo_minusculo = texto[0].lower() + texto[1:]  # "O item 3" -> "o item 3"
+            return f"{verbo(numero == 'p')} {participio}{'o' if genero == 'm' else 'a'}{'s' if numero == 'p' else ''} {artigo_minusculo}", numero == "p"
         if palavra in ("§§", "arts", "artigos"):
             return f"Ficam {participio}os os {texto}", True
         if palavra in ("§", "art", "artigo"):
