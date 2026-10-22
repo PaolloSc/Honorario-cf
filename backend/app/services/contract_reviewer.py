@@ -177,6 +177,7 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
         add(f"{prefix} - documentos", escopo.get("documentos"))
         add(f"{prefix} - consulta", escopo.get("consulta"))
         permuta = escopo.get("permuta") or {}
+        add(f"{prefix} - permuta: objeto", permuta.get("objeto_permuta"))
         add(f"{prefix} - permuta: descrição", permuta.get("descricao"))
         add(f"{prefix} - permuta: forma de pagamento da torna", permuta.get("forma_pagamento_torna"))
 
@@ -187,6 +188,12 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
         add(f"{prefix} - êxito: honorário deduzido", exito.get("honorario_deduzido"))
         add(f"{prefix} - êxito: vencimento", exito.get("vencimento"), frases_exito)
         add(f"{prefix} - êxito: forma de parcelamento", exito.get("forma_parcelamento"), frases_exito)
+        # forma_pagamento e' chave (a_vista, parcelado...) ou texto livre; so' o livre vai.
+        forma = exito.get("forma_pagamento")
+        if forma not in ("a_vista", "parcelado", "conforme_cumprimento"):
+            add(f"{prefix} - êxito: forma de pagamento", forma, frases_exito)
+        for faixa in exito.get("faixas_percentual") or []:
+            add(f"{prefix} - êxito: faixa de valor", faixa.get("faixa"))
 
         pro_labore = escopo.get("pro_labore") or {}
         frases_pl = _frases_do_honorario("pro_labore", pro_labore) if pro_labore else []
@@ -197,6 +204,8 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
         mensalidade = escopo.get("mensalidade") or {}
         frases_m = _frases_do_honorario("mensalidade", mensalidade) if mensalidade else []
         add(f"{prefix} - mensalidade: observação de vencimento", mensalidade.get("dia_vencimento_obs"), frases_m)
+        for faixa in mensalidade.get("faixas_preco") or []:
+            add(f"{prefix} - mensalidade: faixa de preço", faixa.get("faixa"))
 
         for chave, rotulo in HONORARIO_ROTULOS.items():
             h = escopo.get(chave) or {}
