@@ -682,22 +682,47 @@ export async function getContract(contractId: string) {
   return request<ContractDetail>(`/api/contracts/${contractId}`);
 }
 
+// Versão que ESTA aba carregou de cada contrato: o PUT a devolve ao servidor, que recusa
+// (409) se outra aba/pessoa já gravou uma versão mais nova.
+const versaoCarregada: Record<string, number> = {};
+
 export async function getContractFormData(contractId: string, version?: number) {
   const qs = version ? `?version=${version}` : "";
-  return request<ContractFormDataResponse>(`/api/contracts/${contractId}/form-data${qs}`);
+  const r = await request<ContractFormDataResponse>(`/api/contracts/${contractId}/form-data${qs}`);
+  if (!version) versaoCarregada[contractId] = r.version_number;
+  return r;
 }
 
 export async function updateContract(contractId: string, formData: Record<string, unknown>) {
-  return request<{
-    success: boolean;
-    message: string;
-    contract_id: string;
-    version: number;
-    download_url: string;
-  }>(`/api/contracts/${contractId}`, {
-    method: "PUT",
-    body: JSON.stringify({ form_data: formData }),
-  });
+  try {
+    const r = await request<{
+      success: boolean;
+      message: string;
+      contract_id: string;
+      version: number;
+      download_url: string;
+    }>(`/api/contracts/${contractId}`, {
+      method: "PUT",
+      body: JSON.stringify({ form_data: formData, version: versaoCarregada[contractId] ?? null }),
+    });
+    versaoCarregada[contractId] = r.version;
+    return r;
+  } catch (e) {
+    if (!(e instanceof ConflitoError)) throw e;
+    let detail: { codigo?: string; motivo?: string; sugestao?: string } = {};
+    try {
+      detail = JSON.parse(e.message.slice(e.message.indexOf("{"))).detail ?? {};
+    } catch {
+      /* mensagem sem JSON: cai no texto padrão */
+    }
+    if (detail.codigo === "versao_desatualizada") {
+      // Nada foi gravado; recarrega para a pessoa ver (e refazer em cima de) a versão atual.
+      if (typeof window !== "undefined") setTimeout(() => window.location.reload(), 3000);
+      throw new Error(`${detail.motivo ?? "Este contrato foi alterado em outra aba."} Nada foi salvo. Recarregando a versão atual…`);
+    }
+    if (detail.codigo === "contrato_travado") throw new Error(`${detail.motivo} ${detail.sugestao ?? ""}`.trim());
+    throw e;
+  }
 }
 
 export async function updateContractStatus(contractId: string, status: string) {
