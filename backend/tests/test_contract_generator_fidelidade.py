@@ -510,7 +510,8 @@ def test_assinatura_centralizada_na_grade_e_testemunhas_a_esquerda():
     RIBEIRO" na largura da celula, entao o alinhamento precisa ser fixado. Na
     grade e' centralizado dentro da celula; o bloco de testemunhas, que corre
     solto no corpo, fica a esquerda como o resto do contrato. Centralizar os
-    dois foi recusado pelo escritorio.
+    dois foi recusado pelo escritorio. O rotulo "TESTEMUNHAS:" segue solto e
+    a esquerda; as linhas das testemunhas entram na mesma grade, lado a lado.
     """
     from app.services.contract_generator import ESPACO_ASSINATURA
 
@@ -526,6 +527,7 @@ def test_assinatura_centralizada_na_grade_e_testemunhas_a_esquerda():
     folga = str(int(ESPACO_ASSINATURA.pt * 20))
 
     grade = _assinatura_pPr(path)
+    assert any(t == "Nome:" for t, *_ in grade), "testemunhas fora da grade"
     assert grade, "grade de assinaturas vazia"
     for texto, jc, antes, depois in grade:
         assert jc == "center", f"grade deveria ser centralizada, veio {jc} em {texto[:30]!r}"
@@ -533,11 +535,10 @@ def test_assinatura_centralizada_na_grade_e_testemunhas_a_esquerda():
         # A folga fica so acima da linha de assinatura; o nome cola nela.
         assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
 
-    testemunhas = _testemunhas_pPr(path)
-    assert testemunhas, "bloco de testemunhas vazio"
-    for texto, jc, antes, _depois in testemunhas:
-        assert jc == "left", f"testemunhas deveriam ficar a esquerda, veio {jc}"
-        assert antes == (folga if set(texto) == {"_"} else "0"), texto[:30]
+    rotulo = [r for r in _testemunhas_pPr(path) if r[0] == "TESTEMUNHAS:"]
+    assert rotulo, "rotulo de testemunhas ausente"
+    for texto, jc, antes, _depois in rotulo:
+        assert texto == "TESTEMUNHAS:" and jc == "left", (texto, jc)
 
 
 def _testemunhas_pPr(path: str) -> list[tuple[str, str, str, str]]:
@@ -545,7 +546,8 @@ def _testemunhas_pPr(path: str) -> list[tuple[str, str, str, str]]:
     import zipfile
 
     xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
-    corpo = xml.split("</w:tbl>")[-1]
+    # so o paragrafo solto do rotulo, fora das tabelas
+    corpo = re.sub(r"<w:tbl>.*?</w:tbl>", "", xml, flags=re.S)
     out = []
     for p in re.split(r"</w:p>", corpo):
         texto = "".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)).strip()
