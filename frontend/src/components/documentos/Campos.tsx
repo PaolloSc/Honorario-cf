@@ -154,7 +154,7 @@ function CampoOab({ valor, onChange, erro }: { valor: Oab; onChange: (o: Oab) =>
           <Select
             aria-label="UF da OAB"
             value={valor.uf}
-            onChange={(e) => onChange({ ...valor, uf: e.target.value })}
+            onChange={(e) => onChange({ ...valor, uf: e.target.value, original: undefined })}
             options={UFS.map((u) => ({ value: u, label: u }))}
           />
         </div>
