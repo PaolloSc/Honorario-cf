@@ -328,8 +328,11 @@ def test_distrato_quitacao_total_com_substabelecer(client):
     assert "Aditivo" not in texto  # sem aditivos cadastrados, nao cita nenhum
 
 
-# Frase da ressalva e PROVISORIA: depende da validacao juridica do socio (issue #126).
-RESSALVA = "ressalvados os honorários de êxito"
+# Redacao aprovada pelo socio (HCF-126).
+RESSALVA = "ressalvados reembolsos e honorários vincendos, inclusive de êxito, caso exigíveis nos termos do contrato original"
+ITEM_1_2 = ("1.2. As Partes reconhecem que o objeto da prestação de serviços sob responsabilidade da CONTRATADA "
+            "foi executado a contento e que os valores devidos pela CONTRATANTE a título de honorários vencidos e "
+            "eventuais despesas foram integralmente adimplidos a tempo e modo.")
 
 
 @pytest.mark.parametrize("ressalva,substabelecer", [
@@ -341,7 +344,8 @@ def test_distrato_flags_sao_independentes(client, ressalva, substabelecer):
 
     assert (RESSALVA in texto) is ressalva
     assert ("honorários de êxito futuros" in texto) is (not ressalva)
-    assert ("integralmente adimplidos" in texto) is (not ressalva)
+    assert ITEM_1_2 in texto  # 1.2 igual, com e sem ressalva
+    assert "honorários fixos" not in texto
     assert ("substabelecer sem reserva de poderes" in texto) is substabelecer
 
 
@@ -583,9 +587,9 @@ def test_distrato_com_ressalva_nao_contradiz_a_quitacao(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True,
                                                     "substabelecer_e_devolver": False}))
     assert "plena, geral, rasa" not in texto
-    # remete a regra do contrato de honorarios (clausula citada pelo nome, sem numero)
-    assert "na forma prevista no contrato originário para o caso de extinção (cláusula de Prazo, Rescisão e Outros Efeitos)" in texto
-    assert "proporção conforme a fase processual" in texto
+    assert ("concedem-se reciprocamente quitação, em juízo ou fora dele" in texto)
+    assert "a título de honorários e reembolsos vencidos e pagos, " + RESSALVA in texto
+    assert "Prazo, Rescisão e Outros Efeitos" not in texto and "proporção conforme a fase" not in texto
     assert texto.index("em juízo ou fora dele") < texto.index(RESSALVA)  # qualifica a quitacao
     assert "DA QUITAÇÃO" in texto and "REVOGAÇÃO DE PODERES" not in texto
 
@@ -593,6 +597,8 @@ def test_distrato_com_ressalva_nao_contradiz_a_quitacao(client):
 def test_distrato_total_mantem_a_quitacao_plena_e_o_titulo_de_poderes(client):
     texto = _texto(client, _id(client, "distrato", DISTRATO))
     assert "plena, geral, rasa, irrestrita e irrevogável quitação, em juízo ou fora dele" in texto
+    assert "seja a título de honorários vencidos e vincendos, reembolsos, indenizações ou honorários de êxito futuros" in texto
+    assert ITEM_1_2 in texto and "honorários fixos" not in texto
     assert "DA QUITAÇÃO E REVOGAÇÃO DE PODERES" in texto
 
 
@@ -662,3 +668,9 @@ def test_previa_valida_como_a_geracao(client):
     assert client.post("/api/documentos/distrato/preview", json=DISTRATO).status_code == 409
     _origem_de_outro_advogado()
     assert client.post("/api/documentos/aditivo/preview", json=ADITIVO).status_code == 403
+
+
+def test_distrato_ressalva_e_o_padrao_do_modelo():
+    from app.models.documentos_complementares import DistratoRequest
+    d = {k: v for k, v in DISTRATO.items() if k != "ressalva_exito"}
+    assert DistratoRequest(**d).ressalva_exito is True
