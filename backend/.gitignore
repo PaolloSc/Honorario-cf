@@ -1,1 +1,6 @@
 .vercel
+
+# SQLite local (inclui WAL/SHM gerados ao rodar testes)
+honorarios.db*
+*.db-wal
+*.db-shm
