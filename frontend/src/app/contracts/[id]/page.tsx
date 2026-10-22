@@ -107,6 +107,7 @@ export default function ContractDetailPage() {
   const [socioEscritorio, setSocioEscritorio] = useState("");
   const [sincronizando, setSincronizando] = useState(false);
   const [documentos, setDocumentos] = useState<DocumentoDerivado[]>([]);
+  const [documentosCarregados, setDocumentosCarregados] = useState(false);
   const [pendentes, setPendentes] = useState<
     Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>
   >([]);
@@ -134,7 +135,8 @@ export default function ContractDetailPage() {
     if (sessionStatus !== "authenticated" || !contract || ehDocumentoComplementar(contract.tipo_contrato)) return;
     listDocumentos(contractId)
       .then((r) => setDocumentos(r.documentos))
-      .catch(() => setDocumentos([]));
+      .catch(() => setDocumentos([]))
+      .finally(() => setDocumentosCarregados(true));
   }, [sessionStatus, contract, contractId]);
 
   // Contrato aguardando assinatura: confere com o DocuSeal ao abrir a pagina.
@@ -513,7 +515,7 @@ export default function ContractDetailPage() {
       )}
 
       {/* Único ponto de entrada de aditivo, substabelecimento e distrato; derivados não geram derivados. */}
-      {!ehDocumentoDerivado && <NovoDocumentoMenu contratoId={contractId} distratoId={distratoId} />}
+      {!ehDocumentoDerivado && <NovoDocumentoMenu contratoId={contractId} distratoId={distratoId} carregando={!documentosCarregados} />}
       {!ehDocumentoDerivado && <DocumentosDerivados documentos={documentos} />}
 
       {/* Inline contract preview */}

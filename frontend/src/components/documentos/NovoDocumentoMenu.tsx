@@ -26,10 +26,13 @@ function Bloco({ href, titulo, descricao, alerta, children }: {
 export default function NovoDocumentoMenu({
   contratoId,
   distratoId,
+  carregando = false,
 }: {
   contratoId: string;
   /** contract_id do distrato já criado (não cancelado), se houver. */
   distratoId?: string;
+  /** Lista de documentos ainda carregando: o 3º bloco não mostra nenhum dos dois estados. */
+  carregando?: boolean;
 }) {
   const url = (tipo: string) => `/documentos/novo?tipo=${tipo}&origem=${contratoId}`;
   return (
@@ -43,7 +46,15 @@ export default function NovoDocumentoMenu({
         <Bloco href={url("substabelecimento")} titulo="Fazer substabelecimento" descricao="Passa processos para outros advogados">
           <path d="M7 7h11l-3-3M17 17H6l3 3" />
         </Bloco>
-        {distratoId ? (
+        {carregando ? (
+          <div aria-busy="true" aria-label="Carregando" className={`${CARTAO} border-border animate-pulse`}>
+            <span className={`${ICONE} bg-border/60`} />
+            <span className="flex-1">
+              <span className="block h-[22px] w-2/3 rounded bg-border/60" />
+              <span className="block mt-0.5 h-[18px] w-full rounded bg-border/40" />
+            </span>
+          </div>
+        ) : distratoId ? (
           <Bloco href={`/contracts/${distratoId}`} titulo="Distrato já criado" descricao="Abrir" alerta>
             <circle cx="12" cy="12" r="9" /><path d="M8 12h8" />
           </Bloco>
