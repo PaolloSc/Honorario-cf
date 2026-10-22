@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { listColaboradores, type ColaboradorWizard } from "@/app/lib/api";
 import { formatarCNPJ } from "@/app/lib/cnpj";
 import {
+  alteracaoVazia,
   cnjValido,
   processoVazio,
+  ROTULO_ALTERACAO,
+  type Alteracao,
+  type TipoAlteracao,
   substabelecidoVazio,
   type AditivoForm,
   type DistratoForm,
@@ -29,8 +33,8 @@ const cartao = "rounded-lg border border-border bg-background/60 p-3 mb-3";
 
 export function CamposAditivo({ estado, onChange, erros }: Props<AditivoForm>) {
   const set = (parcial: Partial<AditivoForm>) => onChange({ ...estado, ...parcial });
-  const setEmpresa = (i: number, parcial: Partial<AditivoForm["abrangencia"][number]>) =>
-    set({ abrangencia: estado.abrangencia.map((e, k) => (k === i ? { ...e, ...parcial } : e)) });
+  const setAlteracao = (i: number, parcial: Partial<Alteracao>) =>
+    set({ alteracoes: estado.alteracoes.map((a, k) => (k === i ? { ...a, ...parcial } : a)) });
 
   return (
     <>
@@ -47,45 +51,37 @@ export function CamposAditivo({ estado, onChange, erros }: Props<AditivoForm>) {
         <TextArea value={estado.objeto} onChange={(e) => set({ objeto: e.target.value })} error={!!erros.objeto} placeholder="prestação de serviços de consultoria trabalhista" />
       </FormField>
 
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-2">Remuneração</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4">
-        <FormField label="Valor mensal fixo" required error={erros["remuneracao.valor_mensal"]}>
-          <CurrencyInput value={estado.valor_mensal} onChange={(v) => set({ valor_mensal: v })} error={!!erros["remuneracao.valor_mensal"]} />
-        </FormField>
-        <FormField label="Franquia (horas/mês)" hint="Opcional." error={erros["remuneracao.franquia_horas"]}>
-          <Input type="number" min={1} step={1} inputMode="numeric" value={estado.franquia_horas} onChange={(e) => set({ franquia_horas: e.target.value })} error={!!erros["remuneracao.franquia_horas"]} />
-        </FormField>
-        <FormField label="Valor da hora excedente" hint="Opcional." error={erros["remuneracao.valor_hora_excedente"]}>
-          <CurrencyInput value={estado.valor_hora_excedente} onChange={(v) => set({ valor_hora_excedente: v })} error={!!erros["remuneracao.valor_hora_excedente"]} />
-        </FormField>
-      </div>
-
-      <Checkbox
-        label="Admitir compensação de horas entre os meses (apuração a cada 12 meses)"
-        checked={estado.compensacao_anual}
-        onChange={(v) => set({ compensacao_anual: v })}
-        hint="Inclui a cláusula Compensação e Faturamento."
-      />
-
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Abrangência</h3>
-      <p className="text-xs text-muted mb-2">Outras empresas atendidas por este aditivo (grupo econômico). O contratante já entra automaticamente.</p>
-      {estado.abrangencia.map((emp, i) => (
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Alterações no contrato original</h3>
+      <p className="text-xs text-muted mb-2">Cada alteração vira um item numerado do aditivo.</p>
+      {erros.alteracoes && <p className="text-xs text-danger mb-2">{erros.alteracoes}</p>}
+      {estado.alteracoes.map((alt, i) => (
         <div key={i} className={cartao}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-            <FormField label="Razão social" required error={erros[`abrangencia.${i}.razao_social`]}>
-              <Input value={emp.razao_social} onChange={(e) => setEmpresa(i, { razao_social: e.target.value })} error={!!erros[`abrangencia.${i}.razao_social`]} />
+          <FormField label="O que fazer" required>
+            <Select
+              value={alt.tipo}
+              onChange={(e) => setAlteracao(i, { tipo: e.target.value as TipoAlteracao })}
+              options={(Object.keys(ROTULO_ALTERACAO) as TipoAlteracao[]).map((t) => ({ value: t, label: ROTULO_ALTERACAO[t] }))}
+            />
+          </FormField>
+          {alt.tipo !== "adicionar" && (
+            <FormField label="Cláusula do contrato original" required error={erros[`alteracoes.${i}.clausula`]} hint='Ex.: "Cláusula 3ª, item 3.2".'>
+              <Input value={alt.clausula} onChange={(e) => setAlteracao(i, { clausula: e.target.value })} error={!!erros[`alteracoes.${i}.clausula`]} />
             </FormField>
-            <FormField label="CNPJ" required error={erros[`abrangencia.${i}.cnpj`]}>
-              <Input value={emp.cnpj} onChange={(e) => setEmpresa(i, { cnpj: formatarCNPJ(e.target.value) })} error={!!erros[`abrangencia.${i}.cnpj`]} inputMode="text" />
+          )}
+          {alt.tipo !== "excluir" && (
+            <FormField label="Novo texto" required error={erros[`alteracoes.${i}.texto`]}>
+              <TextArea value={alt.texto} onChange={(e) => setAlteracao(i, { texto: e.target.value })} error={!!erros[`alteracoes.${i}.texto`]} />
             </FormField>
-          </div>
-          <button type="button" className={botaoRemover} onClick={() => set({ abrangencia: estado.abrangencia.filter((_, k) => k !== i) })}>
-            Remover empresa
-          </button>
+          )}
+          {estado.alteracoes.length > 1 && (
+            <button type="button" className={botaoRemover} onClick={() => set({ alteracoes: estado.alteracoes.filter((_, k) => k !== i) })}>
+              Remover alteração
+            </button>
+          )}
         </div>
       ))}
-      <button type="button" className={botaoLink} onClick={() => set({ abrangencia: [...estado.abrangencia, { razao_social: "", cnpj: "" }] })}>
-        + Adicionar empresa
+      <button type="button" className={botaoLink} onClick={() => set({ alteracoes: [...estado.alteracoes, alteracaoVazia()] })}>
+        + Adicionar alteração
       </button>
     </>
   );
