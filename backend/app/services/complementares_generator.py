@@ -314,29 +314,21 @@ class DistratoGenerator(ComplementarGenerator):
             "assim o fazendo sem a incidência de qualquer ônus, penalidade, multa rescisória ou "
             "indenização de parte a parte."
         )
-        pagos = (
-            "foi executado a contento e que os valores devidos pela CONTRATANTE a título de "
-            "honorários fixos e eventuais despesas foram integralmente adimplidos a tempo e modo."
-            if not data.ressalva_exito
-            else "foi executado a contento."
-        )
         doc.add_paragraph(
             "1.2. As Partes reconhecem que o objeto da prestação de serviços sob responsabilidade da "
-            f"CONTRATADA {pagos}"
+            "CONTRATADA foi executado a contento e que os valores devidos pela CONTRATANTE a título de "
+            "honorários vencidos e eventuais despesas foram integralmente adimplidos a tempo e modo."
         )
 
         titulo2 = "DA QUITAÇÃO E REVOGAÇÃO DE PODERES" if data.substabelecer_e_devolver else "DA QUITAÇÃO"
         doc.add_heading(f"CLÁUSULA SEGUNDA – {titulo2}", level=2)
         if data.ressalva_exito:
             alcance = (
-                "seja a título de honorários fixos, reembolsos ou indenizações, ressalvados os honorários "
-                "de êxito vincendos relativos às demandas em curso, que continuarão devidos ao C&F na "
-                "forma prevista no contrato originário para o caso de extinção (cláusula de Prazo, "
-                "Rescisão e Outros Efeitos), inclusive quanto à proporção conforme a fase processual em "
-                "que se encontrar cada demanda na data deste distrato"
+                "a título de honorários e reembolsos vencidos e pagos, ressalvados reembolsos e honorários "
+                "vincendos, inclusive de êxito, caso exigíveis nos termos do contrato original"
             )
         else:
-            alcance = "seja a título de honorários fixos, reembolsos, indenizações ou honorários de êxito futuros"
+            alcance = "seja a título de honorários vencidos e vincendos, reembolsos, indenizações ou honorários de êxito futuros"
         # "plena, geral, rasa, irrestrita e irrevogavel" so' na quitacao total: com ressalva se contradiz.
         quitacao = "quitação" if data.ressalva_exito else "plena, geral, rasa, irrestrita e irrevogável quitação"
         doc.add_paragraph(
