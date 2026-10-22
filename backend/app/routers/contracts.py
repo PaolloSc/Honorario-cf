@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,10 +19,12 @@ from app.database import (
 )
 from app.models.documentos_complementares import (
     REQUESTS as REQUESTS_COMPLEMENTARES,
+    TIPO_DISTRATO,
     email_contato,
     nome_exibicao,
 )
 from app.services.contract_dispatch import parse_form_data
+from app.services.substabelecimento_vinculado import sincronizar_do_distrato
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/contracts", tags=["Contracts Management"])
@@ -336,6 +339,19 @@ def update_contract(
 
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
 
+    # Distrato que gerou um substabelecimento: mudar os dados aqui regera aquele documento.
+    regerados: list[str] = []
+    criados: list[str] = []
+    arquivos_novos: list[str] = []
+    if contract.tipo_contrato == TIPO_DISTRATO:
+        try:
+            regerados, criados, arquivos_novos = sincronizar_do_distrato(db, contract, body.form_data, user.email)
+        except Exception as e:
+            db.rollback()
+            for f in arquivos_novos:
+                Path(f).unlink(missing_ok=True)
+            raise HTTPException(500, f"Falha ao atualizar o substabelecimento do distrato: {e}")
+
     new_version = contract.current_version + 1
     client_name, client_email = _extract_client_info(body.form_data)
 
@@ -366,6 +382,8 @@ def update_contract(
         "contract_id": contract_id,
         "version": new_version,
         "download_url": f"/api/contract/{contract_id}/download",
+        "documentos_regerados": regerados,
+        "documentos_gerados_junto": criados,
     }
 
 

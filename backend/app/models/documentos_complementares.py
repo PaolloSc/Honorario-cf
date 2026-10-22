@@ -135,6 +135,9 @@ class DistratoRequest(_ComOrigem):
     ressalva_exito: bool = True
     # Inclui a clausula de substabelecer sem reserva e devolver documentos.
     substabelecer_e_devolver: bool = False
+    # Dados do substabelecimento gerado junto (so com substabelecer_e_devolver). Distratos salvos
+    # antes dessa opcao nao o tem e nao geram nada novo.
+    substabelecimento: Optional["SubstabelecimentoDoDistrato"] = None
 
 
 class Outorgante(BaseModel):
@@ -195,7 +198,21 @@ class SubstabelecimentoRequest(_DocumentoComplementar):
     substabelecidos: list[Substabelecido] = Field(min_length=1)
     endereco_substabelecidos: str = ""  # opcional: sem endereco, a frase some do texto
     processos: list[Processo] = Field(min_length=1)
+    # Preenchido quando o substabelecimento nasce de um distrato: editar o distrato o regera.
+    distrato_origem_id: Optional[str] = None
 
+
+class SubstabelecimentoDoDistrato(BaseModel):
+    """O que o distrato precisa saber para gerar o substabelecimento: o cliente (outorgante) e a
+    data vem do proprio contrato/distrato; aqui ficam quem recebe os poderes e os processos."""
+
+    substabelecentes: list[Substabelecente] = Field(min_length=1)
+    substabelecidos: list[Substabelecido] = Field(min_length=1)
+    endereco_substabelecidos: str = ""
+    processos: list[Processo] = Field(min_length=1)
+
+
+DistratoRequest.model_rebuild()
 
 REQUESTS = {
     TIPO_ADITIVO: AditivoRequest,

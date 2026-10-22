@@ -31,7 +31,7 @@ export interface AditivoForm {
   objeto: string;
   alteracoes: Alteracao[];
 }
-export interface DistratoForm {
+export interface DistratoForm extends PoderesForm {
   data_documento: string;
   data_contrato_origem: string;
   objeto_contrato_origem: string;
@@ -84,7 +84,14 @@ export const oabsParaTexto = (oabs: { numero: string; uf: string }[]) => oabs.ma
 export interface Substabelecente { nome: string; email: string; oab: Oab }
 export interface Substabelecido { nome: string; oab: Oab }
 export interface Processo { tipo: string; numero: string; descricao: string }
-export interface SubstabelecimentoForm {
+/** Quem assina, quem recebe os poderes e os processos: comum ao substabelecimento e ao distrato que o gera. */
+export interface PoderesForm {
+  substabelecentes: Substabelecente[];
+  substabelecidos: Substabelecido[];
+  endereco_substabelecidos: string;
+  processos: Processo[];
+}
+export interface SubstabelecimentoForm extends PoderesForm {
   data_documento: string;
   outorgante_pj: boolean;
   outorgante_nome: string;
@@ -109,6 +116,8 @@ export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocument
     return {
       data_documento: hoje, data_contrato_origem: "", objeto_contrato_origem: "",
       ressalva_exito: true, substabelecer_e_devolver: false,
+      substabelecentes: [], substabelecidos: [substabelecidoVazio()], endereco_substabelecidos: "",
+      processos: [processoVazio()],
     };
   }
   return {
@@ -133,6 +142,17 @@ export function cnjValido(numero: string): boolean {
 }
 
 // ── Payload da API ────────────────────────────────────────────────────────
+
+function payloadPoderes(e: PoderesForm) {
+  return {
+  substabelecentes: e.substabelecentes.map((s) => ({ nome: s.nome, email: s.email, oab: oabTexto(s.oab) })),
+  substabelecidos: e.substabelecidos.map((s) => ({ nome: s.nome.trim(), oab: oabTexto(s.oab, true) })),
+  endereco_substabelecidos: e.endereco_substabelecidos.trim(),
+  processos: e.processos.map((p) => ({
+    tipo: p.tipo.trim() || "Processo", numero: p.numero.trim(), descricao: p.descricao.trim(),
+  })),
+  };
+}
 
 export function montarPayload(
   tipo: TipoDocumento,
@@ -161,6 +181,8 @@ export function montarPayload(
       objeto_contrato_origem: e.objeto_contrato_origem.trim(),
       ressalva_exito: e.ressalva_exito,
       substabelecer_e_devolver: e.substabelecer_e_devolver,
+      // O substabelecimento so vai junto quando a opcao esta marcada.
+      substabelecimento: e.substabelecer_e_devolver ? payloadPoderes(e) : null,
     };
   }
   const e = estado as SubstabelecimentoForm;
@@ -171,12 +193,22 @@ export function montarPayload(
     outorgante: e.outorgante_pj
       ? { razao_social: nome, cnpj: doc || null }
       : { nome, cpf: doc || null },
-    substabelecentes: e.substabelecentes.map((s) => ({ nome: s.nome, email: s.email, oab: oabTexto(s.oab) })),
-    substabelecidos: e.substabelecidos.map((s) => ({ nome: s.nome.trim(), oab: oabTexto(s.oab, true) })),
-    endereco_substabelecidos: e.endereco_substabelecidos.trim(),
-    processos: e.processos.map((p) => ({
-      tipo: p.tipo.trim() || "Processo", numero: p.numero.trim(), descricao: p.descricao.trim(),
+    ...payloadPoderes(e),
+  };
+}
+
+// Salvos antes de 22/10/2026 trazem genero/estado civil: abrem sem eles (o texto salvo nao muda).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function poderesDoFormData(fd: Record<string, any>): PoderesForm {
+  return {
+    substabelecentes: (fd.substabelecentes ?? []).map((s: { nome: string; email: string; oab: string }) => ({
+      nome: s.nome, email: s.email, oab: lerOab(s.oab),
     })),
+    substabelecidos: (fd.substabelecidos?.length ? fd.substabelecidos : [{ nome: "", oab: "" }]).map((s: { nome: string; oab: string }) => ({
+      nome: s.nome, oab: lerOab(s.oab),
+    })),
+    endereco_substabelecidos: fd.endereco_substabelecidos ?? "",
+    processos: fd.processos?.length ? fd.processos : [processoVazio()],
   };
 }
 
@@ -202,6 +234,7 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
       objeto_contrato_origem: fd.objeto_contrato_origem ?? "",
       ressalva_exito: !!fd.ressalva_exito,
       substabelecer_e_devolver: !!fd.substabelecer_e_devolver,
+      ...poderesDoFormData(fd.substabelecimento ?? {}),
     };
   }
   const o = fd.outorgante ?? {};
@@ -210,15 +243,7 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
     outorgante_pj: !o.nome || !!o.razao_social,
     outorgante_nome: o.razao_social ?? o.nome ?? "",
     outorgante_documento: o.cnpj ?? o.cpf ?? "",
-    // Salvos antes de 22/10/2026 trazem genero/estado civil: abrem sem eles (o texto salvo nao muda).
-    substabelecentes: (fd.substabelecentes ?? []).map((s: { nome: string; email: string; oab: string }) => ({
-      nome: s.nome, email: s.email, oab: lerOab(s.oab),
-    })),
-    substabelecidos: (fd.substabelecidos ?? []).map((s: { nome: string; oab: string }) => ({
-      nome: s.nome, oab: lerOab(s.oab),
-    })),
-    endereco_substabelecidos: fd.endereco_substabelecidos ?? "",
-    processos: fd.processos ?? [],
+    ...poderesDoFormData(fd),
   };
 }
 
@@ -233,6 +258,19 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     if (!valor || !String(valor).trim()) e[chave] = msg;
   };
   obrig("data_documento", estado.data_documento);
+  const validarPoderes = (s: PoderesForm) => {
+    if (!s.substabelecentes.length) e.substabelecentes = "Escolha ao menos um substabelecente";
+    if (!s.substabelecidos.length) e.substabelecidos = "Informe ao menos um substabelecido";
+    s.substabelecidos.forEach((x, i) => {
+      obrig(`substabelecidos.${i}.nome`, x.nome);
+      obrig(`substabelecidos.${i}.oab`, x.oab.numero);
+    });
+    s.substabelecentes.forEach((x, i) => obrig(`substabelecentes.${i}.oab`, x.oab.numero));
+    if (!s.processos.length) e.processos = "Informe ao menos um processo";
+    s.processos.forEach((p, i) => {
+      if (!cnjValido(p.numero)) e[`processos.${i}.numero`] = "Número fora do padrão CNJ ou com dígito verificador errado";
+    });
+  };
 
   if (tipo === "aditivo") {
     const a = estado as AditivoForm;
@@ -247,20 +285,11 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     const d = estado as DistratoForm;
     obrig("data_contrato_origem", d.data_contrato_origem);
     obrig("objeto_contrato_origem", d.objeto_contrato_origem);
+    if (d.substabelecer_e_devolver) validarPoderes(d);
   } else {
     const s = estado as SubstabelecimentoForm;
     obrig("outorgante", s.outorgante_nome, "Informe o outorgante");
-    if (!s.substabelecentes.length) e.substabelecentes = "Escolha ao menos um substabelecente";
-    if (!s.substabelecidos.length) e.substabelecidos = "Informe ao menos um substabelecido";
-    s.substabelecidos.forEach((x, i) => {
-      obrig(`substabelecidos.${i}.nome`, x.nome);
-      obrig(`substabelecidos.${i}.oab`, x.oab.numero);
-    });
-    s.substabelecentes.forEach((x, i) => obrig(`substabelecentes.${i}.oab`, x.oab.numero));
-    if (!s.processos.length) e.processos = "Informe ao menos um processo";
-    s.processos.forEach((p, i) => {
-      if (!cnjValido(p.numero)) e[`processos.${i}.numero`] = "Número fora do padrão CNJ ou com dígito verificador errado";
-    });
+    validarPoderes(s);
   }
   return e;
 }
