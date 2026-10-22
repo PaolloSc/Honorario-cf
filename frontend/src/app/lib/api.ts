@@ -685,6 +685,7 @@ export async function getContract(contractId: string) {
 // Versão que ESTA aba carregou de cada contrato: o PUT a devolve ao servidor, que recusa
 // (409) se outra aba/pessoa já gravou uma versão mais nova.
 const versaoCarregada: Record<string, number> = {};
+export const EVENTO_VERSAO_DESATUALIZADA = "contrato-versao-desatualizada";
 
 export async function getContractFormData(contractId: string, version?: number) {
   const qs = version ? `?version=${version}` : "";
@@ -716,13 +717,19 @@ export async function updateContract(contractId: string, formData: Record<string
       /* mensagem sem JSON: cai no texto padrão */
     }
     if (detail.codigo === "versao_desatualizada") {
-      // Nada foi gravado; recarrega para a pessoa ver (e refazer em cima de) a versão atual.
-      if (typeof window !== "undefined") setTimeout(() => window.location.reload(), 3000);
-      throw new Error(`${detail.motivo ?? "Este contrato foi alterado em outra aba."} Nada foi salvo. Recarregando a versão atual…`);
+      // Nada foi gravado e a tela NÃO recarrega sozinha (o digitado seria perdido): o aviso
+      // global (AvisoVersaoDesatualizada) oferece o botão "Recarregar".
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(EVENTO_VERSAO_DESATUALIZADA, { detail: detail.motivo }));
+      throw new Error(`${detail.motivo ?? "Este contrato foi alterado em outra aba."} Nada foi salvo; o que você digitou continua na tela.`);
     }
     if (detail.codigo === "contrato_travado") throw new Error(`${detail.motivo} ${detail.sugestao ?? ""}`.trim());
-    throw e;
+    throw new Error("Não foi possível salvar: o contrato foi alterado por outra pessoa ou está travado. Recarregue a página e tente de novo.");
   }
+}
+
+/** Arquiva a assinatura no DocuSeal e volta o contrato enviado a rascunho (nada muda se o DocuSeal falhar). */
+export async function cancelarEnvioAssinatura(contractId: string) {
+  return request<{ success: boolean; status: string }>(`/api/docuseal/${contractId}/cancelar-envio`, { method: "POST" });
 }
 
 export async function updateContractStatus(contractId: string, status: string) {

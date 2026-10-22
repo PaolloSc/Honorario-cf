@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -475,7 +476,14 @@ def download_contract(
 
     filepath: Path | None = None
 
-    if ver and ver.file_path:
+    generico = output_dir / f"contrato_{contract_id}.docx"
+    # Contratos antigos: varias versoes apontam para o mesmo arquivo generico, que so tem o
+    # texto da mais nova. Para as outras, o arquivo nao serve: regenera da form_data.
+    generico_de_outra_versao = bool(
+        ver and ver.file_path and Path(ver.file_path).name == generico.name
+        and ver.version_number != contract.current_version
+    )
+    if ver and ver.file_path and not generico_de_outra_versao:
         stored = Path(ver.file_path)
         if stored.exists():
             filepath = stored
@@ -487,7 +495,7 @@ def download_contract(
     # O arquivo generico e' sempre o da versao mais nova: so serve para ela.
     pedida_e_a_atual = ver is None or ver.version_number == contract.current_version
     if filepath is None and pedida_e_a_atual:
-        fallback = output_dir / f"contrato_{contract_id}.docx"
+        fallback = generico
         if fallback.exists():
             filepath = fallback
 
@@ -503,7 +511,11 @@ def download_contract(
             # este e' o caminho normal de download, nao um caso de borda.
             contrato_data, gen_tipo = parse_form_data(form_data)
             _, new_filepath = gen_tipo.generate(contrato_data, contract_id=contract_id)
-            filepath = Path(new_filepath)
+            # O gerador grava sempre no nome generico (o da versao mais nova): move para o nome
+            # da versao pedida, senao a proxima consulta devolveria o texto errado.
+            destino = Path(new_filepath).with_name(f"contrato_{contract_id}_v{ver.version_number}.docx")
+            shutil.move(new_filepath, destino)
+            filepath = destino
             # Update stored path
             ver.file_path = str(filepath)
             db.commit()

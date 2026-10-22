@@ -10,6 +10,7 @@ import {
   updateContractStatus,
   sendForSignature,
   sincronizarAssinatura,
+  cancelarEnvioAssinatura,
   sendEmail,
   rollbackContract,
   listTestemunhas,
@@ -227,6 +228,20 @@ export default function ContractDetailPage() {
     }
   };
 
+  const handleCancelarEnvio = async () => {
+    if (!window.confirm("Cancelar o envio para assinatura? O link enviado ao cliente deixa de valer e o contrato volta a rascunho, podendo ser editado e enviado de novo.")) return;
+    try {
+      await cancelarEnvioAssinatura(contractId);
+      fetchContract();
+      setNotification({type: "success", message: "Envio cancelado. O contrato voltou a rascunho."});
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      let motivo = "Não foi possível cancelar o envio. Nada foi alterado.";
+      try { motivo = JSON.parse(m.slice(m.indexOf("{"))).detail || motivo; } catch { /* mensagem sem JSON */ }
+      setNotification({type: "error", message: motivo});
+    }
+  };
+
   const handleStatusChange = async (newStatus: string) => {
     if (!window.confirm(`Tem certeza que deseja alterar o status para "${newStatus}"?`)) return;
     try {
@@ -416,12 +431,20 @@ export default function ContractDetailPage() {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3 mb-8">
-        <a
-          href={`/contracts/${contractId}/edit`}
-          className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition"
-        >
-          Editar Contrato
-        </a>
+        {contract.status === "enviado" || contract.status === "assinado" ? (
+          <span className="px-4 py-2.5 border border-border rounded-lg text-sm text-muted max-w-md">
+            {contract.status === "assinado"
+              ? "Contrato assinado: não pode ser editado. Para mudar algo, crie um aditivo."
+              : "Contrato enviado para assinatura: para editar, use \"Cancelar envio para assinatura\"."}
+          </span>
+        ) : (
+          <a
+            href={`/contracts/${contractId}/edit`}
+            className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition"
+          >
+            Editar Contrato
+          </a>
+        )}
         {/* Só honorários: o wizard da home não abre contrato de consumidor. */}
         {ehHonorarios && (
           <>
@@ -490,6 +513,13 @@ export default function ContractDetailPage() {
               className="px-5 py-2.5 border border-accent/40 text-accent rounded-lg text-sm font-medium hover:bg-accent/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sincronizando ? "Consultando..." : "Atualizar status das assinaturas"}
+            </button>
+            <button
+              onClick={handleCancelarEnvio}
+              title="Arquiva a assinatura no DocuSeal e volta o contrato a rascunho para corrigir e enviar de novo"
+              className="px-5 py-2.5 border border-danger/40 text-danger rounded-lg text-sm font-medium hover:bg-danger/10 transition"
+            >
+              Cancelar envio para assinatura
             </button>
             <button
               onClick={() => handleStatusChange("assinado")}
