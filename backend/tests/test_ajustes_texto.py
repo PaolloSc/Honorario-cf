@@ -101,3 +101,15 @@ def test_endpoint_previa_marca_item_ajustado(client):
     assert '<p class="ajustado">2.2. Texto marcado.</p>' in body["preview_html"]
     assert body["ajustes_descartados"] == ["88.1"]
     assert {"id", "clausula", "texto", "padrao", "ajustado", "editavel", "etapa"} <= set(body["itens"][0])
+
+
+def test_ajuste_sobrevive_ao_json_salvo_e_regeracao():
+    """DOCX regerado a partir do form_data salvo (assinatura/e-mail) mantem o ajuste."""
+    import json
+
+    from app.services.contract_dispatch import parse_form_data
+
+    form = json.loads(json.dumps(_req(ajustes_texto={"2.2": {"texto": "Ajuste salvo.", "padrao": ""}})))
+    contrato, gen = parse_form_data(form)
+    doc = gen._build_document(contrato)
+    assert "Ajuste salvo." in _texto_docx(doc)
