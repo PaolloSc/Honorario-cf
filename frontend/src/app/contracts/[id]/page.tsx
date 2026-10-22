@@ -485,10 +485,11 @@ export default function ContractDetailPage() {
           <>
             <button
               onClick={handleSincronizar}
+              title="Consulta o DocuSeal para ver quem já assinou e atualiza o status do contrato"
               disabled={sincronizando}
               className="px-5 py-2.5 border border-accent/40 text-accent rounded-lg text-sm font-medium hover:bg-accent/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {sincronizando ? "Consultando..." : "Verificar Assinaturas"}
+              {sincronizando ? "Consultando..." : "Atualizar status das assinaturas"}
             </button>
             <button
               onClick={() => handleStatusChange("assinado")}
