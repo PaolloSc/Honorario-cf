@@ -1,5 +1,6 @@
 from __future__ import annotations
  
+import hashlib
 import os
 import re
 import tempfile
@@ -108,35 +109,64 @@ class _ItensClausula:
         self.sec = 0
         self.secao = ""
         self.n = [0, 0]
+        # id semantico (honorarios: "hon.exito.2"; adicionais: "adic.<hash>"); None = posicional
+        self.prefixo: str | None = None
+        self.contador = 0
+        self.vistos: set[str] = set()
 
     def nova_secao(self, titulo: str) -> None:
         self.sec += 1
         self.secao = titulo
         self.n = [0, 0]
+        self.prefixo = None
 
-    def registrar(self, padrao: str, ilvl: int) -> str:
+    def abrir_bloco(self, prefixo: str | None) -> None:
+        self.prefixo = prefixo
+        self.contador = 0
+
+    def _id(self, padrao: str, ilvl: int) -> str:
+        if self.prefixo == "adic":  # chave = conteudo, nao a posicao
+            base = "adic." + hashlib.sha1(padrao.encode("utf-8")).hexdigest()[:8]
+            id_, k = base, 1
+            while id_ in self.vistos:
+                k += 1
+                id_ = f"{base}.{k}"
+            return id_
+        if self.prefixo:
+            self.contador += 1
+            return f"{self.prefixo}.{self.contador}"
         self.n[ilvl - 1] += 1
         for i in range(ilvl, len(self.n)):
             self.n[i] = 0
-        id_ = ".".join(str(x) for x in [self.sec, *self.n[:ilvl]])
+        return ".".join(str(x) for x in [self.sec, *self.n[:ilvl]])
+
+    def registrar(self, padrao: str, ilvl: int) -> str:
+        id_ = self._id(padrao, ilvl)
+        self.vistos.add(id_)
         etapa = SECOES_BLOQUEADAS.get(self.secao)
         ajuste = self.ajustes.get(id_) if etapa is None else None
         texto = padrao
+        aplicado = False
         status = None
         if ajuste is not None:
-            texto = " ".join(ajuste.texto.split()) or padrao
-            status = "padrao_mudou" if ajuste.padrao and ajuste.padrao != padrao else "ok"
+            # So aplica se o texto padrao ainda e' o da epoca do ajuste: um ajuste
+            # em cima de um padrao que mudou pode cair na clausula errada.
+            if ajuste.padrao == padrao:
+                texto = " ".join(ajuste.texto.split()) or padrao
+                aplicado, status = True, "ok"
+            else:
+                status = "padrao_mudou"
         self.itens.append({
             "id": id_, "clausula": self.secao, "texto": texto, "padrao": padrao,
-            "ajustado": ajuste is not None, "status": status,
+            "ajustado": aplicado, "status": status,
+            "ajuste": ajuste.texto if ajuste is not None else None,
             "editavel": etapa is None, "etapa": etapa,
         })
         return texto
 
     def descartados(self) -> list[str]:
         """Ajustes cujo item deixou de existir (ou ficou bloqueado)."""
-        vivos = {i["id"] for i in self.itens if i["ajustado"]}
-        return [k for k in self.ajustes if k not in vivos]
+        return [k for k in self.ajustes if k not in {i["id"] for i in self.itens if i["editavel"]}]
 
 
 class _Numerador:
@@ -796,7 +826,13 @@ class ContractGenerator:
         # Honorario unico: numeracao corrida (3.1, 3.2...) e sem subtitulo.
         # Varios: cada bloco vira 3.n com subclausulas 3.n.1, 3.n.2...
         varios = len(blocos) > 1
+        ctx = getattr(doc, "_cf_itens", None)
+        usados: dict[str, int] = {}
         for add, obj in blocos:
+            if ctx is not None:  # id estavel: tipo do honorario + item (ligar/desligar outro nao muda)
+                tipo = add.__name__.removeprefix("_add_")
+                usados[tipo] = usados.get(tipo, 0) + 1
+                ctx.abrir_bloco(f"hon.{tipo}" + (str(usados[tipo]) if usados[tipo] > 1 else ""))
             add(doc, obj, _Numerador(self, doc, varios), com_subtitulo=varios)
  
     def _add_hora_trabalhada(self, doc: Document, ht: "HoraTrabalhada", num: "_Numerador", com_subtitulo: bool = False) -> None:
@@ -1358,6 +1394,8 @@ class ContractGenerator:
         ]
         if adicionais:
             self._add_secao(doc, "DISPOSIÇÕES ADICIONAIS")
+            if (ctx := getattr(doc, "_cf_itens", None)) is not None:
+                ctx.abrir_bloco("adic")
             for clause in adicionais:
                 self._add_clausula(doc, clause)
 

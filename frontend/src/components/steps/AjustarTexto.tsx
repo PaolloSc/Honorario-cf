@@ -9,6 +9,7 @@ interface Props {
   salvando: boolean;
   onSalvar: (item: ItemClausula, texto: string) => void;
   onVoltar: (item: ItemClausula) => void;
+  onReaplicar: (item: ItemClausula) => void;
   onIrParaEtapa: (etapa: number) => void;
 }
 
@@ -16,10 +17,10 @@ const ETAPA_NOME: Record<number, string> = { 3: "Honorários", 4: "Acessórios" 
 
 // Painel "Ajustar texto": edita uma cláusula por vez; numeração, títulos, partes e
 // assinaturas continuam sob controle do gerador.
-export default function AjustarTexto({ itens, descartados, salvando, onSalvar, onVoltar, onIrParaEtapa }: Props) {
+export default function AjustarTexto({ itens, descartados, salvando, onSalvar, onVoltar, onReaplicar, onIrParaEtapa }: Props) {
   const [editando, setEditando] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState("");
-  const ajustados = itens.filter((i) => i.ajustado).length;
+  const ajustados = itens.filter((i) => i.ajustado || i.status === "padrao_mudou").length;
 
   return (
     <details className="border border-border rounded-xl bg-card" open={ajustados > 0 || undefined}>
@@ -78,9 +79,10 @@ export default function AjustarTexto({ itens, descartados, salvando, onSalvar, o
                     <p className={`flex-1 text-sm ${item.ajustado ? "bg-warning/[0.12] border-l-2 border-warning pl-2" : ""}`}>
                       <span className="font-medium">{item.id}.</span> {item.texto}
                       {item.ajustado && <span className="ml-2 text-[11px] font-medium text-warning">Ajustado à mão</span>}
+                      {item.status === "padrao_mudou" && <span className="ml-2 text-[11px] font-medium text-warning">Ajuste pendente</span>}
                       {item.status === "padrao_mudou" && (
                         <span className="block text-xs text-warning mt-1">
-                          O texto padrão deste item mudou, revise seu ajuste.
+                          O texto padrão deste item mudou: revise ou reaplique seu ajuste. Enquanto isso, o contrato sai com o texto padrão.
                         </span>
                       )}
                     </p>
@@ -97,9 +99,14 @@ export default function AjustarTexto({ itens, descartados, salvando, onSalvar, o
                           >
                             Editar
                           </button>
-                          {item.ajustado && (
+                          {item.status === "padrao_mudou" && (
+                            <button type="button" disabled={salvando} className="text-primary-dark underline" onClick={() => onReaplicar(item)}>
+                              Reaplicar meu ajuste
+                            </button>
+                          )}
+                          {item.ajuste !== null && (
                             <button type="button" disabled={salvando} className="text-muted underline" onClick={() => onVoltar(item)}>
-                              Voltar ao texto padrão
+                              {item.ajustado ? "Voltar ao texto padrão" : "Descartar ajuste"}
                             </button>
                           )}
                         </>

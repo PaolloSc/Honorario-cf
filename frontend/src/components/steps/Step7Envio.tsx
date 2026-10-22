@@ -899,6 +899,7 @@ export default function Step7Envio({
           salvando={salvandoAjuste}
           onSalvar={(item, texto) => void alterarAjuste(item, texto)}
           onVoltar={(item) => void alterarAjuste(item, null)}
+          onReaplicar={(item) => item.ajuste !== null && void alterarAjuste(item, item.ajuste)}
           onIrParaEtapa={(n) => onIrParaEtapa?.(n)}
         />
       )}

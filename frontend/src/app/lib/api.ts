@@ -238,6 +238,8 @@ export interface ItemClausula {
   texto: string;
   padrao: string;
   ajustado: boolean;
+  // Texto guardado do ajuste (mesmo pendente, para reaplicar); null se nao ha ajuste.
+  ajuste: string | null;
   status: "ok" | "padrao_mudou" | null;
   editavel: boolean;
   etapa: number | null;
