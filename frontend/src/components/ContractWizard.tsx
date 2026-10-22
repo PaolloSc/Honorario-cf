@@ -655,6 +655,10 @@ export default function ContractWizard({
             editContractId={editContractId}
             onSaveComplete={onSaveComplete}
             onDataChange={setFormData}
+            onIrParaEtapa={(id) => {
+              setValidationErrors([]);
+              setCurrentStep(id);
+            }}
             onContractGenerated={() => void autosave.descartar()}
             correcoesAplicadas={correcoesAplicadas}
             onCorrecoesAplicadasChange={setCorrecoesAplicadas}

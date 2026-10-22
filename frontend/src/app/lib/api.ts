@@ -232,6 +232,40 @@ async function request<T>(
   return res.json();
 }
 
+export interface ItemClausula {
+  id: string; // chave fixa da cláusula (nunca o número)
+  numero: string; // número que o Word mostra; só para a tela
+  clausula: string;
+  texto: string;
+  padrao: string;
+  ajustado: boolean;
+  // Texto guardado do ajuste (mesmo pendente, para reaplicar); null se nao ha ajuste.
+  ajuste: string | null;
+  padrao_ajuste: string | null; // texto padrão da época em que o ajuste foi feito
+  status: "ok" | "padrao_mudou" | null;
+  editavel: boolean;
+  etapa: number | null;
+}
+
+export interface AjusteDescartado {
+  id: string;
+  texto: string;
+}
+
+export interface PreviaTexto {
+  preview_html: string;
+  itens: ItemClausula[];
+  ajustes_descartados: AjusteDescartado[];
+}
+
+// Previa + cláusulas ajustáveis, sem IA (usada ao salvar/desfazer um ajuste de texto).
+export async function previewTexto(data: unknown) {
+  return request<PreviaTexto>("/api/contract/preview-texto", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 // Varredura de portugues/padrao via DeepSeek antes de gerar o contrato definitivo.
 // Chamada pode demorar (LLM) — usa timeout proprio, maior que o default de 8s.
 export async function reviewContract(data: unknown) {
@@ -239,6 +273,8 @@ export async function reviewContract(data: unknown) {
     enabled: boolean;
     findings: Array<{ trecho: string; problema: string; sugestao: string }>;
     preview_html?: string;
+    itens?: ItemClausula[];
+    ajustes_descartados?: AjusteDescartado[];
     error?: string;
   }>("/api/contract/review", {
     method: "POST",

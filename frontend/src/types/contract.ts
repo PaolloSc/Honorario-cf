@@ -297,6 +297,8 @@ export interface ContratoFormData {
   acessorios: Acessorios;
   participacao: Participacao;
   email_destinatario?: string;
+  // Cláusulas reescritas na etapa 7: id ("2.2") -> texto novo + texto padrão da época.
+  ajustes_texto?: Record<string, { texto: string; padrao: string }>;
 }
  
 export interface ContratoResponse {

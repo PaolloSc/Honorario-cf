@@ -119,7 +119,7 @@ def _frases_do_honorario(chave: str, h: dict) -> list[str]:
         obj = modelos[chave](**h)
         # Os metodos dos blocos nao usam estado do gerador (template/saida).
         gen = ContractGenerator.__new__(ContractGenerator)
-        getattr(gen, f"_add_{chave}")(Document(), obj, frases.append)
+        getattr(gen, f"_add_{chave}")(Document(), obj, lambda texto, **_: frases.append(texto))
     except Exception as e:  # dado incompleto no meio do wizard
         logger.info("Revisao sem frase de contexto para %s: %s", chave, e)
         return []
@@ -209,6 +209,8 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
     add("Limitação do reembolso", acessorios.get("descricao_limitacao_reembolso"))
     add("Critério de extinção do êxito", acessorios.get("criterio_extincao_exito"))
     add("Cláusulas adicionais", acessorios.get("clausulas_adicionais"))
+    for id_, ajuste in (data.get("ajustes_texto") or {}).items():
+        add(f"Cláusula {id_} (ajustada à mão)", ajuste.get("texto"))
 
     return lines
 
