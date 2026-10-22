@@ -23,6 +23,7 @@ export function SyncButton({ cnpj }: { cnpj: string }) {
           }
         }}
         disabled={loading || !cnpj}
+        title="As notas são buscadas automaticamente no Ambiente Nacional da NFS-e toda madrugada (3h)."
         className="px-3 py-1.5 text-xs bg-primary-dark text-white rounded font-medium disabled:opacity-50"
       >
         {loading ? "Agendando..." : "Sincronizar agora"}

@@ -63,7 +63,7 @@ export default function EmissaoPage() {
       <header className="mb-6">
         <a href="/financeiro" className="text-sm text-primary hover:underline">← Setor Financeiro</a>
         <h1 className="font-display text-2xl font-semibold text-primary-dark tracking-wide mt-2">Emissão de NFS-e</h1>
-        <p className="text-sm text-muted mt-1">Faturas, notas emitidas e cadastros. Ambiente de homologação: sem valor fiscal.</p>
+        <p className="text-sm text-muted mt-1">Faturas, notas emitidas e cadastros. Ambiente de testes (homologação): as notas não têm valor fiscal.</p>
       </header>
       {erro && <div className="mb-4 rounded-lg border border-danger bg-danger/[0.08] p-3 text-sm text-danger">{erro}</div>}
 

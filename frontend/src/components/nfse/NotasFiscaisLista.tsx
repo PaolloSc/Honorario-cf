@@ -8,11 +8,20 @@ function brl(v: string) {
   return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+const RESUMO_LABEL = {
+  auto: "automáticas",
+  manual: "manuais",
+  pendente: "a vincular",
+  sem_match: "sem contrato",
+  cancelada: "canceladas",
+  recebida: "recebidas",
+} as const;
+
 const statusBadge: Record<NFSeOut["status_matching"], { label: string; cls: string }> = {
-  auto: { label: "✓ auto", cls: "bg-primary/[0.16] text-primary-dark" },
-  manual: { label: "✓ manual", cls: "bg-primary/[0.16] text-primary-dark" },
-  pendente: { label: "⚠ pendente", cls: "bg-warning/[0.16] text-warning" },
-  sem_match: { label: "✗ sem match", cls: "bg-danger/[0.16] text-danger" },
+  auto: { label: "✓ vinculada (auto)", cls: "bg-primary/[0.16] text-primary-dark" },
+  manual: { label: "✓ vinculada (manual)", cls: "bg-primary/[0.16] text-primary-dark" },
+  pendente: { label: "⚠ a vincular", cls: "bg-warning/[0.16] text-warning" },
+  sem_match: { label: "✗ sem contrato", cls: "bg-danger/[0.16] text-danger" },
   erro: { label: "✗ erro", cls: "bg-danger/[0.16] text-danger" },
   cancelada: { label: "🚫 cancelada", cls: "bg-border/35 text-muted" },
   recebida: { label: "↓ recebida", cls: "bg-border/35 text-foreground" },
@@ -62,17 +71,17 @@ export function NotasFiscaisLista({ competencia_mes }: { competencia_mes: string
           className="border border-border bg-card text-foreground rounded px-2 py-1"
         >
           <option value="">Todos status</option>
-          <option value="auto">Auto</option>
-          <option value="manual">Manual</option>
-          <option value="pendente">Pendente</option>
-          <option value="sem_match">Sem match</option>
+          <option value="auto">Vinculada automaticamente</option>
+          <option value="manual">Vinculada manualmente</option>
+          <option value="pendente">A vincular (confirmar contrato)</option>
+          <option value="sem_match">Sem contrato correspondente</option>
           <option value="cancelada">Cancelada</option>
           <option value="recebida">Recebida</option>
         </select>
         <span className="text-muted">
           Resumo:{" "}
           {(["auto","manual","pendente","sem_match","cancelada","recebida"] as const)
-            .map((k) => `${resumo[k] || 0} ${k}`)
+            .map((k) => `${resumo[k] || 0} ${RESUMO_LABEL[k]}`)
             .join(" · ")}
         </span>
       </div>

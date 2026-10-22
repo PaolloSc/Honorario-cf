@@ -197,7 +197,7 @@ export default function FinanceiroPage() {
                 : "border-transparent text-muted hover:text-foreground"
             }`}
           >
-            {t === "pendentes" && `Pendentes (${pendentes.length})`}
+            {t === "pendentes" && `Participação a cadastrar ou aprovar (${pendentes.length})`}
             {t === "lista" && `Participações (${items.length})`}
             {t === "nova" && "Nova Participação"}
             {t === "simular" && "Simulador"}
@@ -247,7 +247,7 @@ function AbaNotasFiscais() {
           />
         </label>
         <label className="block text-xs">
-          <span className="block text-muted mb-1">CNPJ prestador</span>
+          <span className="block text-muted mb-1">CNPJ de quem emite as notas</span>
           <input
             value={cnpj}
             onChange={(e) => setCnpj(e.target.value)}
@@ -307,7 +307,7 @@ function PendentesLista({
   if (!pendentes.length)
     return (
       <div className="text-muted p-6 text-center border border-dashed border-border rounded-lg">
-        Nenhum contrato pendente. Todos foram tratados.
+        Nenhuma participação a cadastrar ou aprovar. Todas foram tratadas.
       </div>
     );
 

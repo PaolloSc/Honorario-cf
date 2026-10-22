@@ -239,20 +239,20 @@ function ContratoPanel({ tomadores, servicos, aoMsg }: { tomadores: Tomador[]; s
   return (
     <details className="rounded-lg border border-border bg-card p-4">
       <summary className="cursor-pointer text-sm font-semibold text-primary-dark">Quem fatura um contrato</summary>
-      <p className="mt-2 text-xs text-muted">Todo contrato começa faturado pelo Legal One. Só mude para o Honorário quando combinado com o financeiro, para não emitir nota em duplicidade.</p>
+      <p className="mt-2 text-xs text-muted">Todo contrato começa com a nota emitida pelo Legal One. Só mude para este sistema quando combinado com o financeiro, para não emitir a nota duas vezes.</p>
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <Campo rotulo="ID do contrato"><input className={inputCls} value={contrato} onChange={(e) => setContrato(e.target.value)} /></Campo>
         <button onClick={buscar} disabled={!contrato.trim()} className={botaoSecundario}>Consultar</button>
       </div>
       {cfg && (
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <Campo rotulo="Faturado por">
+          <Campo rotulo="Quem emite a nota deste contrato">
             <select className={inputCls} value={cfg.origem} onChange={(e) => setCfg({ ...cfg, origem: e.target.value as Faturamento["origem"] })}>
-              <option value="legalone">Legal One</option>
-              <option value="honorario">Honorário-CF (emite NFS-e)</option>
+              <option value="legalone">Legal One (padrão)</option>
+              <option value="honorario">Este sistema (Honorário-CF emite a NFS-e)</option>
             </select>
           </Campo>
-          <Campo rotulo="Tomador padrão">
+          <Campo rotulo="Tomador padrão" dica="Quem paga a nota; vem preenchido nas novas faturas.">
             <select className={inputCls} value={cfg.tomador_id ?? ""} onChange={(e) => setCfg({ ...cfg, tomador_id: e.target.value ? Number(e.target.value) : null })}>
               <option value="">—</option>
               {tomadores.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
