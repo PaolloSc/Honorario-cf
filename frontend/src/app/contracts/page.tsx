@@ -186,7 +186,7 @@ export default function ContractsPage() {
                         <p className="text-xs text-muted">{c.client_email || c.contract_id.slice(0, 8)}</p>
                         {c.contrato_origem_id && !derivado && (
                           <p className="text-xs text-muted">
-                            Derivado de{" "}
+                            Gerado a partir do contrato{" "}
                             <a href={`/contracts/${c.contrato_origem_id}`} className="text-primary hover:underline">
                               {c.contrato_origem_id.slice(0, 8)}…
                             </a>
