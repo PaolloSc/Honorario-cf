@@ -44,26 +44,38 @@ export const UFS = [
 ];
 export const OAB_UF_PADRAO = "MG";
 /** OAB do formulario: so o numero e a UF (padrao MG); o texto do documento e' montado no envio. */
-export interface Oab { numero: string; uf: string }
+export interface Oab {
+  numero: string;
+  uf: string;
+  /** Texto salvo que nao segue o padrao (varias OABs, formato livre): vai ao documento como esta, ate a pessoa editar. */
+  original?: string;
+}
 export const oabVazia = (): Oab => ({ numero: "", uf: OAB_UF_PADRAO });
 
 /** "36959" -> "36.959" (numeros so com digitos); inscricoes com letra ficam como digitadas. */
 export function formatarOabNumero(valor: string): string {
+  const comSufixo = valor.trim().match(/^([\d.]+)\s*-\s*([A-Za-z])$/); // "36959-a" -> "36.959-A"
+  if (comSufixo) return `${formatarOabNumero(comSufixo[1])}-${comSufixo[2].toUpperCase()}`;
   const limpo = valor.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 8);
   return /^\d+$/.test(limpo) ? limpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : limpo;
 }
 
 /** Texto da OAB no documento. Substabelecente: "OAB/MG n.º 36.959"; substabelecido: "OAB/MG sob o n.º 36.959". */
 export function oabTexto(o: Oab, sob = false): string {
+  if (o.original && o.numero === o.original.trim()) return o.original; // nunca reescreve o que nao entendeu
   return `OAB/${o.uf || OAB_UF_PADRAO} ${sob ? "sob o " : ""}n.º ${formatarOabNumero(o.numero)}`;
 }
 
 /** Texto salvo ("OAB/MG nº 36.959", "OAB/SP sob o n.º 1.234") -> numero e UF do formulario. */
 export function lerOab(texto: string | undefined | null): Oab {
-  const t = texto ?? "";
-  const m = t.match(/OAB\s*\/\s*([A-Za-z]{2})\D*?([0-9][0-9.\sA-Za-z]*)$/);
+  const t = (texto ?? "").trim();
+  const numero = "([0-9][0-9.]*(?:\\s*-\\s*[A-Za-z])?)";
+  // Padrao: "OAB/MG n.º 36.959", "OAB-SP 12345", "OAB/MG sob o n.º 1.234", com ou sem sufixo "-A".
+  const m = t.match(new RegExp(`^OAB\\s*[/-]\\s*([A-Za-z]{2})\\s*(?:sob\\s+o\\s+)?(?:n\\s*\\.?\\s*[º°o]?\\s*\\.?\\s*)?${numero}$`, "i"));
   if (m) return { numero: formatarOabNumero(m[2]), uf: m[1].toUpperCase() };
-  return { numero: formatarOabNumero(t), uf: OAB_UF_PADRAO };
+  if (new RegExp(`^${numero}$`).test(t)) return { numero: formatarOabNumero(t), uf: OAB_UF_PADRAO };
+  // Fora do padrao (varias OABs, texto livre): fica exatamente como esta.
+  return t ? { numero: t, uf: OAB_UF_PADRAO, original: t } : { numero: "", uf: OAB_UF_PADRAO };
 }
 
 /** "36959/MG, 1234/SP" -> OABs do cadastro (numero so digitos, UF da lista); null se algum item for invalido. */

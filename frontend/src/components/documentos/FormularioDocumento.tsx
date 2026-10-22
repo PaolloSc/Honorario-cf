@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   gerarDocumento,
   listDocumentos,
@@ -30,6 +30,8 @@ import {
 } from "@/app/lib/documentos";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { CamposAditivo, CamposDistrato, CamposSubstabelecimento } from "./Campos";
+
+type PartesSub = Pick<SubstabelecimentoForm, "substabelecentes" | "substabelecidos" | "endereco_substabelecidos">;
 
 interface Props {
   tipo: TipoDocumento;
@@ -88,16 +90,35 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
   const acrescentando = !!existente?.pode_acrescentar && acrescentar;
 
   // Ao acrescentar, as partes e o endereço do documento existente já vêm preenchidos (o que for
-  // informado aqui substitui o de lá).
+  // informado aqui substitui o de lá). Só entram em campos vazios; se a pessoa já digitou, pergunta.
+  // "Criar um novo" devolve o que foi preenchido sozinho, sem tocar no que a pessoa editou.
+  const autoPreenchido = useRef<{ antes: PartesSub; aplicado: PartesSub } | null>(null);
+  const ultimoPreenchido = useRef<string | null>(null);
+  const partesDe = (e: SubstabelecimentoForm): PartesSub => ({
+    substabelecentes: e.substabelecentes, substabelecidos: e.substabelecidos, endereco_substabelecidos: e.endereco_substabelecidos,
+  });
+  const iguais = (a: PartesSub, b: PartesSub) => JSON.stringify(a) === JSON.stringify(b);
+  const partesVazias = (p: PartesSub) =>
+    !p.substabelecentes.length && !p.endereco_substabelecidos.trim() && p.substabelecidos.every((s) => !s.nome.trim() && !s.oab.numero.trim());
+  const preencherComExistente = () => {
+    if (!existente) return;
+    const atual = partesDe(estado as SubstabelecimentoForm);
+    const novo = partesDe(estadoDoFormData("substabelecimento", { ...existente }, "") as SubstabelecimentoForm);
+    if (iguais(atual, novo)) return;
+    if (!partesVazias(atual) && !window.confirm("Você já preencheu partes ou endereço. Trocar pelos do substabelecimento existente?")) return;
+    autoPreenchido.current = { antes: atual, aplicado: novo };
+    setEstado({ ...(estado as SubstabelecimentoForm), ...novo });
+  };
+  const desfazerPreenchimento = () => {
+    const auto = autoPreenchido.current;
+    autoPreenchido.current = null;
+    if (auto && iguais(partesDe(estado as SubstabelecimentoForm), auto.aplicado)) setEstado({ ...(estado as SubstabelecimentoForm), ...auto.antes });
+  };
   useEffect(() => {
-    if (!acrescentando || !existente) return;
-    const doc = estadoDoFormData("substabelecimento", { ...existente }, "") as SubstabelecimentoForm;
-    setEstado((atual) => ({
-      ...(atual as SubstabelecimentoForm),
-      substabelecentes: doc.substabelecentes,
-      substabelecidos: doc.substabelecidos,
-      endereco_substabelecidos: doc.endereco_substabelecidos,
-    }));
+    if (!acrescentando || !existente?.contract_id || ultimoPreenchido.current === existente.contract_id) return;
+    ultimoPreenchido.current = existente.contract_id;
+    preencherComExistente();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acrescentando, existente]);
 
   // Pré-preenchimento pelo contrato de origem (partes só leitura; data do contrato editável).
@@ -282,7 +303,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
                     {existente.processos?.length ? ` (processos: ${existente.processos.join(", ")})` : ""}.
                   </p>
                   <label className="flex items-center gap-2 mb-1">
-                    <input type="radio" checked={acrescentar} onChange={() => setAcrescentar(true)} />
+                    <input type="radio" checked={acrescentar} onChange={() => { setAcrescentar(true); preencherComExistente(); }} />
                     Acrescentar o processo a ele
                   </label>
                   {acrescentar && (
@@ -291,7 +312,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
                     </p>
                   )}
                   <label className="flex items-center gap-2">
-                    <input type="radio" checked={!acrescentar} onChange={() => setAcrescentar(false)} />
+                    <input type="radio" checked={!acrescentar} onChange={() => { setAcrescentar(false); desfazerPreenchimento(); }} />
                     Criar um novo
                   </label>
                 </>
