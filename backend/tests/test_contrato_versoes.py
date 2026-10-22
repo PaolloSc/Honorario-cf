@@ -182,3 +182,33 @@ def test_ficha_aprovada_pelo_financeiro_nao_e_tocada(client):
     assert _put(client, cid, _form(cpf=CPF_B), version=1).status_code == 200
     assert _ficha(cid) == [("111.444.777-35", True)]
     assert json.loads(_contrato(cid).cliente_docs) == ["52998224725"]
+
+
+# ── validacao de valores no PUT (regras do ContratoRequest, sem duplicar) ───
+
+
+@pytest.mark.parametrize("tipo,campo,valor,trecho", [
+    ("exito", "percentual", 150, "êxito"),
+    ("exito", "percentual", -5, "êxito"),
+    ("hora_trabalhada", "valor_hora", 0, "hora trabalhada"),
+])
+def test_put_recusa_valores_invalidos_com_422_e_nao_grava(client, tipo, campo, valor, trecho):
+    from tests.test_varredura_honorarios import _req
+
+    cid = _criar(client)
+    corpo = _req(tipo, **{campo: valor})
+    corpo["contratantes"] = _form()["contratantes"]
+    r = _put(client, cid, corpo, version=1)
+    assert r.status_code == 422, r.text
+    det = r.json()["detail"]
+    assert isinstance(det, list) and trecho in det[0]["msg"] and det[0]["loc"][:2] == ["body", "form_data"]
+    assert _contrato(cid).current_version == 1
+
+
+def test_put_com_valores_validos_continua_passando(client):
+    from tests.test_varredura_honorarios import _req
+
+    cid = _criar(client)
+    corpo = _req("exito", percentual=100)
+    corpo["contratantes"] = _form()["contratantes"]
+    assert _put(client, cid, corpo, version=1).status_code == 200

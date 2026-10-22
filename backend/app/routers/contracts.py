@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
@@ -25,6 +26,7 @@ from app.models.documentos_complementares import (
     email_contato,
     nome_exibicao,
 )
+from app.models.contract import ContratoRequest
 from app.services.contract_dispatch import parse_form_data
 
 logger = logging.getLogger(__name__)
@@ -151,6 +153,22 @@ def _congelar_versao_atual(db: Session, contract: ContractDB) -> None:
     )
     if ver and ver.file_path and Path(ver.file_path).exists():
         ver.file_path = _arquivo_da_versao(ver.file_path, contract.contract_id, ver.version_number)
+
+
+def _validar_valores_do_honorario(form_data: dict, contrato_data) -> None:
+    """Regras de valor do ContratoRequest (exito 0-100, hora/pro-labore/mensalidade > 0).
+
+    parse_form_data usa o contexto 'previa' (aceita dado antigo ao regerar/baixar); editar e'
+    gravar dado novo, entao aqui vale a regra completa, com 422 por campo como no wizard.
+    """
+    if not isinstance(contrato_data, ContratoRequest):
+        return
+    try:
+        ContratoRequest.model_validate(form_data)
+    except ValidationError as e:
+        raise RequestValidationError([
+            {**err, "loc": ("body", "form_data", *err["loc"])} for err in e.errors(include_context=False, include_url=False)
+        ])
 
 
 def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_data: dict, contrato_data, user: CurrentUser) -> None:
@@ -413,6 +431,7 @@ def update_contract(
         contrato_data, gen = parse_form_data(body.form_data, estrito=True)
     except Exception as e:
         raise HTTPException(422, f"Dados invalidos: {e}")
+    _validar_valores_do_honorario(body.form_data, contrato_data)
 
     _congelar_versao_atual(db, contract)
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
