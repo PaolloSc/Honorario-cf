@@ -212,3 +212,18 @@ def test_put_com_valores_validos_continua_passando(client):
     corpo = _req("exito", percentual=100)
     corpo["contratantes"] = _form()["contratantes"]
     assert _put(client, cid, corpo, version=1).status_code == 200
+
+
+def test_substabelecimento_assinado_nao_volta_a_rascunho_e_sugere_criar_novo(client):
+    from tests.test_documentos_complementares import PROC_A, SUBSTABELECIMENTO
+
+    sub = {**SUBSTABELECIMENTO, "processos": [PROC_A]}
+    r = client.post("/api/documentos/substabelecimento", json=sub)
+    assert r.status_code == 200, r.text
+    cid = r.json()["contract_id"]
+    _travar(cid, "assinado")
+    resp = _put(client, cid, sub, version=1)
+    assert resp.status_code == 409
+    d = resp.json()["detail"]
+    assert d["codigo"] == "contrato_travado" and "novo substabelecimento" in d["sugestao"]
+    assert _contrato(cid).status == "assinado"
