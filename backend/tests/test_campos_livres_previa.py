@@ -89,3 +89,40 @@ def test_faixas_vao_para_a_ia():
                          "exito": {"faixas_percentual": [{"faixa": "acima de dois milhões", "percentual": "10"}]}}]}
     textos = [t for _, t, _ in contract_reviewer.campos_abertos(data)]
     assert "de 1 a 10 processos" in textos and "acima de dois milhões" in textos
+
+
+def test_fronteira_de_palavra_sim_nao_marca_assim():
+    from app.routers.contract import _achar_no_html
+
+    assert _achar_no_html("<p>Assim fica combinado.</p>", "sim") is None
+    assert _achar_no_html("<p>Assim ou sim, tanto faz.</p>", "sim") == "sim"
+    assert _achar_no_html("<p>Pagamento em dia conforme combinado</p>", "pagamento em dia") == "Pagamento em dia"
+
+
+def test_texto_curto_ou_percentual_so_marca_se_unico():
+    from app.routers.contract import _achar_no_html
+
+    duas = "<p>Desconto de 10% na parcela 1.</p><p>Multa de 10% ao ano.</p>"
+    assert _achar_no_html(duas, "10%") is None
+    assert _achar_no_html("<p>Desconto de 10% na parcela 1.</p>", "10%") == "10%"
+    # texto longo repetido continua valendo (a mesma frase em dois honorários)
+    longo = "<p>abatimento combinado com o financeiro</p><p>abatimento combinado com o financeiro</p>"
+    assert _achar_no_html(longo, "abatimento combinado com o financeiro")
+
+
+def test_nao_casa_dentro_de_tag():
+    from app.routers.contract import _achar_no_html
+
+    assert _achar_no_html('<p style="background">texto</p>', "background") is None
+
+
+def test_destaques_sobrepostos_marcam_so_o_mais_longo():
+    from app.routers.contract import _marcar_digitados
+
+    out = _marcar_digitados(
+        "<p>nos termos: pagamento em dia sempre.</p>",
+        ["pagamento em dia", "em dia sempre", "pagamento em dia sempre"],
+        [],
+    )
+    assert out.count("<mark") == 1 and "<mark" in out and out.count("</mark>") == 1
+    assert ">pagamento em dia sempre</mark>" in out
