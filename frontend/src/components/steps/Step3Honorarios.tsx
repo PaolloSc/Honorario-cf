@@ -266,7 +266,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
           updated.mensalidade = {
             valor: 0,
             subtipo: "advocacia_partido",
-            dia_vencimento: "5",
+            dia_vencimento: "",
             variacao_preco: "sem_variacao",
           };
         } else if (tipo === "exito" && !escopo.exito) {

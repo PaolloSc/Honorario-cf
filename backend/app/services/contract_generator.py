@@ -997,7 +997,8 @@ class ContractGenerator:
                 row = table.add_row().cells
                 row[0].text = faixa.get("faixa", "")
                 row[1].text = self._percentual_digitado(faixa.get("percentual", ""))
-        elif ex.percentual:
+        elif ex.percentual and ex.subtipo != SubtipoExito.PERCENTUAL_VARIAVEL:
+            # variavel nao herda o percentual fixo que ficou escondido na troca de subtipo
             num(
                 f"Os honorários de êxito corresponderão a {percentual_com_extenso(ex.percentual)} "
                 f"sobre {beneficio}{base}.", chave="incidencia"

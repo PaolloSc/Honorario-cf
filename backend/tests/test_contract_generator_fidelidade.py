@@ -658,7 +658,7 @@ def test_clausulas_gerais_com_numeros_por_extenso():
 
 def test_vencimento_livre_com_ponto_e_maiuscula_encaixa_na_frase():
     pl = _escopo("pro_labore")
-    pl["pro_labore"].update(tipo_parcelamento="mensal", numero_parcelas=2, valor_parcela=500,
+    pl["pro_labore"].update(tipo_parcelamento="mensal", numero_parcelas=2, valor_parcela=500, valor_total=1000,
                             vencimento_parcelas_obs="Todo dia 10.")
     m = _escopo("mensalidade", mensalidade_subtipo="advocacia_partido", tipo="consultoria_contratual")
     m["mensalidade"].update(dia_vencimento="", dia_vencimento_obs="Até o 5º dia útil.")

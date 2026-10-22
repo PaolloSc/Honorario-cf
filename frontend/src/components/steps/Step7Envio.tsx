@@ -354,6 +354,9 @@ export default function Step7Envio({
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
   const reviewStarted = useRef(false);
+  // Contrato novo já criado nesta tela: se o e-mail falhar, tentar de novo reaproveita o
+  // mesmo contrato (com os mesmos dados) em vez de gerar outro e outra participação.
+  const criadoAgora = useRef<{ id: string; dados: string } | null>(null);
 
   useEffect(() => {
     // Só faz sentido revisar o texto ainda não gerado (criação). Em edição o
@@ -468,10 +471,13 @@ export default function Step7Envio({
         if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
         resultContractId = result.contract_id;
         onContractGenerated?.();
+      } else if (criadoAgora.current && criadoAgora.current.dados === JSON.stringify(data)) {
+        resultContractId = criadoAgora.current.id;
       } else {
         const result = await generateContract(data);
         if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
         resultContractId = result.contract_id!;
+        criadoAgora.current = { id: resultContractId, dados: JSON.stringify(data) };
         onContractGenerated?.();
       }
 

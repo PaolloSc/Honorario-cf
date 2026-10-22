@@ -13,7 +13,7 @@ assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado" })),
 assert.equal(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcelamento_customizado: "  " })), "E").length, 1);
 // Com texto, mensal ou parcela única: passa.
 assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcelamento_customizado: "50/50" })), "E"), []);
-assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal" })), "E"), []);
+assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal", numero_parcelas: 2, valor_parcela: 500 })), "E"), []);
 assert.deepEqual(errosDoEscopo(escopo(pl({})), "E"), []);
 // Pró-labore desmarcado não valida dado que ficou para trás.
 assert.deepEqual(
@@ -55,5 +55,16 @@ assert.deepEqual(
   [],
 );
 assert.deepEqual(errosDoEscopo({ honorarios: [], hora_trabalhada: { valor_hora: 0 } } as never, "E"), []);
+
+// Pró-labore mensal, permuta e êxito "Outro" (achados 11 e 12 da varredura).
+const mensal = (extra: object) => escopo(pl({ tipo_parcelamento: "mensal", valor_total: 12000, ...extra }));
+assert.equal(errosDoEscopo(mensal({}), "E").length, 1); // sem nº nem valor da parcela
+assert.equal(errosDoEscopo(mensal({ numero_parcelas: 3, valor_parcela: 1000 }), "E").length, 1); // 3000 != 12000
+assert.deepEqual(errosDoEscopo(mensal({ numero_parcelas: 3, valor_parcela: 4000 }), "E"), []);
+assert.deepEqual(errosDoEscopo(mensal({ valor_total: 10000, numero_parcelas: 3, valor_parcela: 3333.33 }), "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: " " } } as never, "E").length, 1);
+assert.deepEqual(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: "imóvel" } } as never, "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "a definir" } } as never, "E").length, 1);
+assert.deepEqual(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "em 2 vezes" } } as never, "E"), []);
 
 console.log("validacaoHonorarios.ts ok");

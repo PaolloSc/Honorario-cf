@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
  
+import re
 from enum import Enum
 from typing import Literal, Optional
  
@@ -372,30 +373,83 @@ class ContratoRequest(BaseModel):
     ajustes_texto: dict[str, AjusteTexto] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _valores_dos_honorarios(self, info: ValidationInfo) -> "ContratoRequest":
-        """Percentual de exito entre 0 e 100; hora, pro-labore e mensalidade com valor
-        maior que zero. A previa do pop-up (context previa) aceita o formulario pela metade."""
+    def _conferir(self, info: ValidationInfo) -> "ContratoRequest":
+        """Minimo que a tela ja exige, agora tambem no backend (422). A previa do
+        pop-up e o envio de contrato salvo (context previa) aceitam formulario pela
+        metade e dados antigos."""
         if (info.context or {}).get("previa"):
             return self
+        if not self.contratantes:
+            raise ValueError("Informe pelo menos um contratante.")
+        if not self.escopos:
+            raise ValueError("Informe pelo menos um escopo.")
+        for c in self.contratantes:
+            doc, esperado, rotulo = (c.cpf, 11, "CPF") if isinstance(c, ContratantePF) else (c.cnpj, 14, "CNPJ")
+            if len(re.sub(r"\D", "", doc or "")) != esperado:
+                raise ValueError(f"{rotulo} inválido: deve ter {esperado} dígitos.")
+            if not _EMAIL.match((c.email or "").strip()):
+                raise ValueError("E-mail do contratante inválido.")
         for i, e in enumerate(self.escopos, 1):
-            h = e.honorarios
-            pct = e.exito.percentual if TipoHonorario.EXITO in h and e.exito else None
-            if pct is not None and not 0 <= pct <= 100:
-                raise ValueError(f"Escopo {i}: o percentual de êxito deve ficar entre 0 e 100.")
-            checks = [(TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada and e.hora_trabalhada.valor_hora, "hora trabalhada")]
-            # pro-labore com parcelamento descrito em texto pode ficar sem total
-            pl = e.pro_labore
-            if pl and not (pl.tipo_parcelamento == "customizado" and (pl.parcelamento_customizado or "").strip()):
-                checks.append((TipoHonorario.PRO_LABORE, pl.valor_total, "pró-labore"))
-            # mensalidade por faixas de preco pode ficar sem valor unico
-            if e.mensalidade and not e.mensalidade.faixas_preco:
-                checks.append((TipoHonorario.MENSALIDADE, e.mensalidade.valor, "mensalidade"))
-            for tipo, valor, rotulo in checks:
-                if tipo in h and valor is not None and valor <= 0:
-                    raise ValueError(f"Escopo {i}: o valor de {rotulo} deve ser maior que zero.")
+            _conferir_honorarios(i, e)
+        _conferir_participacao(self.participacao)
         return self
- 
- 
+
+
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _numero(txt) -> float | None:
+    try:
+        return float(str(txt).strip().replace("%", "").replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _conferir_participacao(p: "Participacao") -> None:
+    if not p.tem_participacao:
+        return
+    percentuais = [p.valor_percentual if p.valor_tipo == "percentual" else None] + [x.percentual for x in p.participantes]
+    for txt in percentuais:
+        if (txt or "").strip():
+            n = _numero(txt)
+            if n is None or not 0 <= n <= 100:
+                raise ValueError(f"Percentual de participação inválido: {txt!r} (use um número de 0 a 100).")
+    for v in [p.valor_monetario] + [x.valor_monetario for x in p.participantes]:
+        if v is not None and v < 0:
+            raise ValueError("O valor da participação não pode ser negativo.")
+
+
+def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
+    h = e.honorarios
+    pre = f"Escopo {i}: "
+    if TipoHonorario.EXITO in h and e.exito:
+        if e.exito.percentual is not None and not 0 <= e.exito.percentual <= 100:
+            raise ValueError(pre + "o percentual de êxito deve ficar entre 0 e 100.")
+        if (e.exito.forma_pagamento or "").strip().lower() == "a definir":
+            raise ValueError(pre + "descreva a forma de pagamento do êxito (\"Outro\" sem texto).")
+    if TipoHonorario.PERMUTA in h and e.permuta and not (e.permuta.objeto_permuta or "").strip():
+        raise ValueError(pre + "informe o objeto da permuta.")
+    checks = []
+    if TipoHonorario.HORA_TRABALHADA in h and e.hora_trabalhada:
+        checks.append((e.hora_trabalhada.valor_hora, "hora trabalhada"))
+    pl = e.pro_labore
+    if TipoHonorario.PRO_LABORE in h and pl:
+        if pl.tipo_parcelamento == "mensal":
+            if not (pl.numero_parcelas and pl.numero_parcelas > 0 and pl.valor_parcela and pl.valor_parcela > 0):
+                raise ValueError(pre + "pró-labore mensal precisa do número de parcelas e do valor da parcela.")
+            if pl.valor_total > 0 and abs(pl.numero_parcelas * pl.valor_parcela - pl.valor_total) > 0.01 * pl.numero_parcelas:
+                raise ValueError(pre + "pró-labore: número de parcelas × valor da parcela não bate com o valor total.")
+        # parcelamento descrito em texto pode ficar sem total
+        if not (pl.tipo_parcelamento == "customizado" and (pl.parcelamento_customizado or "").strip()):
+            checks.append((pl.valor_total, "pró-labore"))
+    # mensalidade por faixas de preco pode ficar sem valor unico
+    if TipoHonorario.MENSALIDADE in h and e.mensalidade and not e.mensalidade.faixas_preco:
+        checks.append((e.mensalidade.valor, "mensalidade"))
+    for valor, rotulo in checks:
+        if valor is not None and valor <= 0:
+            raise ValueError(pre + f"o valor de {rotulo} deve ser maior que zero.")
+
+
 class ContratoResponse(BaseModel):
     success: bool
     message: str
