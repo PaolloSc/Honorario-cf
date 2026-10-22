@@ -56,7 +56,7 @@ def test_cpf_e_email_invalidos_sao_recusados():
         ContratoRequest(**req)
     req = _base_req()
     req["contratantes"][0]["email"] = "nao-e-email"
-    with pytest.raises(ValidationError, match="E-mail"):
+    with pytest.raises(ValidationError, match="Contratante 1: e-mail"):
         ContratoRequest(**req)
 
 
@@ -135,3 +135,18 @@ def test_cnpj_numerico_e_alfanumerico_passam(cnpj):
 def test_cnpj_invalido_e_recusado(cnpj):
     with pytest.raises(ValidationError, match="CNPJ"):
         ContratoRequest(**_pj(cnpj))
+
+
+def test_erro_de_contratante_diz_qual():
+    req = _base_req()
+    req["contratantes"].append({**req["contratantes"][0], "cpf": "1"})
+    with pytest.raises(ValidationError, match="Contratante 2: CPF"):
+        ContratoRequest(**req)
+
+
+def test_resumo_do_escopo_nao_traz_percentual_fixo_no_exito_variavel():
+    from app.models.contract import EscopoItem
+    from app.services.contract_generator import ContractGenerator
+
+    e = EscopoItem(**_req("exito", subtipo="percentual_variavel", percentual=10)["escopos"][0])
+    assert "10%" not in ContractGenerator()._preco_resumo(e)

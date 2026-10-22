@@ -1573,7 +1573,9 @@ class ContractGenerator:
                 parts.append(f"{valor_com_extenso(v)} de mensalidade" if v else "Mensalidade")
             elif tipo == TipoHonorario.EXITO and escopo.exito:
                 v = escopo.exito.percentual
-                parts.append(f"{percentual_com_extenso(v)} de êxito" if v else "Êxito")
+                # variavel nao herda o percentual fixo escondido (mesma regra da clausula)
+                fixo = v and escopo.exito.subtipo != SubtipoExito.PERCENTUAL_VARIAVEL
+                parts.append(f"{percentual_com_extenso(v)} de êxito" if fixo else "Êxito")
             elif tipo == TipoHonorario.PERMUTA and escopo.permuta:
                 parts.append(f"Permuta com serviços de {escopo.permuta.objeto_permuta}")
         return " + ".join(parts) if parts else "A definir"
