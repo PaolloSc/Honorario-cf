@@ -708,17 +708,50 @@ _MARCA_RISCADO = "background:rgba(239,68,68,.18);color:#b91c1c;text-decoration:l
 _MARCA_IA = "background:rgba(34,197,94,.22);text-decoration:none;border-radius:2px;padding:0 1px"
 
 
+def _achar_no_html(html: str, digitado: str) -> str | None:
+    """Trecho do html que corresponde ao texto digitado, mesmo que o contrato o escreva
+    um pouco diferente: inicial maiuscula/minuscula, espacos repetidos, aspas, ponto
+    final. Devolve o texto como esta no contrato (sem escape), ou None."""
+    from html import escape, unescape
+
+    miolo = (digitado or "").strip().rstrip(".;, ").strip()
+    if not miolo:
+        return None
+    partes: list[str] = []
+    primeira = True
+    for pedaco in re.split(r"(\s+)", miolo):
+        if not pedaco:
+            continue
+        if pedaco.isspace():
+            partes.append(r"\s+")
+            continue
+        for c in pedaco:
+            if c in "\"'":
+                partes.append("(?:" + "|".join(re.escape(x) for x in (c, escape(c), escape(c, quote=False), "&#39;")) + ")")
+            elif primeira and c.isalpha():
+                partes.append("[" + re.escape(c.lower()) + re.escape(c.upper()) + "]")
+            else:
+                partes.append(re.escape(escape(c)))
+            primeira = False
+    achado = re.search("".join(partes), html)
+    return unescape(achado.group(0)) if achado else None
+
+
 def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
     """Amarelo = o que a pessoa digitou. Onde a IA propoe outro texto, o digitado sai
-    riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar)."""
+    riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar).
+    O mesmo texto digitado em mais de um honorario e' destacado em cada ocorrencia."""
+    from collections import Counter
     from html import escape
 
-    for texto in textos:
+    for texto, vezes in Counter(textos).items():
         alvo = escape(texto)
         dentro = alvo
         for a in achados:
-            trecho = escape((a.get("trecho") or "").strip())
-            if trecho and trecho in dentro:
+            bruto = (a.get("trecho") or "").strip()
+            # a IA ve o texto como digitado; o contrato pode ter descido a inicial
+            trecho = next((escape(t) for t in (bruto, bruto[:1].swapcase() + bruto[1:]) if t and escape(t) in dentro), "")
+            if trecho:
                 # ponytail: casa por substring; trecho dentro de sugestao ja inserida
                 # nao e' tratado (o revisor ja descarta trechos aninhados).
                 dentro = dentro.replace(
@@ -727,7 +760,7 @@ def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
                     f'<ins style="{_MARCA_IA}">{escape(a.get("sugestao") or "")}</ins>',
                     1,
                 )
-        html = html.replace(alvo, f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>', 1)
+        html = html.replace(alvo, f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>', vezes)
     return html
 
 
@@ -768,11 +801,11 @@ def preview_honorarios(
     dump = {"escopos": [e.model_dump(mode="json") for e in body.escopos]}
     # O gerador tira a pontuacao final do que foi digitado; o destaque tem de casar.
     completos = contract_reviewer.campos_abertos(dump)
-    # O contrato desce a inicial de "Até R$ 500" / "Um desconto de 5%"; a busca no html
-    # (e o destaque) tem de usar o texto como o gerador o escreveu, nao como foi digitado.
-    como_sai = ContractGenerator._texto_livre
-    completos = [c for c in completos if len(como_sai(c[1])) >= 3 and escape(como_sai(c[1])) in html]
-    textos = [como_sai(t) for _, t, _ in completos]
+    # O contrato pode escrever o texto diferente do digitado (inicial, ponto final,
+    # espacos); a busca no html e o destaque usam o texto como saiu no contrato.
+    como_sai = [(c, _achar_no_html(html, c[1])) for c in completos]
+    completos = [c for c, achado in como_sai if achado and len(achado) >= 3]
+    textos = [achado for _, achado in como_sai if achado and len(achado) >= 3]
     # Desconto percentual nao e' texto livre, mas e' a "especificacao" que a pessoa preencheu.
     for h in (e.model_dump(mode="json").get(k) or {} for e in body.escopos for k in contract_reviewer.HONORARIO_ROTULOS):
         if h.get("tem_desconto") and h.get("desconto_tipo") != "livre" and h.get("desconto_percentual"):
