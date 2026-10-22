@@ -190,7 +190,8 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
         add(f"{prefix} - êxito: forma de parcelamento", exito.get("forma_parcelamento"), frases_exito)
         # forma_pagamento e' chave (a_vista, parcelado...) ou texto livre; so' o livre vai.
         forma = exito.get("forma_pagamento")
-        if forma not in ("a_vista", "parcelado", "conforme_cumprimento"):
+        # "a definir" e' o placeholder que o formulario grava ao escolher "Outro".
+        if forma not in ("a_vista", "parcelado", "conforme_cumprimento") and (forma or "").strip().lower() != "a definir":
             add(f"{prefix} - êxito: forma de pagamento", forma, frases_exito)
         for faixa in exito.get("faixas_percentual") or []:
             add(f"{prefix} - êxito: faixa de valor", faixa.get("faixa"))

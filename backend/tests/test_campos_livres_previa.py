@@ -159,3 +159,36 @@ def test_campo_so_e_marcado_no_bloco_gerado_por_ele(client, monkeypatch):
     assert len(marcas) == 1
     inicio = html.rfind("<p>", 0, marcas[0].start())
     assert "permuta com os" not in html[inicio:html.index("</p>", marcas[0].start())]
+
+
+def test_marcar_usa_fronteira_de_palavra():
+    from app.routers.contract import _marcar_digitados
+
+    out = _marcar_digitados("<p>Assim ficou, e sim, combinado.</p>", ["sim"], [])
+    assert out.count("<mark") == 1 and ">sim</mark>" in out and "As<mark" not in out
+    # texto longo dentro de palavra maior tambem nao marca
+    assert "<mark" not in _marcar_digitados("<p>xpagamento em diay</p>", ["pagamento em dia"], [])
+
+
+def test_texto_curto_repetido_vai_a_ia_mas_sem_destaque(client, monkeypatch):
+    e = _escopo("pro_labore")
+    e["pro_labore"].update(tem_desconto=True, desconto_tipo="livre", desconto_livre="x livre longa", desconto_condicao="o desconto")
+    html, ia = _previa(client, monkeypatch, e)
+    assert "o desconto" in ia and "x livre longa" in ia
+    # "o desconto" (curto) aparece 2x no mesmo paragrafo: sem <mark> nele
+    assert ">o desconto</mark>" not in html.lower() and ">x livre longa</mark>" in html
+
+
+def test_a_definir_nao_vai_a_ia():
+    data = {"escopos": [{"exito": {"forma_pagamento": "a definir"}}]}
+    assert contract_reviewer.campos_abertos(data) == []
+    data["escopos"][0]["exito"]["forma_pagamento"] = "em duas vezes após o trânsito"
+    assert len(contract_reviewer.campos_abertos(data)) == 1
+
+
+def test_achar_sem_destaque_aceita_texto_curto_repetido():
+    from app.routers.contract import _achar_no_html
+
+    duas = "<p>Desconto de 10% na parcela 1.</p><p>Multa de 10% ao ano.</p>"
+    assert _achar_no_html(duas, "10%") is None
+    assert _achar_no_html(duas, "10%", destaque=False) == "10%"
