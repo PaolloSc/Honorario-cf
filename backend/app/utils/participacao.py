@@ -110,6 +110,11 @@ def linhas_participacao(p: Mapping[str, Any]) -> list[tuple[str, str]]:
     # ficha (envio, pos-assinatura e rascunho do financeiro) nascerem iguais.
     if p.get("categoria_cliente"):
         linhas.append(("Categoria do cliente", p["categoria_cliente"]))
+    etiquetas = p.get("etiquetas") or []
+    if isinstance(etiquetas, str):
+        etiquetas = [etiquetas] if etiquetas.strip() else []
+    if etiquetas:
+        linhas.append(("Etiquetas", ", ".join(etiquetas)))
     valores = p.get("listas_transmissao") or []
     if isinstance(valores, str):  # formato antigo: um valor so
         valores = [valores] if valores.strip() else []

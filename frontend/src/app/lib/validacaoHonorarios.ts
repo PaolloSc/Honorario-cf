@@ -45,6 +45,21 @@ export function errosDoEscopo(
       errors.push(`${label}: informe o valor de ${rotulo} (maior que zero).`);
     }
   }
+  if (escopo.honorarios.includes("pro_labore") && pl?.tipo_parcelamento === "mensal") {
+    const n = pl.numero_parcelas ?? 0;
+    const v = pl.valor_parcela ?? 0;
+    if (n <= 0 || v <= 0) {
+      errors.push(`${label}: pró-labore mensal precisa do número de parcelas e do valor da parcela.`);
+    } else if ((pl.valor_total ?? 0) > 0 && Math.abs(n * v - pl.valor_total) > 0.01 * n) {
+      errors.push(`${label}: pró-labore: número de parcelas × valor da parcela não bate com o valor total.`);
+    }
+  }
+  if (escopo.honorarios.includes("permuta") && !escopo.permuta?.objeto_permuta?.trim()) {
+    errors.push(`${label}: informe o objeto da permuta.`);
+  }
+  if (escopo.honorarios.includes("exito") && escopo.exito?.forma_pagamento?.trim().toLowerCase() === "a definir") {
+    errors.push(`${label}: descreva a forma de pagamento do êxito (\"Outro\" sem texto).`);
+  }
   for (const hon of Object.keys(ROTULOS) as Honorario[]) {
     const h = escopo[hon];
     if (
