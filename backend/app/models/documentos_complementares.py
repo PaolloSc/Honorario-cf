@@ -78,22 +78,53 @@ class Empresa(BaseModel):
 
 
 class Remuneracao(BaseModel):
-    valor_mensal: float = Field(gt=0)
-    # Opcionais: sem franquia / hora excedente as clausulas correspondentes somem.
-    franquia_horas: Optional[int] = Field(default=None, gt=0)
-    valor_hora_excedente: Optional[float] = Field(default=None, gt=0)
+    """Legado: aditivos salvos antes de 22/10/2026. Lido e ignorado."""
+
+    valor_mensal: Optional[float] = None
+    franquia_horas: Optional[int] = None
+    valor_hora_excedente: Optional[float] = None
+
+
+TIPO_ALTERAR, TIPO_EXCLUIR, TIPO_ADICIONAR = "alterar", "excluir", "adicionar"
+
+
+class AlteracaoClausula(BaseModel):
+    """Uma mudanca no contrato original: alterar, excluir ou adicionar clausula."""
+
+    tipo: Literal["alterar", "excluir", "adicionar"]
+    clausula: Optional[str] = None  # clausula do contrato original (alterar e excluir)
+    texto: Optional[str] = None  # novo texto (alterar e adicionar)
+
+    @model_validator(mode="after")
+    def _campos_do_tipo(self):
+        self.clausula = (self.clausula or "").strip() or None
+        self.texto = (self.texto or "").strip() or None
+        if self.tipo in (TIPO_ALTERAR, TIPO_EXCLUIR) and not self.clausula:
+            raise ValueError("Informe a cláusula do contrato original")
+        if self.tipo in (TIPO_ALTERAR, TIPO_ADICIONAR) and not self.texto:
+            raise ValueError("Informe o novo texto")
+        return self
 
 
 class AditivoRequest(_ComOrigem):
     tipo_contrato: Literal["aditivo"] = TIPO_ADITIVO
     objeto: str = Field(min_length=1)
-    remuneracao: Remuneracao
-    compensacao_anual: bool = True
+    alteracoes: list[AlteracaoClausula] = Field(default_factory=list)
+    # Legado (aditivos salvos com remuneracao/abrangencia): aceitos e ignorados na geracao.
+    remuneracao: Optional[Remuneracao] = None
+    compensacao_anual: bool = False
     abrangencia: list[Empresa] = Field(default_factory=list)
     # Quando o contrato original foi firmado (nao a data de cadastro na plataforma). Obrigatoria:
     # o contrato de honorarios nao guarda essa data, entao o advogado informa.
     data_contrato_origem: str = Field(min_length=1)
     numero: int = 1  # servidor: 1 + aditivos ja existentes
+
+    @model_validator(mode="after")
+    def _ao_menos_uma_alteracao(self):
+        # Aditivo legado (com remuneracao) continua gerando sem lista de alteracoes.
+        if not self.alteracoes and self.remuneracao is None:
+            raise ValueError("Informe ao menos uma alteração")
+        return self
 
 
 class DistratoRequest(_ComOrigem):

@@ -20,20 +20,30 @@ assert.ok(ehDocumentoComplementar("distrato"));
 assert.ok(!ehDocumentoComplementar("honorarios"));
 assert.ok(!ehDocumentoComplementar(undefined));
 
-// Aditivo: franquia e hora excedente opcionais; vazio vira null (o backend omite a cláusula).
-const ad = { ...(estadoInicial("aditivo", "2026-10-16") as AditivoForm), objeto: " auditoria ", valor_mensal: 1500, data_contrato_origem: "2020-01-15" };
+// Aditivo: lista de alteracoes (alterar/excluir/adicionar); campos que nao cabem no tipo vao como null.
+const alt = (tipo: "alterar" | "excluir" | "adicionar", clausula = "", texto = "") => ({ tipo, clausula, texto });
+const ad = {
+  ...(estadoInicial("aditivo", "2026-10-16") as AditivoForm),
+  objeto: " auditoria ", data_contrato_origem: "2020-01-15",
+  alteracoes: [alt("alterar", " Cláusula 3ª, item 3.2 ", " novo "), alt("excluir", "Cláusula 5ª", "sobra"), alt("adicionar", "sobra", "nova cláusula")],
+};
 assert.deepEqual(validar("aditivo", ad), {});
 const p = montarPayload("aditivo", ad, "origem-1") as any;
 assert.equal(p.objeto, "auditoria");
 assert.equal(p.contrato_origem_id, "origem-1");
-assert.equal(p.remuneracao.franquia_horas, null);
-assert.equal(p.remuneracao.valor_hora_excedente, null);
 assert.equal(p.data_contrato_origem, "2020-01-15");
+assert.deepEqual(p.alteracoes, [
+  { tipo: "alterar", clausula: "Cláusula 3ª, item 3.2", texto: "novo" },
+  { tipo: "excluir", clausula: "Cláusula 5ª", texto: null },
+  { tipo: "adicionar", clausula: null, texto: "nova cláusula" },
+]);
+assert.equal(p.remuneracao, undefined);
+assert.equal(p.abrangencia, undefined);
 // Data do contrato original obrigatoria no aditivo (decisao do usuario).
 assert.ok(validar("aditivo", { ...ad, data_contrato_origem: "" }).data_contrato_origem);
-assert.equal(montarPayload("aditivo", { ...ad, franquia_horas: "5" }, "o").remuneracao.franquia_horas, 5);
-assert.deepEqual(Object.keys(validar("aditivo", { ...ad, valor_mensal: undefined, objeto: "" })).sort(), ["objeto", "remuneracao.valor_mensal"]);
-assert.ok(validar("aditivo", { ...ad, abrangencia: [{ razao_social: "X", cnpj: "11" }] })["abrangencia.0.cnpj"]);
+assert.ok(validar("aditivo", { ...ad, alteracoes: [] }).alteracoes);
+assert.deepEqual(Object.keys(validar("aditivo", { ...ad, objeto: "", alteracoes: [alt("alterar"), alt("excluir"), alt("adicionar")] })).sort(),
+  ["alteracoes.0.clausula", "alteracoes.0.texto", "alteracoes.1.clausula", "alteracoes.2.texto", "objeto"]);
 
 // Distrato exige a data e o objeto do contrato original.
 assert.deepEqual(Object.keys(validar("distrato", estadoInicial("distrato", "2026-10-16"))).sort(),
@@ -63,9 +73,10 @@ assert.deepEqual(estadoDoFormData("substabelecimento", ps, "h"), {
   ...ok, processos: [{ tipo: "Processo", numero: "1234567-49.2020.8.13.0024", descricao: "A x B" }],
   outorgante_documento: "",
 });
-const ad2 = estadoDoFormData("aditivo", { ...p, remuneracao: { valor_mensal: 1500, franquia_horas: 2 } }, "h") as AditivoForm;
-assert.equal(ad2.franquia_horas, "2");
-assert.equal(ad2.valor_mensal, 1500);
+const ad2 = estadoDoFormData("aditivo", p, "h") as AditivoForm;
+assert.deepEqual(ad2.alteracoes[1], { tipo: "excluir", clausula: "Cláusula 5ª", texto: "" });
+// Aditivo legado (remuneracao/abrangencia): abre, sem alteracoes herdadas.
+assert.deepEqual((estadoDoFormData("aditivo", { objeto: "x", remuneracao: { valor_mensal: 1 }, abrangencia: [] }, "h") as AditivoForm).alteracoes, []);
 
 // Erros 422 do backend em português, por campo.
 const r = errosDaApi(new Error('API error 422: {"detail":[{"loc":["processos",0,"numero"],"msg":"Value error, Número de processo inválido","type":"value_error"},'
