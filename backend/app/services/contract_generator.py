@@ -113,6 +113,7 @@ class _ItensClausula:
         self.prefixo: str | None = None
         self.contador = 0
         self.vistos: set[str] = set()
+        self.duplicadas: list[str] = []
 
     def nova_secao(self, titulo: str) -> None:
         self.sec += 1
@@ -124,24 +125,22 @@ class _ItensClausula:
         self.prefixo = prefixo
         self.contador = 0
 
-    def _id(self, padrao: str, ilvl: int) -> str:
-        if self.prefixo == "adic":  # chave = conteudo, nao a posicao
-            base = "adic." + hashlib.sha1(padrao.encode("utf-8")).hexdigest()[:8]
-            id_, k = base, 1
-            while id_ in self.vistos:
-                k += 1
-                id_ = f"{base}.{k}"
-            return id_
-        if self.prefixo:
-            self.contador += 1
-            return f"{self.prefixo}.{self.contador}"
+    def _numero(self, ilvl: int) -> str:
+        """Numero que o Word mostra (so para a tela; nunca serve de id)."""
         self.n[ilvl - 1] += 1
         for i in range(ilvl, len(self.n)):
             self.n[i] = 0
         return ".".join(str(x) for x in [self.sec, *self.n[:ilvl]])
 
-    def registrar(self, padrao: str, ilvl: int) -> str:
-        id_ = self._id(padrao, ilvl)
+    def registrar(self, padrao: str, ilvl: int, chave: str) -> str:
+        numero = self._numero(ilvl)
+        id_ = f"{self.prefixo}.{chave}" if self.prefixo else chave
+        if id_ in self.vistos:  # nao deve ocorrer (ha teste); o sufixo evita ids iguais em producao
+            self.duplicadas.append(id_)
+            k = 2
+            while f"{id_}.{k}" in self.vistos:
+                k += 1
+            id_ = f"{id_}.{k}"
         self.vistos.add(id_)
         etapa = SECOES_BLOQUEADAS.get(self.secao)
         ajuste = self.ajustes.get(id_) if etapa is None else None
@@ -157,16 +156,19 @@ class _ItensClausula:
             else:
                 status = "padrao_mudou"
         self.itens.append({
-            "id": id_, "clausula": self.secao, "texto": texto, "padrao": padrao,
+            "id": id_, "numero": numero, "clausula": self.secao, "texto": texto, "padrao": padrao,
+            "padrao_ajuste": ajuste.padrao if ajuste is not None else None,
             "ajustado": aplicado, "status": status,
             "ajuste": ajuste.texto if ajuste is not None else None,
             "editavel": etapa is None, "etapa": etapa,
         })
         return texto
 
-    def descartados(self) -> list[str]:
-        """Ajustes cujo item deixou de existir (ou ficou bloqueado)."""
-        return [k for k in self.ajustes if k not in {i["id"] for i in self.itens if i["editavel"]}]
+    def descartados(self) -> list[dict]:
+        """Ajustes cuja clausula deixou de existir no contrato: nunca aplicados em outra;
+        o texto volta na lista para a pessoa copiar."""
+        vivos = {i["id"] for i in self.itens if i["editavel"]}
+        return [{"id": k, "texto": a.texto} for k, a in self.ajustes.items() if k not in vivos]
 
 
 class _Numerador:
@@ -183,10 +185,10 @@ class _Numerador:
         self.sub = sub
         self.i = 0
 
-    def __call__(self, texto: str):
+    def __call__(self, texto: str, *, chave: str):
         self.i += 1
         ilvl = 2 if (self.sub and self.i > 1) else 1
-        return self.gen._add_clausula(self.doc, texto, ilvl)
+        return self.gen._add_clausula(self.doc, texto, ilvl, chave=chave)
 
 
 MESES_PT_BR = [
@@ -210,7 +212,7 @@ class ContractGenerator:
         self.template_path = self._resolve_backend_path(settings.template_path)
         self.output_dir = self._resolve_backend_path(settings.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
- 
+
     def generate(self, data: ContratoRequest, contract_id: str | None = None, signatario_roles: list[dict] | None = None) -> tuple[str, str]:
         """Generate a contract document from form data.
 
@@ -225,7 +227,7 @@ class ContractGenerator:
         doc.save(str(filepath))
  
         return contract_id, str(filepath)
- 
+
     def _build_document(self, data: ContratoRequest, signatario_roles: list[dict] | None = None) -> Document:
         doc = self._new_document_from_template()
         self._clear_body(doc)
@@ -394,10 +396,10 @@ class ContractGenerator:
             itens.nova_secao(titulo)
         return self._numerar(doc.add_heading(titulo, level=2), 0)
 
-    def _add_clausula(self, doc: Document, texto: str, ilvl: int = 1):
+    def _add_clausula(self, doc: Document, texto: str, ilvl: int = 1, *, chave: str):
         """Cláusula numerada automaticamente (1 = x.y, 2 = x.y.z)."""
         if (itens := getattr(doc, "_cf_itens", None)) is not None:
-            texto = itens.registrar(texto, ilvl)
+            texto = itens.registrar(texto, ilvl, chave)
         return self._numerar(doc.add_paragraph(texto), ilvl)
 
     def _apply_document_standard(self, doc: DocxDocument) -> None:
@@ -620,7 +622,7 @@ class ContractGenerator:
     def _add_desconto(self, h, num: "_Numerador") -> None:
         frase = self._frase_desconto(h)
         if frase:
-            num(frase)
+            num(frase, chave="desconto")
 
     def _label_from_map(self, value: str | None, labels: dict[str, str]) -> str:
         raw = (value or "").strip()
@@ -646,7 +648,7 @@ class ContractGenerator:
             element.set(qn("w:sz"), "4")
             element.set(qn("w:space"), "0")
             element.set(qn("w:color"), "000000")
- 
+
     def _set_table_header(self, table, *titles: str) -> None:
         """Preenche a linha de titulo da tabela com texto centralizado."""
         for cell, title in zip(table.rows[0].cells, titles):
@@ -663,7 +665,7 @@ class ContractGenerator:
     def _add_title(self, doc: Document) -> None:
         title = doc.add_heading("CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS", level=1)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
- 
+
     def _add_parties(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "DAS PARTES")
 
@@ -722,14 +724,14 @@ class ContractGenerator:
             return value or ""
         return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
  
- 
+
     def _add_scope_and_fees(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "OBJETO, ESCOPO E HONORÁRIO")
  
         self._add_clausula(
             doc,
             'O objeto do presente Contrato ("Contrato") é a prestação, pelo C&F, '
-            "de serviços advocatícios à CONTRATANTE, conforme o seguinte Escopo e Preço:"
+            "de serviços advocatícios à CONTRATANTE, conforme o seguinte Escopo e Preço:", chave="escopo.objeto"
         )
  
         # Summary table
@@ -748,7 +750,7 @@ class ContractGenerator:
             doc,
             "Não estão incluídos no escopo: serviços contábeis, perícias, cálculos, "
             "auditorias, análise econômica, financeira ou de qualquer outra natureza que "
-            "não seja estritamente jurídica."
+            "não seja estritamente jurídica.", chave="escopo.nao_incluidos_escopo"
         )
  
         has_hora = any(TipoHonorario.HORA_TRABALHADA in e.honorarios for e in data.escopos)
@@ -770,14 +772,14 @@ class ContractGenerator:
                 doc,
                 "Caso a CONTRATANTE solicite atendimento a questões expressamente não "
                 "indicadas no objeto e escopo deste Contrato, serão aplicados os mesmos "
-                "critérios de honorários de hora trabalhada previstos no Contrato."
+                "critérios de honorários de hora trabalhada previstos no Contrato.", chave="escopo.hora_fora_escopo"
             )
         else:
             self._add_clausula(
                 doc,
                 "Não estão incluídos na precificação serviços oferecidos pelo C&F "
                 "e não expressamente indicados no objeto e escopo deste Contrato, os quais "
-                "poderão ser pactuados posteriormente entre as Partes."
+                "poderão ser pactuados posteriormente entre as Partes.", chave="escopo.nao_incluidos_preco"
             )
 
         if has_mensalidade_partido:
@@ -785,7 +787,7 @@ class ContractGenerator:
                 doc,
                 "Também não estão incluídos na precificação os serviços de consultoria que "
                 "constituam um projeto específico multidisciplinar ou dotado de certa "
-                "complexidade, tais como planejamentos e/ou estruturações."
+                "complexidade, tais como planejamentos e/ou estruturações.", chave="escopo.projeto_especifico"
             )
 
         if data.incluir_partes_relacionadas and (has_hora or has_mensalidade_processo):
@@ -794,7 +796,7 @@ class ContractGenerator:
                 "Para fins deste Contrato, são Partes Relacionadas: "
                 "(i) cônjuge, companheiro(a) ou parente de primeiro ou segundo grau da "
                 "CONTRATANTE; (ii) entidade(s) ou pessoa(s) jurídica(s) cujo controle "
-                "fático ou jurídico seja da CONTRATANTE."
+                "fático ou jurídico seja da CONTRATANTE.", chave="escopo.partes_relacionadas"
             )
             self._add_clausula(
                 doc,
@@ -802,7 +804,7 @@ class ContractGenerator:
                 "Relacionadas, salvo ajuste expresso em contrário, serão aplicados os "
                 "mesmos critérios de honorários previstos no Contrato, constituindo "
                 "nova contratação para todos os fins.",
-                ilvl=2,
+                ilvl=2, chave="escopo.partes_relacionadas_atendimento",
             )
 
     def _add_fee_details(self, doc: Document, data: ContratoRequest) -> None:
@@ -834,7 +836,7 @@ class ContractGenerator:
                 usados[tipo] = usados.get(tipo, 0) + 1
                 ctx.abrir_bloco(f"hon.{tipo}" + (str(usados[tipo]) if usados[tipo] > 1 else ""))
             add(doc, obj, _Numerador(self, doc, varios), com_subtitulo=varios)
- 
+
     def _add_hora_trabalhada(self, doc: Document, ht: "HoraTrabalhada", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
             doc.add_heading("HORA TRABALHADA", level=3)
@@ -842,7 +844,7 @@ class ContractGenerator:
         num(
             f"Os serviços serão remunerados por hora trabalhada{valor}, sendo as horas "
             "apuradas ao final de cada mês e faturadas em parcela única no mês "
-            "imediatamente subsequente."
+            "imediatamente subsequente.", chave="valor"
         )
 
         urgencia = "em regime de urgência"
@@ -852,20 +854,20 @@ class ContractGenerator:
                 "Quando, por solicitação da CONTRATANTE, os serviços forem prestados "
                 f"{urgencia}, as horas trabalhadas serão acrescidas de {percentual_com_extenso(50)}; "
                 f"quando prestados {fora}, de {percentual_com_extenso(100)}; e, quando "
-                f"reunidas as duas hipóteses, de {percentual_com_extenso(150)}."
+                f"reunidas as duas hipóteses, de {percentual_com_extenso(150)}.", chave="urgencia"
             )
         elif ht.tem_hora_urgencia or ht.tem_hora_fora_expediente:
             cond, pct = (urgencia, 50) if ht.tem_hora_urgencia else (fora, 100)
             num(
                 f"Quando, por solicitação da CONTRATANTE, os serviços forem prestados {cond}, "
-                f"as horas trabalhadas serão acrescidas de {percentual_com_extenso(pct)}."
+                f"as horas trabalhadas serão acrescidas de {percentual_com_extenso(pct)}.", chave="urgencia"
             )
 
         if ht.tem_teto_mensal and ht.valor_teto_mensal:
             num(
                 "O valor mensal faturado a título de horas trabalhadas não excederá o teto "
                 f"de {valor_com_extenso(ht.valor_teto_mensal)}; o excedente será cobrado "
-                "na(s) fatura(s) subsequente(s), respeitado o mesmo teto."
+                "na(s) fatura(s) subsequente(s), respeitado o mesmo teto.", chave="teto_mensal"
             )
 
         if ht.tem_pacote_horas and ht.quantidade_horas_pacote and ht.valor_pacote:
@@ -877,7 +879,7 @@ class ContractGenerator:
                 "Os serviços jurídicos serão remunerados mediante pacote mensal fixo de "
                 f"{numero_com_extenso(ht.quantidade_horas_pacote, 'horas', fem=True)}, no valor de "
                 f"{valor_com_extenso(ht.valor_pacote)}. As horas não utilizadas em determinado "
-                f"mês serão acumuladas e poderão ser aproveitadas no mês imediatamente subsequente{zera}."
+                f"mês serão acumuladas e poderão ser aproveitadas no mês imediatamente subsequente{zera}.", chave="pacote"
             )
 
         self._add_desconto(ht, num)
@@ -893,19 +895,19 @@ class ContractGenerator:
         total = f", no valor total de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
         customizado = self._texto_livre(pl.parcelamento_customizado)
         if pl.tipo_parcelamento == "customizado" and customizado:
-            num(f"Os honorários pró-labore{total} serão pagos da seguinte forma: {customizado}.")
+            num(f"Os honorários pró-labore{total} serão pagos da seguinte forma: {customizado}.", chave="pagamento")
         elif pl.tipo_parcelamento == "mensal" and pl.numero_parcelas and pl.valor_parcela:
             num(
                 f"Os honorários pró-labore{total} serão pagos em "
                 f"{numero_com_extenso(pl.numero_parcelas, 'parcelas', fem=True)} de "
                 f"{valor_com_extenso(pl.valor_parcela)}"
-                f"{self._com_vencimento(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}."
+                f"{self._com_vencimento(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}.", chave="pagamento"
             )
         else:
             total = f", no valor de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
             num(
                 f"Os honorários pró-labore{total} serão pagos em parcela única"
-                f"{self._com_vencimento(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}."
+                f"{self._com_vencimento(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}.", chave="pagamento"
             )
 
         self._add_desconto(pl, num)
@@ -919,11 +921,11 @@ class ContractGenerator:
             num(
                 f"Os honorários de advocacia de partido serão pagos por mensalidade{valor}{venc}, "
                 "e abrangem a prestação de serviços advocatícios de consultoria e de "
-                "contencioso de rotina nas áreas oferecidas pelo C&F."
+                "contencioso de rotina nas áreas oferecidas pelo C&F.", chave="pagamento_partido"
             )
             num(
                 "A precificação tem como referência o fluxo atual de demanda da "
-                "CONTRATANTE, devendo os honorários ser renegociados caso esse fluxo aumente."
+                "CONTRATANTE, devendo os honorários ser renegociados caso esse fluxo aumente.", chave="referencia_partido"
             )
 
         elif m.subtipo in (SubtipoMensalidade.POR_PROCESSO, SubtipoMensalidade.POR_PASTA):
@@ -939,17 +941,17 @@ class ContractGenerator:
             devida = "devida enquanto este estiver ativo" if processo else "devida enquanto esta estiver ativa"
             num(
                 f"Os honorários serão pagos por mensalidade{valor} por {tipo_label}, "
-                f"{devida}{var_label}{venc}."
+                f"{devida}{var_label}{venc}.", chave="pagamento_processo"
             )
 
             if m.variacao_preco == VariacaoPrecoMensalidade.LIMITACAO_TEMPORAL and m.limitacao_temporal_anos:
                 num(
                     f"A mensalidade será devida por até {numero_com_extenso(m.limitacao_temporal_anos, 'anos')} "
-                    "de tramitação sob o patrocínio do C&F."
+                    "de tramitação sob o patrocínio do C&F.", chave="limitacao_temporal"
                 )
 
             if m.faixas_preco:
-                num("O valor da mensalidade observará as seguintes faixas:")
+                num("O valor da mensalidade observará as seguintes faixas:", chave="faixas")
                 table = doc.add_table(rows=1, cols=2)
                 self._apply_table_grid(table)
                 self._set_table_header(table, "Faixa", "Valor")
@@ -964,7 +966,7 @@ class ContractGenerator:
             else:
                 ativo = ("Considera-se ativa a pasta que não tenha sido definitivamente "
                          "extinta, baixada e arquivada")
-            num(f"{ativo} no sistema do Tribunal ou do respectivo órgão.")
+            num(f"{ativo} no sistema do Tribunal ou do respectivo órgão.", chave="ativo")
 
         self._add_desconto(m, num)
 
@@ -985,7 +987,7 @@ class ContractGenerator:
         if ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
             num(
                 f"Os honorários de êxito incidirão sobre {beneficio}{base}, no percentual "
-                "correspondente à faixa de valor do Benefício, conforme a tabela abaixo:"
+                "correspondente à faixa de valor do Benefício, conforme a tabela abaixo:", chave="incidencia"
             )
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
@@ -997,10 +999,10 @@ class ContractGenerator:
         elif ex.percentual:
             num(
                 f"Os honorários de êxito corresponderão a {percentual_com_extenso(ex.percentual)} "
-                f"sobre {beneficio}{base}."
+                f"sobre {beneficio}{base}.", chave="incidencia"
             )
         else:
-            num(f"Os honorários de êxito incidirão sobre {beneficio}{base}.")
+            num(f"Os honorários de êxito incidirão sobre {beneficio}{base}.", chave="incidencia")
 
         forma = (ex.forma_pagamento or "").strip()
         venc = ""
@@ -1017,24 +1019,24 @@ class ContractGenerator:
                 forma_txt = self._texto_livre(forma)
             venc_txt = f", com vencimento {venc}" if venc else ""
             parc_txt = f", observado o seguinte parcelamento: {parcelamento}" if parcelamento else ""
-            num(f"Os honorários de êxito serão pagos {forma_txt}{venc_txt}{parc_txt}.")
+            num(f"Os honorários de êxito serão pagos {forma_txt}{venc_txt}{parc_txt}.", chave="pagamento")
         elif parcelamento:
             venc_txt = f"vencerão {venc} e " if venc else ""
-            num(f"Os honorários de êxito {venc_txt}serão parcelados da seguinte forma: {parcelamento}.")
+            num(f"Os honorários de êxito {venc_txt}serão parcelados da seguinte forma: {parcelamento}.", chave="pagamento")
         elif venc:
-            num(f"Os honorários de êxito vencerão {venc}.")
+            num(f"Os honorários de êxito vencerão {venc}.", chave="pagamento")
 
         if ex.tem_beneficio_prospectivo and ex.prospectivo_duracao_meses:
             num(
                 "Caso os serviços do C&F também proporcionem Benefício prospectivo à "
                 "CONTRATANTE, os honorários de êxito incidirão igualmente sobre o Benefício "
-                f"apurado no período de {numero_com_extenso(ex.prospectivo_duracao_meses, 'meses')}."
+                f"apurado no período de {numero_com_extenso(ex.prospectivo_duracao_meses, 'meses')}.", chave="prospectivo"
             )
 
         if ex.deduz_outro_honorario and ex.honorario_deduzido:
             num(
                 "Do valor dos honorários de êxito será abatido o valor pago a título de "
-                f"{self._label_from_map(ex.honorario_deduzido, HONORARIO_LABELS)}."
+                f"{self._label_from_map(ex.honorario_deduzido, HONORARIO_LABELS)}.", chave="deducao"
             )
 
         self._add_desconto(ex, num)
@@ -1050,14 +1052,14 @@ class ContractGenerator:
         num(
             "Os serviços contratados serão remunerados mediante permuta com os serviços de "
             f"{perm.objeto_permuta}, a serem prestados pela CONTRATANTE ao C&F."
-            + (f" {descricao}" if descricao else "")
+            + (f" {descricao}" if descricao else ""), chave="objeto"
         )
         if perm.tem_torna and perm.valor_torna:
             forma = self._texto_livre(perm.forma_pagamento_torna)
             forma = f", da seguinte forma: {forma}" if forma else ""
             num(
                 "A CONTRATANTE pagará ainda ao C&F, a título de torna, "
-                f"{valor_com_extenso(perm.valor_torna)}{forma}."
+                f"{valor_com_extenso(perm.valor_torna)}{forma}.", chave="torna"
             )
         self._add_desconto(perm, num)
 
@@ -1122,9 +1124,14 @@ class ContractGenerator:
                 "modo a adimplir tais obrigações em ordem preferencial."
             )
 
-        for clause in clauses:
-            self._add_clausula(doc, clause)
- 
+        chaves = [
+            "gerais.reajuste", "gerais.pagamento", "gerais.fraude", "gerais.pagamento_invalido",
+            "gerais.vencimento", "gerais.mora", "gerais.mudanca_legislativa", "gerais.faturamento",
+            "gerais.solidariedade",
+        ]
+        for chave, clause in zip(chaves, clauses, strict=True):
+            self._add_clausula(doc, clause, chave=chave)
+
     def _add_accessories(self, doc: Document, ac: Acessorios, has_exito: bool = False) -> None:
         self._add_secao(doc, "REEMBOLSOS, DESPESAS E OUTRAS VERBAS")
         if ac.tem_reembolso:
@@ -1132,11 +1139,11 @@ class ContractGenerator:
                 doc,
                 "Valores adiantados pelo C&F serão reembolsados pela "
                 f"CONTRATANTE no prazo de até {numero_com_extenso(5, 'dias')}, contados da "
-                "apresentação do(s) respectivo(s) comprovante(s)."
+                "apresentação do(s) respectivo(s) comprovante(s).", chave="acess.reembolso"
             )
             if ac.reembolso_limitado and ac.descricao_limitacao_reembolso:
                 limite = self._texto_livre(ac.descricao_limitacao_reembolso)
-                self._add_clausula(doc, f"O reembolso observará a seguinte limitação: {limite}.", ilvl=2)
+                self._add_clausula(doc, f"O reembolso observará a seguinte limitação: {limite}.", ilvl=2, chave="acess.reembolso_limite")
 
         clauses = [
             "Custas, despesas, taxas, emolumentos, cópias xerográficas, diligências, "
@@ -1164,9 +1171,11 @@ class ContractGenerator:
                 "sucumbências sem anuência do C&F, o valor correspondente será descontado do "
                 "benefício econômico para fins de cálculo do êxito ou devido diretamente ao C&F."
             )
-        for clause in clauses:
-            self._add_clausula(doc, clause)
- 
+        chaves = ["acess.custas", "acess.credlocaliza", "acess.km", "acess.copia"]
+        chaves += ["acess.sucumbencia"] if has_exito else []
+        for chave, clause in zip(chaves, clauses, strict=True):
+            self._add_clausula(doc, clause, chave=chave)
+
     def _add_obligations(self, doc: Document) -> None:
         self._add_secao(doc, "OBRIGAÇÕES DAS PARTES")
         self._add_clausula(
@@ -1174,20 +1183,20 @@ class ContractGenerator:
             "A CONTRATANTE obriga-se a: (i) fornecer informações e documentos de forma "
             "completa e em tempo hábil; (ii) manter seus dados cadastrais atualizados; "
             "(iii) efetuar os pagamentos nos respectivos prazos; (iv) autorizar despesas "
-            "quando exigido; e (v) cooperar com o C&F na estratégia definida."
+            "quando exigido; e (v) cooperar com o C&F na estratégia definida.", chave="obrig.contratante"
         )
         self._add_clausula(
             doc,
             "O C&F obriga-se a: (i) executar o serviço com diligência, técnica e zelo; "
             "(ii) manter confidencialidade e sigilo profissional; e (iii) fornecer, quando "
-            "solicitado, informações e documentos relativos à prestação dos serviços."
+            "solicitado, informações e documentos relativos à prestação dos serviços.", chave="obrig.cf"
         )
         self._add_clausula(
             doc,
             "A prestação de serviço advocatício constitui obrigação de meio, "
-            "inexistindo obrigação de êxito e/ou resultado."
+            "inexistindo obrigação de êxito e/ou resultado.", chave="obrig.meio"
         )
- 
+
     def _add_integrity(self, doc: Document) -> None:
         self._add_secao(doc, "COMPLIANCE")
         self._add_clausula(
@@ -1195,22 +1204,22 @@ class ContractGenerator:
             "As Partes comprometem-se a observar a legislação aplicável, incluindo a Lei "
             "Anticorrupção e outras normas similares, bem como a cooperar com diretrizes de "
             "Governança, quando existentes e conhecidas, no que for pertinente à execução "
-            "deste Contrato."
+            "deste Contrato.", chave="compl.lei"
         )
         self._add_clausula(
             doc,
             "As Partes comprometem-se a tratar dados pessoais estritamente para as "
             "finalidades deste Contrato, observando medidas razoáveis de segurança e "
             "confidencialidade, sendo autorizada desde já a criação de cadastros internos "
-            "para fins de comunicação em geral."
+            "para fins de comunicação em geral.", chave="compl.dados"
         )
         self._add_clausula(
             doc,
             "A CONTRATANTE declara estar ciente de que o C&F, sob supervisão humana, "
             "utiliza ferramentas de inteligência artificial e outras tecnologias como "
-            "apoio à prestação do serviço."
+            "apoio à prestação do serviço.", chave="compl.ia"
         )
- 
+
     def _frase_vigencia(self, ac: Acessorios) -> str | None:
         """Prazo específico pactuado (Acessórios > Vigência); None se não informado."""
         def br(iso: str | None) -> str | None:
@@ -1238,15 +1247,15 @@ class ContractGenerator:
             doc,
             "Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
             "presente Contrato é celebrado por tempo indeterminado, até que seja esgotado o "
-            "objeto contratado."
+            "objeto contratado.", chave="prazo.indeterminado"
         )
         vigencia = self._frase_vigencia(data.acessorios)
         if vigencia:
-            self._add_clausula(doc, vigencia, ilvl=2)
+            self._add_clausula(doc, vigencia, ilvl=2, chave="prazo.vigencia")
         self._add_clausula(
             doc,
             "Qualquer Parte poderá rescindir este Contrato imotivadamente mediante "
-            "notificação por escrito com antecedência mínima de 30 (trinta) dias."
+            "notificação por escrito com antecedência mínima de 30 (trinta) dias.", chave="prazo.rescisao"
         )
         self._add_clausula(
             doc,
@@ -1256,7 +1265,7 @@ class ContractGenerator:
             "seus advogados permanecerão representando a CONTRATANTE durante os 10 (dez) dias "
             "seguintes à notificação, salvo se forem substituídos antes do término desse "
             "prazo.",
-            ilvl=2,
+            ilvl=2, chave="prazo.antecedencia",
         )
         incisos = [
             "(i) os honorários vencidos serão devidos integralmente",
@@ -1276,14 +1285,14 @@ class ContractGenerator:
                 doc,
                 f"{base_83}; {incisos[-1]}; e (v) os honorários de êxito vincendos ao momento "
                 f"da resilição continuarão devidos ao C&F observando-se o seguinte critério: "
-                f"{criterio_exito}."
+                f"{criterio_exito}.", chave="prazo.efeitos_extincao"
             )
         elif has_exito:
             self._add_clausula(
                 doc,
                 f"{base_83}; {incisos[-1]}; e (v) os honorários de êxito vincendos ao momento "
                 "da resilição continuarão devidos ao C&F observando-se a seguinte proporção "
-                "não cumulativa:"
+                "não cumulativa:", chave="prazo.efeitos_extincao"
             )
             linhas = [
                 ("Antes da primeira decisão de mérito", 50),
@@ -1308,47 +1317,47 @@ class ContractGenerator:
                 "A eventual inocorrência de determinada fase processual não afeta o "
                 "recebimento dos honorários de êxito nos termos previstos nesta cláusula, "
                 "aplicando-se o percentual correspondente à fase processual ao tempo da "
-                "resilição, independentemente da ocorrência das fases anteriores."
+                "resilição, independentemente da ocorrência das fases anteriores.", chave="prazo.inocorrencia_fase"
             )
         else:
-            self._add_clausula(doc, f"{base_83}; e {incisos[-1]}.")
+            self._add_clausula(doc, f"{base_83}; e {incisos[-1]}.", chave="prazo.efeitos_extincao")
 
         self._add_clausula(
             doc,
             "Exceto se expressa e diversamente pactuado, todas as "
             "disposições contratuais possuem validade e eficácia para os serviços já em "
-            "curso."
+            "curso.", chave="prazo.servicos_em_curso"
         )
- 
+
     def _add_ip(self, doc: Document) -> None:
         self._add_secao(doc, "PROPRIEDADE INTELECTUAL")
         self._add_clausula(
             doc,
             "A produção intelectual desenvolvida pelo C&F, como, por exemplo, teses, "
             "estratégias, modelos, documentos, minutas e know-how, permanece de sua "
-            "titularidade."
+            "titularidade.", chave="pi.titularidade"
         )
         self._add_clausula(
             doc,
             "Sem expressa autorização do C&F, é vedada a disponibilização a terceiros "
             "do conteúdo dessa produção intelectual (ainda que parcial), ressalvadas "
-            "obrigações legais ou ordem de autoridade competente."
+            "obrigações legais ou ordem de autoridade competente.", chave="pi.vedacao"
         )
         self._add_clausula(
             doc,
             "É facultado ao C&F e aos advogados que o integram valerem-se dessa "
             "produção intelectual em livros, publicações e outras atuações profissionais, "
             "sempre com a ressalva de respeito ao sigilo das questões relacionadas a este "
-            "Contrato."
+            "Contrato.", chave="pi.publicacoes"
         )
         self._add_clausula(
             doc,
             "A CONTRATANTE autoriza o C&F a utilizar seu nome, marca e logotipo, de "
             "forma não exclusiva, para fins institucionais, inclusive em apresentações, "
             "portfólios e materiais correlatos, sem divulgação de informações confidenciais "
-            "do serviço."
+            "do serviço.", chave="pi.marca"
         )
- 
+
     def _add_general(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "DISPOSIÇÕES GERAIS")
         gerais = [
@@ -1384,8 +1393,13 @@ class ContractGenerator:
             "Contrato, o qual, no entanto, deverá prevalecer em caso de dúvida, divergência "
             "ou conflito.",
         ]
-        for clause in gerais:
-            self._add_clausula(doc, clause)
+        chaves = [
+            "disp.notificacao", "disp.maiusculas", "disp.sucessores", "disp.cessao", "disp.liberalidade",
+            "disp.renuncia_tacita", "disp.titulo_executivo", "disp.assinatura_eletronica",
+            "disp.efeito_data", "disp.proposta",
+        ]
+        for chave, clause in zip(chaves, gerais, strict=True):
+            self._add_clausula(doc, clause, chave=chave)
 
         adicionais = [
             c.strip()
@@ -1396,17 +1410,17 @@ class ContractGenerator:
             self._add_secao(doc, "DISPOSIÇÕES ADICIONAIS")
             if (ctx := getattr(doc, "_cf_itens", None)) is not None:
                 ctx.abrir_bloco("adic")
-            for clause in adicionais:
-                self._add_clausula(doc, clause)
+            for clause in adicionais:  # texto livre: a chave e' o conteudo, nunca a posicao
+                self._add_clausula(doc, clause, chave=hashlib.sha1(clause.encode("utf-8")).hexdigest()[:8])
 
         self._add_secao(doc, "FORO")
         self._add_clausula(
             doc,
             "Fica eleito o foro da Comarca de Belo Horizonte/MG para dirimir "
             "quaisquer dúvidas ou controvérsias decorrentes deste Contrato, com renúncia de "
-            "qualquer outro, por mais privilegiado que seja."
+            "qualquer outro, por mais privilegiado que seja.", chave="foro.comarca"
         )
- 
+
     def _add_signatures(self, doc: Document, data: ContratoRequest, signatario_roles: list[dict] | None = None) -> None:
         doc.add_paragraph()
         doc.add_paragraph(
@@ -1536,7 +1550,7 @@ class ContractGenerator:
             label += " - " + "; ".join(extras)
  
         return label
- 
+
     def _preco_resumo(self, escopo: EscopoItem) -> str:
         parts = []
         for tipo in escopo.honorarios:

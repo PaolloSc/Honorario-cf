@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type ItemClausula, type Testemunha } from "@/app/lib/api";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
 import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
@@ -349,7 +349,7 @@ export default function Step7Envio({
 
   // Cláusulas ajustáveis (painel "Ajustar texto") e ajustes que deixaram de existir.
   const [itens, setItens] = useState<ItemClausula[]>([]);
-  const [descartados, setDescartados] = useState<string[]>([]);
+  const [descartados, setDescartados] = useState<AjusteDescartado[]>([]);
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
   const reviewStarted = useRef(false);
@@ -377,15 +377,19 @@ export default function Step7Envio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Guarda as cláusulas da prévia e descarta do formulário o ajuste cujo item sumiu.
-  const aplicarPrevia = (novos?: ItemClausula[], sumidos: string[] = []) => {
+  // Guarda as cláusulas da prévia e os ajustes cuja cláusula deixou de existir (o texto fica
+  // no painel para copiar; só some quando a pessoa descarta).
+  const aplicarPrevia = (novos?: ItemClausula[], sumidos: AjusteDescartado[] = []) => {
     if (novos) setItens(novos);
     setDescartados(sumidos);
-    if (sumidos.length > 0 && onDataChange) {
-      const resto = { ...(dataRef.current.ajustes_texto ?? {}) };
-      sumidos.forEach((id) => delete resto[id]);
-      onDataChange({ ...dataRef.current, ajustes_texto: resto });
-    }
+  };
+
+  const descartarAjusteSumido = (id: string) => {
+    if (!onDataChange) return;
+    const resto = { ...(dataRef.current.ajustes_texto ?? {}) };
+    delete resto[id];
+    onDataChange({ ...dataRef.current, ajustes_texto: resto });
+    setDescartados((d) => d.filter((x) => x.id !== id));
   };
 
   // Grava (ou remove, com texto === null) o ajuste de uma cláusula e refaz a prévia.
@@ -899,6 +903,7 @@ export default function Step7Envio({
           salvando={salvandoAjuste}
           onSalvar={(item, texto) => void alterarAjuste(item, texto)}
           onVoltar={(item) => void alterarAjuste(item, null)}
+          onDescartarSumido={descartarAjusteSumido}
           onReaplicar={(item) => item.ajuste !== null && void alterarAjuste(item, item.ajuste)}
           onIrParaEtapa={(n) => onIrParaEtapa?.(n)}
         />
