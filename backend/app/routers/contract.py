@@ -733,8 +733,16 @@ def _achar_no_html(html: str, digitado: str) -> str | None:
             else:
                 partes.append(re.escape(escape(c)))
             primeira = False
-    achado = re.search("".join(partes), html)
-    return unescape(achado.group(0)) if achado else None
+    # Fronteira de palavra nas pontas ("sim" nao marca dentro de "Assim") e fora de tags.
+    padrao = r"(?<!\w)" + "".join(partes) + r"(?!\w)(?![^<]*>)"
+    achados = [m.group(0) for m in re.finditer(padrao, html)]
+    if not achados:
+        return None
+    # Texto curto ou so' numero/percentual ("10%") casa com frases que nao sao dele:
+    # melhor sem destaque que destaque no lugar errado.
+    if (len(miolo) < 12 or not re.search(r"[^\W\d_]", miolo)) and len(achados) != 1:
+        return None
+    return unescape(achados[0])
 
 
 def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
@@ -744,7 +752,10 @@ def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
     from collections import Counter
     from html import escape
 
-    for texto, vezes in Counter(textos).items():
+    # Cada trecho vira um intervalo; o mais longo vence quando dois se sobrepoem
+    # (nada de <mark> dentro de <mark>), e o texto curto nunca cai dentro de tag.
+    escolhidos: list[tuple[int, int, str]] = []
+    for texto, vezes in sorted(Counter(textos).items(), key=lambda kv: -len(kv[0])):
         alvo = escape(texto)
         dentro = alvo
         for a in achados:
@@ -760,7 +771,17 @@ def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
                     f'<ins style="{_MARCA_IA}">{escape(a.get("sugestao") or "")}</ins>',
                     1,
                 )
-        html = html.replace(alvo, f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>', vezes)
+        marcado = f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>'
+        usados = 0
+        for m in re.finditer(re.escape(alvo) + r"(?![^<]*>)", html):
+            if usados == vezes:
+                break
+            if any(m.start() < f and i0 < m.end() for i0, f, _ in escolhidos):
+                continue
+            escolhidos.append((m.start(), m.end(), marcado))
+            usados += 1
+    for ini, fim, marcado in sorted(escolhidos, reverse=True):
+        html = html[:ini] + marcado + html[fim:]
     return html
 
 
