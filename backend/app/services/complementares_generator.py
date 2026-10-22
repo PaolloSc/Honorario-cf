@@ -8,6 +8,7 @@ modelos de referencia (clientes, valores, processos) nao entram no codigo.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from datetime import date, datetime
 
@@ -224,29 +225,53 @@ class AditivoGenerator(ComplementarGenerator):
             "igual teor e forma, para um só efeito."
         )
 
-    _MASCULINOS = {"item", "subitem", "paragrafo", "inciso", "artigo", "anexo", "capitulo", "trecho"}
+    _MASCULINOS = {"item", "subitem", "paragrafo", "inciso", "anexo", "capitulo", "trecho"}
     _FEMININOS = {"clausula", "subclausula", "alinea", "secao", "tabela", "parte", "disposicao"}
+    _ARTIGOS = {"o": ("s", "m"), "a": ("s", "f"), "os": ("p", "m"), "as": ("p", "f")}
 
     @classmethod
-    def _dispositivo(cls, texto: str, participio: str) -> str:
-        """'Fica alterada a Cláusula 3ª' / 'Fica alterado o item 3.2', pelo que a pessoa digitou.
+    def _dispositivo(cls, texto: str, participio: str) -> tuple[str, bool]:
+        """('Fica alterada a Cláusula 3ª', False) / ('Ficam alterados os itens 3.2 e 3.3', True).
 
-        Palavra inicial desconhecida (ex.: só '3.2'): 'a disposição' como substantivo neutro.
+        Número e gênero vêm da primeira palavra digitada: Cláusula(s), item/itens, §, Art., ou um
+        artigo já escrito ('o item 3' não leva outro artigo). Palavra desconhecida (ex.: só '3.2'):
+        'a disposição'.
         """
         texto = texto.strip()
-        primeira = unicodedata.normalize("NFD", texto.split(" ", 1)[0]).encode("ascii", "ignore").decode().lower().strip(",.")
-        if primeira in cls._MASCULINOS:
-            return f"Fica {participio}o o {texto}"
-        if primeira in cls._FEMININOS:
-            return f"Fica {participio}a a {texto}"
-        return f"Fica {participio}a a disposição {texto}"
+        norm = unicodedata.normalize("NFD", texto).encode("ascii", "ignore").decode().lower()
+        m = re.match(r"(arts?\b|artigos?\b|[a-z]+)", norm)  # '§' some no ascii: tratado a parte
+        palavra = "§§" if texto.startswith("§§") else "§" if texto.startswith("§") else (m.group(1) if m else "")
+        verbo = lambda plural: "Ficam" if plural else "Fica"  # noqa: E731
+        if palavra in cls._ARTIGOS:  # ja vem com artigo definido: nao duplica
+            numero, genero = cls._ARTIGOS[palavra]
+            return f"{verbo(numero == 'p')} {participio}{'o' if genero == 'm' else 'a'}{'s' if numero == 'p' else ''} {texto}", numero == "p"
+        if palavra in ("§§", "arts", "artigos"):
+            return f"Ficam {participio}os os {texto}", True
+        if palavra in ("§", "art", "artigo"):
+            return f"Fica {participio}o o {texto}", False
+        singular = palavra
+        plural = False
+        if palavra.endswith("s") and palavra not in cls._MASCULINOS | cls._FEMININOS:
+            for base in (palavra[:-1], palavra[:-2], palavra[:-3] + "ao" if palavra.endswith("oes") else None):
+                if base in cls._MASCULINOS | cls._FEMININOS:
+                    singular, plural = base, True
+                    break
+            if palavra in ("itens", "subitens"):
+                singular, plural = palavra[:-3] + "em", True
+        if singular in cls._MASCULINOS:
+            return f"{verbo(plural)} {participio}o{'s' if plural else ''} {'os' if plural else 'o'} {texto}", plural
+        if singular in cls._FEMININOS:
+            return f"{verbo(plural)} {participio}a{'s' if plural else ''} {'as' if plural else 'a'} {texto}", plural
+        return f"Fica {participio}a a disposição {texto}", False
 
     @classmethod
     def _redacao_alteracao(cls, alt) -> str:
         if alt.tipo == "alterar":
-            return f"{cls._dispositivo(alt.clausula, 'alterad')}, que passa a vigorar com a seguinte redação: “{alt.texto}”"
+            frase, plural = cls._dispositivo(alt.clausula, "alterad")
+            return f"{frase}, que {'passam' if plural else 'passa'} a vigorar com a seguinte redação: “{alt.texto}”"
         if alt.tipo == "excluir":
-            return f"{cls._dispositivo(alt.clausula, 'excluíd')} do contrato original."
+            frase, _ = cls._dispositivo(alt.clausula, "excluíd")
+            return f"{frase} do contrato original."
         return f"Fica incluída no contrato original a seguinte cláusula: “{alt.texto}”"
 
     def _fechamento(self, doc: Document, data: AditivoRequest, signatario_roles) -> None:

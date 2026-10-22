@@ -21,6 +21,19 @@ from tests.test_documentos_complementares import (  # noqa: F401  (auth_e_origem
     ("alterar", "3.2", "Fica alterada a disposição 3.2, que passa"),
     ("excluir", "Cláusula 5ª", "Fica excluída a Cláusula 5ª do contrato original."),
     ("excluir", "item 5.1", "Fica excluído o item 5.1 do contrato original."),
+    ("alterar", "Cláusulas 3ª e 4ª", "Ficam alteradas as Cláusulas 3ª e 4ª, que passam a vigorar"),
+    ("alterar", "itens 3.2 e 3.3", "Ficam alterados os itens 3.2 e 3.3, que passam a vigorar"),
+    ("alterar", "parágrafos 1º e 2º", "Ficam alterados os parágrafos 1º e 2º, que passam"),
+    ("excluir", "Cláusulas 5ª e 6ª", "Ficam excluídas as Cláusulas 5ª e 6ª do contrato original."),
+    ("excluir", "incisos I e II", "Ficam excluídos os incisos I e II do contrato original."),
+    ("alterar", "§ 2º da Cláusula 4ª", "Fica alterado o § 2º da Cláusula 4ª, que passa"),
+    ("alterar", "§§ 1º e 2º", "Ficam alterados os §§ 1º e 2º, que passam"),
+    ("alterar", "Art. 5", "Fica alterado o Art. 5, que passa"),
+    ("alterar", "artigo 7", "Fica alterado o artigo 7, que passa"),
+    ("alterar", "o item 3", "Fica alterado o item 3, que passa"),
+    ("alterar", "a Cláusula 3ª", "Fica alterada a Cláusula 3ª, que passa"),
+    ("excluir", "os itens 4 e 5", "Ficam excluídos os itens 4 e 5 do contrato original."),
+    ("excluir", "as alíneas a e b", "Ficam excluídas as alíneas a e b do contrato original."),
 ])
 def test_aditivo_concorda_com_o_que_foi_digitado(tipo, clausula, esperado):
     alt = AlteracaoClausula(tipo=tipo, clausula=clausula, texto="novo" if tipo == "alterar" else None)
