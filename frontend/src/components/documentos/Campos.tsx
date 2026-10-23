@@ -18,6 +18,7 @@ import {
   type AditivoForm,
   type DistratoForm,
   type Erros,
+  type PoderesForm,
   type SubstabelecimentoForm,
 } from "@/app/lib/documentos";
 import CurrencyInput from "@/components/ui/CurrencyInput";
@@ -122,6 +123,13 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
         onChange={(v) => set({ substabelecer_e_devolver: v })}
         hint="Marcado, o distrato também passa os processos aos novos advogados, sem reserva de poderes, e prevê a devolução dos documentos do cliente."
       />
+      {estado.substabelecer_e_devolver && (
+        <>
+          <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecimento gerado junto</h3>
+          <p className="text-xs text-muted mb-2">O cliente e a data vêm do contrato e do distrato. Informe quem assina, quem recebe os poderes e os processos.</p>
+          <CamposPoderes estado={estado} onChange={set} erros={erros} />
+        </>
+      )}
     </>
   );
 }
@@ -157,13 +165,11 @@ function CampoOab({ valor, onChange, erro }: { valor: Oab; onChange: (o: Oab) =>
 
 const formatarCEP = (d: string) => (d.length > 5 ? d.replace(/^(\d{5})(\d)/, "$1-$2") : d);
 
-export function CamposSubstabelecimento({ estado, onChange, erros }: Props<SubstabelecimentoForm>) {
-  const set = (parcial: Partial<SubstabelecimentoForm>) => onChange({ ...estado, ...parcial });
+export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & { onChange: (parcial: Partial<PoderesForm>) => void }) {
+  const set = (parcial: Partial<PoderesForm>) => onChange(parcial);
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [escolhido, setEscolhido] = useState("");
   const [oab, setOab] = useState<Oab>(oabVazia());
-  const [msgCnpj, setMsgCnpj] = useState("");
-  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [cep, setCep] = useState("");
   const [numeroEnd, setNumeroEnd] = useState("");
   const [msgCep, setMsgCep] = useState("");
@@ -190,29 +196,12 @@ export function CamposSubstabelecimento({ estado, onChange, erros }: Props<Subst
     setOab(oabVazia());
   };
 
-  const setSubstabelecente = (i: number, parcial: Partial<SubstabelecimentoForm["substabelecentes"][number]>) =>
+  const setSubstabelecente = (i: number, parcial: Partial<PoderesForm["substabelecentes"][number]>) =>
     set({ substabelecentes: estado.substabelecentes.map((s, k) => (k === i ? { ...s, ...parcial } : s)) });
-  const setSubstabelecido = (i: number, parcial: Partial<SubstabelecimentoForm["substabelecidos"][number]>) =>
+  const setSubstabelecido = (i: number, parcial: Partial<PoderesForm["substabelecidos"][number]>) =>
     set({ substabelecidos: estado.substabelecidos.map((s, k) => (k === i ? { ...s, ...parcial } : s)) });
-  const setProcesso = (i: number, parcial: Partial<SubstabelecimentoForm["processos"][number]>) =>
+  const setProcesso = (i: number, parcial: Partial<PoderesForm["processos"][number]>) =>
     set({ processos: estado.processos.map((p, k) => (k === i ? { ...p, ...parcial } : p)) });
-
-  // CNPJ completo e valido: busca razao social como no cadastro de contratos; sem achar, digita-se a mao.
-  const mudarDocumento = async (valor: string) => {
-    const documento = estado.outorgante_pj ? formatarCNPJ(valor) : valor;
-    set({ outorgante_documento: documento });
-    setMsgCnpj("");
-    if (!estado.outorgante_pj || limparCNPJ(documento).length !== 14 || !cnpjValido(documento)) return;
-    setBuscandoCnpj(true);
-    try {
-      const d = await lookupCNPJ(documento);
-      onChange({ ...estado, outorgante_documento: documento, outorgante_nome: d.razao_social });
-    } catch {
-      setMsgCnpj("CNPJ não encontrado na consulta. Preencha a razão social manualmente.");
-    } finally {
-      setBuscandoCnpj(false);
-    }
-  };
 
   // Endereco profissional (opcional): o CEP traz rua, bairro e cidade; numero e complemento entram a mao.
   const montarEndereco = (rua: string, num: string, cepFmt: string, resto: string) =>
@@ -244,29 +233,6 @@ export function CamposSubstabelecimento({ estado, onChange, erros }: Props<Subst
 
   return (
     <>
-      <FormField label="Data do substabelecimento" required error={erros.data_documento}>
-        <Input type="date" className="sm:max-w-xs" value={estado.data_documento} onChange={(e) => set({ data_documento: e.target.value })} error={!!erros.data_documento} />
-      </FormField>
-
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Outorgante (cliente)</h3>
-      <p className="text-xs text-muted mb-2">O cliente que deu os poderes (procuração) que estão sendo substabelecidos.</p>
-      <div className="flex gap-4 mb-2 text-sm">
-        <label className="flex items-center gap-2"><input type="radio" checked={!estado.outorgante_pj} onChange={() => set({ outorgante_pj: false, outorgante_documento: "" })} /> Pessoa física</label>
-        <label className="flex items-center gap-2"><input type="radio" checked={estado.outorgante_pj} onChange={() => set({ outorgante_pj: true, outorgante_documento: "" })} /> Pessoa jurídica</label>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-        <FormField
-          label={estado.outorgante_pj ? "CNPJ" : "CPF"}
-          hint={estado.outorgante_pj ? (buscandoCnpj ? "Buscando…" : "Com o CNPJ completo, a razão social é buscada.") : "Opcional."}
-          error={msgCnpj || undefined}
-        >
-          <Input value={estado.outorgante_documento} onChange={(e) => mudarDocumento(e.target.value)} inputMode="numeric" />
-        </FormField>
-        <FormField label={estado.outorgante_pj ? "Razão social" : "Nome"} required error={erros.outorgante}>
-          <Input value={estado.outorgante_nome} onChange={(e) => set({ outorgante_nome: e.target.value })} error={!!erros.outorgante} />
-        </FormField>
-      </div>
-
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecentes (C&amp;F)</h3>
       <p className="text-xs text-muted mb-2">Quem passa os poderes: advogados do escritório. Escolha no cadastro de colaboradores; a OAB vem do cadastro, se houver. Eles assinam o documento.</p>
       {estado.substabelecentes.map((s, i) => (
@@ -380,6 +346,58 @@ export function CamposSubstabelecimento({ estado, onChange, erros }: Props<Subst
         );
       })}
       <button type="button" className={botaoLink} onClick={() => set({ processos: [...estado.processos, processoVazio()] })}>+ Adicionar processo</button>
+    </>
+  );
+}
+
+export function CamposSubstabelecimento({ estado, onChange, erros }: Props<SubstabelecimentoForm>) {
+  const set = (parcial: Partial<SubstabelecimentoForm>) => onChange({ ...estado, ...parcial });
+  const [msgCnpj, setMsgCnpj] = useState("");
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+
+  // CNPJ completo e valido: busca razao social como no cadastro de contratos; sem achar, digita-se a mao.
+  const mudarDocumento = async (valor: string) => {
+    const documento = estado.outorgante_pj ? formatarCNPJ(valor) : valor;
+    set({ outorgante_documento: documento });
+    setMsgCnpj("");
+    if (!estado.outorgante_pj || limparCNPJ(documento).length !== 14 || !cnpjValido(documento)) return;
+    setBuscandoCnpj(true);
+    try {
+      const d = await lookupCNPJ(documento);
+      onChange({ ...estado, outorgante_documento: documento, outorgante_nome: d.razao_social });
+    } catch {
+      setMsgCnpj("CNPJ não encontrado na consulta. Preencha a razão social manualmente.");
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  };
+
+  return (
+    <>
+      <FormField label="Data do substabelecimento" required error={erros.data_documento}>
+        <Input type="date" className="sm:max-w-xs" value={estado.data_documento} onChange={(e) => set({ data_documento: e.target.value })} error={!!erros.data_documento} />
+      </FormField>
+
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Outorgante (cliente)</h3>
+      <p className="text-xs text-muted mb-2">O cliente que deu os poderes (procuração) que estão sendo substabelecidos.</p>
+      <div className="flex gap-4 mb-2 text-sm">
+        <label className="flex items-center gap-2"><input type="radio" checked={!estado.outorgante_pj} onChange={() => set({ outorgante_pj: false, outorgante_documento: "" })} /> Pessoa física</label>
+        <label className="flex items-center gap-2"><input type="radio" checked={estado.outorgante_pj} onChange={() => set({ outorgante_pj: true, outorgante_documento: "" })} /> Pessoa jurídica</label>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+        <FormField
+          label={estado.outorgante_pj ? "CNPJ" : "CPF"}
+          hint={estado.outorgante_pj ? (buscandoCnpj ? "Buscando…" : "Com o CNPJ completo, a razão social é buscada.") : "Opcional."}
+          error={msgCnpj || undefined}
+        >
+          <Input value={estado.outorgante_documento} onChange={(e) => mudarDocumento(e.target.value)} inputMode="numeric" />
+        </FormField>
+        <FormField label={estado.outorgante_pj ? "Razão social" : "Nome"} required error={erros.outorgante}>
+          <Input value={estado.outorgante_nome} onChange={(e) => set({ outorgante_nome: e.target.value })} error={!!erros.outorgante} />
+        </FormField>
+      </div>
+
+      <CamposPoderes estado={estado} onChange={set} erros={erros} />
     </>
   );
 }

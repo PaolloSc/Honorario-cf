@@ -49,6 +49,26 @@ assert.deepEqual(Object.keys(validar("aditivo", { ...ad, objeto: "", alteracoes:
 assert.deepEqual(Object.keys(validar("distrato", estadoInicial("distrato", "2026-10-16"))).sort(),
   ["data_contrato_origem", "objeto_contrato_origem"]);
 
+// Distrato: só com "substabelecer e devolver" pede e envia os dados do substabelecimento.
+const dis = { ...(estadoInicial("distrato", "2026-10-16") as any), data_contrato_origem: "2020-01-01", objeto_contrato_origem: "x" };
+assert.deepEqual(validar("distrato", dis), {});
+assert.equal((montarPayload("distrato", dis, "o") as any).substabelecimento, null);
+const disSub = { ...dis, substabelecer_e_devolver: true };
+for (const k of ["substabelecentes", "processos.0.numero", "substabelecidos.0.nome", "substabelecidos.0.oab"]) assert.ok(validar("distrato", disSub)[k], k);
+const disOk = {
+  ...disSub,
+  substabelecentes: [{ nome: "Sócia", email: "s@cf.com", oab: { numero: "1", uf: "MG" } }],
+  substabelecidos: [{ nome: "Novo", oab: { numero: "2", uf: "SP" } }],
+  processos: [{ tipo: "Processo", numero: "1234567-49.2020.8.13.0024", descricao: "" }],
+};
+assert.deepEqual(validar("distrato", disOk), {});
+const pd = montarPayload("distrato", disOk, "o") as any;
+assert.equal(pd.substabelecimento.substabelecidos[0].oab, "OAB/SP sob o n.º 2");
+assert.equal(pd.substabelecimento.substabelecentes[0].oab, "OAB/MG n.º 1");
+// Distrato salvo antes da opção (sem dados do substabelecimento) abre normalmente.
+assert.equal((estadoDoFormData("distrato", { substabelecer_e_devolver: true }, "h") as any).substabelecidos.length, 1);
+assert.equal((estadoDoFormData("distrato", pd, "h") as any).substabelecidos[0].oab.uf, "SP");
+
 // Substabelecimento sem origem: processo precisa de CNJ válido; listas vazias recusadas.
 // Endereço e estado civil/gênero não são mais exigidos; OAB é só número + UF (padrão MG).
 const sub = estadoInicial("substabelecimento", "2026-10-16") as SubstabelecimentoForm;
