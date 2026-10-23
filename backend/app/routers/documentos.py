@@ -32,10 +32,13 @@ from app.models.documentos_complementares import (
     ROTULO_DOCUMENTO,
     TIPO_ADITIVO,
     TIPO_DISTRATO,
+    TIPO_SUBSTABELECIMENTO,
     TIPOS_COMPLEMENTARES,
     AditivoAnterior,
+    DistratoRequest,
     SubstabelecimentoRequest,
     email_contato,
+    nome_contratante,
     nome_exibicao,
 )
 from app.routers.contract import _docx_to_html
@@ -128,6 +131,12 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
     except ValidationError as e:
         raise RequestValidationError(e.errors())
 
+    if isinstance(data, DistratoRequest) and data.substabelecer_e_devolver and data.substabelecimento is None:
+        raise RequestValidationError([{
+            "loc": ("body", "substabelecimento"), "msg": "Informe quem recebe os poderes e os processos",
+            "type": "missing", "input": None,
+        }])
+
     origem = _origem(data.contrato_origem_id, user, db) if data.contrato_origem_id else None
     aviso = None
     if origem is not None:
@@ -164,6 +173,75 @@ def previa_documento(
         tmp_path.unlink(missing_ok=True)
 
 
+def _substabelecimento_do_distrato(distrato: DistratoRequest, origem: ContractDB | None) -> SubstabelecimentoRequest:
+    """Substabelecimento sem reserva a favor do novo patrono, preenchido com o contrato e o distrato."""
+    d = distrato.substabelecimento
+    nomes = [nome_contratante(c) for c in distrato.contratantes] or ["o CONTRATANTE"]
+    primeiro = distrato.contratantes[0] if distrato.contratantes else {}
+    if len(distrato.contratantes) == 1 and primeiro.get("cnpj"):
+        outorgante = {"razao_social": nomes[0], "cnpj": primeiro["cnpj"]}
+    elif len(distrato.contratantes) == 1:
+        outorgante = {"nome": nomes[0], "cpf": primeiro.get("cpf") or None}
+    else:  # varios contratantes: o texto cita todos, sem documento
+        outorgante = {"nome": " e ".join(nomes)}
+    return SubstabelecimentoRequest(
+        contrato_origem_id=distrato.contrato_origem_id,
+        data_documento=distrato.data_documento,
+        outorgante=outorgante,
+        substabelecentes=d.substabelecentes,
+        substabelecidos=d.substabelecidos,
+        endereco_substabelecidos=d.endereco_substabelecidos,
+        processos=d.processos,
+    )
+
+
+def _gravar(db: Session, tipo: str, data, origem: ContractDB | None, user: CurrentUser) -> str:
+    """Gera o DOCX e grava contrato, versao 1 e auditoria (sem commit). Devolve o contract_id."""
+    contract_id, filepath = get_generator(tipo).generate(data)
+    form_dict = data.model_dump(mode="json")
+    nome = nome_exibicao(data)
+    origem_id = origem.contract_id if origem else None
+
+    db.add(ContractDB(
+        contract_id=contract_id,
+        status="rascunho",
+        client_name=nome,
+        client_email=email_contato(data),
+        tipo_contrato=tipo,
+        contrato_origem_id=origem_id,
+        current_version=1,
+        created_by=user.email,
+        updated_by=user.email,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+        cliente_docs=serialize_cliente_docs(
+            {"contratantes": [data.outorgante.model_dump()]}
+            if isinstance(data, SubstabelecimentoRequest)
+            else form_dict
+        ),
+    ))
+    db.flush()
+    db.add(ContractVersionDB(
+        contract_id=contract_id,
+        version_number=1,
+        form_data_json=json.dumps(form_dict, ensure_ascii=False),
+        file_path=filepath,
+        created_by=user.email,
+        created_at=utcnow(),
+    ))
+    rotulo = ROTULO_DOCUMENTO[tipo]
+    db.add(AuditLogDB(
+        contract_id=contract_id, action="criacao", version_number=1, user_email=user.email,
+        detail=f"{rotulo} gerado para {nome}", created_at=utcnow(),
+    ))
+    if origem_id:
+        db.add(AuditLogDB(
+            contract_id=origem_id, action="documento_complementar", user_email=user.email,
+            detail=f"{rotulo} criado ({contract_id})", created_at=utcnow(),
+        ))
+    return contract_id
+
+
 @router.post("/{tipo}")
 def gerar_documento(
     tipo: str,
@@ -174,48 +252,11 @@ def gerar_documento(
     data, origem, aviso = _montar(tipo, corpo, user, db)
 
     try:
-        contract_id, filepath = get_generator(tipo).generate(data)
-        form_dict = data.model_dump(mode="json")
-        nome = nome_exibicao(data)
-        origem_id = origem.contract_id if origem else None
-
-        db.add(ContractDB(
-            contract_id=contract_id,
-            status="rascunho",
-            client_name=nome,
-            client_email=email_contato(data),
-            tipo_contrato=tipo,
-            contrato_origem_id=origem_id,
-            current_version=1,
-            created_by=user.email,
-            updated_by=user.email,
-            created_at=utcnow(),
-            updated_at=utcnow(),
-            cliente_docs=serialize_cliente_docs(
-                {"contratantes": [data.outorgante.model_dump()]}
-                if isinstance(data, SubstabelecimentoRequest)
-                else form_dict
-            ),
-        ))
-        db.flush()
-        db.add(ContractVersionDB(
-            contract_id=contract_id,
-            version_number=1,
-            form_data_json=json.dumps(form_dict, ensure_ascii=False),
-            file_path=filepath,
-            created_by=user.email,
-            created_at=utcnow(),
-        ))
-        rotulo = ROTULO_DOCUMENTO[tipo]
-        db.add(AuditLogDB(
-            contract_id=contract_id, action="criacao", version_number=1, user_email=user.email,
-            detail=f"{rotulo} gerado para {nome}", created_at=utcnow(),
-        ))
-        if origem_id:
-            db.add(AuditLogDB(
-                contract_id=origem_id, action="documento_complementar", user_email=user.email,
-                detail=f"{rotulo} criado ({contract_id})", created_at=utcnow(),
-            ))
+        contract_id = _gravar(db, tipo, data, origem, user)
+        extras = []
+        if isinstance(data, DistratoRequest) and data.substabelecer_e_devolver and data.substabelecimento:
+            sub = _substabelecimento_do_distrato(data, origem)
+            extras.append(_gravar(db, TIPO_SUBSTABELECIMENTO, sub, origem, user))
         db.commit()
     except HTTPException:
         raise
@@ -231,4 +272,5 @@ def gerar_documento(
         "contract_id": contract_id,
         "download_url": f"/api/contract/{contract_id}/download",
         "aviso": aviso,
+        "documentos_gerados_junto": extras,
     }

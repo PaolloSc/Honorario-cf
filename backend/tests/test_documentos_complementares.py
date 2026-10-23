@@ -82,6 +82,12 @@ DISTRATO = {
     "objeto_contrato_origem": "assessoria jurídica empresarial",
     "ressalva_exito": False,
     "substabelecer_e_devolver": True,
+    "substabelecimento": {
+        "substabelecentes": [{"nome": "Sócia CF", "oab": "OAB/MG n.º 111.111", "email": "socia@cf.com"}],
+        "substabelecidos": [{"nome": "Novo Patrono", "oab": "OAB/SP sob o n.º 55.555"}],
+        "endereco_substabelecidos": "",
+        "processos": [{"tipo": "Processo", "numero": "1234567-49.2020.8.13.0024", "descricao": "Cliente x Parte"}],
+    },
 }
 
 PROC_A = {"tipo": "Processo", "numero": "1234567-49.2020.8.13.0024",
@@ -480,7 +486,7 @@ def test_documentos_derivados_aparecem_no_contrato_de_origem(client):
     r = client.get(f"/api/contracts/{ORIGEM}/documentos")
     assert r.status_code == 200
     tipos = sorted(d["tipo_contrato"] for d in r.json()["documentos"])
-    assert tipos == ["aditivo", "distrato"]
+    assert tipos == ["aditivo", "distrato", "substabelecimento"]  # o distrato gera o substabelecimento junto
 
 
 def test_edicao_de_rascunho_regenera_nova_versao(client):
@@ -728,3 +734,54 @@ def test_substabelecimento_sem_endereco_omite_a_frase(client):
 def test_substabelecimento_com_endereco_mantem_a_frase(client):
     texto = _texto(client, _id(client, "substabelecimento", _neutro()))
     assert "com endereço profissional à Rua Parceira, 10, Belo Horizonte/MG, CEP 30.000-000, os poderes" in texto
+
+
+# ── Distrato que gera tambem o substabelecimento ───────────────────────────
+
+
+def _derivados_do_origem(tipo: str) -> list:
+    db = SessionLocal()
+    try:
+        return db.query(ContractDB).filter_by(contrato_origem_id=ORIGEM, tipo_contrato=tipo).all()
+    finally:
+        db.close()
+
+
+def test_distrato_com_a_opcao_gera_os_dois_documentos(client):
+    r = _gerar(client, "distrato", DISTRATO)
+    assert r.status_code == 200, r.text
+    extras = r.json()["documentos_gerados_junto"]
+    assert len(extras) == 1
+    # os dois ficam ligados ao contrato de origem
+    assert len(_derivados_do_origem("distrato")) == 1
+    subs = _derivados_do_origem("substabelecimento")
+    assert [x.contract_id for x in subs] == extras
+    texto = _texto(client, extras[0])
+    assert "SUBSTABELECIMENTO SEM RESERVA DE PODERES" in texto
+    assert "Novo Patrono, inscrito(a) na OAB/SP sob o n.º 55.555" in texto
+    assert "SÓCIA CF, OAB/MG n.º 111.111" in texto
+    assert "Processo n.º 1234567-49.2020.8.13.0024" in texto
+    # outorgante e data vem do contrato e do distrato
+    assert "EMPRESA EXEMPLO LTDA" in texto and "07 de outubro de 2026" in texto
+
+
+def test_distrato_sem_a_opcao_gera_so_o_distrato(client):
+    payload = {**DISTRATO, "substabelecer_e_devolver": False}
+    r = _gerar(client, "distrato", payload)
+    assert r.status_code == 200, r.text
+    assert r.json()["documentos_gerados_junto"] == []
+    assert len(_derivados_do_origem("distrato")) == 1
+    assert _derivados_do_origem("substabelecimento") == []
+
+
+def test_distrato_com_a_opcao_sem_dados_do_substabelecimento_e_rejeitado(client):
+    payload = {k: v for k, v in DISTRATO.items() if k != "substabelecimento"}
+    assert _gerar(client, "distrato", payload).status_code == 422
+    assert _derivados_do_origem("distrato") == []
+
+
+def test_substabelecimento_do_distrato_aparece_na_lista_do_contrato(client):
+    _gerar(client, "distrato", DISTRATO)
+    r = client.get(f"/api/contracts/{ORIGEM}/documentos")
+    assert r.status_code == 200, r.text
+    assert sorted(d["tipo_contrato"] for d in r.json()["documentos"]) == ["distrato", "substabelecimento"]
