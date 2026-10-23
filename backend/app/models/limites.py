@@ -6,7 +6,7 @@ LIMITE_CURTO = 256  # nomes e e-mails: o banco guarda client_name/client_email e
 
 
 def _curto(chave: str) -> bool:
-    return chave == "nome" or chave.endswith("_nome") or chave.startswith("email") or chave.endswith("_email")
+    return chave in ("nome", "razao_social") or chave.endswith("_nome") or chave.startswith("email") or chave.endswith("_email")
 
 
 def _checar(valor, caminho: str, chave: str = "") -> None:

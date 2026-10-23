@@ -67,6 +67,41 @@ def test_erro_nao_tratado_vira_500_generico():
     _sem_vazamento(r.text)
 
 
+def test_500_nao_tratado_sai_com_cabecalho_cors():
+    @app.get("/api/_teste_erro_cors")
+    def _boom():
+        raise RuntimeError(SQL)
+
+    r = TestClient(app, raise_server_exceptions=False).get(
+        "/api/_teste_erro_cors", headers={"Origin": "http://localhost:3000"})
+    assert r.status_code == 500
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    _sem_vazamento(r.text)
+
+
+def test_pj_com_razao_social_acima_de_256_da_422(client):
+    form = _form()
+    form["contratantes"] = [{
+        "tipo": "PJ", "razao_social": "R" * 300, "cnpj": "11222333000181", "endereco_sede": "Rua X, 1",
+        "email": "a@a.com", "representantes": [{"nome": "Fulano", "cpf": "11144477735"}],
+    }]
+    r = client.post("/api/contract/generate", json=form)
+    assert r.status_code == 422 and "razao_social" in r.text and "256" in r.text
+    _sem_vazamento(r.text)
+
+
+def test_gerar_documento_complementar_nao_vaza_o_erro(client, monkeypatch):
+    def quebra(*a, **k):
+        raise RuntimeError(SQL)
+
+    monkeypatch.setattr("app.routers.documentos._gravar", quebra)
+    r = client.post("/api/documentos/aditivo", json={
+        "contrato_origem_id": "x", "objeto": "o", "data_contrato_origem": "2025-01-01",
+        "alteracoes": [{"tipo": "adicionar", "texto": "y"}]})
+    assert r.status_code in (404, 500)
+    _sem_vazamento(r.text)
+
+
 def _contrato_para_email(client) -> str:
     r = client.post("/api/contract/generate", json=_form())
     assert r.status_code == 200, r.text
