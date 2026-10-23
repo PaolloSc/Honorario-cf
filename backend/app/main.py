@@ -46,11 +46,18 @@ async def _validacao_sem_eco(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": erros})
 
 
-@app.exception_handler(Exception)
-async def _erro_interno_generico(request: Request, exc: Exception):
-    """500 nunca devolve SQL, parametros nem texto cru de terceiros: o detalhe fica so no log."""
-    logging.getLogger("app.erros").error("Erro nao tratado em %s %s", request.method, request.url.path, exc_info=exc)
-    return JSONResponse(status_code=500, content={"detail": MSG_ERRO_INTERNO})
+@app.middleware("http")
+async def _erro_interno_generico(request: Request, call_next):
+    """500 nunca devolve SQL, parametros nem texto cru de terceiros: o detalhe fica so no log.
+
+    Fica DENTRO do CORSMiddleware (registrado antes dele): um handler de Exception do Starlette
+    roda por fora e a resposta sairia sem cabecalho CORS, escondendo a mensagem do navegador.
+    """
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        logging.getLogger("app.erros").error("Erro nao tratado em %s %s", request.method, request.url.path, exc_info=exc)
+        return JSONResponse(status_code=500, content={"detail": MSG_ERRO_INTERNO})
 
 
 app.add_middleware(SlowAPIMiddleware)

@@ -364,7 +364,7 @@ def review_contract(
         return {"enabled": True, "findings": findings, **previa}
     except contract_reviewer.ContractReviewError as e:
         logger.warning("Revisao do contrato indisponivel: %s", e)
-        return {"enabled": True, "findings": [], **previa, "error": str(e)}
+        return {"enabled": True, "findings": [], **previa, "error": "Revisão por IA indisponível no momento."}
     except Exception as e:
         logger.error("Falha na revisao do contrato: %s", e)
         raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)

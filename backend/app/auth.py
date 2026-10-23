@@ -125,14 +125,15 @@ def _decode_token(token: str) -> dict:
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
     except jwt.InvalidTokenError as e:
+        logger.warning("Token invalido: %s", e)
         raise HTTPException(
             401,
-            f"Token invalido: {e}",
+            "Token invalido",
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
     except Exception as e:
         logger.error("Token decode error: %s", e)
-        raise HTTPException(401, f"Erro de autenticacao: {e}")
+        raise HTTPException(401, "Erro de autenticacao")
 
 
 def _get_or_create_user(db: Session, azure_id: str, email: str, name: str) -> UserDB:
