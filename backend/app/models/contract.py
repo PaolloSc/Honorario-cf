@@ -4,6 +4,8 @@ from enum import Enum
 from typing import Literal, Optional
  
 from pydantic import BaseModel, Field, model_validator
+
+from app.models.limites import LimiteTamanhos
  
  
 class TipoPessoa(str, Enum):
@@ -361,7 +363,7 @@ class AjusteTexto(BaseModel):
     padrao: str = ""
 
 
-class ContratoRequest(BaseModel):
+class ContratoRequest(LimiteTamanhos):
     contratantes: list[ContratantePF | ContratantePJ]
     incluir_partes_relacionadas: bool = False
     escopos: list[EscopoItem]
