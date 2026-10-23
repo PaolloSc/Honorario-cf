@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { entrarComConvite } from "@/lib/convite";
 import Logo from "@/components/ui/Logo";
 
 export default function ConvitePage() {
@@ -10,10 +11,10 @@ export default function ConvitePage() {
   const [falhou, setFalhou] = useState(false);
 
   useEffect(() => {
-    signIn("convite", { token, redirect: false }).then((r) => {
-      if (r?.ok && !r.error) window.location.href = "/";
+    entrarComConvite(() => signIn("convite", { token, redirect: false })).then((entrou) => {
+      if (entrou) window.location.href = "/";
       else setFalhou(true);
-    }, () => setFalhou(true));
+    });
   }, [token]);
 
   return (
