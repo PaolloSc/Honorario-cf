@@ -666,10 +666,11 @@ export default function Step7Envio({
           <div className="space-y-2 mt-1">
             {recipients.map((r, i) => (
               <div key={i}>
-                <label className="block text-xs text-muted mb-0.5">
+                <label htmlFor={`destinatario-${i}`} className="block text-xs text-muted mb-0.5">
                   {r.nome || `Contratante ${i + 1}`}
                 </label>
                 <input
+                  id={`destinatario-${i}`}
                   type="email"
                   value={r.email}
                   onChange={(e) => updateRecipient(i, e.target.value)}
