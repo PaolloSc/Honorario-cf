@@ -48,11 +48,14 @@ def tipo_contrato(form_data: dict) -> str:
     return form_data.get("tipo_contrato") or TIPO_HONORARIOS
 
 
-def parse_form_data(form_data: dict) -> tuple[Any, ContractGenerator]:
-    """Retorna (request validado, gerador) conforme o tipo gravado no form_data."""
+def parse_form_data(form_data: dict, estrito: bool = False) -> tuple[Any, ContractGenerator]:
+    """Retorna (request validado, gerador) conforme o tipo gravado no form_data.
+    estrito=True (edicao de contrato salvo) aplica as mesmas validacoes do contrato novo;
+    o padrao e' brando, para regerar contratos antigos (download, e-mail, assinatura)."""
     tipo = tipo_contrato(form_data)
     if tipo == TIPO_CONSUMIDOR_AEREO:
         return ContratoConsumidorRequest(**form_data), get_generator(tipo)
     if tipo in REQUESTS_COMPLEMENTARES:
         return REQUESTS_COMPLEMENTARES[tipo](**form_data), get_generator(tipo)
-    return ContratoRequest.model_validate(form_data, context={"previa": True}), get_generator(TIPO_HONORARIOS)
+    ctx = None if estrito else {"previa": True}
+    return ContratoRequest.model_validate(form_data, context=ctx), get_generator(TIPO_HONORARIOS)

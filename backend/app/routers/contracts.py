@@ -330,7 +330,7 @@ def update_contract(
         body.form_data["contrato_origem_id"] = contract.contrato_origem_id
 
     try:
-        contrato_data, gen = parse_form_data(body.form_data)
+        contrato_data, gen = parse_form_data(body.form_data, estrito=True)
     except Exception as e:
         raise HTTPException(422, f"Dados invalidos: {e}")
 
