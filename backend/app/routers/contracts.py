@@ -152,22 +152,6 @@ def _congelar_versao_atual(db: Session, contract: ContractDB) -> None:
         ver.file_path = _arquivo_da_versao(ver.file_path, contract.contract_id, ver.version_number)
 
 
-def _validar_valores_do_honorario(form_data: dict, contrato_data) -> None:
-    """Regras de valor do ContratoRequest (exito 0-100, hora/pro-labore/mensalidade > 0).
-
-    parse_form_data usa o contexto 'previa' (aceita dado antigo ao regerar/baixar); editar e'
-    gravar dado novo, entao aqui vale a regra completa, com 422 por campo como no wizard.
-    """
-    if not isinstance(contrato_data, ContratoRequest):
-        return
-    try:
-        ContratoRequest.model_validate(form_data)
-    except ValidationError as e:
-        raise RequestValidationError([
-            {**err, "loc": ("body", "form_data", *err["loc"])} for err in e.errors(include_context=False, include_url=False)
-        ])
-
-
 def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_data: dict, contrato_data, user: CurrentUser) -> None:
     """Mantem a busca por CPF/CNPJ e a ficha de participacao (rascunho) iguais ao contrato salvo."""
     contract.cliente_docs = serialize_cliente_docs(form_data)
@@ -429,9 +413,13 @@ def update_contract(
 
     try:
         contrato_data, gen = parse_form_data(body.form_data, estrito=True)
+    except ValidationError as e:
+        # 422 por campo, como no wizard (a restauracao de versao segue no modo brando).
+        raise RequestValidationError([
+            {**err, "loc": ("body", "form_data", *err["loc"])} for err in e.errors(include_context=False, include_url=False)
+        ])
     except Exception as e:
         raise HTTPException(422, f"Dados invalidos: {e}")
-    _validar_valores_do_honorario(body.form_data, contrato_data)
 
     _congelar_versao_atual(db, contract)
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
