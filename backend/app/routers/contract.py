@@ -356,9 +356,10 @@ def review_contract(
         if not contract_reviewer.is_configured():
             return {"enabled": False, "findings": [], **previa}
 
-        text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"))
+        aplicados = {i["id"] for i in previa["itens"] if i["ajustado"]}
+        text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"), aplicados)
         findings = contract_reviewer.review_text(text) if text.strip() else []
-        findings = contract_reviewer.so_do_digitado(findings, data.model_dump(mode="json"))
+        findings = contract_reviewer.so_do_digitado(findings, data.model_dump(mode="json"), aplicados)
         return {"enabled": True, "findings": findings, **previa}
     except contract_reviewer.ContractReviewError as e:
         logger.warning("Revisao do contrato indisponivel: %s", e)

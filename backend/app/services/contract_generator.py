@@ -151,7 +151,8 @@ class _ItensClausula:
             # So aplica se o texto padrao ainda e' o da epoca do ajuste: um ajuste
             # em cima de um padrao que mudou pode cair na clausula errada.
             if ajuste.padrao == padrao:
-                texto = " ".join(ajuste.texto.split()) or padrao
+                # '{{...}}' e' marcador de campo do DocuSeal: texto digitado nao pode criar campo de assinatura.
+                texto = " ".join(ajuste.texto.replace("{{", "").replace("}}", "").split()) or padrao
                 aplicado, status = True, "ok"
             else:
                 status = "padrao_mudou"

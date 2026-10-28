@@ -58,6 +58,37 @@ def test_ajuste_aplicado_no_docx():
     assert ctx.descartados() == []
 
 
+def test_marcador_do_docuseal_no_ajuste_e_removido():
+    _, base = _build()
+    alvo = _por_id(base.itens)["escopo.nao_incluidos_escopo"]
+    doc, ctx = _build(ajustes_texto={"escopo.nao_incluidos_escopo": {
+        "texto": "Antes {{Assinatura;type=signature;role=Contratante}} depois {{x", "padrao": alvo["padrao"]}})
+    texto = _texto_docx(doc)
+    assert "{{" not in texto and "}}" not in texto
+    assert _por_id(ctx.itens)["escopo.nao_incluidos_escopo"]["ajustado"]
+    assert "Antes Assinatura;type=signature;role=Contratante depois x" in texto
+
+
+def test_revisao_da_ia_le_so_os_ajustes_aplicados():
+    from app.services import contract_reviewer
+
+    _, base = _build()
+    itens = _por_id(base.itens)
+    ok, mudou = "escopo.nao_incluidos_escopo", "escopo.objeto"
+    ajustes = {
+        ok: {"texto": "Texto aplicado.", "padrao": itens[ok]["padrao"]},
+        mudou: {"texto": "Texto com padrao velho.", "padrao": "padrao antigo"},
+        "99.9": {"texto": "Texto descartado.", "padrao": "x"},
+    }
+    data = _req(ajustes_texto=ajustes)
+    _, ctx = _build(ajustes_texto=ajustes)
+    aplicados = {i["id"] for i in ctx.itens if i["ajustado"]}
+    assert aplicados == {ok}
+    texto = contract_reviewer.extract_open_fields(data, aplicados)
+    assert "Texto aplicado." in texto
+    assert "padrao velho" not in texto and "descartado" not in texto
+
+
 def test_item_inexistente_e_ignorado():
     doc, ctx = _build(ajustes_texto={"99.9": {"texto": "fantasma", "padrao": "x"}})
     assert "fantasma" not in _texto_docx(doc)
