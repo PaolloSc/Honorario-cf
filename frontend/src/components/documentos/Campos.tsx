@@ -71,7 +71,7 @@ export function CamposAditivo({ estado, onChange, erros }: Props<AditivoForm>) {
           </FormField>
           {alt.tipo !== "adicionar" && (
             <FormField label="Cláusula do contrato original" required error={erros[`alteracoes.${i}.clausula`]} hint='Ex.: "Cláusula 3ª, item 3.2".'>
-              <Input value={alt.clausula} onChange={(e) => setAlteracao(i, { clausula: e.target.value })} error={!!erros[`alteracoes.${i}.clausula`]} />
+              <Input value={alt.clausula} onChange={(e) => setAlteracao(i, { clausula: e.target.value })} error={!!erros[`alteracoes.${i}.clausula`]} placeholder="Ex.: Cláusula 3ª, item 3.2" />
             </FormField>
           )}
           {alt.tipo !== "excluir" && (
