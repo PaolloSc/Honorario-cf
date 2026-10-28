@@ -728,17 +728,75 @@ _MARCA_RISCADO = "background:rgba(239,68,68,.18);color:#b91c1c;text-decoration:l
 _MARCA_IA = "background:rgba(34,197,94,.22);text-decoration:none;border-radius:2px;padding:0 1px"
 
 
-def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
-    """Amarelo = o que a pessoa digitou. Onde a IA propoe outro texto, o digitado sai
-    riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar)."""
+def _padrao_do_texto(digitado: str):
+    """Regex que acha no html o texto digitado, mesmo escrito um pouco diferente no
+    contrato: inicial maiuscula/minuscula, espacos repetidos, aspas, ponto final.
+    Com fronteira de palavra nas pontas ("sim" nao casa em "Assim") e fora de tags.
+    Unica busca, usada para achar e para marcar. None se nao ha o que procurar."""
     from html import escape
 
-    for texto in textos:
+    miolo = (digitado or "").strip().rstrip(".;, ").strip()
+    if not miolo:
+        return None
+    partes: list[str] = []
+    primeira = True
+    for pedaco in re.split(r"(\s+)", miolo):
+        if not pedaco:
+            continue
+        if pedaco.isspace():
+            partes.append(r"\s+")
+            continue
+        for c in pedaco:
+            if c in "\"'":
+                partes.append("(?:" + "|".join(re.escape(x) for x in (c, escape(c), escape(c, quote=False), "&#39;")) + ")")
+            elif primeira and c.isalpha():
+                partes.append("[" + re.escape(c.lower()) + re.escape(c.upper()) + "]")
+            else:
+                partes.append(re.escape(escape(c)))
+            primeira = False
+    return re.compile(r"(?<!\w)" + "".join(partes) + r"(?!\w)(?![^<]*>)"), miolo
+
+
+def _achar_no_html(html: str, digitado: str, destaque: bool = True) -> str | None:
+    """Trecho do html que corresponde ao texto digitado, como esta no contrato (sem
+    escape), ou None. Com destaque=True, texto curto (<12) ou so' numero/percentual
+    ("10%") so' vale se tiver uma unica ocorrencia: melhor sem destaque que no lugar
+    errado. destaque=False so' diz se o campo foi escrito no contrato (vai a IA)."""
+    from html import unescape
+
+    padrao = _padrao_do_texto(digitado)
+    if not padrao:
+        return None
+    regex, miolo = padrao
+    achados = [m.group(0) for m in regex.finditer(html)]
+    if not achados:
+        return None
+    if destaque and (len(miolo) < 12 or not re.search(r"[^\W\d_]", miolo)) and len(achados) != 1:
+        return None
+    return unescape(achados[0])
+
+
+def _marcar_digitados(html: str, textos: list, achados: list[dict]) -> str:
+    """Amarelo = o que a pessoa digitou. Onde a IA propoe outro texto, o digitado sai
+    riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar).
+    O mesmo texto digitado em mais de um honorario e' destacado em cada ocorrencia."""
+    from html import escape
+
+    # Cada trecho vira um intervalo; o mais longo vence quando dois se sobrepoem
+    # (nada de <mark> dentro de <mark>), e o texto curto nunca cai dentro de tag.
+    # Um item e' o texto ou (texto, trechos do html onde o gerador o escreveu): fora
+    # desses trechos nunca marca. Cada item usa uma ocorrencia (texto igual em dois
+    # honorarios = dois itens = duas marcas).
+    itens = [(t, None) if isinstance(t, str) else t for t in textos]
+    escolhidos: list[tuple[int, int, str]] = []
+    for texto, spans in sorted(itens, key=lambda it: -len(it[0])):
         alvo = escape(texto)
         dentro = alvo
         for a in achados:
-            trecho = escape((a.get("trecho") or "").strip())
-            if trecho and trecho in dentro:
+            bruto = (a.get("trecho") or "").strip()
+            # a IA ve o texto como digitado; o contrato pode ter descido a inicial
+            trecho = next((escape(t) for t in (bruto, bruto[:1].swapcase() + bruto[1:]) if t and escape(t) in dentro), "")
+            if trecho:
                 # ponytail: casa por substring; trecho dentro de sugestao ja inserida
                 # nao e' tratado (o revisor ja descarta trechos aninhados).
                 dentro = dentro.replace(
@@ -747,26 +805,36 @@ def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
                     f'<ins style="{_MARCA_IA}">{escape(a.get("sugestao") or "")}</ins>',
                     1,
                 )
-        html = html.replace(alvo, f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>', 1)
+        marcado = f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>'
+        regex = _padrao_do_texto(texto)[0]
+        for m in regex.finditer(html):
+            if spans is not None and not any(i0 <= m.start() and m.end() <= f for i0, f in spans):
+                continue
+            if any(m.start() < f and i0 < m.end() for i0, f, _ in escolhidos):
+                continue
+            escolhidos.append((m.start(), m.end(), marcado))
+            break
+    for ini, fim, marcado in sorted(escolhidos, reverse=True):
+        html = html[:ini] + marcado + html[fim:]
     return html
 
 
-@router.post("/preview-honorarios")
-def preview_honorarios(
-    body: PreviaHonorariosRequest,
-    user: CurrentUser = Depends(get_current_user),
-) -> dict:
-    """Previa so' da secao de honorarios, para o pop-up do wizard: o texto digitado
-    vem destacado e, com revisar=True, a correcao da IA aparece no lugar. Nada e' gravado."""
-    import tempfile
-    from html import escape
+_BLOCO = re.compile(r"<(?:p|h1|h3|table)(?=[\s>])")
 
-    from app.utils.currency import percentual_com_extenso
+
+def _blocos(html: str) -> list[tuple[int, int]]:
+    """Intervalos (inicio, fim) dos paragrafos/titulos/tabelas do html do contrato."""
+    ini = [m.start() for m in _BLOCO.finditer(html)]
+    return list(zip(ini, ini[1:] + [len(html)]))
+
+
+def _html_honorarios(escopos: list, acessorios) -> str:
+    import tempfile
 
     data = ContratoRequest(
         contratantes=[_CONTRATANTE_PREVIA],
-        escopos=body.escopos,
-        acessorios=body.acessorios or Acessorios(),
+        escopos=escopos,
+        acessorios=acessorios or Acessorios(),
         participacao={"tem_participacao": False},
     )
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
@@ -783,16 +851,73 @@ def preview_honorarios(
     # Secoes saem como <h3> numerado; recorta da secao 3 ate a seguinte.
     inicio = html.rfind("<h3>", 0, html.find("OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS"))
     fim = html.rfind("<h3>", 0, html.find("CLÁUSULAS GERAIS"))
-    html = html[inicio:fim]
+    return html[inicio:fim]
+
+
+def _tirar_texto(obj, texto: str):
+    """Copia do dump com todo valor igual a `texto` esvaziado."""
+    if isinstance(obj, dict):
+        return {k: _tirar_texto(v, texto) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_tirar_texto(v, texto) for v in obj]
+    return "" if obj == texto else obj
+
+
+def _trechos_do_campo(html: str, body: "PreviaHonorariosRequest", texto: str) -> list[tuple[int, int]] | None:
+    """Onde o gerador escreveu o campo: gera o contrato de novo sem o texto e fica com
+    os blocos que sumiram ou mudaram. Falhou = None (sem destaque, nunca no lugar errado;
+    o campo continua indo a IA)."""
+    from collections import Counter
+
+    try:
+        sem = body.model_dump(mode="json")
+        sem = PreviaHonorariosRequest(**_tirar_texto(sem, texto))
+        html_sem = _html_honorarios(sem.escopos, sem.acessorios)
+    except Exception:
+        logger.warning("Previa: nao foi possivel localizar o campo no contrato", exc_info=True)
+        return None
+    restam = Counter(html_sem[i:f] for i, f in _blocos(html_sem))
+    spans = []
+    for i, f in _blocos(html):
+        if restam[html[i:f]] > 0:
+            restam[html[i:f]] -= 1
+        else:
+            spans.append((i, f))
+    return spans
+
+
+@router.post("/preview-honorarios")
+def preview_honorarios(
+    body: PreviaHonorariosRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Previa so' da secao de honorarios, para o pop-up do wizard: o texto digitado
+    vem destacado e, com revisar=True, a correcao da IA aparece no lugar. Nada e' gravado."""
+    from app.utils.currency import percentual_com_extenso
+
+    html = _html_honorarios(body.escopos, body.acessorios)
 
     dump = {"escopos": [e.model_dump(mode="json") for e in body.escopos]}
     # O gerador tira a pontuacao final do que foi digitado; o destaque tem de casar.
     completos = contract_reviewer.campos_abertos(dump)
-    # O contrato desce a inicial de "Até R$ 500" / "Um desconto de 5%"; a busca no html
-    # (e o destaque) tem de usar o texto como o gerador o escreveu, nao como foi digitado.
-    como_sai = ContractGenerator._texto_livre
-    completos = [c for c in completos if len(como_sai(c[1])) >= 3 and escape(como_sai(c[1])) in html]
-    textos = [como_sai(t) for _, t, _ in completos]
+    # O contrato pode escrever o texto diferente do digitado (inicial, ponto final,
+    # espacos); a busca no html e o destaque usam o texto como saiu no contrato.
+    # Cada campo so' vale dentro dos blocos onde o gerador o escreveu.
+    trechos: dict = {}
+    como_sai = []
+    for c in completos:
+        if c[1] not in trechos:
+            trechos[c[1]] = _trechos_do_campo(html, body, c[1])
+        sp = trechos[c[1]]
+        if sp is None:
+            # nao deu para localizar: o campo vai a IA (procurado no html todo), sem destaque
+            como_sai.append((c, _achar_no_html(html, c[1], destaque=False), None, []))
+            continue
+        regiao = "".join(html[i:f] for i, f in sp)
+        como_sai.append((c, _achar_no_html(regiao, c[1], destaque=False), _achar_no_html(regiao, c[1]), sp))
+    # Vai a IA o que foi escrito no contrato; so' recebe destaque o que se acha sem duvida.
+    completos = [c for c, escrito, _, _ in como_sai if escrito and len(escrito) >= 3]
+    textos: list = [(achado, sp) for _, _, achado, sp in como_sai if achado and len(achado) >= 3]
     # Desconto percentual nao e' texto livre, mas e' a "especificacao" que a pessoa preencheu.
     for h in (e.model_dump(mode="json").get(k) or {} for e in body.escopos for k in contract_reviewer.HONORARIO_ROTULOS):
         if h.get("tem_desconto") and h.get("desconto_tipo") != "livre" and h.get("desconto_percentual"):
