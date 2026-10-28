@@ -126,14 +126,14 @@ def _frases_do_honorario(chave: str, h: dict) -> list[str]:
     return frases
 
 
-def extract_open_fields(data: dict) -> str:
+def extract_open_fields(data: dict, aplicados: set[str] | None = None) -> str:
     """Extrai so' os campos de texto livre digitados no formulario (nao a clausula
     padrao do contrato, que quem preenche o wizard nao tem como editar ali).
 
     Campos que entram no meio de uma frase pronta do contrato (desconto,
     parcelamento, vencimento do exito) vao acompanhados dessa frase, para a
     sugestao se encaixar nela."""
-    return texto_para_revisao(campos_abertos(data))
+    return texto_para_revisao(campos_abertos(data, aplicados))
 
 
 def texto_para_revisao(campos: list[tuple[str, str, str | None]]) -> str:
@@ -145,11 +145,12 @@ def texto_para_revisao(campos: list[tuple[str, str, str | None]]) -> str:
     return chr(10).join(linhas)
 
 
-def open_fields(data: dict) -> list[tuple[str, str]]:
-    return [(label, text) for label, text, _ in campos_abertos(data)]
+def open_fields(data: dict, aplicados: set[str] | None = None) -> list[tuple[str, str]]:
+    return [(label, text) for label, text, _ in campos_abertos(data, aplicados)]
 
 
-def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
+def campos_abertos(data: dict, aplicados: set[str] | None = None) -> list[tuple[str, str, str | None]]:
+    # aplicados: ids dos ajustes que entraram no contrato; None = todos (sem informacao do gerador).
     lines: list[tuple[str, str, str | None]] = []
 
     def add(label: str, value, frases: list[str] | None = None) -> None:
@@ -210,6 +211,8 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
     add("Critério de extinção do êxito", acessorios.get("criterio_extincao_exito"))
     add("Cláusulas adicionais", acessorios.get("clausulas_adicionais"))
     for id_, ajuste in (data.get("ajustes_texto") or {}).items():
+        if aplicados is not None and id_ not in aplicados:
+            continue  # padrao mudou ou clausula descartada: nao esta no contrato, a IA nao le
         add(f"Cláusula {id_} (ajustada à mão)", ajuste.get("texto"))
 
     return lines
@@ -278,11 +281,11 @@ def review_text(document_text: str, avisar_ambiguidade: bool = False) -> list[di
     return _drop_nested_trechos(findings) + avisos
 
 
-def so_do_digitado(findings: list[dict], data: dict) -> list[dict]:
+def so_do_digitado(findings: list[dict], data: dict, aplicados: set[str] | None = None) -> list[dict]:
     """O modelo recebe "rotulo: texto" e as vezes critica o rotulo (hifen, "do" vs
     "para"), que nao e' texto de ninguem. Fica so' o achado cujo trecho esta no
     que a pessoa digitou."""
-    textos = [t for _, t in open_fields(data)]
+    textos = [t for _, t in open_fields(data, aplicados)]
     return [f for f in findings if any((f.get("trecho") or "").strip() in t for t in textos)]
 
 
