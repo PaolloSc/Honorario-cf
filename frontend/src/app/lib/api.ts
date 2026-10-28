@@ -460,7 +460,7 @@ export const consultarProcesso = (numero: string) =>
 export function importarPlanilhaProcessos(arquivo: File) {
   const form = new FormData();
   form.append("arquivo", arquivo);
-  return chamarProcessos<{ processos: ProcessoPlanilha[]; validos: number; invalidos: number }>(
+  return chamarProcessos<{ aviso: string; processos: ProcessoPlanilha[]; validos: number; invalidos: number }>(
     "/api/processos/planilha", { method: "POST", body: form });
 }
 

@@ -36,12 +36,22 @@ def _tribunal(j: str, tr: str) -> Optional[str]:
     if j in _SUPERIORES:
         return _SUPERIORES[j] if n == 0 else None
     if j == "4":
+        if n == 90:
+            return "Conselho da Justiça Federal"
         return f"Tribunal Regional Federal da {n}ª Região" if 1 <= n <= 6 else None
     if j == "5":
+        if n == 0:
+            return "Tribunal Superior do Trabalho"
+        if n == 90:
+            return "Conselho Superior da Justiça do Trabalho"
         return f"Tribunal Regional do Trabalho da {n}ª Região" if 1 <= n <= 24 else None
     if j == "6":
+        if n == 0:
+            return "Tribunal Superior Eleitoral"
         return f"Tribunal Regional Eleitoral ({_UFS[n - 1]})" if 1 <= n <= 27 else None
     if j == "7":
+        if n == 0:
+            return "Superior Tribunal Militar"
         return f"{n}ª Circunscrição Judiciária Militar" if 1 <= n <= 12 else None
     if j == "8":
         return f"Tribunal de Justiça ({_UFS[n - 1]})" if 1 <= n <= 27 else None
