@@ -198,6 +198,8 @@ class SubstabelecimentoRequest(_DocumentoComplementar):
     substabelecidos: list[Substabelecido] = Field(min_length=1)
     endereco_substabelecidos: str = ""  # opcional: sem endereco, a frase some do texto
     processos: list[Processo] = Field(min_length=1)
+    # Preenchido quando o substabelecimento nasce de um distrato: editar o distrato o regera.
+    distrato_origem_id: Optional[str] = None
 
 
 class SubstabelecimentoDoDistrato(BaseModel):
