@@ -220,7 +220,14 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
     return <div className="max-w-3xl mx-auto px-4 py-12 text-center text-muted">Carregando contrato original...</div>;
   }
 
-  const bloqueado = tipo === "distrato" && distratoExistente;
+  // Acrescentar mantém as partes do documento existente: partes/endereço diferentes não podem acrescentar.
+  const partesDiferem = (() => {
+    if (!acrescentando || !existente || tipo !== "substabelecimento") return false;
+    const atual = partesDe(estado as SubstabelecimentoForm);
+    const doc = partesDe(estadoDoFormData("substabelecimento", { ...existente }, "") as SubstabelecimentoForm);
+    return !iguais({ ...atual, endereco_substabelecidos: atual.endereco_substabelecidos.trim() || doc.endereco_substabelecidos }, doc);
+  })();
+  const bloqueado = (tipo === "distrato" && distratoExistente) || partesDiferem;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -255,7 +262,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
           {prefill.aviso} Você pode continuar, mas confira se o documento faz sentido.
         </div>
       )}
-      {bloqueado && (
+      {tipo === "distrato" && distratoExistente && (
         <div role="alert" className="rounded-lg border border-danger bg-danger/[0.08] p-3 mb-4 text-sm text-danger">
           Já existe um distrato para este contrato. Abra-o na página do contrato.
         </div>
@@ -307,8 +314,10 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
                     Acrescentar o processo a ele
                   </label>
                   {acrescentar && (
-                    <p className="text-xs text-foreground ml-6 mb-1">
-                      As partes e o endereço deste formulário substituem os do substabelecimento existente.
+                    <p className={`text-xs ml-6 mb-1 ${partesDiferem ? "text-danger font-medium" : "text-foreground"}`}>
+                      {partesDiferem
+                        ? "Substabelecentes, substabelecidos ou endereço diferem do substabelecimento existente. Para acrescentar, mantenha os mesmos; para outras partes, escolha “Criar um novo”."
+                        : "O processo entra no substabelecimento existente, que mantém as partes e o endereço dele."}
                     </p>
                   )}
                   <label className="flex items-center gap-2">

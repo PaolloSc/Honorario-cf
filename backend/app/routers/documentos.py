@@ -33,6 +33,7 @@ from app.models.documentos_complementares import (
 from app.routers.contract import _docx_to_html
 from app.routers.contracts import _check_access
 from app.services.contract_dispatch import get_generator
+from app.utils.erros import MSG_ERRO_INTERNO
 from app.services.substabelecimento_vinculado import (
     MOTIVO_TRAVADO,
     acrescentar_processos,
@@ -195,14 +196,29 @@ def _processos_novos(existente: ContractDB, data: SubstabelecimentoRequest, db: 
     """O substabelecimento existente com os processos de `data` que ainda nao constam nele."""
     atual = SubstabelecimentoRequest(**form_data_atual(existente, db))
     todos = acrescentar_processos(atual.processos, data.processos)
-    # Quem assina/recebe e o endereco informados agora valem para o documento todo (a tela avisa antes).
-    campos = {"processos": todos}
-    for nome in ("substabelecentes", "substabelecidos"):
-        if getattr(data, nome):
-            campos[nome] = getattr(data, nome)
-    if data.endereco_substabelecidos.strip():
-        campos["endereco_substabelecidos"] = data.endereco_substabelecidos
-    return atual.model_copy(update=campos), len(todos) - len(atual.processos)
+    return atual.model_copy(update={"processos": todos}), len(todos) - len(atual.processos)
+
+
+def _norm(texto: str) -> str:
+    return " ".join((texto or "").casefold().split())
+
+
+def _partes_diferem(atual: SubstabelecimentoRequest, data: SubstabelecimentoRequest) -> bool:
+    """Substabelecentes, substabelecidos ou endereco informados diferem dos do documento existente.
+    Acrescentar mantem as partes do documento: se a pessoa informou outras, o DOCX final diria que
+    o processo foi substabelecido a quem ela nao escolheu."""
+    def pessoas(lista) -> list[tuple]:
+        return [(_norm(p.nome), _norm(p.oab)) for p in lista]
+
+    def substabelecentes(lista) -> list[tuple]:
+        return [(_norm(p.nome), _norm(p.oab), _norm(p.email)) for p in lista]
+
+    if substabelecentes(atual.substabelecentes) != substabelecentes(data.substabelecentes):
+        return True
+    if pessoas(atual.substabelecidos) != pessoas(data.substabelecidos):
+        return True
+    novo_endereco = _norm(data.endereco_substabelecidos)
+    return bool(novo_endereco) and novo_endereco != _norm(atual.endereco_substabelecidos)
 
 
 @router.get("/substabelecimento-existente")
@@ -257,8 +273,14 @@ def gerar_documento(
         if travado(alvo, db):
             aviso = f"Foi criado um novo substabelecimento porque {MOTIVO_TRAVADO}."
         else:
-            combinado, novos = _processos_novos(alvo, data, db)
             atual = SubstabelecimentoRequest(**form_data_atual(alvo, db))
+            if _partes_diferem(atual, data):
+                raise HTTPException(422, (
+                    "As partes ou o endereço informados diferem do substabelecimento existente. "
+                    "Para acrescentar o processo, mantenha os mesmos substabelecentes, substabelecidos e endereço; "
+                    "para outras partes, crie um novo substabelecimento."
+                ))
+            combinado, novos = _processos_novos(alvo, data, db)
             if novos == 0 and combinado.model_dump(mode="json") == atual.model_dump(mode="json"):
                 return {
                     "success": True, "message": "Os processos já constavam no substabelecimento",
@@ -271,7 +293,7 @@ def gerar_documento(
             except Exception as e:
                 db.rollback()
                 logger.error("Falha ao acrescentar processo: %s", e)
-                raise HTTPException(500, str(e))
+                raise HTTPException(500, MSG_ERRO_INTERNO)
             return {
                 "success": True, "message": "Processo acrescentado ao substabelecimento existente",
                 "contract_id": alvo.contract_id, "download_url": f"/api/contract/{alvo.contract_id}/download",
