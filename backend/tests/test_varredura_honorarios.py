@@ -100,3 +100,37 @@ def test_previa_aceita_valor_zerado_formulario_pela_metade(client, monkeypatch):
     finally:
         app.dependency_overrides.pop(get_current_user, None)
     assert r.status_code == 200
+
+
+# ── edicao de contrato salvo (PUT) valida como o contrato novo ────────────
+
+
+def _salvar(client):
+    r = client.post("/api/contract/generate", json=_req("hora_trabalhada", valor_hora=500))
+    assert r.status_code == 200, r.text
+    cid = r.json()["contract_id"]
+    return cid, client.get(f"/api/contracts/{cid}/form-data").json()["form_data"]
+
+
+def test_put_recusa_valor_zerado_e_o_modo_brando_continua_para_regerar(client):
+    from app.services.contract_dispatch import parse_form_data
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        azure_id="x", email="l@test.com", name="L", role="user")
+    try:
+        cid, form = _salvar(client)
+        assert client.put(f"/api/contracts/{cid}", json={"form_data": form}).status_code == 200
+        form["escopos"][0]["hora_trabalhada"]["valor_hora"] = 0
+        r = client.put(f"/api/contracts/{cid}", json={"form_data": form})
+        assert r.status_code == 422
+        assert client.get(f"/api/contracts/{cid}").json()["current_version"] == 2  # nao gerou versao nova
+        form["escopos"][0]["hora_trabalhada"]["valor_hora"] = 500
+        form["contratantes"] = []
+        assert client.put(f"/api/contracts/{cid}", json={"form_data": form}).status_code == 422
+        form["contratantes"] = [{**_base_req()["contratantes"][0], "email": "xx"}]
+        assert client.put(f"/api/contracts/{cid}", json={"form_data": form}).status_code == 422
+        form["escopos"][0]["hora_trabalhada"]["valor_hora"] = 0
+        parse_form_data(form)  # contrato antigo (download, e-mail, assinatura) segue regerando
+        with pytest.raises(ValidationError):
+            parse_form_data(form, estrito=True)
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
