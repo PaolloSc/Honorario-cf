@@ -148,8 +148,15 @@ export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocument
 
 const CNJ = /^(\d{7})-(\d{2})\.(\d{4})\.(\d)\.(\d{2})\.(\d{4})$/;
 
+/** Com 20 dígitos (com ou sem pontuação) devolve o número com a máscara do CNJ; senão, o texto como veio. */
+export function formatarCnj(numero: string): string {
+  const d = (numero || "").replace(/\D/g, "");
+  if (d.length !== 20) return (numero || "").trim();
+  return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9, 13)}.${d[13]}.${d.slice(14, 16)}.${d.slice(16)}`;
+}
+
 export function cnjValido(numero: string): boolean {
-  const m = CNJ.exec((numero || "").trim());
+  const m = CNJ.exec(formatarCnj(numero));
   if (!m) return false;
   const [, seq, dv, ano, j, tr, origem] = m;
   // Resto por partes: o número inteiro (20 dígitos) não cabe num Number.
@@ -166,7 +173,7 @@ function payloadPoderes(e: PoderesForm) {
   substabelecidos: e.substabelecidos.map((s) => ({ nome: s.nome.trim(), oab: oabTexto(s.oab, true) })),
   endereco_substabelecidos: e.endereco_substabelecidos.trim(),
   processos: e.processos.map((p) => ({
-    tipo: p.tipo.trim() || "Processo", numero: p.numero.trim(), descricao: p.descricao.trim(),
+    tipo: p.tipo.trim() || "Processo", numero: formatarCnj(p.numero), descricao: p.descricao.trim(),
   })),
   };
 }
