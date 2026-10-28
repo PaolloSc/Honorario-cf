@@ -419,6 +419,51 @@ export interface ColaboradorWizard {
   oabs?: OabCadastro[];
 }
 
+export interface ConsultaProcesso {
+  valido: boolean;
+  numero: string;
+  erro?: string;
+  justica?: string;
+  tribunal?: string | null;
+  // Partes do Legal One do escritório (só leitura); null se o processo não está lá ou não há acesso.
+  legalone: { cliente: string[]; contraria: string[]; descricao: string } | null;
+}
+
+export interface ProcessoPlanilha {
+  linha: number;
+  valido: boolean;
+  numero: string;
+  erro?: string;
+  tribunal?: string | null;
+  tipo: string;
+  descricao: string;
+}
+
+async function chamarProcessos<T>(path: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetchAutenticado(`${API_BASE}${path}`, { ...init, signal: controller.signal });
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => null);
+      throw new Error(typeof corpo?.detail === "string" ? corpo.detail : "Não foi possível concluir a consulta.");
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export const consultarProcesso = (numero: string) =>
+  chamarProcessos<ConsultaProcesso>(`/api/processos/cnj?numero=${encodeURIComponent(numero)}`);
+
+export function importarPlanilhaProcessos(arquivo: File) {
+  const form = new FormData();
+  form.append("arquivo", arquivo);
+  return chamarProcessos<{ processos: ProcessoPlanilha[]; validos: number; invalidos: number }>(
+    "/api/processos/planilha", { method: "POST", body: form });
+}
+
 export async function listColaboradores(opts?: { participavel?: boolean }) {
   const qs = opts?.participavel ? "?participavel=true" : "";
   return request<{ colaboradores: ColaboradorWizard[] }>(

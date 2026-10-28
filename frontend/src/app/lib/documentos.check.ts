@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { cnpjValido } from "./cnpj.ts";
 import {
-  agruparDerivados, cnjValido, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
+  agruparDerivados, cnjValido, formatarCnj, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
   formatarOabNumero, lerOab, trocarUfOab, oabsDoTexto, oabTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
 } from "./documentos.ts";
 
@@ -14,6 +14,9 @@ assert.ok(cnjValido("1234567-49.2020.8.13.0024"));
 assert.ok(cnjValido("1111111-60.2023.4.06.0000"));
 assert.ok(!cnjValido("1234567-50.2020.8.13.0024")); // DV errado
 assert.ok(!cnjValido("123"));
+assert.ok(cnjValido("12345674920208130024")); // sem máscara
+assert.equal(formatarCnj("12345674920208130024"), "1234567-49.2020.8.13.0024");
+assert.equal(formatarCnj("123"), "123");
 assert.ok(!cnjValido(""));
 
 assert.ok(ehDocumentoComplementar("distrato"));
