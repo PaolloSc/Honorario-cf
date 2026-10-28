@@ -231,7 +231,8 @@ def _numeros(cid: str) -> list[str]:
 def test_editar_o_distrato_mantem_processo_acrescentado_depois(client, monkeypatch):
     r = _gerar(client, "distrato", DISTRATO)
     distrato, sub = r.json()["contract_id"], r.json()["documentos_gerados_junto"][0]
-    ac = client.post(f"/api/documentos/substabelecimento?acrescentar_a={sub}", json=_sub(processos=[PROC_C]))
+    partes = {k: _form(sub)[k] for k in ("substabelecentes", "substabelecidos", "endereco_substabelecidos")}
+    ac = client.post(f"/api/documentos/substabelecimento?acrescentar_a={sub}", json=_sub(processos=[PROC_C], **partes))
     assert ac.status_code == 200 and _numeros(sub) == [PROC_A["numero"], PROC_C["numero"]]
     # muda outra coisa no distrato: nada some e nao gera versao
     _editar(client, distrato, objeto_contrato_origem="outro objeto")
@@ -247,18 +248,19 @@ def test_editar_o_distrato_mantem_processo_acrescentado_depois(client, monkeypat
     assert _numeros(sub) == [PROC_A["numero"], PROC_C["numero"]]
 
 
-def test_acrescentar_aplica_substabelecidos_e_endereco_informados(client):
+def test_acrescentar_com_partes_diferentes_da_422_e_nao_muda_o_documento(client):
     cid = _id(client, "substabelecimento", _sub())
+    antes, versao = _form(cid), _versao(cid)
     novos = [{"nome": "Outro Patrono", "oab": "OAB/SP sob o n.º 9.999"}]
-    r = client.post(
-        f"/api/documentos/substabelecimento?acrescentar_a={cid}",
-        json=_sub(processos=[PROC_A], substabelecidos=novos, endereco_substabelecidos="Rua Nova, 1"),
-    )
-    assert r.status_code == 200 and r.json()["processos_novos"] == 0
-    assert _versao(cid) == 2  # mudou quem recebe: nova versao mesmo sem processo novo
-    f = _form(cid)
-    assert [s["nome"] for s in f["substabelecidos"]] == ["Outro Patrono"] and f["endereco_substabelecidos"] == "Rua Nova, 1"
-    assert "Outro Patrono" in _texto(client, cid)
+    for diferente in (
+        {"substabelecidos": novos},
+        {"substabelecentes": [{**antes["substabelecentes"][0], "nome": "Outra Pessoa"}]},
+        {"endereco_substabelecidos": "Rua Nova, 1"},
+    ):
+        r = client.post(f"/api/documentos/substabelecimento?acrescentar_a={cid}", json=_sub(processos=[PROC_B], **diferente))
+        assert r.status_code == 422 and "novo substabelecimento" in r.text
+    assert _versao(cid) == versao and _form(cid) == antes
+    assert "Outro Patrono" not in _texto(client, cid)
 
 
 def test_put_do_distrato_com_substab_travado_falha_no_commit_nao_deixa_docx(client, monkeypatch):
@@ -277,7 +279,7 @@ def test_put_do_distrato_com_substab_travado_falha_no_commit_nao_deixa_docx(clie
     monkeypatch.setattr(Session, "commit", quebra)
     resp = client.put(f"/api/contracts/{distrato}", json={"form_data": form})
     monkeypatch.undo()
-    assert resp.status_code == 500
+    assert resp.status_code == 500 and "falha no commit" not in resp.text  # sem detalhe interno
     assert _docx_no_disco() == antes  # o DOCX do substabelecimento novo foi apagado
     assert _todos_substabelecimentos() == 1
 

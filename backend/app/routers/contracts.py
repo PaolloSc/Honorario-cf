@@ -25,6 +25,7 @@ from app.models.documentos_complementares import (
 )
 from app.services.contract_dispatch import parse_form_data
 from app.services.substabelecimento_vinculado import sincronizar_do_distrato
+from app.utils.erros import MSG_ERRO_INTERNO
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/contracts", tags=["Contracts Management"])
@@ -350,7 +351,8 @@ def update_contract(
             db.rollback()
             for f in arquivos_novos:
                 Path(f).unlink(missing_ok=True)
-            raise HTTPException(500, f"Falha ao atualizar o substabelecimento do distrato: {e}")
+            logger.error("Falha ao atualizar o substabelecimento do distrato %s: %s", contract_id, e)
+            raise HTTPException(500, MSG_ERRO_INTERNO)
 
     new_version = contract.current_version + 1
     client_name, client_email = _extract_client_info(body.form_data)
@@ -381,7 +383,7 @@ def update_contract(
         for f in arquivos_novos:  # nada de .docx sem registro
             Path(f).unlink(missing_ok=True)
         logger.error("Falha ao gravar a edicao de %s: %s", contract_id, e)
-        raise HTTPException(500, f"Falha ao salvar: {e}")
+        raise HTTPException(500, MSG_ERRO_INTERNO)
 
     return {
         "success": True,
