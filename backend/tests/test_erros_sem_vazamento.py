@@ -94,7 +94,7 @@ def test_gerar_documento_complementar_nao_vaza_o_erro(client, monkeypatch):
     def quebra(*a, **k):
         raise RuntimeError(SQL)
 
-    monkeypatch.setattr("app.routers.documentos._gravar", quebra)
+    monkeypatch.setattr("app.routers.documentos.gravar_novo", quebra)
     r = client.post("/api/documentos/aditivo", json={
         "contrato_origem_id": "x", "objeto": "o", "data_contrato_origem": "2025-01-01",
         "alteracoes": [{"tipo": "adicionar", "texto": "y"}]})
