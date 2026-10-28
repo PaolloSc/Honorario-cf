@@ -18,6 +18,7 @@ from app.models.documentos_complementares import ROTULO_DOCUMENTO, TIPO_DISTRATO
 from app.services.azure_email import AzureEmailService
 from app.services.docuseal import DocuSealService, link_assinatura
 from app.utils.participacao import linhas_participacao
+from app.utils.erros import MSG_ERRO_DOCUSEAL, MSG_ERRO_INTERNO
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/docuseal", tags=["DocuSeal"])
@@ -541,7 +542,7 @@ async def send_for_signature(
         raise
     except Exception as e:
         logger.error("DocuSeal error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
 
 
 async def _send_contract_to_financeiro(
@@ -1030,7 +1031,7 @@ async def sincronizar_status_assinatura(
         status_data = await service.get_submission_status(version.docuseal_submission_id)
     except Exception as e:
         logger.warning("Falha ao consultar submissao %s: %s", version.docuseal_submission_id, e)
-        raise HTTPException(status_code=502, detail=f"Não foi possível consultar o DocuSeal: {e}")
+        raise HTTPException(status_code=502, detail=MSG_ERRO_DOCUSEAL)
 
     conclusao = _conclusao_docuseal(status_data)
     if not conclusao:
