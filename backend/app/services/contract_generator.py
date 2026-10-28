@@ -1136,6 +1136,8 @@ class ContractGenerator:
             "gerais.vencimento", "gerais.mora", "gerais.mudanca_legislativa", "gerais.faturamento",
             "gerais.solidariedade",
         ]
+        if not data.acessorios.tem_penalidade_inadimplemento:
+            chaves.remove("gerais.mora")
         for chave, clause in zip(chaves, clauses, strict=True):
             self._add_clausula(doc, clause, chave=chave)
 
