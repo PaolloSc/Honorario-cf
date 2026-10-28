@@ -319,7 +319,7 @@ def gerar_documento(
         for f in arquivos:
             Path(f).unlink(missing_ok=True)
         logger.error("Falha ao gerar %s: %s", tipo, e)
-        raise HTTPException(500, str(e))
+        raise HTTPException(500, MSG_ERRO_INTERNO)
 
     logger.info("%s gerado por %s: %s", tipo, user.email, contract_id)
     return {

@@ -19,6 +19,7 @@ from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcn
 from app.routers.contract import _SIG_TAG, _contract_filename
 from app.services.azure_email import AzureEmailService
 from app.utils.participacao import linhas_participacao
+from app.utils.erros import MSG_ERRO_EMAIL
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/email", tags=["Email"])
@@ -310,13 +311,14 @@ async def send_contract_email(
                 db.commit()
             return EmailResponse(success=True, message="E-mail enviado com sucesso")
         else:
-            return EmailResponse(success=False, message=result.get("error", "Erro ao enviar e-mail"))
+            logger.error("Falha no envio de e-mail: %s", result.get("error"))
+            return EmailResponse(success=False, message=MSG_ERRO_EMAIL)
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to send email: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_EMAIL)
 
 
 def _build_objeto_contrato_from_db(contract_id: str, db: Session) -> str:
@@ -503,8 +505,9 @@ async def send_participacao_email(
                 db.commit()
             return EmailResponse(success=True, message="Ficha enviada para o financeiro")
 
-        return EmailResponse(success=False, message=result.get("error", "Erro ao enviar ficha"))
+        logger.error("Falha no envio da ficha: %s", result.get("error"))
+        return EmailResponse(success=False, message=MSG_ERRO_EMAIL)
 
     except Exception as e:
         logger.error("Failed to send participacao email: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_EMAIL)

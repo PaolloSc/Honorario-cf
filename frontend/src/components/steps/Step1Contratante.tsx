@@ -354,13 +354,14 @@ function ClienteRecorrente({ onEscolher }: { onEscolher: (s: SugestaoCliente) =>
 
   return (
     <div className="relative mb-4">
-      <label className="block text-sm font-semibold text-foreground mb-1">
+      <label htmlFor="busca-cliente" className="block text-sm font-semibold text-foreground mb-1">
         Cliente já cadastrado no sistema?
       </label>
       <p className="text-xs text-muted mb-1">
         Busca clientes que já têm contrato aqui. Se não aparecer, preencha os dados abaixo.
       </p>
       <Input
+        id="busca-cliente"
         type="search"
         value={q}
         onChange={(e) => setQ(e.target.value)}

@@ -15,6 +15,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.models.limites import LimiteTamanhos
+
 TIPO_ADITIVO = "aditivo"
 TIPO_DISTRATO = "distrato"
 TIPO_SUBSTABELECIMENTO = "substabelecimento"
@@ -47,7 +49,7 @@ class AditivoAnterior(BaseModel):
     objeto: str = ""
 
 
-class _DocumentoComplementar(BaseModel):
+class _DocumentoComplementar(LimiteTamanhos):
     contrato_origem_id: Optional[str] = None
     data_documento: Optional[str] = None  # ISO yyyy-mm-dd; vazio = hoje
     email_destinatario: Optional[str] = None
