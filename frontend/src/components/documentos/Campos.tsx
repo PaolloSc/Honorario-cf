@@ -174,6 +174,9 @@ const formatarCEP = (d: string) => (d.length > 5 ? d.replace(/^(\d{5})(\d)/, "$1
 
 export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & { onChange: (parcial: Partial<PoderesForm>) => void }) {
   const set = (parcial: Partial<PoderesForm>) => onChange(parcial);
+  // Props da renderização mais recente: o que volta de uma consulta demorada não pode usar a cópia antiga.
+  const maisRecente = useRef({ estado, onChange });
+  maisRecente.current = { estado, onChange };
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [escolhido, setEscolhido] = useState("");
   const [oab, setOab] = useState<Oab>(oabVazia());
@@ -226,11 +229,12 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
       if (!r.valido) return;
       const descricao = r.legalone?.descricao ?? "";
       setInfoProcesso((a) => ({ ...a, [numero]: { tribunal: r.tribunal ?? r.justica ?? "", partes: !!descricao } }));
+      // Estado atual (a consulta demora): só preenche o que continua vazio, sem pisar em edição feita enquanto esperava.
       if (descricao) {
-        const atual = estado.processos.find((p) => formatarCnj(p.numero) === numero);
-        if (atual && !atual.descricao.trim()) {
-          set({ processos: estado.processos.map((p) => (formatarCnj(p.numero) === numero ? { ...p, numero, descricao } : p)) });
-        }
+        const { estado: atual, onChange: aplicar } = maisRecente.current;
+        aplicar({
+          processos: atual.processos.map((p) => (formatarCnj(p.numero) === numero && !p.descricao.trim() ? { ...p, numero, descricao } : p)),
+        });
       }
     } catch { /* sem consulta, segue digitado */ }
   };
@@ -257,7 +261,8 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
       setAvisoPlanilha(
         `${acrescentar.length} processo(s) importado(s)` +
         (novos.length - acrescentar.length ? `, ${novos.length - acrescentar.length} já estava(m) na lista` : "") +
-        (ignorados.length ? `. Ignorado(s) por número inválido ou repetido: ${ignorados.slice(0, 8).join(", ")}${ignorados.length > 8 ? "…" : ""}` : "") + ".",
+        (ignorados.length ? `. Ignorado(s) por número inválido ou repetido: ${ignorados.slice(0, 8).join(", ")}${ignorados.length > 8 ? "…" : ""}` : "") + "." +
+        (r.aviso ? ` ${r.aviso}` : ""),
       );
     } catch (e) {
       setAvisoPlanilha(e instanceof Error ? e.message : "Não foi possível importar a planilha.");

@@ -181,3 +181,48 @@ def test_planilha_csv_sem_cabecalho_com_ponto_e_virgula(client):
 def test_planilha_ruim_da_422_sem_vazar(client, nome, conteudo):
     r = _enviar(client, nome, conteudo)
     assert r.status_code == 422 and "Traceback" not in r.text
+
+
+# --- Ajustes da revisao ----------------------------------------------------------------------
+
+def test_planilha_que_descomprime_demais_e_recusada_antes_de_abrir(client, monkeypatch):
+    from app.routers import processos
+
+    monkeypatch.setattr(processos, "LIMITE_DESCOMPRIMIDO", 100)  # o xlsx de teste ja passa disso
+    abriu = []
+    monkeypatch.setattr("openpyxl.load_workbook", lambda *a, **k: abriu.append(1))
+    r = _enviar(client, "bomba.xlsx", _xlsx([[PROC_A["numero"]]]))
+    assert r.status_code == 422 and "descompactada" in r.text and not abriu
+
+
+def test_leitura_da_planilha_roda_fora_do_event_loop():
+    import inspect
+
+    from app.routers import processos
+
+    assert not inspect.iscoroutinefunction(processos.importar_planilha)  # def: o FastAPI usa o threadpool
+
+
+def test_numero_invalido_longo_e_truncado_em_60(client):
+    j = _enviar(client, "p.csv", ("9" * 300 + "\n").encode()).json()
+    assert len(j["processos"][0]["numero"]) == 60
+
+
+def test_planilha_com_varias_abas_avisa_que_so_a_primeira_foi_lida(client):
+    wb = Workbook()
+    wb.active.append([PROC_A["numero"]])
+    wb.create_sheet("Outra").append([PROC_B["numero"]])
+    buf = io.BytesIO()
+    wb.save(buf)
+    j = _enviar(client, "p.xlsx", buf.getvalue()).json()
+    assert "2 abas" in j["aviso"] and j["validos"] == 1
+    assert _enviar(client, "p.xlsx", _xlsx([[PROC_A["numero"]]])).json()["aviso"] == ""
+
+
+@pytest.mark.parametrize("j,tr,esperado", [
+    ("5", "00", "Tribunal Superior do Trabalho"), ("6", "00", "Tribunal Superior Eleitoral"),
+    ("7", "00", "Superior Tribunal Militar"), ("4", "90", "Conselho da Justiça Federal"),
+    ("5", "90", "Conselho Superior da Justiça do Trabalho"),
+])
+def test_orgaos_nacionais(j, tr, esperado):
+    assert cnj.decodificar(_com_dv("1234567", "2022", j, tr, "0000")).tribunal == esperado
