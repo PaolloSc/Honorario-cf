@@ -38,7 +38,7 @@ def test_wrong_key_fails(kek_b64):
 def test_tampered_ciphertext_fails(kek_b64):
     box = CryptoBox(kek_b64)
     blob = box.encrypt("hello")
-    tampered = type(blob)(nonce=blob.nonce, ciphertext=blob.ciphertext[:-1] + b"\x00")
+    tampered = type(blob)(nonce=blob.nonce, ciphertext=blob.ciphertext[:-1] + bytes([blob.ciphertext[-1] ^ 0x01]))  # XOR: sempre muda o byte
     with pytest.raises(InvalidCipherError):
         box.decrypt(tampered)
 
