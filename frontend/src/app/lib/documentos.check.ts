@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { cnpjValido } from "./cnpj.ts";
 import {
-  agruparDerivados, cnjValido, formatarCnj, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
+  agruparDerivados, valorEmReais, cnjValido, formatarCnj, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
   formatarOabNumero, lerOab, trocarUfOab, oabsDoTexto, oabTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
 } from "./documentos.ts";
 
@@ -56,6 +56,18 @@ assert.deepEqual(Object.keys(validar("distrato", estadoInicial("distrato", "2026
 const dis = { ...(estadoInicial("distrato", "2026-10-16") as any), data_contrato_origem: "2020-01-01", objeto_contrato_origem: "x" };
 assert.deepEqual(validar("distrato", dis), {});
 assert.equal((montarPayload("distrato", dis, "o") as any).substabelecimento, null);
+// Pagamento: valor em reais no formato brasileiro; com valor exige a data; sem valor não envia nada.
+assert.equal(valorEmReais("4.000,50"), 4000.5);
+assert.equal(valorEmReais("R$ 4000"), 4000);
+assert.equal(valorEmReais(""), null);
+assert.equal(valorEmReais("abc"), null);
+assert.deepEqual(Object.keys(validar("distrato", { ...dis, pagamento_valor: "4.000,00" })), ["pagamento_data"]);
+assert.ok(validar("distrato", { ...dis, pagamento_valor: "0" }).pagamento_valor);
+const pg = montarPayload("distrato", { ...dis, pagamento_valor: "4.000,00", pagamento_data: "2026-11-30" }, "o") as any;
+assert.equal(pg.pagamento_valor, 4000);
+assert.equal(pg.pagamento_data, "2026-11-30");
+assert.equal((montarPayload("distrato", dis, "o") as any).pagamento_valor, null);
+assert.equal((estadoDoFormData("distrato", pg, "h") as any).pagamento_valor, "4000");
 const disSub = { ...dis, substabelecer_e_devolver: true };
 for (const k of ["substabelecentes", "processos.0.numero", "substabelecidos.0.nome", "substabelecidos.0.oab"]) assert.ok(validar("distrato", disSub)[k], k);
 const disOk = {

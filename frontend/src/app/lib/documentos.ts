@@ -37,6 +37,18 @@ export interface DistratoForm extends PoderesForm {
   objeto_contrato_origem: string;
   ressalva_exito: boolean;
   substabelecer_e_devolver: boolean;
+  /** Pagamento pendente ao escritório; sem valor, a cláusula não entra no distrato. */
+  pagamento_valor: string;
+  pagamento_data: string;
+  pagamento_forma: string;
+}
+
+/** "4.000,50" ou "4000,5" -> 4000.5; texto vazio ou inválido -> null. */
+export function valorEmReais(texto: string): number | null {
+  const t = (texto || "").trim().replace(/[R$\s]/g, "");
+  if (!t) return null;
+  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+  return Number.isFinite(n) ? n : null;
 }
 export const UFS = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA",
@@ -132,7 +144,8 @@ export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocument
   if (tipo === "distrato") {
     return {
       data_documento: hoje, data_contrato_origem: "", objeto_contrato_origem: "",
-      ressalva_exito: true, substabelecer_e_devolver: false,
+      ressalva_exito: false, substabelecer_e_devolver: false,
+      pagamento_valor: "", pagamento_data: "", pagamento_forma: "",
       substabelecentes: [], substabelecidos: [substabelecidoVazio()], endereco_substabelecidos: "",
       processos: [processoVazio()],
     };
@@ -205,6 +218,9 @@ export function montarPayload(
       objeto_contrato_origem: e.objeto_contrato_origem.trim(),
       ressalva_exito: e.ressalva_exito,
       substabelecer_e_devolver: e.substabelecer_e_devolver,
+      pagamento_valor: valorEmReais(e.pagamento_valor),
+      pagamento_data: valorEmReais(e.pagamento_valor) ? e.pagamento_data || null : null,
+      pagamento_forma: e.pagamento_forma.trim(),
       // O substabelecimento so vai junto quando a opcao esta marcada.
       substabelecimento: e.substabelecer_e_devolver ? payloadPoderes(e) : null,
     };
@@ -258,6 +274,9 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
       objeto_contrato_origem: fd.objeto_contrato_origem ?? "",
       ressalva_exito: !!fd.ressalva_exito,
       substabelecer_e_devolver: !!fd.substabelecer_e_devolver,
+      pagamento_valor: fd.pagamento_valor ? String(fd.pagamento_valor).replace(".", ",") : "",
+      pagamento_data: fd.pagamento_data ?? "",
+      pagamento_forma: fd.pagamento_forma ?? "",
       ...poderesDoFormData(fd.substabelecimento ?? {}),
     };
   }
@@ -309,6 +328,11 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     const d = estado as DistratoForm;
     obrig("data_contrato_origem", d.data_contrato_origem);
     obrig("objeto_contrato_origem", d.objeto_contrato_origem);
+    if (d.pagamento_valor.trim()) {
+      const v = valorEmReais(d.pagamento_valor);
+      if (!v || v <= 0) e.pagamento_valor = "Informe um valor maior que zero";
+      else obrig("pagamento_data", d.pagamento_data, "Informe a data limite do pagamento");
+    }
     if (d.substabelecer_e_devolver) validarPoderes(d);
   } else {
     const s = estado as SubstabelecimentoForm;

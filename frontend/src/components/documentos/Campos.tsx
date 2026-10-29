@@ -112,12 +112,26 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
         <TextArea value={estado.objeto_contrato_origem} onChange={(e) => set({ objeto_contrato_origem: e.target.value })} error={!!erros.objeto_contrato_origem} placeholder="consultoria e contencioso de rotina" />
       </FormField>
 
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Pagamento pendente ao escritório</h3>
+      <p className="text-xs text-muted mb-2">Deixe o valor em branco se não houver pagamento: a cláusula não entra no distrato.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+        <FormField label="Valor (R$)" error={erros.pagamento_valor}>
+          <Input value={estado.pagamento_valor} onChange={(e) => set({ pagamento_valor: e.target.value })} error={!!erros.pagamento_valor} inputMode="decimal" placeholder="4.000,00" />
+        </FormField>
+        <FormField label="Data limite" required={!!estado.pagamento_valor.trim()} error={erros.pagamento_data}>
+          <Input type="date" value={estado.pagamento_data} onChange={(e) => set({ pagamento_data: e.target.value })} error={!!erros.pagamento_data} />
+        </FormField>
+      </div>
+      <FormField label="Forma de pagamento" hint='Completa "por meio de …". Em branco: Pix no CNPJ do escritório.'>
+        <TextArea value={estado.pagamento_forma} onChange={(e) => set({ pagamento_forma: e.target.value })} placeholder="transferência bancária (banco, agência e conta) ou Pix" />
+      </FormField>
+
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Quitação</h3>
       <Checkbox
         label="Ressalvar honorários e reembolsos a vencer (inclusive êxito)"
         checked={estado.ressalva_exito}
         onChange={(v) => set({ ressalva_exito: v })}
-        hint="Marcado (padrão), ressalva honorários e reembolsos vincendos, inclusive de êxito. Desmarcado, dá quitação total."
+        hint="Marcado, acrescenta à quitação a ressalva de honorários e reembolsos vincendos, inclusive de êxito. Desmarcado (padrão, como no modelo), a quitação é total."
       />
       <Checkbox
         label="Substabelecer sem reserva de poderes e devolver documentos"

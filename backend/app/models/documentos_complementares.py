@@ -46,7 +46,7 @@ class _DocumentoComplementar(LimiteTamanhos):
     data_documento: Optional[str] = None  # ISO yyyy-mm-dd; vazio = hoje
     email_destinatario: Optional[str] = None
 
-    @field_validator("data_documento", "data_contrato_origem", check_fields=False)
+    @field_validator("data_documento", "data_contrato_origem", "pagamento_data", check_fields=False)
     @classmethod
     def _data_iso(cls, v):
         if v in (None, ""):
@@ -132,6 +132,16 @@ class DistratoRequest(_ComOrigem):
     # Dados do substabelecimento gerado junto (so com substabelecer_e_devolver). Distratos salvos
     # antes dessa opcao nao o tem e nao geram nada novo.
     substabelecimento: Optional["SubstabelecimentoDoDistrato"] = None
+    # Pagamento pendente ao escritorio. Sem valor, a clausula nao entra no distrato.
+    pagamento_valor: Optional[float] = Field(default=None, gt=0, le=1_000_000_000)
+    pagamento_data: Optional[str] = None  # ISO; obrigatoria com valor
+    pagamento_forma: str = ""  # vazio = Pix no CNPJ do escritorio
+
+    @model_validator(mode="after")
+    def _pagamento_completo(self):
+        if self.pagamento_valor and not self.pagamento_data:
+            raise ValueError("Informe a data limite do pagamento")
+        return self
 
 
 class Outorgante(BaseModel):
