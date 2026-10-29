@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { listColaboradores, lookupCNPJ, type ColaboradorWizard } from "@/app/lib/api";
+import { consultarProcesso, importarPlanilhaProcessos, listColaboradores, lookupCNPJ, type ColaboradorWizard } from "@/app/lib/api";
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import {
   alteracaoVazia,
   cnjValido,
+  formatarCnj,
   formatarOabNumero,
   trocarUfOab,
   oabVazia,
@@ -173,6 +174,9 @@ const formatarCEP = (d: string) => (d.length > 5 ? d.replace(/^(\d{5})(\d)/, "$1
 
 export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & { onChange: (parcial: Partial<PoderesForm>) => void }) {
   const set = (parcial: Partial<PoderesForm>) => onChange(parcial);
+  // Props da renderização mais recente: o que volta de uma consulta demorada não pode usar a cópia antiga.
+  const maisRecente = useRef({ estado, onChange });
+  maisRecente.current = { estado, onChange };
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [escolhido, setEscolhido] = useState("");
   const [oab, setOab] = useState<Oab>(oabVazia());
@@ -208,6 +212,64 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
     set({ substabelecidos: estado.substabelecidos.map((s, k) => (k === i ? { ...s, ...parcial } : s)) });
   const setProcesso = (i: number, parcial: Partial<PoderesForm["processos"][number]>) =>
     set({ processos: estado.processos.map((p, k) => (k === i ? { ...p, ...parcial } : p)) });
+
+  // Tribunal (pelo número) e partes (Legal One) por número já consultado; a chave é o número com máscara.
+  const [infoProcesso, setInfoProcesso] = useState<Record<string, { tribunal: string; partes: boolean }>>({});
+  const [avisoPlanilha, setAvisoPlanilha] = useState("");
+  const [importando, setImportando] = useState(false);
+
+  // Ao sair do campo: coloca a máscara, mostra o tribunal e, se o Legal One conhece o processo e o campo
+  // está vazio, traz as partes de lá. Falha de rede não atrapalha: o advogado digita as partes.
+  const aoSairDoNumero = async (i: number) => {
+    const numero = formatarCnj(estado.processos[i].numero);
+    if (numero !== estado.processos[i].numero) setProcesso(i, { numero });
+    if (!cnjValido(numero) || infoProcesso[numero]) return;
+    try {
+      const r = await consultarProcesso(numero);
+      if (!r.valido) return;
+      const descricao = r.legalone?.descricao ?? "";
+      setInfoProcesso((a) => ({ ...a, [numero]: { tribunal: r.tribunal ?? r.justica ?? "", partes: !!descricao } }));
+      // Estado atual (a consulta demora): só preenche o que continua vazio, sem pisar em edição feita enquanto esperava.
+      if (descricao) {
+        const { estado: atual, onChange: aplicar } = maisRecente.current;
+        aplicar({
+          processos: atual.processos.map((p) => (formatarCnj(p.numero) === numero && !p.descricao.trim() ? { ...p, numero, descricao } : p)),
+        });
+      }
+    } catch { /* sem consulta, segue digitado */ }
+  };
+
+  const importarPlanilha = async (arquivo: File | undefined) => {
+    if (!arquivo) return;
+    setImportando(true);
+    setAvisoPlanilha("");
+    try {
+      const r = await importarPlanilhaProcessos(arquivo);
+      const novos = r.processos
+        .filter((p) => p.valido)
+        .map((p) => ({ tipo: p.tipo.trim() || "Processo", numero: p.numero, descricao: p.descricao }));
+      const jaTem = new Set(estado.processos.map((p) => formatarCnj(p.numero)));
+      const acrescentar = novos.filter((p) => !jaTem.has(p.numero));
+      const vazios = (p: { numero: string; descricao: string }) => !p.numero.trim() && !p.descricao.trim();
+      set({ processos: [...estado.processos.filter((p) => !vazios(p)), ...acrescentar] });
+      setInfoProcesso((a) => {
+        const b = { ...a };
+        r.processos.forEach((p) => { if (p.valido && p.tribunal) b[p.numero] = { tribunal: p.tribunal, partes: false }; });
+        return b;
+      });
+      const ignorados = r.processos.filter((p) => !p.valido).map((p) => `linha ${p.linha}`);
+      setAvisoPlanilha(
+        `${acrescentar.length} processo(s) importado(s)` +
+        (novos.length - acrescentar.length ? `, ${novos.length - acrescentar.length} já estava(m) na lista` : "") +
+        (ignorados.length ? `. Ignorado(s) por número inválido ou repetido: ${ignorados.slice(0, 8).join(", ")}${ignorados.length > 8 ? "…" : ""}` : "") + "." +
+        (r.aviso ? ` ${r.aviso}` : ""),
+      );
+    } catch (e) {
+      setAvisoPlanilha(e instanceof Error ? e.message : "Não foi possível importar a planilha.");
+    } finally {
+      setImportando(false);
+    }
+  };
 
   // Endereco profissional (opcional): o CEP traz rua, bairro e cidade; numero e complemento entram a mao.
   const montarEndereco = (rua: string, num: string, cepFmt: string, resto: string) =>
@@ -338,7 +400,13 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
               </FormField>
               <div className="sm:col-span-2">
                 <FormField label="Número (CNJ)" required error={erros[`processos.${i}.numero`] ?? aviso}>
-                  <Input value={p.numero} onChange={(e) => setProcesso(i, { numero: e.target.value })} error={!!(erros[`processos.${i}.numero`] ?? aviso)} placeholder="0000000-00.0000.0.00.0000" />
+                  <Input value={p.numero} onChange={(e) => setProcesso(i, { numero: e.target.value })} onBlur={() => aoSairDoNumero(i)} error={!!(erros[`processos.${i}.numero`] ?? aviso)} placeholder="0000000-00.0000.0.00.0000" />
+                  {infoProcesso[formatarCnj(p.numero)]?.tribunal && (
+                    <p className="text-xs text-muted mt-1">
+                      {infoProcesso[formatarCnj(p.numero)].tribunal}
+                      {infoProcesso[formatarCnj(p.numero)].partes && " · partes trazidas do Legal One"}
+                    </p>
+                  )}
                 </FormField>
               </div>
             </div>
@@ -351,7 +419,16 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
           </div>
         );
       })}
-      <button type="button" className={botaoLink} onClick={() => set({ processos: [...estado.processos, processoVazio()] })}>+ Adicionar processo</button>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <button type="button" className={botaoLink} onClick={() => set({ processos: [...estado.processos, processoVazio()] })}>+ Adicionar processo</button>
+        <label className={`${botaoLink} cursor-pointer`}>
+          {importando ? "Importando…" : "Importar de planilha (.xlsx ou .csv)"}
+          <input type="file" accept=".xlsx,.xlsm,.csv" className="sr-only" disabled={importando}
+            onChange={(e) => { importarPlanilha(e.target.files?.[0]); e.target.value = ""; }} />
+        </label>
+      </div>
+      <p className="text-xs text-muted mt-1">Planilha: uma linha por processo, com o número na primeira coluna (ou com cabeçalho “Número”, “Tipo”, “Descrição”).</p>
+      {avisoPlanilha && <p role="status" className="text-xs text-primary-dark mt-1">{avisoPlanilha}</p>}
     </>
   );
 }
