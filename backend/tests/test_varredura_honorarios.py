@@ -134,3 +134,47 @@ def test_put_recusa_valor_zerado_e_o_modo_brando_continua_para_regerar(client):
             parse_form_data(form, estrito=True)
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+# ── itens 5, 6 e 7 (modelo padrao decide onde entra) ──────────────────────
+
+
+def _texto(req):
+    return "\n".join(_paras_for(req))
+
+
+def test_valor_diligencia_entra_nas_despesas_so_quando_preenchido():
+    req = _base_req()
+    assert "Cada diligência realizada" not in _texto(req)
+    req["acessorios"]["valor_diligencia"] = 350
+    texto = _texto(req)
+    assert "Cada diligência realizada pelo C&F" in texto and "350,00" in texto
+
+
+def test_periodo_da_hora_trabalhada_vira_prazo_determinado_em_8_1():
+    req = _req("hora_trabalhada", valor_hora=500)
+    assert "tempo indeterminado" in _texto(req)
+    req["escopos"][0]["hora_trabalhada"].update(data_inicio="2026-01-01", data_fim="2026-12-31", duracao_meses=12)
+    texto = _texto(req)
+    assert "prazo determinado, de 01/01/2026 a 31/12/2026" in texto
+    assert "tempo indeterminado" not in texto
+
+
+def test_periodo_do_honorario_desmarcado_ou_vigencia_dos_acessorios_nao_mudam_o_8_1():
+    req = _req("exito", percentual=10)
+    req["escopos"][0]["hora_trabalhada"] = {"valor_hora": 1, "data_inicio": "2026-01-01", "data_fim": "2026-12-31"}
+    assert "tempo indeterminado" in _texto(req)  # hora_trabalhada nao esta marcada
+    req = _req("hora_trabalhada", valor_hora=500)
+    req["escopos"][0]["hora_trabalhada"].update(data_inicio="2026-01-01", data_fim="2026-12-31")
+    req["acessorios"].update(vigencia_inicio="2026-03-01", vigencia_fim="2026-09-30")
+    texto = _texto(req)
+    assert "tempo indeterminado" in texto and "01/01/2026 a 31/12/2026" not in texto
+    assert "de 01/03/2026 a 30/09/2026" in texto
+
+
+def test_exito_variavel_sem_faixa_completa_e_recusado_e_com_faixa_sai_a_tabela():
+    req = _req("exito", subtipo="percentual_variavel", faixas_percentual=[{"faixa": "até 100 mil", "percentual": ""}])
+    with pytest.raises(ValidationError):
+        ContratoRequest(**req)
+    req["escopos"][0]["exito"]["faixas_percentual"] = [{"faixa": "até R$ 100.000,00", "percentual": "10"}]
+    assert "até R$ 100.000,00" in "\n".join(_paras_for(req))

@@ -1170,6 +1170,13 @@ class ContractGenerator:
             "por quilômetro rodado.",
             f"O custo de cada cópia reprográfica reembolsável pela CONTRATANTE é de {valor_com_extenso(0.40)}.",
         ]
+        chaves = ["acess.custas", "acess.credlocaliza", "acess.km", "acess.copia"]
+        if ac.valor_diligencia:
+            clauses.append(
+                f"Cada diligência realizada pelo C&F fora do seu escritório será cobrada à razão de "
+                f"{valor_com_extenso(ac.valor_diligencia)} por ato, a título de reembolso."
+            )
+            chaves.append("acess.diligencia")
         # Sucumbencia/renuncia so faz sentido quando ha honorario de exito pactuado.
         if has_exito:
             clauses.append(
@@ -1180,7 +1187,6 @@ class ContractGenerator:
                 "sucumbências sem anuência do C&F, o valor correspondente será descontado do "
                 "benefício econômico para fins de cálculo do êxito ou devido diretamente ao C&F."
             )
-        chaves = ["acess.custas", "acess.credlocaliza", "acess.km", "acess.copia"]
         chaves += ["acess.sucumbencia"] if has_exito else []
         for chave, clause in zip(chaves, clauses, strict=True):
             self._add_clausula(doc, clause, chave=chave)
@@ -1250,14 +1256,45 @@ class ContractGenerator:
             return f"O presente Contrato vigorará a partir de {inicio}."
         return None
 
+    @staticmethod
+    def _periodo_dos_honorarios(data: ContratoRequest) -> tuple[str, str] | None:
+        """(inicio, fim) dd/mm/aaaa do "Período do contrato" (hora trabalhada) e do "Período da
+        mensalidade" da etapa 3: do primeiro início ao último fim. None se nenhum escopo trouxer
+        as duas datas, ou se o prazo específico foi informado em Acessórios (frase própria)."""
+        ac = data.acessorios
+        if ac.vigencia_inicio or ac.vigencia_fim or ac.vigencia_meses:
+            return None
+        datas = []
+        for e in data.escopos:
+            ativos = ((TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada), (TipoHonorario.MENSALIDADE, e.mensalidade))
+            for tipo, h in ativos:  # dado de honorario desmarcado nao conta
+                if tipo not in e.honorarios or not h or not h.data_inicio or not h.data_fim:
+                    continue
+                try:
+                    datas.append((datetime.fromisoformat(h.data_inicio), datetime.fromisoformat(h.data_fim)))
+                except ValueError:
+                    continue
+        if not datas:
+            return None
+        ini = min(d[0] for d in datas)
+        fim = max(d[1] for d in datas)
+        return f"{ini.day:02d}/{ini.month:02d}/{ini.year}", f"{fim.day:02d}/{fim.month:02d}/{fim.year}"
+
     def _add_term_and_termination(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "PRAZO, RESCISÃO E OUTROS EFEITOS")
-        self._add_clausula(
-            doc,
-            "Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
-            "presente Contrato é celebrado por tempo indeterminado, até que seja esgotado o "
-            "objeto contratado.", chave="prazo.indeterminado"
-        )
+        periodo = self._periodo_dos_honorarios(data)
+        if periodo:
+            texto_prazo = (
+                f"Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
+                f"presente Contrato é celebrado por prazo determinado, de {periodo[0]} a {periodo[1]}."
+            )
+        else:
+            texto_prazo = (
+                "Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
+                "presente Contrato é celebrado por tempo indeterminado, até que seja esgotado o "
+                "objeto contratado."
+            )
+        self._add_clausula(doc, texto_prazo, chave="prazo.indeterminado")
         vigencia = self._frase_vigencia(data.acessorios)
         if vigencia:
             self._add_clausula(doc, vigencia, ilvl=2, chave="prazo.vigencia")

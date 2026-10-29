@@ -67,4 +67,11 @@ assert.deepEqual(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_perm
 assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "a definir" } } as never, "E").length, 1);
 assert.deepEqual(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "em 2 vezes" } } as never, "E"), []);
 
+// Êxito variável precisa de faixa completa (item 7).
+const variavel = (faixas: object[]) =>
+  ({ honorarios: ["exito"], exito: { subtipo: "percentual_variavel", faixas_percentual: faixas } }) as never;
+assert.equal(errosDoEscopo(variavel([]), "E").length, 1);
+assert.equal(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "" }]), "E").length, 1);
+assert.deepEqual(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "10" }]), "E"), []);
+
 console.log("validacaoHonorarios.ts ok");

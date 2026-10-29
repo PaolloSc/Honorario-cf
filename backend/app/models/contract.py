@@ -430,6 +430,11 @@ def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
     if TipoHonorario.EXITO in h and e.exito:
         if e.exito.percentual is not None and not 0 <= e.exito.percentual <= 100:
             raise ValueError(pre + "o percentual de êxito deve ficar entre 0 e 100.")
+        if e.exito.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and not any(
+            (f.get("faixa") or "").strip() and (f.get("percentual") or "").strip()
+            for f in e.exito.faixas_percentual or []
+        ):
+            raise ValueError(pre + "êxito de percentual variável precisa de ao menos uma faixa com valor e percentual.")
         if (e.exito.forma_pagamento or "").strip().lower() == "a definir":
             raise ValueError(pre + "descreva a forma de pagamento do êxito (\"Outro\" sem texto).")
     if TipoHonorario.PERMUTA in h and e.permuta and not (e.permuta.objeto_permuta or "").strip():
