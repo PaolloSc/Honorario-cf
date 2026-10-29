@@ -728,7 +728,7 @@ def test_substabelecido_sem_genero_nem_estado_civil_sai_neutro(client):
 def test_substabelecimento_sem_endereco_omite_a_frase(client):
     texto = _texto(client, _id(client, "substabelecimento", _neutro(endereco_substabelecidos="")))
     assert "endereço profissional" not in texto
-    assert "OAB/MG sob o n.º 3.333, os poderes que lhe foram conferidos por" in texto
+    assert "OAB/MG sob o n.º 3.333, os poderes que lhes foram conferidos por" in texto
 
 
 def test_substabelecimento_com_endereco_mantem_a_frase(client):

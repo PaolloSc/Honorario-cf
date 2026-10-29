@@ -37,6 +37,7 @@ from app.services.contract_dispatch import get_generator as get_consumidor_gen
 from app.services.contract_dispatch import parse_form_data
 from app.services.contract_generator import ContractGenerator
 from app.utils.participacao import valor_participacao, valor_participante
+from app.utils.erros import MSG_ERRO_INTERNO
 
 
 def get_consumidor_generator():
@@ -309,7 +310,7 @@ def generate_contract(
     except Exception as e:
         db.rollback()
         logger.error("Failed to generate contract: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
 
 
 def _previa_com_itens(data: ContratoRequest) -> dict:
@@ -363,10 +364,10 @@ def review_contract(
         return {"enabled": True, "findings": findings, **previa}
     except contract_reviewer.ContractReviewError as e:
         logger.warning("Revisao do contrato indisponivel: %s", e)
-        return {"enabled": True, "findings": [], **previa, "error": str(e)}
+        return {"enabled": True, "findings": [], **previa, "error": "Revisão por IA indisponível no momento."}
     except Exception as e:
         logger.error("Falha na revisao do contrato: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
 
 
 @router.post("/generate-consumidor", response_model=ContratoResponse)
@@ -431,7 +432,7 @@ def generate_contrato_consumidor(
     except Exception as e:
         db.rollback()
         logger.error("Failed to generate consumer contract: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
 
 
 @router.get("/{contract_id}/download")
@@ -700,7 +701,7 @@ def preview_contrato_consumidor(
         return HTMLResponse(content=_docx_to_html(tmp_path))
     except Exception as e:
         logger.error("Failed to preview consumer contract: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
     finally:
         try:
             tmp_path.unlink()

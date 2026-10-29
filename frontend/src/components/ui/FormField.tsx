@@ -1,6 +1,19 @@
 "use client";
 
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { ReactNode, createContext, useContext, useId, useMemo, useRef, useState } from "react";
+
+// O FormField passa o id do campo para o controle dentro dele: o <label> fica associado (for/id)
+// sem cada tela repetir id e htmlFor. Controle com id próprio mantém o seu.
+const CampoIdContext = createContext<{ id: string; dono: { current: string | null } } | undefined>(undefined);
+
+/** id do FormField para o controle: só o primeiro controle de cada FormField o recebe (ids são únicos). */
+function useCampoId(): string | undefined {
+  const campo = useContext(CampoIdContext);
+  const eu = useId();
+  if (!campo) return undefined;
+  if (campo.dono.current === null) campo.dono.current = eu;
+  return campo.dono.current === eu ? campo.id : undefined;
+}
  
 interface FormFieldProps {
   label: string;
@@ -17,13 +30,16 @@ export default function FormField({
   error,
   children,
 }: FormFieldProps) {
+  const id = useId();
+  const dono = useRef<string | null>(null);
+  const valor = useMemo(() => ({ id, dono }), [id]);
   return (
     <div className="mb-4">
-      <label className="block text-sm font-semibold text-foreground mb-1">
+      <label htmlFor={id} className="block text-sm font-semibold text-foreground mb-1">
         {label}
         {required && <span className="text-danger ml-1">*</span>}
       </label>
-      {children}
+      <CampoIdContext.Provider value={valor}>{children}</CampoIdContext.Provider>
       {hint && <p className="text-xs text-muted mt-1">{hint}</p>}
       {error && <p className="text-xs text-danger mt-1">{error}</p>}
     </div>
@@ -35,8 +51,10 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
  
 export function Input({ error, className = "", ...props }: InputProps) {
+  const campoId = useCampoId();
   return (
     <input
+      id={campoId}
       className={`w-full px-3 py-2 rounded-lg border ${
         error ? "border-danger" : "border-border"
       } bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary-light transition ${className}`}
@@ -58,8 +76,10 @@ export function Select({
   className = "",
   ...props
 }: SelectProps) {
+  const campoId = useCampoId();
   return (
     <select
+      id={campoId}
       className={`w-full px-3 py-2 rounded-lg border ${
         error ? "border-danger" : "border-border"
       } bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary-light transition ${className}`}
@@ -85,8 +105,10 @@ interface TextAreaProps
 }
  
 export function TextArea({ error, className = "", ...props }: TextAreaProps) {
+  const campoId = useCampoId();
   return (
     <textarea
+      id={campoId}
       className={`w-full px-3 py-2 rounded-lg border ${
         error ? "border-danger" : "border-border"
       } bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary-light transition resize-y ${className}`}
@@ -176,6 +198,7 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const campoId = useCampoId();
 
   const selected = options.find((o) => o.value === value);
   const showList = editing && query.trim().length > 0;
@@ -188,6 +211,7 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
   return (
     <div className={`relative ${className}`}>
       <input
+        id={campoId}
         type="text"
         value={editing ? query : selected?.label ?? (livre ? value : "")}
         onChange={(e) => {

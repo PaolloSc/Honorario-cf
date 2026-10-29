@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Lexend_Zetta } from "next/font/google";
 import Logo from "@/components/ui/Logo";
+import MenuMobile from "@/components/MenuMobile";
 import NavConsumidor from "@/components/NavConsumidor";
 import Providers from "@/components/Providers";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -73,6 +74,7 @@ export default async function RootLayout({
                     </Link>
                   </nav>
                 )}
+                {isAuthenticated && <MenuMobile />}
                 <ThemeToggle />
                 <UserMenu />
               </div>

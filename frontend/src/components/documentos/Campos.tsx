@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listColaboradores, lookupCNPJ, type ColaboradorWizard } from "@/app/lib/api";
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import {
   alteracaoVazia,
   cnjValido,
   formatarOabNumero,
+  trocarUfOab,
   oabVazia,
   UFS,
   type Oab,
@@ -70,7 +71,7 @@ export function CamposAditivo({ estado, onChange, erros }: Props<AditivoForm>) {
           </FormField>
           {alt.tipo !== "adicionar" && (
             <FormField label="Cláusula do contrato original" required error={erros[`alteracoes.${i}.clausula`]} hint='Ex.: "Cláusula 3ª, item 3.2".'>
-              <Input value={alt.clausula} onChange={(e) => setAlteracao(i, { clausula: e.target.value })} error={!!erros[`alteracoes.${i}.clausula`]} />
+              <Input value={alt.clausula} onChange={(e) => setAlteracao(i, { clausula: e.target.value })} error={!!erros[`alteracoes.${i}.clausula`]} placeholder="Ex.: Cláusula 3ª, item 3.2" />
             </FormField>
           )}
           {alt.tipo !== "excluir" && (
@@ -138,9 +139,10 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
 
 /** Numero da OAB + UF (padrao MG, editavel). */
 function CampoOab({ valor, onChange, erro }: { valor: Oab; onChange: (o: Oab) => void; erro?: string }) {
+  const raiz = useRef<HTMLDivElement>(null);
   return (
     <FormField label="OAB" required error={erro} hint="Só o número. A UF é MG, se não for outra.">
-      <div className="flex gap-2">
+      <div className="flex gap-2" ref={raiz}>
         <div className="flex-1 min-w-0">
           <Input
             inputMode="text"
@@ -154,7 +156,11 @@ function CampoOab({ valor, onChange, erro }: { valor: Oab; onChange: (o: Oab) =>
           <Select
             aria-label="UF da OAB"
             value={valor.uf}
-            onChange={(e) => onChange({ ...valor, uf: e.target.value })}
+            onChange={(e) => {
+              const limpou = !!valor.original;
+              onChange(trocarUfOab(valor, e.target.value));
+              if (limpou) setTimeout(() => raiz.current?.querySelector("input")?.focus(), 0);
+            }}
             options={UFS.map((u) => ({ value: u, label: u }))}
           />
         </div>

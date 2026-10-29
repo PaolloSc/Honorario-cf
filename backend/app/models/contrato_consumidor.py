@@ -11,6 +11,8 @@ from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.models.limites import LimiteTamanhos
+
 TIPO_CONSUMIDOR_AEREO = "consumidor_aereo"
 
 # Valor do milheiro (1.000 milhas) por companhia — tabela fixa do escritorio.
@@ -105,7 +107,7 @@ class ReAerea(BaseModel):
         return MILHEIRO_POR_COMPANHIA.get(self.companhia, 0.0)
 
 
-class ContratoConsumidorRequest(BaseModel):
+class ContratoConsumidorRequest(LimiteTamanhos):
     tipo_contrato: Literal["consumidor_aereo"] = TIPO_CONSUMIDOR_AEREO
     contratantes: list[ContratanteConsumidor] = Field(min_length=1)
     res: list[ReAerea] = Field(min_length=1)
