@@ -15,6 +15,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.models.limites import LimiteTamanhos
+
 TIPO_ADITIVO = "aditivo"
 TIPO_DISTRATO = "distrato"
 TIPO_SUBSTABELECIMENTO = "substabelecimento"
@@ -47,7 +49,7 @@ class AditivoAnterior(BaseModel):
     objeto: str = ""
 
 
-class _DocumentoComplementar(BaseModel):
+class _DocumentoComplementar(LimiteTamanhos):
     contrato_origem_id: Optional[str] = None
     data_documento: Optional[str] = None  # ISO yyyy-mm-dd; vazio = hoje
     email_destinatario: Optional[str] = None
@@ -198,6 +200,8 @@ class SubstabelecimentoRequest(_DocumentoComplementar):
     substabelecidos: list[Substabelecido] = Field(min_length=1)
     endereco_substabelecidos: str = ""  # opcional: sem endereco, a frase some do texto
     processos: list[Processo] = Field(min_length=1)
+    # Preenchido quando o substabelecimento nasce de um distrato: editar o distrato o regera.
+    distrato_origem_id: Optional[str] = None
 
 
 class SubstabelecimentoDoDistrato(BaseModel):

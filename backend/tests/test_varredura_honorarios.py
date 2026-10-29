@@ -178,3 +178,22 @@ def test_exito_variavel_sem_faixa_completa_e_recusado_e_com_faixa_sai_a_tabela()
         ContratoRequest(**req)
     req["escopos"][0]["exito"]["faixas_percentual"] = [{"faixa": "até R$ 100.000,00", "percentual": "10"}]
     assert "até R$ 100.000,00" in "\n".join(_paras_for(req))
+
+
+def test_ajustes_da_revisao_da_angela_no_prazo_e_nas_faixas():
+    # 3a: periodo invertido e' recusado
+    req = _req("hora_trabalhada", valor_hora=500, data_inicio="2026-12-31", data_fim="2026-01-10")
+    with pytest.raises(ValidationError):
+        ContratoRequest(**req)
+    # 3c: vigencia so em meses (sem frase) nao suprime o periodo da hora
+    req = _req("hora_trabalhada", valor_hora=500, data_inicio="2026-01-01", data_fim="2026-12-31")
+    req["acessorios"]["vigencia_meses"] = 12
+    assert "prazo determinado, de 01/01/2026 a 31/12/2026" in _texto(req)
+    # 4a: linha em branco some; 4b: percentual precisa ser numero 0-100
+    base = {"subtipo": "percentual_variavel"}
+    req = _req("exito", **base, faixas_percentual=[{"faixa": "até 100 mil", "percentual": "10"}, {"faixa": "", "percentual": ""}])
+    texto = _texto(req)
+    assert "até 100 mil" in texto
+    for pct in ("300", "-5"):
+        with pytest.raises(ValidationError):
+            ContratoRequest(**_req("exito", **base, faixas_percentual=[{"faixa": "x", "percentual": pct}]))

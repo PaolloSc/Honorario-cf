@@ -994,6 +994,8 @@ class ContractGenerator:
             self._apply_table_grid(table)
             self._set_table_header(table, "Faixa de Valor", "Percentual")
             for faixa in ex.faixas_percentual:
+                if not (faixa.get("faixa") or "").strip() and not (faixa.get("percentual") or "").strip():
+                    continue  # linha em branco da tela
                 row = table.add_row().cells
                 row[0].text = faixa.get("faixa", "")
                 row[1].text = self._percentual_digitado(faixa.get("percentual", ""))
@@ -1256,13 +1258,11 @@ class ContractGenerator:
             return f"O presente Contrato vigorará a partir de {inicio}."
         return None
 
-    @staticmethod
-    def _periodo_dos_honorarios(data: ContratoRequest) -> tuple[str, str] | None:
+    def _periodo_dos_honorarios(self, data: ContratoRequest) -> tuple[str, str] | None:
         """(inicio, fim) dd/mm/aaaa do "Período do contrato" (hora trabalhada) e do "Período da
         mensalidade" da etapa 3: do primeiro início ao último fim. None se nenhum escopo trouxer
         as duas datas, ou se o prazo específico foi informado em Acessórios (frase própria)."""
-        ac = data.acessorios
-        if ac.vigencia_inicio or ac.vigencia_fim or ac.vigencia_meses:
+        if self._frase_vigencia(data.acessorios):
             return None
         datas = []
         for e in data.escopos:
@@ -1274,6 +1274,7 @@ class ContractGenerator:
                     datas.append((datetime.fromisoformat(h.data_inicio), datetime.fromisoformat(h.data_fim)))
                 except ValueError:
                     continue
+        datas = [d for d in datas if d[0] <= d[1]]  # fim antes do inicio: ignora (a tela e o 422 avisam)
         if not datas:
             return None
         ini = min(d[0] for d in datas)

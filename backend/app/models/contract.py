@@ -4,8 +4,10 @@ import re
 from enum import Enum
 from typing import Literal, Optional
  
-from app.utils.documento import normalizar_doc
 from pydantic import BaseModel, Field, ValidationInfo, model_validator
+
+from app.models.limites import LimiteTamanhos
+from app.utils.documento import normalizar_doc
  
  
 class TipoPessoa(str, Enum):
@@ -363,7 +365,7 @@ class AjusteTexto(BaseModel):
     padrao: str = ""
 
 
-class ContratoRequest(BaseModel):
+class ContratoRequest(LimiteTamanhos):
     contratantes: list[ContratantePF | ContratantePJ]
     incluir_partes_relacionadas: bool = False
     escopos: list[EscopoItem]
@@ -430,15 +432,31 @@ def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
     if TipoHonorario.EXITO in h and e.exito:
         if e.exito.percentual is not None and not 0 <= e.exito.percentual <= 100:
             raise ValueError(pre + "o percentual de êxito deve ficar entre 0 e 100.")
-        if e.exito.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and not any(
-            (f.get("faixa") or "").strip() and (f.get("percentual") or "").strip()
-            for f in e.exito.faixas_percentual or []
-        ):
-            raise ValueError(pre + "êxito de percentual variável precisa de ao menos uma faixa com valor e percentual.")
+        if e.exito.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL:
+            completas = 0
+            for f in e.exito.faixas_percentual or []:
+                faixa, pct = (f.get("faixa") or "").strip(), (f.get("percentual") or "").strip()
+                if not faixa and not pct:
+                    continue  # linha em branco da tela: o gerador a descarta
+                if not faixa or not pct:
+                    raise ValueError(pre + "cada faixa do êxito variável precisa de valor e percentual.")
+                try:  # texto livre ("a combinar") passa; numero fora de 0-100 nao
+                    ok = 0 <= float(pct.rstrip("%").strip().replace(",", ".")) <= 100
+                except ValueError:
+                    ok = True
+                if not ok:
+                    raise ValueError(pre + f"percentual da faixa \"{faixa}\" deve ficar entre 0 e 100.")
+                completas += 1
+            if not completas:
+                raise ValueError(pre + "êxito de percentual variável precisa de ao menos uma faixa com valor e percentual.")
         if (e.exito.forma_pagamento or "").strip().lower() == "a definir":
             raise ValueError(pre + "descreva a forma de pagamento do êxito (\"Outro\" sem texto).")
     if TipoHonorario.PERMUTA in h and e.permuta and not (e.permuta.objeto_permuta or "").strip():
         raise ValueError(pre + "informe o objeto da permuta.")
+    for tipo, obj, rotulo in ((TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada, "do contrato"),
+                              (TipoHonorario.MENSALIDADE, e.mensalidade, "da mensalidade")):
+        if tipo in h and obj and obj.data_inicio and obj.data_fim and obj.data_fim < obj.data_inicio:
+            raise ValueError(pre + f"o período {rotulo} termina antes de começar.")  # datas ISO comparam como texto
     checks = []
     if TipoHonorario.HORA_TRABALHADA in h and e.hora_trabalhada:
         checks.append((e.hora_trabalhada.valor_hora, "hora trabalhada"))
