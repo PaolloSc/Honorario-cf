@@ -23,6 +23,7 @@ from app.models.documentos_complementares import (
 )
 from app.services.consumidor_generator import ConsumidorGenerator
 from app.services.contract_generator import MESES_PT_BR
+from app.utils.currency import valor_com_extenso
 
 ESCRITORIO_NOME = "CARVALHO & FURTADO ADVOGADOS"
 ESCRITORIO_CNPJ = "25.463.159/0001-73"
@@ -280,93 +281,110 @@ class AditivoGenerator(ComplementarGenerator):
         self._assinaturas_partes(doc, data, signatario_roles)
 
 
+# ── Clausulas do distrato que o Dr. e a revisao juridica ajustam: ficam aqui, fora da logica ──
+DISTRATO_SEM_VALOR = "As Partes declaram que os honorários contratuais foram integralmente quitados, não havendo valores pendentes."
+DISTRATO_ENCARGOS = (
+    "Em caso de atraso no pagamento, incidirão multa de 10% (dez por cento), juros de 1% (um por cento) ao mês "
+    "e correção monetária sobre o valor devido. O presente Distrato, assinado pelas partes e por duas "
+    "testemunhas, constitui título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil."
+)
+DISTRATO_SUBSTABELECIMENTO = (
+    "A CONTRATADA substabelecerá, sem reserva de poderes, os processos judiciais em favor do novo patrono, que a "
+    "CONTRATANTE se obriga a indicar em até 10 (dez) dias contados da assinatura deste Distrato. A CONTRATADA "
+    "responderá apenas pelos prazos processuais que vencerem nesse período, nos termos do art. 5º, § 3º, da "
+    "Lei n.º 8.906/94, e restituirá os documentos físicos ou digitais sob sua guarda mediante recibo."
+)
+DISTRATO_RESSALVA_EXITO = (
+    ", ressalvados os honorários de êxito, que serão devidos de forma proporcional ao trabalho realizado até a "
+    "data deste Distrato, caso venham a se tornar exigíveis nos termos do contrato original, bem como os "
+    "honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
+)
+
+
 class DistratoGenerator(ComplementarGenerator):
-    TITULO = "DISTRATO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS"
+    """Texto do modelo do escritorio para distrato; os dados do modelo de referencia nao entram no codigo."""
+
+    TITULO = "DISTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS"
 
     def _corpo(self, doc: Document, data: DistratoRequest) -> None:
-        doc.add_paragraph("São Partes:")
         for c in data.contratantes:
-            if c.get("cnpj"):
-                final = ', neste ato representada na forma de seu Contrato Social, doravante denominada simplesmente "CONTRATANTE"; e'
-            else:  # pessoa fisica nao tem contrato social
-                final = ', doravante denominado(a) simplesmente "CONTRATANTE"; e'
-            doc.add_paragraph(f"{self._qualificar(c, com_representantes=False)}{final}")
+            denominada = "denominada" if c.get("cnpj") else "denominado(a)"  # PJ: feminino; PF: sem presumir o genero
+            doc.add_paragraph(f"{self._qualificar(c, com_representantes=False)}; {denominada} apenas CONTRATANTE;")
         doc.add_paragraph(
-            f"{ESCRITORIO_NOME}, pessoa jurídica de direito privado, sociedade simples de prestação de "
-            f"serviços advocatícios, inscrita no CNPJ sob o n.º {ESCRITORIO_CNPJ}, estabelecida na "
-            f"{ESCRITORIO_ENDERECO}, neste ato representada na forma de seu Contrato Social, doravante "
-            'denominada simplesmente "CONTRATADA";'
+            f"{ESCRITORIO_NOME}, pessoa jurídica de direito interno, sociedade simples de prestação de "
+            f"serviços advocatícios, inscrita no CNPJ n.º {ESCRITORIO_CNPJ}, com sede na "
+            f"{ESCRITORIO_ENDERECO}, doravante denominada apenas CONTRATADA."
         )
-        doc.add_paragraph(
-            'CONTRATANTE e CONTRATADA serão, quando denominadas individualmente, "PARTE" e, '
-            'coletivamente, "PARTES".'
-        )
+        doc.add_paragraph("Têm entre si contratadas as seguintes cláusulas do presente Distrato:")
 
-        doc.add_paragraph("CONSIDERANDO QUE:")
-        considerandos = [
-            f"As Partes celebraram, em {self._data_extenso(data.data_contrato_origem)}, o Contrato de "
-            "Prestação de Serviços Advocatícios, tendo por objeto a prestação de serviços de "
-            f"{_sem_ponto(data.objeto_contrato_origem)};"
-        ]
+        n = 0
+
+        def clausula(texto: str) -> int:
+            nonlocal n
+            n += 1
+            doc.add_paragraph(f"{n}. {texto}")
+            return n
+
+        clausula(
+            f"As partes declaram e reconhecem que firmaram, entre si, em {self._data_extenso(data.data_contrato_origem)}, "
+            "Contrato de Prestação de Serviço Advocatício para "
+            f"{_sem_ponto(data.objeto_contrato_origem)}."
+        )
         for ant in data.aditivos_anteriores:
-            considerandos.append(
-                f"As Partes celebraram, em {_mes_ano(ant.data_documento)}, o {ant.numero}º Aditivo "
-                f"Contratual ao referido Contrato, tendo por objeto {_sem_ponto(ant.objeto)};"
-            )
-        considerandos.append(
-            "É de comum interesse das Partes rescindir e extinguir formalmente a referida relação "
-            "contratual, nos termos do art. 472 do Código Civil;"
-        )
-        for i, texto in enumerate(considerandos, 1):
-            doc.add_paragraph(f"{_romano(i)}. {texto}")
-
-        doc.add_paragraph(
-            "Resolvem as Partes firmar o presente DISTRATO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS "
-            "ADVOCATÍCIOS, que se regerá pelas seguintes cláusulas e condições:"
-        )
-
-        doc.add_heading("CLÁUSULA PRIMEIRA – DO DISTRATO", level=2)
-        doc.add_paragraph(
-            "1.1. As Partes acordam expressamente com o encerramento e rescisão definitiva do Contrato de "
-            f"Prestação de Serviços Advocatícios firmado em {self._data_extenso(data.data_contrato_origem)}, "
-            "assim o fazendo sem a incidência de qualquer ônus, penalidade, multa rescisória ou "
-            "indenização de parte a parte."
-        )
-        doc.add_paragraph(
-            "1.2. As Partes reconhecem que o objeto da prestação de serviços sob responsabilidade da "
-            "CONTRATADA foi executado a contento e que os valores devidos pela CONTRATANTE a título de "
-            "honorários vencidos e eventuais despesas foram integralmente adimplidos a tempo e modo."
-        )
-
-        titulo2 = "DA QUITAÇÃO E REVOGAÇÃO DE PODERES" if data.substabelecer_e_devolver else "DA QUITAÇÃO"
-        doc.add_heading(f"CLÁUSULA SEGUNDA – {titulo2}", level=2)
-        if data.ressalva_exito:
-            alcance = (
-                "a título de honorários e reembolsos vencidos e pagos, ressalvados reembolsos e honorários "
-                "vincendos, inclusive de êxito, caso exigíveis nos termos do contrato original"
-            )
-        else:
-            alcance = "seja a título de honorários vencidos e vincendos, reembolsos, indenizações ou honorários de êxito futuros"
-        # "plena, geral, rasa, irrestrita e irrevogavel" so' na quitacao total: com ressalva se contradiz.
-        quitacao = "quitação" if data.ressalva_exito else "plena, geral, rasa, irrestrita e irrevogável quitação"
-        doc.add_paragraph(
-            f"2.1. Por este instrumento, as Partes concedem-se reciprocamente {quitacao}, em juízo ou "
-            "fora dele, de todas as obrigações principais, acessórias, diretas e indiretas decorrentes "
-            "do contrato originário e de eventuais aditivos celebrados, nada mais tendo a reclamar ou "
-            f"exigir uma da outra, {alcance}."
-        )
-        if data.substabelecer_e_devolver:
             doc.add_paragraph(
-                "2.2. A CONTRATADA compromete-se a substabelecer sem reserva de poderes a favor do novo "
-                "patrono a ser indicado pela CONTRATANTE, bem como a restituir eventuais documentos "
-                "físicos ou digitais que estejam sob sua guarda."
+                f"Reconhecem, ainda, o {ant.numero}º Aditivo Contratual ao referido Contrato, firmado em "
+                f"{_mes_ano(ant.data_documento)}, tendo por objeto {_sem_ponto(ant.objeto)}."
             )
-
-        doc.add_paragraph(
-            "E, por estarem justas e acordadas, as Partes firmam o presente instrumento em 2 (duas) vias "
-            "de igual teor e forma, na presença de 2 (duas) testemunhas abaixo assinadas, para que "
-            "produza todos os seus jurídicos e legais efeitos."
+        k = clausula(
+            "Por motivos supervenientes à assinatura do referido instrumento, as partes decidem de comum "
+            "acordo firmar o presente Distrato nas seguintes condições:"
         )
+        subclausulas: list[str] = []
+        if data.pagamento_valor:
+            forma = _sem_ponto(data.pagamento_forma) or f"Pix (CNPJ {ESCRITORIO_CNPJ})"
+            subclausulas.append(
+                f"A CONTRATANTE pagará à CONTRATADA, até o dia {self._data_curta(data.pagamento_data)}, "
+                f"o valor de {valor_com_extenso(data.pagamento_valor)}, por meio de {forma}."
+            )
+            subclausulas.append(DISTRATO_ENCARGOS)
+        else:
+            subclausulas.append(DISTRATO_SEM_VALOR)
+        if data.substabelecer_e_devolver:
+            subclausulas.append(DISTRATO_SUBSTABELECIMENTO)
+        for i, texto in enumerate(subclausulas, 1):
+            doc.add_paragraph(f"{k}.{i}. {texto}")
+
+        # Com ressalva (opcao do formulario), a quitacao preserva o exito proporcional e a sucumbencia.
+        ressalva = DISTRATO_RESSALVA_EXITO if data.ressalva_exito else ""
+        clausula(
+            "Salvo as obrigações previstas neste Distrato, as partes, com o presente instrumento, se dão mútua, "
+            "total, completa, irrevogável e irretratável quitação, declarando que nada têm a reclamar extra ou "
+            f"judicialmente uma da outra, renunciando a qualquer direito ou pretensão nesse sentido{ressalva}."
+        )
+        clausula(
+            "O Contrato objeto do presente Distrato resta extinto, sem qualquer ônus, penalidade, dever e/ou "
+            "obrigação adicionais entre si, além dos expressamente pactuados neste instrumento, reconhecendo "
+            "ambas as Partes que não há pendências, créditos ou débitos entre elas além dos aqui previstos."
+        )
+        clausula(
+            "A tolerância de qualquer das partes com descumprimento de obrigações constantes no presente "
+            "instrumento não deverá ser tido como novação ou ter como efeito a mudança de qualquer dos termos "
+            "acordados no presente Distrato."
+        )
+        clausula(
+            "O presente instrumento incorpora todas as tratativas, acordos e combinados entre as partes, "
+            "excluindo qualquer outra que nele não conste expressamente."
+        )
+        clausula("O foro da comarca eleita no contrato permanece o competente para dirimir qualquer conflito oriundo deste Distrato.")
+        doc.add_paragraph(
+            "E, por estarem as partes justas e contratadas e por considerarem o negócio perfeito, assinam o "
+            "presente instrumento em 02 (duas) vias de igual teor e forma, para um só efeito, juntamente com "
+            "as testemunhas abaixo."
+        )
+
+    @staticmethod
+    def _data_curta(iso: str | None) -> str:
+        return _data(iso).strftime("%d/%m/%Y")
 
     def _fechamento(self, doc: Document, data: DistratoRequest, signatario_roles) -> None:
         self._data_e_local(doc, data)
