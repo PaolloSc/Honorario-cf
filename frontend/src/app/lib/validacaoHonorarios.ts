@@ -31,6 +31,14 @@ export function errosDoEscopo(
   if (escopo.honorarios.includes("exito") && pct != null && (pct < 0 || pct > 100)) {
     errors.push(`${label}: o percentual de êxito deve ficar entre 0 e 100.`);
   }
+  const ex = escopo.exito;
+  if (
+    escopo.honorarios.includes("exito") &&
+    ex?.subtipo === "percentual_variavel" &&
+    !ex.faixas_percentual?.some((f) => f.faixa.trim() && f.percentual.trim())
+  ) {
+    errors.push(`${label}: êxito de percentual variável precisa de ao menos uma faixa com valor e percentual.`);
+  }
   const valores: [Honorario, number | null | undefined, string][] = [
     ["hora_trabalhada", escopo.hora_trabalhada?.valor_hora, "hora trabalhada"],
     ["mensalidade", escopo.mensalidade?.faixas_preco?.length ? undefined : escopo.mensalidade?.valor, "mensalidade"],

@@ -16,7 +16,8 @@ def _req(tipo, **campos):
 
 
 def test_exito_variavel_nao_imprime_o_percentual_fixo_que_ficou():
-    paras = _paras_for(_req("exito", subtipo="percentual_variavel", percentual=10, base_calculo="x"))
+    paras = _paras_for(_req("exito", subtipo="percentual_variavel", percentual=10, base_calculo="x",
+                              faixas_percentual=[{"faixa": "até R$ 100.000,00", "percentual": "8"}]))
     assert not _has(paras, "corresponderão a 10% (dez por cento)")
     assert _has(paras, "Os honorários de êxito incidirão sobre")
 
