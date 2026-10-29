@@ -150,7 +150,7 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
       {(estado.substabelecer_e_devolver || estado.contencioso) && (
         <>
           <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecimento gerado junto</h3>
-          <p className="text-xs text-muted mb-2">O cliente e a data vêm do contrato e do distrato. Informe quem assina, quem recebe os poderes e os processos.</p>
+          <p className="text-xs text-muted mb-2">O cliente e a data vêm do contrato e do distrato. Informe quem assina, quem recebe os poderes e os processos: ao sair do número CNJ, o tribunal aparece e, se o processo estiver no Legal One, as partes são preenchidas.</p>
           <CamposPoderes estado={estado} onChange={set} erros={erros} />
         </>
       )}
