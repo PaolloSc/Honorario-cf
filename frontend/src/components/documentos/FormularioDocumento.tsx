@@ -1,14 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   gerarDocumento,
   listDocumentos,
   prefillDocumento,
   previewDocumento,
+  substabelecimentoExistente,
   updateContract,
   type PrefillDocumento,
+  type SubstabelecimentoExistente,
 } from "@/app/lib/api";
 import { cnpjValido } from "@/app/lib/cnpj";
 import { hojeBrasilia } from "@/app/lib/datas";
@@ -28,6 +30,8 @@ import {
 } from "@/app/lib/documentos";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { CamposAditivo, CamposDistrato, CamposSubstabelecimento } from "./Campos";
+
+type PartesSub = Pick<SubstabelecimentoForm, "substabelecentes" | "substabelecidos" | "endereco_substabelecidos">;
 
 interface Props {
   tipo: TipoDocumento;
@@ -63,6 +67,59 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
   const [geral, setGeral] = useState("");
   const [previa, setPrevia] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Substabelecimento: o mesmo cliente (CPF/CNPJ) já tem um? Padrão: acrescentar o processo a ele.
+  const [existente, setExistente] = useState<SubstabelecimentoExistente | null>(null);
+  const [acrescentar, setAcrescentar] = useState(true);
+  const docOutorgante = tipo === "substabelecimento" ? (estado as SubstabelecimentoForm).outorgante_documento : "";
+  const docDigitos = docOutorgante.replace(/\D/g, "");
+
+  useEffect(() => {
+    if (tipo !== "substabelecimento" || editando || sessionStatus !== "authenticated" || ![11, 14].includes(docDigitos.length)) {
+      setExistente(null);
+      return;
+    }
+    let ativo = true;
+    substabelecimentoExistente(docDigitos)
+      .then((r) => ativo && setExistente(r.existe ? r : null))
+      .catch(() => ativo && setExistente(null));
+    return () => {
+      ativo = false;
+    };
+  }, [tipo, editando, sessionStatus, docDigitos]);
+
+  const acrescentando = !!existente?.pode_acrescentar && acrescentar;
+
+  // Ao acrescentar, as partes e o endereço do documento existente já vêm preenchidos (o que for
+  // informado aqui substitui o de lá). Só entram em campos vazios; se a pessoa já digitou, pergunta.
+  // "Criar um novo" devolve o que foi preenchido sozinho, sem tocar no que a pessoa editou.
+  const autoPreenchido = useRef<{ antes: PartesSub; aplicado: PartesSub } | null>(null);
+  const ultimoPreenchido = useRef<string | null>(null);
+  const partesDe = (e: SubstabelecimentoForm): PartesSub => ({
+    substabelecentes: e.substabelecentes, substabelecidos: e.substabelecidos, endereco_substabelecidos: e.endereco_substabelecidos,
+  });
+  const iguais = (a: PartesSub, b: PartesSub) => JSON.stringify(a) === JSON.stringify(b);
+  const partesVazias = (p: PartesSub) =>
+    !p.substabelecentes.length && !p.endereco_substabelecidos.trim() && p.substabelecidos.every((s) => !s.nome.trim() && !s.oab.numero.trim());
+  const preencherComExistente = () => {
+    if (!existente) return;
+    const atual = partesDe(estado as SubstabelecimentoForm);
+    const novo = partesDe(estadoDoFormData("substabelecimento", { ...existente }, "") as SubstabelecimentoForm);
+    if (iguais(atual, novo)) return;
+    if (!partesVazias(atual) && !window.confirm("Você já preencheu partes ou endereço. Trocar pelos do substabelecimento existente?")) return;
+    autoPreenchido.current = { antes: atual, aplicado: novo };
+    setEstado({ ...(estado as SubstabelecimentoForm), ...novo });
+  };
+  const desfazerPreenchimento = () => {
+    const auto = autoPreenchido.current;
+    autoPreenchido.current = null;
+    if (auto && iguais(partesDe(estado as SubstabelecimentoForm), auto.aplicado)) setEstado({ ...(estado as SubstabelecimentoForm), ...auto.antes });
+  };
+  useEffect(() => {
+    if (!acrescentando || !existente?.contract_id || ultimoPreenchido.current === existente.contract_id) return;
+    ultimoPreenchido.current = existente.contract_id;
+    preencherComExistente();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acrescentando, existente]);
 
   // Pré-preenchimento pelo contrato de origem (partes só leitura; data do contrato editável).
   useEffect(() => {
@@ -135,7 +192,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
     if (!payload) return;
     setOcupado(true);
     try {
-      const r = await gerarDocumento(tipo, payload);
+      const r = await gerarDocumento(tipo, payload, acrescentando ? existente?.contract_id : undefined);
       router.push(`/contracts/${r.contract_id}`);
     } catch (e) {
       aplicarErroDaApi(e);
@@ -163,7 +220,14 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
     return <div className="max-w-3xl mx-auto px-4 py-12 text-center text-muted">Carregando contrato original...</div>;
   }
 
-  const bloqueado = tipo === "distrato" && distratoExistente;
+  // Acrescentar mantém as partes do documento existente: partes/endereço diferentes não podem acrescentar.
+  const partesDiferem = (() => {
+    if (!acrescentando || !existente || tipo !== "substabelecimento") return false;
+    const atual = partesDe(estado as SubstabelecimentoForm);
+    const doc = partesDe(estadoDoFormData("substabelecimento", { ...existente }, "") as SubstabelecimentoForm);
+    return !iguais({ ...atual, endereco_substabelecidos: atual.endereco_substabelecidos.trim() || doc.endereco_substabelecidos }, doc);
+  })();
+  const bloqueado = (tipo === "distrato" && distratoExistente) || partesDiferem;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -198,7 +262,7 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
           {prefill.aviso} Você pode continuar, mas confira se o documento faz sentido.
         </div>
       )}
-      {bloqueado && (
+      {tipo === "distrato" && distratoExistente && (
         <div role="alert" className="rounded-lg border border-danger bg-danger/[0.08] p-3 mb-4 text-sm text-danger">
           Já existe um distrato para este contrato. Abra-o na página do contrato.
         </div>
@@ -210,6 +274,11 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
       {previa !== null ? (
         <>
           <p className="text-sm text-muted mb-2">Confira o texto. O documento só é gerado depois desta prévia.</p>
+          {acrescentando && (
+            <p role="note" className="rounded-lg border border-warning bg-warning/[0.08] p-3 mb-3 text-sm text-warning">
+              Ao gerar, o(s) processo(s) abaixo serão acrescentados ao substabelecimento que este cliente já tem (nova versão do mesmo documento).
+            </p>
+          )}
           {tipo === "substabelecimento" && (
             <p role="note" className="rounded-lg border border-border bg-card p-3 mb-3 text-sm text-foreground">
               Assinatura preferencialmente com o token do advogado, por sócio com poderes conforme o contrato social. Em caso de urgência ou indisponibilidade, use o procedimento alternativo do escritório.
@@ -231,6 +300,38 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
           {tipo === "aditivo" && <CamposAditivo estado={estado as AditivoForm} onChange={setEstado} erros={erros} />}
           {tipo === "distrato" && <CamposDistrato estado={estado as DistratoForm} onChange={setEstado} erros={erros} />}
           {tipo === "substabelecimento" && <CamposSubstabelecimento estado={estado as SubstabelecimentoForm} onChange={setEstado} erros={erros} />}
+
+          {existente && (
+            <div role="group" aria-label="Substabelecimento já existente deste cliente" className="mt-5 rounded-lg border border-warning bg-warning/[0.08] p-4 text-sm">
+              {existente.pode_acrescentar ? (
+                <>
+                  <p className="font-medium text-foreground mb-2">
+                    Este cliente já tem substabelecimento
+                    {existente.processos?.length ? ` (processos: ${existente.processos.join(", ")})` : ""}.
+                  </p>
+                  <label className="flex items-center gap-2 mb-1">
+                    <input type="radio" checked={acrescentar} onChange={() => { setAcrescentar(true); preencherComExistente(); }} />
+                    Acrescentar o processo a ele
+                  </label>
+                  {acrescentar && (
+                    <p className={`text-xs ml-6 mb-1 ${partesDiferem ? "text-danger font-medium" : "text-foreground"}`}>
+                      {partesDiferem
+                        ? "Substabelecentes, substabelecidos ou endereço diferem do substabelecimento existente. Para acrescentar, mantenha os mesmos; para outras partes, escolha “Criar um novo”."
+                        : "O processo entra no substabelecimento existente, que mantém as partes e o endereço dele."}
+                    </p>
+                  )}
+                  <label className="flex items-center gap-2">
+                    <input type="radio" checked={!acrescentar} onChange={() => { setAcrescentar(false); desfazerPreenchimento(); }} />
+                    Criar um novo
+                  </label>
+                </>
+              ) : (
+                <p className="text-foreground">
+                  Este cliente já tem substabelecimento, mas {existente.motivo}. Será criado um novo.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-3 mt-6">
             <a href={voltarPara} className={botaoSecundario}>Cancelar</a>

@@ -122,7 +122,7 @@ export default function Step6Revisao({ data }: Step6Props) {
               : "Não"}
           </li>
           <li>
-            Penalidade por inadimplemento:{" "}
+            Multa de 10% por inadimplemento:{" "}
             {data.acessorios.tem_penalidade_inadimplemento ? "Sim" : "Não"}
           </li>
           {data.acessorios.valor_diligencia && (

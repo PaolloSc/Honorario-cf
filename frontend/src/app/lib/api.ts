@@ -419,6 +419,51 @@ export interface ColaboradorWizard {
   oabs?: OabCadastro[];
 }
 
+export interface ConsultaProcesso {
+  valido: boolean;
+  numero: string;
+  erro?: string;
+  justica?: string;
+  tribunal?: string | null;
+  // Partes do Legal One do escritório (só leitura); null se o processo não está lá ou não há acesso.
+  legalone: { cliente: string[]; contraria: string[]; descricao: string } | null;
+}
+
+export interface ProcessoPlanilha {
+  linha: number;
+  valido: boolean;
+  numero: string;
+  erro?: string;
+  tribunal?: string | null;
+  tipo: string;
+  descricao: string;
+}
+
+async function chamarProcessos<T>(path: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetchAutenticado(`${API_BASE}${path}`, { ...init, signal: controller.signal });
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => null);
+      throw new Error(typeof corpo?.detail === "string" ? corpo.detail : "Não foi possível concluir a consulta.");
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export const consultarProcesso = (numero: string) =>
+  chamarProcessos<ConsultaProcesso>(`/api/processos/cnj?numero=${encodeURIComponent(numero)}`);
+
+export function importarPlanilhaProcessos(arquivo: File) {
+  const form = new FormData();
+  form.append("arquivo", arquivo);
+  return chamarProcessos<{ aviso: string; processos: ProcessoPlanilha[]; validos: number; invalidos: number }>(
+    "/api/processos/planilha", { method: "POST", body: form });
+}
+
 export async function listColaboradores(opts?: { participavel?: boolean }) {
   const qs = opts?.participavel ? "?participavel=true" : "";
   return request<{ colaboradores: ColaboradorWizard[] }>(
@@ -1082,12 +1127,37 @@ export async function previewDocumento(tipo: string, payload: unknown, signal?: 
   return res.text();
 }
 
-export async function gerarDocumento(tipo: string, payload: unknown) {
+export interface SubstabelecimentoExistente {
+  existe: boolean;
+  contract_id?: string;
+  client_name?: string;
+  status?: string;
+  pode_acrescentar?: boolean;
+  motivo?: string | null;
+  processos?: string[];
+  substabelecentes?: Array<{ nome: string; email: string; oab: string }>;
+  substabelecidos?: Array<{ nome: string; oab: string }>;
+  endereco_substabelecidos?: string;
+}
+
+// O cliente (CPF/CNPJ) já tem substabelecimento? Orienta "acrescentar o processo" ou "criar novo".
+export async function substabelecimentoExistente(documento: string) {
+  return request<SubstabelecimentoExistente>(
+    `/api/documentos/substabelecimento-existente?documento=${encodeURIComponent(documento)}`,
+  );
+}
+
+// acrescentarA: contract_id de um substabelecimento do mesmo outorgante, que recebe os processos.
+export async function gerarDocumento(tipo: string, payload: unknown, acrescentarA?: string) {
   return request<{
     success: boolean;
     message: string;
     contract_id: string;
     download_url: string;
     aviso: string | null;
-  }>(`/api/documentos/${tipo}`, { method: "POST", body: JSON.stringify(payload) });
+    acrescentado?: boolean;
+  }>(`/api/documentos/${tipo}${acrescentarA ? `?acrescentar_a=${encodeURIComponent(acrescentarA)}` : ""}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

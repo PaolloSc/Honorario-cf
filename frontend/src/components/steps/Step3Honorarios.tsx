@@ -743,6 +743,60 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         </FormField>
                       )}
 
+                      {escopo.exito.subtipo === "percentual_variavel" && (
+                        <div className="md:col-span-2 space-y-2">
+                          <p className="text-xs font-medium text-foreground uppercase tracking-wide">
+                            Faixas de valor e percentual
+                          </p>
+                          {(escopo.exito.faixas_percentual ?? []).map((f, fi) => {
+                            const faixas = escopo.exito!.faixas_percentual ?? [];
+                            const muda = (parcial: Partial<typeof f>) =>
+                              updateExito(idx, {
+                                faixas_percentual: faixas.map((x, xi) => (xi === fi ? { ...x, ...parcial } : x)),
+                              });
+                            return (
+                              <div key={fi} className="grid grid-cols-[1fr_8rem_auto] gap-2 items-center">
+                                <Input
+                                  value={f.faixa}
+                                  onChange={(e) => muda({ faixa: e.target.value })}
+                                  placeholder="Ex.: até R$ 100.000,00"
+                                  aria-label={`Faixa ${fi + 1}`}
+                                />
+                                <Input
+                                  value={f.percentual}
+                                  onChange={(e) => muda({ percentual: e.target.value })}
+                                  placeholder="Ex.: 10"
+                                  aria-label={`Percentual da faixa ${fi + 1}`}
+                                />
+                                <button
+                                  type="button"
+                                  className="text-sm text-muted-foreground hover:text-destructive px-2"
+                                  onClick={() =>
+                                    updateExito(idx, { faixas_percentual: faixas.filter((_, xi) => xi !== fi) })
+                                  }
+                                >
+                                  Remover
+                                </button>
+                              </div>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            className="text-sm text-primary hover:underline"
+                            onClick={() =>
+                              updateExito(idx, {
+                                faixas_percentual: [
+                                  ...(escopo.exito!.faixas_percentual ?? []),
+                                  { faixa: "", percentual: "" },
+                                ],
+                              })
+                            }
+                          >
+                            + Adicionar faixa
+                          </button>
+                        </div>
+                      )}
+
                       <FormField label="Incidência">
                         <Select
                           value={escopo.exito.incidencia || ""}

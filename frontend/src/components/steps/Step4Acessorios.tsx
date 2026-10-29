@@ -67,7 +67,7 @@ export default function Step4Acessorios({ acessorios, onChange }: Step4Props) {
         )}
  
         <Toggle
-          label="Haverá penalidade por inadimplemento?"
+          label="Haverá multa de 10% por inadimplemento?"
           value={acessorios.tem_penalidade_inadimplemento}
           onChange={(v) =>
             onChange({ ...acessorios, tem_penalidade_inadimplemento: v })
