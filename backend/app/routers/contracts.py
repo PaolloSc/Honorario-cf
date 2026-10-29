@@ -442,7 +442,13 @@ def update_contract(
         raise HTTPException(422, f"Dados invalidos: {e}")
 
     congelada = _congelar_versao_atual(db, contract)
-    _, filepath = gen.generate(contrato_data, contract_id=contract_id)
+    try:
+        _, filepath = gen.generate(contrato_data, contract_id=contract_id)
+    except Exception as e:
+        db.rollback()  # a copia congelada ainda nao foi para o banco; o file_path alterado em memoria nao pode ir
+        _desfazer_arquivos(congelada, [])
+        logger.error("Falha ao gerar a edicao de %s: %s", contract_id, e)
+        raise HTTPException(500, MSG_ERRO_INTERNO)
 
     # Distrato que gerou um substabelecimento: mudar os dados aqui regera aquele documento.
     regerados: list[str] = []
@@ -582,8 +588,14 @@ def rollback_contract(
     except Exception as e:
         raise HTTPException(422, f"Dados da versao {version} invalidos: {e}")
 
-    _congelar_versao_atual(db, contract)
-    _, filepath = gen.generate(contrato_data, contract_id=contract_id)
+    congelada = _congelar_versao_atual(db, contract)
+    try:
+        _, filepath = gen.generate(contrato_data, contract_id=contract_id)
+    except Exception as e:
+        db.rollback()
+        _desfazer_arquivos(congelada, [])
+        logger.error("Falha ao gerar a reversao de %s: %s", contract_id, e)
+        raise HTTPException(500, MSG_ERRO_INTERNO)
 
     # Create a new version based on the old data
     new_version = contract.current_version + 1
