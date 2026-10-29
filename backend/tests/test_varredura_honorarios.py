@@ -20,19 +20,22 @@ def _req(tipo, **campos):
 # ── 1. penalidade por inadimplemento ──────────────────────────────────────
 
 
-def test_sem_penalidade_a_clausula_do_atraso_some_inteira():
+def test_sem_penalidade_so_a_multa_sai():
     req = _base_req()
     assert req["acessorios"]["tem_penalidade_inadimplemento"] is False
     paras = _paras_for(req)
     assert not _has(paras, "multa de")
-    assert not _has(paras, "O atraso no pagamento")
+    assert _has(paras, "juros de 1% (um por cento) ao mês e atualização monetária pelo IPCA")
+    assert _has(paras, "suspensão dos serviços ou da rescisão contratual")
     assert _has(paras, "mudanças legislativas/regulatórias")  # vizinhas intactas
 
 
 def test_com_penalidade_a_clausula_continua():
     req = _base_req()
     req["acessorios"]["tem_penalidade_inadimplemento"] = True
-    assert _has(_paras_for(req), "multa de 10% (dez por cento)")
+    paras = _paras_for(req)
+    assert _has(paras, "juros de 1% (um por cento) ao mês, multa de 10% (dez por cento)")
+    assert _has(paras, "atualização monetária pelo IPCA, sem prejuízo da suspensão")
 
 
 def test_sem_penalidade_numeracao_das_clausulas_gerais_sem_buraco():
@@ -197,3 +200,18 @@ def test_ajustes_da_revisao_da_angela_no_prazo_e_nas_faixas():
     for pct in ("300", "-5", "abc"):
         with pytest.raises(ValidationError):
             ContratoRequest(**_req("exito", **base, faixas_percentual=[{"faixa": "x", "percentual": pct}]))
+
+
+def test_8_1_so_vira_prazo_determinado_quando_todos_os_honorarios_tem_periodo():
+    req = _req("hora_trabalhada", valor_hora=500, data_inicio="2026-01-01", data_fim="2026-12-31")
+    e = _escopo("mensalidade")
+    e["mensalidade"].update(data_inicio="2026-03-01", data_fim="2027-02-28")
+    req["escopos"][0]["honorarios"].append("mensalidade")
+    req["escopos"][0]["mensalidade"] = e["mensalidade"]
+    assert "prazo determinado, de 01/01/2026 a 28/02/2027" in _texto(req)  # todos com periodo
+    for extra, dados in (("exito", {"percentual": 10}), ("permuta", {"objeto_permuta": "imóvel"})):
+        r2 = _req("hora_trabalhada", valor_hora=500, data_inicio="2026-01-01", data_fim="2026-12-31")
+        r2["escopos"][0]["honorarios"].append(extra)
+        r2["escopos"][0][extra] = _escopo(extra)[extra] | dados
+        texto = _texto(r2)
+        assert "tempo indeterminado" in texto and "prazo determinado, de" not in texto, extra

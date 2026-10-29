@@ -1104,15 +1104,18 @@ class ContractGenerator:
             "fiscal (inclusive em eventual migração de regime tributário), sem alteração do "
             "escopo ou do valor líquido pactuado.",
         ]
-        if data.acessorios.tem_penalidade_inadimplemento:
-            # entra antes das mudancas legislativas (ultimas duas do bloco)
-            clauses.insert(
-                len(clauses) - 2,
-                f"O atraso no pagamento sujeitará a CONTRATANTE a juros de {percentual_com_extenso(1)} "
-                f"ao mês, multa de {percentual_com_extenso(10)} sobre o valor em atraso e "
-                "atualização monetária pelo IPCA, sem prejuízo da suspensão dos serviços ou da "
-                "rescisão contratual, a critério do C&F.",
-            )
+        # Sem penalidade (Acessorios) so a multa sai; juros, IPCA e suspensao/rescisao ficam.
+        j, m = percentual_com_extenso(1), percentual_com_extenso(10)
+        encargos = (
+            f"juros de {j} ao mês, multa de {m} sobre o valor em atraso e atualização monetária pelo IPCA"
+            if data.acessorios.tem_penalidade_inadimplemento
+            else f"juros de {j} ao mês e atualização monetária pelo IPCA"
+        )
+        clauses.insert(
+            len(clauses) - 2,  # antes das mudancas legislativas (ultimas duas do bloco)
+            f"O atraso no pagamento sujeitará a CONTRATANTE a {encargos}, sem prejuízo da "
+            "suspensão dos serviços ou da rescisão contratual, a critério do C&F.",
+        )
 
         if com_parte_relacionada:
             clauses.append(
@@ -1138,8 +1141,6 @@ class ContractGenerator:
             "gerais.vencimento", "gerais.mora", "gerais.mudanca_legislativa", "gerais.faturamento",
             "gerais.solidariedade",
         ]
-        if not data.acessorios.tem_penalidade_inadimplemento:
-            chaves.remove("gerais.mora")
         for chave, clause in zip(chaves, clauses, strict=True):
             self._add_clausula(doc, clause, chave=chave)
 
@@ -1260,21 +1261,25 @@ class ContractGenerator:
 
     def _periodo_dos_honorarios(self, data: ContratoRequest) -> tuple[str, str] | None:
         """(inicio, fim) dd/mm/aaaa do "Período do contrato" (hora trabalhada) e do "Período da
-        mensalidade" da etapa 3: do primeiro início ao último fim. None se nenhum escopo trouxer
-        as duas datas, ou se o prazo específico foi informado em Acessórios (frase própria)."""
+        mensalidade" da etapa 3, do primeiro início ao último fim, só quando TODOS os honorários
+        do contrato têm período. None caso contrário, ou se o prazo específico foi informado em
+        Acessórios (frase própria)."""
         if self._frase_vigencia(data.acessorios):
             return None
         datas = []
         for e in data.escopos:
-            ativos = ((TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada), (TipoHonorario.MENSALIDADE, e.mensalidade))
-            for tipo, h in ativos:  # dado de honorario desmarcado nao conta
-                if tipo not in e.honorarios or not h or not h.data_inicio or not h.data_fim:
-                    continue
+            por_tipo = {TipoHonorario.HORA_TRABALHADA: e.hora_trabalhada, TipoHonorario.MENSALIDADE: e.mensalidade}
+            for tipo in e.honorarios:  # exito, pro-labore ou permuta no contrato: sem periodo, fica indeterminado
+                h = por_tipo.get(tipo)
+                if not h or not h.data_inicio or not h.data_fim:
+                    return None
                 try:
-                    datas.append((datetime.fromisoformat(h.data_inicio), datetime.fromisoformat(h.data_fim)))
+                    ini, fim = datetime.fromisoformat(h.data_inicio), datetime.fromisoformat(h.data_fim)
                 except ValueError:
-                    continue
-        datas = [d for d in datas if d[0] <= d[1]]  # fim antes do inicio: ignora (a tela e o 422 avisam)
+                    return None
+                if ini > fim:
+                    return None
+                datas.append((ini, fim))
         if not datas:
             return None
         ini = min(d[0] for d in datas)
