@@ -538,7 +538,7 @@ def test_tipo_desconhecido_da_404(client):
 def test_distrato_com_pessoa_fisica_nao_fala_em_contrato_social(client):
     _semear_origem(CLIENTE_PF)
     texto = _texto(client, _id(client, "distrato", DISTRATO))
-    assert "denominado apenas Contratante" in texto
+    assert "denominado(a) apenas CONTRATANTE" in texto
     assert "inscrito(a)" not in texto
     assert "Contrato Social" not in texto  # pessoa fisica nao tem; o modelo nao cita o do escritorio
 
@@ -629,15 +629,21 @@ def test_distrato_total_usa_a_quitacao_do_modelo_sem_ressalva(client):
     assert "foro da comarca eleita no contrato" in texto
 
 
+def test_distrato_concorda_contratante_e_contratada_em_todo_o_texto(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **PAGAMENTO}))
+    assert "denominada apenas CONTRATADA" in texto and "denominada apenas CONTRATANTE" in texto  # PJ do ORIGEM
+    assert "Contratado" not in texto and "A Contratante" not in texto and "O Contratante" not in texto
+
+
 PAGAMENTO = {"pagamento_valor": 4000, "pagamento_data": "2026-11-30"}
 
 
 def test_distrato_com_pagamento_traz_valor_data_e_forma(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, **PAGAMENTO, "substabelecer_e_devolver": False}))
-    assert ("2.1. A Contratante pagará ao Contratado, até o dia 30/11/2026, o valor de R$ 4.000,00 "
+    assert ("2.1. A CONTRATANTE pagará à CONTRATADA, até o dia 30/11/2026, o valor de R$ 4.000,00 "
             "(quatro mil reais), por meio de Pix (CNPJ 25.463.159/0001-73).") in texto
-    assert texto.index("Por motivos supervenientes") < texto.index("2.1. A Contratante pagará")
-    assert texto.index("2.1. A Contratante pagará") < texto.index("mútua, total")
+    assert texto.index("Por motivos supervenientes") < texto.index("2.1. A CONTRATANTE pagará")
+    assert texto.index("2.1. A CONTRATANTE pagará") < texto.index("mútua, total")
 
 
 def test_distrato_pagamento_com_forma_informada_e_substabelecimento_numerados(client):
@@ -645,14 +651,14 @@ def test_distrato_pagamento_com_forma_informada_e_substabelecimento_numerados(cl
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, **forma}))
     assert "por meio de transferência bancária (Banco Exemplo, ag. 0001, c/c 12345-6)." in texto
     assert "Pix (CNPJ" not in texto
-    assert "2.3. O Contratado substabelecerá, sem reserva de poderes" in texto
+    assert "2.3. A CONTRATADA substabelecerá, sem reserva de poderes" in texto
 
 
 def test_distrato_sem_valor_nao_tem_clausula_de_pagamento(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, "pagamento_data": "2026-11-30"}))
-    assert "pagará ao Contratado" not in texto and "Pix" not in texto
+    assert "pagará à CONTRATADA" not in texto and "Pix" not in texto
     assert "2.1. As Partes declaram que os honorários contratuais foram integralmente quitados" in texto
-    assert "2.2. O Contratado substabelecerá" in texto
+    assert "2.2. A CONTRATADA substabelecerá" in texto
 
 
 def test_distrato_sem_valor_declara_honorarios_quitados(client):
@@ -697,6 +703,7 @@ def test_distrato_consultivo_nao_gera_substabelecimento(client):
 @pytest.mark.parametrize("extra", [
     {"pagamento_valor": 4000},  # sem data limite
     {"pagamento_valor": 0, "pagamento_data": "2026-11-30"},
+    {"pagamento_valor": 0.001, "pagamento_data": "2026-11-30"},
     {"pagamento_valor": -5, "pagamento_data": "2026-11-30"},
     {"pagamento_valor": 4000, "pagamento_data": "30/11/2026"},
 ])

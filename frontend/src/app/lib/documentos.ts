@@ -49,7 +49,9 @@ export interface DistratoForm extends PoderesForm {
 export function valorEmReais(texto: string): number | null {
   const t = (texto || "").trim().replace(/[R$\s]/g, "");
   if (!t) return null;
-  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+  // Vírgula = decimal (pontos são milhar). Sem vírgula, só "ponto + 3 dígitos" repetido é milhar: "4.000" = 4000, "4.5" = 4,5.
+  const milhar = /^\d{1,3}(\.\d{3})+$/.test(t);
+  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : milhar ? t.replace(/\./g, "") : t);
   return Number.isFinite(n) ? n : null;
 }
 export const UFS = [
@@ -334,7 +336,7 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     obrig("objeto_contrato_origem", d.objeto_contrato_origem);
     if (d.pagamento_valor.trim()) {
       const v = valorEmReais(d.pagamento_valor);
-      if (!v || v <= 0) e.pagamento_valor = "Informe um valor maior que zero";
+      if (!v || v < 0.01) e.pagamento_valor = "Informe um valor de pelo menos R$ 0,01";
       else obrig("pagamento_data", d.pagamento_data, "Informe a data limite do pagamento");
     }
     if (d.substabelecer_e_devolver || d.contencioso) validarPoderes(d);

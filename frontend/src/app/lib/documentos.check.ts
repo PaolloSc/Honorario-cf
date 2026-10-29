@@ -59,6 +59,13 @@ assert.equal((montarPayload("distrato", dis, "o") as any).substabelecimento, nul
 // Pagamento: valor em reais no formato brasileiro; com valor exige a data; sem valor não envia nada.
 assert.equal(valorEmReais("4.000,50"), 4000.5);
 assert.equal(valorEmReais("R$ 4000"), 4000);
+assert.equal(valorEmReais("4.000"), 4000);
+assert.equal(valorEmReais("10.000"), 10000);
+assert.equal(valorEmReais("1.234.567"), 1234567);
+assert.equal(valorEmReais("R$ 4.000"), 4000);
+assert.equal(valorEmReais("4.5"), 4.5);
+assert.equal(valorEmReais("4.000,00"), 4000);
+assert.ok(validar("distrato", { ...dis, pagamento_valor: "0,001", pagamento_data: "2026-11-30" }).pagamento_valor);
 assert.equal(valorEmReais(""), null);
 assert.equal(valorEmReais("abc"), null);
 assert.deepEqual(Object.keys(validar("distrato", { ...dis, pagamento_valor: "4.000,00" })), ["pagamento_data"]);

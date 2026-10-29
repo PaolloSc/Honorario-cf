@@ -135,7 +135,7 @@ class DistratoRequest(_ComOrigem):
     # antes dessa opcao nao o tem e nao geram nada novo.
     substabelecimento: Optional["SubstabelecimentoDoDistrato"] = None
     # Pagamento pendente ao escritorio. Sem valor, a clausula nao entra no distrato.
-    pagamento_valor: Optional[float] = Field(default=None, gt=0, le=1_000_000_000)
+    pagamento_valor: Optional[float] = Field(default=None, ge=0.01, le=1_000_000_000)
     pagamento_data: Optional[str] = None  # ISO; obrigatoria com valor
     pagamento_forma: str = ""  # vazio = Pix no CNPJ do escritorio
 

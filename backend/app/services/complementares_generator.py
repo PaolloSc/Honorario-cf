@@ -289,8 +289,8 @@ DISTRATO_ENCARGOS = (
     "testemunhas, constitui título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil."
 )
 DISTRATO_SUBSTABELECIMENTO = (
-    "O Contratado substabelecerá, sem reserva de poderes, os processos judiciais em favor do novo patrono, que a "
-    "Contratante se obriga a indicar em até 10 (dez) dias contados da assinatura deste Distrato. O Contratado "
+    "A CONTRATADA substabelecerá, sem reserva de poderes, os processos judiciais em favor do novo patrono, que a "
+    "CONTRATANTE se obriga a indicar em até 10 (dez) dias contados da assinatura deste Distrato. A CONTRATADA "
     "responderá apenas pelos prazos processuais que vencerem nesse período, nos termos do art. 5º, § 3º, da "
     "Lei n.º 8.906/94, e restituirá os documentos físicos ou digitais sob sua guarda mediante recibo."
 )
@@ -308,11 +308,12 @@ class DistratoGenerator(ComplementarGenerator):
 
     def _corpo(self, doc: Document, data: DistratoRequest) -> None:
         for c in data.contratantes:
-            doc.add_paragraph(f"{self._qualificar(c, com_representantes=False)}; denominado apenas Contratante;")
+            denominada = "denominada" if c.get("cnpj") else "denominado(a)"  # PJ: feminino; PF: sem presumir o genero
+            doc.add_paragraph(f"{self._qualificar(c, com_representantes=False)}; {denominada} apenas CONTRATANTE;")
         doc.add_paragraph(
             f"{ESCRITORIO_NOME}, pessoa jurídica de direito interno, sociedade simples de prestação de "
             f"serviços advocatícios, inscrita no CNPJ n.º {ESCRITORIO_CNPJ}, com sede na "
-            f"{ESCRITORIO_ENDERECO}, doravante denominado apenas Contratado."
+            f"{ESCRITORIO_ENDERECO}, doravante denominada apenas CONTRATADA."
         )
         doc.add_paragraph("Têm entre si contratadas as seguintes cláusulas do presente Distrato:")
 
@@ -342,7 +343,7 @@ class DistratoGenerator(ComplementarGenerator):
         if data.pagamento_valor:
             forma = _sem_ponto(data.pagamento_forma) or f"Pix (CNPJ {ESCRITORIO_CNPJ})"
             subclausulas.append(
-                f"A Contratante pagará ao Contratado, até o dia {self._data_curta(data.pagamento_data)}, "
+                f"A CONTRATANTE pagará à CONTRATADA, até o dia {self._data_curta(data.pagamento_data)}, "
                 f"o valor de {valor_com_extenso(data.pagamento_valor)}, por meio de {forma}."
             )
             subclausulas.append(DISTRATO_ENCARGOS)
