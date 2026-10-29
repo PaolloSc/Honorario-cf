@@ -73,7 +73,7 @@ const variavel = (faixas: object[]) =>
 assert.equal(errosDoEscopo(variavel([]), "E").length, 1);
 assert.equal(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "" }]), "E").length, 1);
 assert.deepEqual(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "10" }]), "E"), []);
-assert.deepEqual(errosDoEscopo(variavel([{ faixa: "a", percentual: "a combinar" }]), "E"), []);
+assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "a combinar" }]), "E").length, 1);
 assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "300" }]), "E").length, 1);
 assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "10" }, { faixa: "b", percentual: "" }]), "E").length, 1);
 assert.deepEqual(errosDoEscopo(variavel([{ faixa: "a", percentual: "10,5%" }, { faixa: "", percentual: "" }]), "E"), []);

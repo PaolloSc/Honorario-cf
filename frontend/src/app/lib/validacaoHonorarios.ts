@@ -41,7 +41,7 @@ export function errosDoEscopo(
       if (!faixa && !pct) continue; // linha em branco: o contrato a descarta
       const n = Number(pct.replace(/%$/, "").trim().replace(",", "."));
       if (!faixa || !pct) errors.push(`${label}: cada faixa do êxito variável precisa de valor e percentual.`);
-      else if (Number.isFinite(n) && (n < 0 || n > 100)) errors.push(`${label}: percentual da faixa "${faixa}" deve ficar entre 0 e 100.`); // texto livre ("a combinar") passa
+      else if (!Number.isFinite(n) || n < 0 || n > 100) errors.push(`${label}: percentual da faixa "${faixa}" deve ser um número entre 0 e 100.`);
       else completas++;
     }
     if (!completas && errors.length === antes) errors.push(`${label}: êxito de percentual variável precisa de ao menos uma faixa com valor e percentual.`);

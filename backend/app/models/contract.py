@@ -431,7 +431,7 @@ def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
     pre = f"Escopo {i}: "
     if TipoHonorario.EXITO in h and e.exito:
         if e.exito.percentual is not None and not 0 <= e.exito.percentual <= 100:
-            raise ValueError(pre + "o percentual de êxito deve ficar entre 0 e 100.")
+            raise ValueError(pre + "o percentual de êxito deve ser um número entre 0 e 100.")
         if e.exito.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL:
             completas = 0
             for f in e.exito.faixas_percentual or []:
@@ -440,12 +440,12 @@ def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
                     continue  # linha em branco da tela: o gerador a descarta
                 if not faixa or not pct:
                     raise ValueError(pre + "cada faixa do êxito variável precisa de valor e percentual.")
-                try:  # texto livre ("a combinar") passa; numero fora de 0-100 nao
+                try:
                     ok = 0 <= float(pct.rstrip("%").strip().replace(",", ".")) <= 100
                 except ValueError:
-                    ok = True
+                    ok = False
                 if not ok:
-                    raise ValueError(pre + f"percentual da faixa \"{faixa}\" deve ficar entre 0 e 100.")
+                    raise ValueError(pre + f"percentual da faixa \"{faixa}\" deve ser um número entre 0 e 100.")
                 completas += 1
             if not completas:
                 raise ValueError(pre + "êxito de percentual variável precisa de ao menos uma faixa com valor e percentual.")
