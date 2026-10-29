@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -131,6 +132,82 @@ def _map_natureza_wizard(natureza_text: str | None) -> tuple[bool, bool]:
         eh_cap = True
     return eh_cap, eh_perf
 
+def campos_rascunho_participacao(data: ContratoRequest, user_email: str, user_name: str) -> dict:
+    """Campos da ficha de participacao (rascunho) derivados do wizard; usado ao criar e ao editar."""
+    tipo = _infer_tipo_honorario(data)
+    participacao_data = data.participacao
+
+    participantes_wizard = (participacao_data.participantes if participacao_data else None) or []
+
+    # Parse valores da wizard
+    pct = _parse_percentual(
+        participacao_data.percentual_ou_valor if participacao_data else None
+    )
+    # Natureza vem agora por advogado; usa a do primeiro participante como base.
+    primeira_natureza = participantes_wizard[0].natureza if participantes_wizard else None
+    eh_cap, eh_perf = _map_natureza_wizard(primeira_natureza)
+    pct_captacao = pct if eh_cap else 0.0
+    pct_performance = pct if eh_perf else 0.0
+
+    # Email: prioriza campo estruturado novo, fallback parse do legado, fallback user.
+    email_novo = (participacao_data.contato_financeiro_email or "").strip() if participacao_data else ""
+    email_wizard = email_novo or _parse_email(
+        participacao_data.contato_financeiro_cliente if participacao_data else None
+    )
+    beneficiario_email = email_wizard or user_email
+    # Nome: junta os nomes de todos os participantes. Fallback user_name.
+    beneficiario_nome = (
+        ", ".join(p.nome for p in participantes_wizard) if participantes_wizard else user_name
+    )
+
+    # Backend natureza = contratual/societario (campo legal, nao wizard)
+    natureza_val = "contratual"
+
+    # Motivos: usa texto da wizard quando aplicável
+    motivo_cap = (
+        participacao_data.responsavel_captacao
+        if participacao_data and pct_captacao > 0 and participacao_data.responsavel_captacao
+        else None
+    )
+    motivo_perf = (
+        participacao_data.responsavel_gestao
+        if participacao_data and pct_performance > 0 and participacao_data.responsavel_gestao
+        else None
+    )
+
+    obs_extra = ""
+    if participacao_data:
+        # Mesma formatacao da ficha (R$ 5.000,00, nao R$ 5000.00).
+        valor_geral = valor_participacao(participacao_data.model_dump())
+        valor_str = valor_geral[1] if valor_geral else "-"
+        participantes_str = "; ".join(
+            f"{p.nome} ({p.natureza or '-'}, {valor_participante(p.model_dump()) or 'geral'})"
+            for p in participantes_wizard
+        ) or "-"
+        obs_extra = (
+            f"Rascunho automatico do wizard. "
+            f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
+            f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
+            f"Valor wizard: {valor_str} · "
+            f"Participantes: {participantes_str}"
+        )
+    else:
+        obs_extra = "Rascunho automatico do wizard."
+
+    return {
+        "beneficiario_email": beneficiario_email,
+        "beneficiario_nome": beneficiario_nome or "",
+        "tipo_honorario": tipo,
+        "percentual_captacao": pct_captacao,
+        "percentual_performance": pct_performance,
+        "motivo_captacao": motivo_cap,
+        "motivo_performance": motivo_perf,
+        "natureza": natureza_val,
+        "cliente_cpf_cnpj": _extract_cpf_cnpj(data),
+        "observacoes": obs_extra,
+    }
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/contract", tags=["Contract"])
 
@@ -205,81 +282,12 @@ def generate_contract(
         # ── Plano A: cria Participação rascunho automática para o financeiro ──
         # Percentuais zerados + aprovada=False. Setor financeiro complementa e aprova.
         try:
-            tipo = _infer_tipo_honorario(data)
-            participacao_data = data.participacao
-
-            participantes_wizard = (participacao_data.participantes if participacao_data else None) or []
-
-            # Parse valores da wizard
-            pct = _parse_percentual(
-                participacao_data.percentual_ou_valor if participacao_data else None
-            )
-            # Natureza vem agora por advogado; usa a do primeiro participante como base.
-            primeira_natureza = participantes_wizard[0].natureza if participantes_wizard else None
-            eh_cap, eh_perf = _map_natureza_wizard(primeira_natureza)
-            pct_captacao = pct if eh_cap else 0.0
-            pct_performance = pct if eh_perf else 0.0
-
-            # Email: prioriza campo estruturado novo, fallback parse do legado, fallback user.
-            email_novo = (participacao_data.contato_financeiro_email or "").strip() if participacao_data else ""
-            email_wizard = email_novo or _parse_email(
-                participacao_data.contato_financeiro_cliente if participacao_data else None
-            )
-            beneficiario_email = email_wizard or user.email
-            # Nome: junta os nomes de todos os participantes. Fallback user.name.
-            beneficiario_nome = (
-                ", ".join(p.nome for p in participantes_wizard) if participantes_wizard else user.name
-            )
-
-            # Backend natureza = contratual/societario (campo legal, nao wizard)
-            natureza_val = "contratual"
-
-            # Motivos: usa texto da wizard quando aplicável
-            motivo_cap = (
-                participacao_data.responsavel_captacao
-                if participacao_data and pct_captacao > 0 and participacao_data.responsavel_captacao
-                else None
-            )
-            motivo_perf = (
-                participacao_data.responsavel_gestao
-                if participacao_data and pct_performance > 0 and participacao_data.responsavel_gestao
-                else None
-            )
-
-            obs_extra = ""
-            if participacao_data:
-                # Mesma formatacao da ficha (R$ 5.000,00, nao R$ 5000.00).
-                valor_geral = valor_participacao(participacao_data.model_dump())
-                valor_str = valor_geral[1] if valor_geral else "-"
-                participantes_str = "; ".join(
-                    f"{p.nome} ({p.natureza or '-'}, {valor_participante(p.model_dump()) or 'geral'})"
-                    for p in participantes_wizard
-                ) or "-"
-                obs_extra = (
-                    f"Rascunho automatico do wizard. "
-                    f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
-                    f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
-                    f"Valor wizard: {valor_str} · "
-                    f"Participantes: {participantes_str}"
-                )
-            else:
-                obs_extra = "Rascunho automatico do wizard."
-
             rascunho = ParticipacaoDB(
+                **campos_rascunho_participacao(data, user.email, user.name),
                 contract_id=contract_id,
-                beneficiario_email=beneficiario_email,
-                beneficiario_nome=beneficiario_nome or "",
-                tipo_honorario=tipo,
-                percentual_captacao=pct_captacao,
-                percentual_performance=pct_performance,
-                motivo_captacao=motivo_cap,
-                motivo_performance=motivo_perf,
-                natureza=natureza_val,
-                cliente_cpf_cnpj=_extract_cpf_cnpj(data),
                 data_inicio=utcnow().date(),
                 vinculo_ativo=True,
                 aprovada=False,
-                observacoes=obs_extra,
                 created_by=user.email,
                 created_at=utcnow(),
             )
@@ -288,7 +296,7 @@ def generate_contract(
                 AuditLogDB(
                     contract_id=contract_id,
                     action="participacao_rascunho",
-                    detail=f"Rascunho automático criado para revisão do financeiro (tipo={tipo})",
+                    detail=f"Rascunho automático criado para revisão do financeiro (tipo={rascunho.tipo_honorario})",
                     user_email=user.email,
                     created_at=utcnow(),
                 )
@@ -458,6 +466,8 @@ def download_contract(
     query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
     if version:
         ver = query.filter(ContractVersionDB.version_number == version).first()
+        if ver is None:
+            raise HTTPException(404, f"Versao {version} nao encontrada")
     else:
         ver = query.order_by(ContractVersionDB.version_number.desc()).first()
 
@@ -467,7 +477,14 @@ def download_contract(
 
     filepath: Path | None = None
 
-    if ver and ver.file_path:
+    generico = output_dir / f"contrato_{contract_id}.docx"
+    # Contratos antigos: varias versoes apontam para o mesmo arquivo generico, que so tem o
+    # texto da mais nova. Para as outras, o arquivo nao serve: regenera da form_data.
+    generico_de_outra_versao = bool(
+        ver and ver.file_path and Path(ver.file_path).name == generico.name
+        and ver.version_number != contract.current_version
+    )
+    if ver and ver.file_path and not generico_de_outra_versao:
         stored = Path(ver.file_path)
         if stored.exists():
             filepath = stored
@@ -476,8 +493,10 @@ def download_contract(
             if candidate.exists():
                 filepath = candidate
 
-    if filepath is None:
-        fallback = output_dir / f"contrato_{contract_id}.docx"
+    # O arquivo generico e' sempre o da versao mais nova: so serve para ela.
+    pedida_e_a_atual = ver is None or ver.version_number == contract.current_version
+    if filepath is None and pedida_e_a_atual:
+        fallback = generico
         if fallback.exists():
             filepath = fallback
 
@@ -493,7 +512,11 @@ def download_contract(
             # este e' o caminho normal de download, nao um caso de borda.
             contrato_data, gen_tipo = parse_form_data(form_data)
             _, new_filepath = gen_tipo.generate(contrato_data, contract_id=contract_id)
-            filepath = Path(new_filepath)
+            # O gerador grava sempre no nome generico (o da versao mais nova): move para o nome
+            # da versao pedida, senao a proxima consulta devolveria o texto errado.
+            destino = Path(new_filepath).with_name(f"contrato_{contract_id}_v{ver.version_number}.docx")
+            shutil.move(new_filepath, destino)
+            filepath = destino
             # Update stored path
             ver.file_path = str(filepath)
             db.commit()
