@@ -144,15 +144,32 @@ def _arquivo_da_versao(filepath: str | Path, contract_id: str, versao: int) -> s
     return str(destino)
 
 
-def _congelar_versao_atual(db: Session, contract: ContractDB) -> None:
-    """Antes de gerar a proxima versao, prende o DOCX da atual a um nome proprio."""
+def _congelar_versao_atual(db: Session, contract: ContractDB) -> tuple[Path, Path] | None:
+    """Antes de gerar a proxima versao, prende o DOCX da atual a um nome proprio.
+    Devolve (original, copia) se criou a copia, para a edicao poder desfazer se falhar."""
     ver = (
         db.query(ContractVersionDB)
         .filter(ContractVersionDB.contract_id == contract.contract_id, ContractVersionDB.version_number == contract.current_version)
         .first()
     )
     if ver and ver.file_path and Path(ver.file_path).exists():
-        ver.file_path = _arquivo_da_versao(ver.file_path, contract.contract_id, ver.version_number)
+        original = Path(ver.file_path)
+        ver.file_path = _arquivo_da_versao(original, contract.contract_id, ver.version_number)
+        if Path(ver.file_path) != original:
+            return original, Path(ver.file_path)
+    return None
+
+
+def _desfazer_arquivos(congelada: tuple[Path, Path] | None, novos: list[str]) -> None:
+    """Edicao que nao chegou ao banco: apaga o que ela criou e devolve ao arquivo original o conteudo da
+    versao anterior (o gerador o sobrescreve no lugar)."""
+    for f in novos:
+        Path(f).unlink(missing_ok=True)
+    if congelada:
+        original, copia = congelada
+        if copia.exists():
+            shutil.copyfile(copia, original)
+            copia.unlink(missing_ok=True)
 
 
 def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_data: dict, contrato_data, user: CurrentUser) -> None:
@@ -424,7 +441,7 @@ def update_contract(
     except Exception as e:
         raise HTTPException(422, f"Dados invalidos: {e}")
 
-    _congelar_versao_atual(db, contract)
+    congelada = _congelar_versao_atual(db, contract)
     _, filepath = gen.generate(contrato_data, contract_id=contract_id)
 
     # Distrato que gerou um substabelecimento: mudar os dados aqui regera aquele documento.
@@ -436,13 +453,13 @@ def update_contract(
             regerados, criados, arquivos_novos = sincronizar_do_distrato(db, contract, body.form_data, user.email)
         except Exception as e:
             db.rollback()
-            for f in arquivos_novos:
-                Path(f).unlink(missing_ok=True)
+            _desfazer_arquivos(congelada, arquivos_novos)
             logger.error("Falha ao atualizar o substabelecimento do distrato %s: %s", contract_id, e)
             raise HTTPException(500, MSG_ERRO_INTERNO)
 
     new_version = contract.current_version + 1
     filepath = _arquivo_da_versao(filepath, contract_id, new_version)
+    arquivos_novos.append(filepath)
     client_name, client_email = _extract_client_info(body.form_data)
 
     version_entry = ContractVersionDB(
@@ -469,8 +486,7 @@ def update_contract(
         db.commit()
     except Exception as e:
         db.rollback()
-        for f in arquivos_novos:  # nada de .docx sem registro
-            Path(f).unlink(missing_ok=True)
+        _desfazer_arquivos(congelada, arquivos_novos)  # nada de .docx sem registro
         logger.error("Falha ao gravar a edicao de %s: %s", contract_id, e)
         raise HTTPException(500, MSG_ERRO_INTERNO)
 
