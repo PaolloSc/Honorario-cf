@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
+import { ehErro422, textoDoErro } from "@/app/lib/erro422";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
 import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
@@ -315,6 +316,7 @@ export default function Step7Envio({
   // Varredura de português/padrão via DeepSeek, roda sozinha ao chegar neste passo.
   const [reviewFindings, setReviewFindings] = useState<Array<{ trecho: string; problema: string; sugestao: string }>>([]);
   const [reviewStatus, setReviewStatus] = useState<"idle" | "checking" | "done" | "error">("idle");
+  const [reviewErro, setReviewErro] = useState("");
   // Indice do achado com "Aplicar correção" em andamento (desabilita só aquele botão).
   const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
 
@@ -353,6 +355,9 @@ export default function Step7Envio({
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
   const reviewStarted = useRef(false);
+  // Contrato novo já criado nesta tela: se o e-mail falhar, tentar de novo reaproveita o
+  // mesmo contrato (com os mesmos dados) em vez de gerar outro e outra participação.
+  const criadoAgora = useRef<{ id: string; dados: string } | null>(null);
 
   useEffect(() => {
     // Só faz sentido revisar o texto ainda não gerado (criação). Em edição o
@@ -373,7 +378,11 @@ export default function Step7Envio({
         setReviewFindings(r.findings);
         setReviewStatus("done");
       })
-      .catch(() => setReviewStatus("error"));
+      .catch((e) => {
+        // regra do contrato (422): diz qual campo corrigir em vez do aviso genérico
+        setReviewErro(ehErro422(e) ? textoDoErro(e) : "");
+        setReviewStatus("error");
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -463,10 +472,13 @@ export default function Step7Envio({
         if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
         resultContractId = result.contract_id;
         onContractGenerated?.();
+      } else if (criadoAgora.current && criadoAgora.current.dados === JSON.stringify(data)) {
+        resultContractId = criadoAgora.current.id;
       } else {
         const result = await generateContract(data);
         if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
         resultContractId = result.contract_id!;
+        criadoAgora.current = { id: resultContractId, dados: JSON.stringify(data) };
         onContractGenerated?.();
       }
 
@@ -508,7 +520,7 @@ export default function Step7Envio({
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -554,7 +566,7 @@ export default function Step7Envio({
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -626,7 +638,7 @@ export default function Step7Envio({
       }
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -770,7 +782,9 @@ export default function Step7Envio({
 
       {reviewStatus === "error" && (
         <div className="bg-warning/[0.1] border border-warning rounded-lg p-4 text-sm text-foreground">
-          Não foi possível concluir a verificação de português. Você pode revisar manualmente e prosseguir.
+          {reviewErro
+            ? `Este contrato não passa nas regras atuais: ${reviewErro} Volte à etapa correspondente e corrija.`
+            : "Não foi possível concluir a verificação de português. Você pode revisar manualmente e prosseguir."}
         </div>
       )}
 

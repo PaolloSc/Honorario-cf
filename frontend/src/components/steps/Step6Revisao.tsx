@@ -122,7 +122,7 @@ export default function Step6Revisao({ data }: Step6Props) {
               : "Não"}
           </li>
           <li>
-            Penalidade por inadimplemento:{" "}
+            Multa de 10% por inadimplemento:{" "}
             {data.acessorios.tem_penalidade_inadimplemento ? "Sim" : "Não"}
           </li>
           {data.acessorios.valor_diligencia && (
@@ -180,12 +180,16 @@ export default function Step6Revisao({ data }: Step6Props) {
       {/* Cadastro no Legal One — vai ao financeiro mesmo sem participação */}
       {Boolean(
         data.participacao.categoria_cliente ||
+          data.participacao.etiquetas?.length ||
           data.participacao.listas_transmissao?.length,
       ) && (
         <Section title="Cadastro no Legal One (Interno)">
           <ul className="text-sm text-muted space-y-1 ml-4 list-disc">
             {data.participacao.categoria_cliente && (
               <li>Categoria do cliente: {data.participacao.categoria_cliente}</li>
+            )}
+            {!!data.participacao.etiquetas?.length && (
+              <li>Etiquetas: {data.participacao.etiquetas.join(", ")}</li>
             )}
             {!!data.participacao.listas_transmissao?.length && (
               <li>Lista de transmissão: {data.participacao.listas_transmissao.join(", ")}</li>

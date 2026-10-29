@@ -832,11 +832,14 @@ def _blocos(html: str) -> list[tuple[int, int]]:
 def _html_honorarios(escopos: list, acessorios) -> str:
     import tempfile
 
-    data = ContratoRequest(
-        contratantes=[_CONTRATANTE_PREVIA],
-        escopos=escopos,
-        acessorios=acessorios or Acessorios(),
-        participacao={"tem_participacao": False},
+    data = ContratoRequest.model_validate(
+        {
+            "contratantes": [_CONTRATANTE_PREVIA],
+            "escopos": escopos,
+            "acessorios": acessorios or Acessorios(),
+            "participacao": {"tem_participacao": False},
+        },
+        context={"previa": True},  # pop-up com formulario pela metade
     )
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
     tmp_path = Path(tmp.name)

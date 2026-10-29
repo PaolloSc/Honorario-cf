@@ -68,7 +68,7 @@ def test_pro_labore_customizado_sem_valor_nao_escreve_zero():
 
 
 def test_pro_labore_mensal_e_legado_tem_parcelamento():
-    campos = {"numero_parcelas": 3, "valor_parcela": 1000, "vencimento_parcelas": "10"}
+    campos = {"numero_parcelas": 3, "valor_parcela": 1000, "valor_total": 3000, "vencimento_parcelas": "10"}
     novo = _paras_for(_req_com("pro_labore", tipo_parcelamento="mensal", **campos))
     legado = _paras_for(_req_com("pro_labore", tem_parcelamento=True, **campos))
     esperado = "serão pagos em 3 (três) parcelas de R$ 1.000,00"

@@ -13,7 +13,7 @@ assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado" })),
 assert.equal(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcelamento_customizado: "  " })), "E").length, 1);
 // Com texto, mensal ou parcela única: passa.
 assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcelamento_customizado: "50/50" })), "E"), []);
-assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal" })), "E"), []);
+assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal", numero_parcelas: 2, valor_parcela: 500 })), "E"), []);
 assert.deepEqual(errosDoEscopo(escopo(pl({})), "E"), []);
 // Pró-labore desmarcado não valida dado que ficou para trás.
 assert.deepEqual(
@@ -33,5 +33,51 @@ assert.deepEqual(
   errosDoEscopo({ honorarios: [], mensalidade: { tem_desconto: true, desconto_percentual: 150 } } as never, "E"),
   [],
 );
+
+// Êxito de 0 a 100 e valores maiores que zero (achados 4 e 10 da varredura).
+const exito = (percentual: number) => ({ honorarios: ["exito"], exito: { percentual } }) as never;
+assert.deepEqual(errosDoEscopo(exito(150), "E1"), ["E1: o percentual de êxito deve ficar entre 0 e 100."]);
+assert.equal(errosDoEscopo(exito(-5), "E").length, 1);
+assert.deepEqual(errosDoEscopo(exito(100), "E"), []);
+assert.deepEqual(errosDoEscopo(exito(0), "E"), []);
+const hora = (valor_hora: number) => ({ honorarios: ["hora_trabalhada"], hora_trabalhada: { valor_hora } }) as never;
+assert.deepEqual(errosDoEscopo(hora(0), "E1"), ["E1: informe o valor de hora trabalhada (maior que zero)."]);
+assert.equal(errosDoEscopo(hora(-1), "E").length, 1);
+assert.deepEqual(errosDoEscopo(hora(300), "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["mensalidade"], mensalidade: { valor: 0 } } as never, "E").length, 1);
+assert.deepEqual(
+  errosDoEscopo({ honorarios: ["mensalidade"], mensalidade: { valor: 0, faixas_preco: [{ faixa: "a", valor: "1" }] } } as never, "E"),
+  [],
+);
+assert.equal(errosDoEscopo(escopo(pl({ valor_total: -500 })), "E").length, 1);
+assert.deepEqual(
+  errosDoEscopo(escopo(pl({ valor_total: 0, tipo_parcelamento: "customizado", parcelamento_customizado: "a combinar" })), "E"),
+  [],
+);
+assert.deepEqual(errosDoEscopo({ honorarios: [], hora_trabalhada: { valor_hora: 0 } } as never, "E"), []);
+
+// Pró-labore mensal, permuta e êxito "Outro" (achados 11 e 12 da varredura).
+const mensal = (extra: object) => escopo(pl({ tipo_parcelamento: "mensal", valor_total: 12000, ...extra }));
+assert.equal(errosDoEscopo(mensal({}), "E").length, 1); // sem nº nem valor da parcela
+assert.equal(errosDoEscopo(mensal({ numero_parcelas: 3, valor_parcela: 1000 }), "E").length, 1); // 3000 != 12000
+assert.deepEqual(errosDoEscopo(mensal({ numero_parcelas: 3, valor_parcela: 4000 }), "E"), []);
+assert.deepEqual(errosDoEscopo(mensal({ valor_total: 10000, numero_parcelas: 3, valor_parcela: 3333.33 }), "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: " " } } as never, "E").length, 1);
+assert.deepEqual(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: "imóvel" } } as never, "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "a definir" } } as never, "E").length, 1);
+assert.deepEqual(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "em 2 vezes" } } as never, "E"), []);
+
+// Êxito variável precisa de faixa completa (item 7).
+const variavel = (faixas: object[]) =>
+  ({ honorarios: ["exito"], exito: { subtipo: "percentual_variavel", faixas_percentual: faixas } }) as never;
+assert.equal(errosDoEscopo(variavel([]), "E").length, 1);
+assert.equal(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "" }]), "E").length, 1);
+assert.deepEqual(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "10" }]), "E"), []);
+assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "a combinar" }]), "E").length, 1);
+assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "300" }]), "E").length, 1);
+assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "10" }, { faixa: "b", percentual: "" }]), "E").length, 1);
+assert.deepEqual(errosDoEscopo(variavel([{ faixa: "a", percentual: "10,5%" }, { faixa: "", percentual: "" }]), "E"), []);
+// Período invertido (revisão da Angela).
+assert.equal(errosDoEscopo({ honorarios: ["mensalidade"], mensalidade: { data_inicio: "2026-12-31", data_fim: "2026-01-10" } } as never, "E").length, 1);
 
 console.log("validacaoHonorarios.ts ok");

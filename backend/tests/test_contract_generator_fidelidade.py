@@ -6,9 +6,10 @@ from app.models.contract import ContratoRequest
 from app.services.contract_generator import ContractGenerator
 
 
-def _paras_for(req: dict) -> list[str]:
-    """Gera o contrato e devolve os parágrafos de texto do .docx."""
-    data = ContratoRequest(**req)
+def _paras_for(req: dict, solto: bool = False) -> list[str]:
+    """Gera o contrato e devolve os parágrafos de texto do .docx. solto=True pula a
+    validação de valores (o gerador continua tolerante a valor zerado)."""
+    data = ContratoRequest.model_validate(req, context={"previa": True}) if solto else ContratoRequest(**req)
     gen = ContractGenerator()
     _, path = gen.generate(data, contract_id="FIDELIDADE_TEST")
     xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf-8")
@@ -610,7 +611,7 @@ def test_hora_trabalhada_texto_corrido_com_acrescimos_por_extenso():
 
 
 def test_valor_zero_nao_aparece():
-    paras = _paras_for(_req_escopos([_hora(valor_hora=0)]))
+    paras = _paras_for(_req_escopos([_hora(valor_hora=0)]), solto=True)
     assert not _has(paras, "R$ 0,00")
     assert not _has(paras, "zero reais")
     assert _has(paras, "Os serviços serão remunerados por hora trabalhada, sendo as horas apuradas")
@@ -640,7 +641,9 @@ def test_mensalidade_por_pasta_concorda_no_feminino():
 
 
 def test_clausulas_gerais_com_numeros_por_extenso():
-    paras = _paras_for(_base_req())
+    req = _base_req()
+    req["acessorios"]["tem_penalidade_inadimplemento"] = True
+    paras = _paras_for(req)
     assert _has(paras, "juros de 1% (um por cento) ao mês, multa de 10% (dez por cento)")
     assert _has(paras, "no prazo de até 5 (cinco) dias")
     assert _has(paras, "durante os 10 (dez) dias seguintes à notificação")
@@ -655,7 +658,7 @@ def test_clausulas_gerais_com_numeros_por_extenso():
 
 def test_vencimento_livre_com_ponto_e_maiuscula_encaixa_na_frase():
     pl = _escopo("pro_labore")
-    pl["pro_labore"].update(tipo_parcelamento="mensal", numero_parcelas=2, valor_parcela=500,
+    pl["pro_labore"].update(tipo_parcelamento="mensal", numero_parcelas=2, valor_parcela=500, valor_total=1000,
                             vencimento_parcelas_obs="Todo dia 10.")
     m = _escopo("mensalidade", mensalidade_subtipo="advocacia_partido", tipo="consultoria_contratual")
     m["mensalidade"].update(dia_vencimento="", dia_vencimento_obs="Até o 5º dia útil.")
@@ -685,12 +688,10 @@ def test_exito_variavel_faixas_com_percentual_por_extenso():
     e["exito"].update(subtipo="percentual_variavel", percentual=None, faixas_percentual=[
         {"faixa": "até R$ 1 milhão", "percentual": "10"},
         {"faixa": "acima", "percentual": "7,5%"},
-        {"faixa": "outros", "percentual": "a combinar"},
     ])
     paras = _paras_for(_req_escopos([e]))
     assert _has(paras, "10% (dez por cento)")
     assert _has(paras, "7,5% (sete vírgula cinco por cento)")
-    assert _has(paras, "a combinar")
 
 
 def test_texto_livre_so_baixa_inicial_de_palavra_comum():
