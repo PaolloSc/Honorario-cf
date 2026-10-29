@@ -14,7 +14,7 @@ import logging
 from app.config import settings
 from app.utils.erros import MSG_ERRO_INTERNO
 from app.database import init_db
-from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, documentos, drafts, email, emissor, faturamento, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
+from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, documentos, drafts, email, emissor, faturamento, legalone_opcoes, nfse, nfse_internal, participacoes, processos, tax_codes, testemunhas, users
 
 init_db()
 
@@ -99,6 +99,7 @@ app.include_router(users.router)
 app.include_router(participacoes.router)
 app.include_router(nfse.router)
 app.include_router(documentos.router)
+app.include_router(processos.router)
 app.include_router(emissor.router)
 app.include_router(emissor.emitidas_router)
 app.include_router(faturamento.router)
