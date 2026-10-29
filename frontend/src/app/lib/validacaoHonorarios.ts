@@ -31,6 +31,29 @@ export function errosDoEscopo(
   if (escopo.honorarios.includes("exito") && pct != null && (pct < 0 || pct > 100)) {
     errors.push(`${label}: o percentual de êxito deve ficar entre 0 e 100.`);
   }
+  const ex = escopo.exito;
+  if (escopo.honorarios.includes("exito") && ex?.subtipo === "percentual_variavel") {
+    let completas = 0;
+    const antes = errors.length;
+    for (const f of ex.faixas_percentual ?? []) {
+      const faixa = f.faixa.trim();
+      const pct = f.percentual.trim();
+      if (!faixa && !pct) continue; // linha em branco: o contrato a descarta
+      const n = Number(pct.replace(/%$/, "").trim().replace(",", "."));
+      if (!faixa || !pct) errors.push(`${label}: cada faixa do êxito variável precisa de valor e percentual.`);
+      else if (!Number.isFinite(n) || n < 0 || n > 100) errors.push(`${label}: percentual da faixa "${faixa}" deve ser um número entre 0 e 100.`);
+      else completas++;
+    }
+    if (!completas && errors.length === antes) errors.push(`${label}: êxito de percentual variável precisa de ao menos uma faixa com valor e percentual.`);
+  }
+  for (const [tipo, obj, rotulo] of [
+    ["hora_trabalhada", escopo.hora_trabalhada, "do contrato"],
+    ["mensalidade", escopo.mensalidade, "da mensalidade"],
+  ] as const) {
+    if (escopo.honorarios.includes(tipo) && obj?.data_inicio && obj?.data_fim && obj.data_fim < obj.data_inicio) {
+      errors.push(`${label}: o período ${rotulo} termina antes de começar.`);
+    }
+  }
   const valores: [Honorario, number | null | undefined, string][] = [
     ["hora_trabalhada", escopo.hora_trabalhada?.valor_hora, "hora trabalhada"],
     ["mensalidade", escopo.mensalidade?.faixas_preco?.length ? undefined : escopo.mensalidade?.valor, "mensalidade"],

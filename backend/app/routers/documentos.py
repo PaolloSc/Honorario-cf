@@ -7,7 +7,6 @@ os endpoints dos contratos. Aqui ficam so' a geracao e o pre-preenchimento.
 
 from __future__ import annotations
 
-import json
 import logging
 import tempfile
 from pathlib import Path
@@ -19,14 +18,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
-from app.database import (
-    AuditLogDB,
-    ContractDB,
-    ContractVersionDB,
-    get_db,
-    serialize_cliente_docs,
-    utcnow,
-)
+from app.database import ContractDB, get_db
 from app.models.documentos_complementares import (
     REQUESTS,
     ROTULO_DOCUMENTO,
@@ -37,37 +29,35 @@ from app.models.documentos_complementares import (
     AditivoAnterior,
     DistratoRequest,
     SubstabelecimentoRequest,
-    email_contato,
-    nome_contratante,
-    nome_exibicao,
 )
 from app.routers.contract import _docx_to_html
 from app.routers.contracts import _check_access
 from app.services.contract_dispatch import get_generator
+from app.utils.erros import MSG_ERRO_INTERNO
+from app.services.substabelecimento_vinculado import (
+    MOTIVO_TRAVADO,
+    acrescentar_processos,
+    documento_do_outorgante,
+    form_data_atual,
+    gravar_novo,
+    nova_versao,
+    so_digitos,
+    substabelecimento_do_distrato,
+    substabelecimentos_do_outorgante,
+    travado,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documentos", tags=["Documentos complementares"])
 
 
-def _form_data_atual(contract: ContractDB, db: Session) -> dict:
-    ver = (
-        db.query(ContractVersionDB)
-        .filter(
-            ContractVersionDB.contract_id == contract.contract_id,
-            ContractVersionDB.version_number == contract.current_version,
-        )
-        .first()
-    )
-    return json.loads(ver.form_data_json) if ver else {}
-
-
 def _origem(contrato_id: str, user: CurrentUser, db: Session) -> ContractDB:
     origem = db.query(ContractDB).filter(ContractDB.contract_id == contrato_id).first()
     if not origem:
-        raise HTTPException(404, "Contrato de origem não encontrado")
+        raise HTTPException(404, "Contrato original não encontrado")
     _check_access(origem, user)
     if origem.tipo_contrato in TIPOS_COMPLEMENTARES:
-        raise HTTPException(422, "O contrato de origem não pode ser outro documento complementar")
+        raise HTTPException(422, "O contrato original não pode ser outro documento complementar")
     return origem
 
 
@@ -88,7 +78,7 @@ def _aditivos_anteriores(origem_id: str, db: Session, so_assinados: bool = False
     for i, ad in enumerate(_derivados(origem_id, db, TIPO_ADITIVO), 1):
         if so_assinados and ad.status != "assinado":
             continue
-        form = _form_data_atual(ad, db)
+        form = form_data_atual(ad, db)
         anteriores.append(
             AditivoAnterior(
                 numero=i,
@@ -112,14 +102,41 @@ def prefill(
 ) -> dict:
     """Dados do contrato de origem para abrir o formulario ja preenchido."""
     origem = _origem(contrato_origem_id, user, db)
-    form = _form_data_atual(origem, db)
+    form = form_data_atual(origem, db)
     return {
         "contratantes": form.get("contratantes") or [],
         "aditivos_existentes": len(_derivados(origem.contract_id, db, TIPO_ADITIVO)),
         "data_contrato_origem": _data_contrato_origem(form),
         "status_origem": origem.status,
-        "aviso": None if origem.status == "assinado" else "O contrato de origem ainda não foi assinado.",
+        "aviso": None if origem.status == "assinado" else "O contrato original ainda não foi assinado.",
     }
+
+
+def _erro_campo(campo: str, msg: str) -> RequestValidationError:
+    return RequestValidationError([{"loc": ("body", campo), "msg": msg, "type": "value_error", "input": None}])
+
+
+def _validar_distrato_origem(data: SubstabelecimentoRequest, user: CurrentUser, db: Session) -> None:
+    """O distrato de onde o substabelecimento diz nascer existe e e' do mesmo cliente; senao 422."""
+    distrato = db.query(ContractDB).filter(
+        ContractDB.contract_id == data.distrato_origem_id, ContractDB.tipo_contrato == TIPO_DISTRATO,
+        ContractDB.status != "cancelado",
+    ).first()
+    if not distrato:
+        raise _erro_campo("distrato_origem_id", "Distrato de origem não encontrado")
+    try:
+        _check_access(distrato, user)
+    except HTTPException:
+        raise _erro_campo("distrato_origem_id", "Distrato de origem não encontrado")
+    if data.contrato_origem_id and data.contrato_origem_id != distrato.contrato_origem_id:
+        raise _erro_campo("distrato_origem_id", "O distrato é de outro contrato")
+    docs = {
+        so_digitos(c.get("cnpj") or c.get("cpf"))
+        for c in (form_data_atual(distrato, db).get("contratantes") or [])
+    }
+    doc_outorgante = so_digitos(data.outorgante.cnpj or data.outorgante.cpf)
+    if doc_outorgante and doc_outorgante not in docs:
+        raise _erro_campo("distrato_origem_id", "O distrato é de outro cliente")
 
 
 def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
@@ -138,12 +155,14 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
         }])
 
     origem = _origem(data.contrato_origem_id, user, db) if data.contrato_origem_id else None
+    if isinstance(data, SubstabelecimentoRequest) and data.distrato_origem_id:
+        _validar_distrato_origem(data, user, db)
     aviso = None
     if origem is not None:
-        aviso = None if origem.status == "assinado" else "O contrato de origem ainda não foi assinado."
+        aviso = None if origem.status == "assinado" else "O contrato original ainda não foi assinado."
         if not isinstance(data, SubstabelecimentoRequest):
             # Servidor manda nos campos derivados do contrato de origem.
-            form_origem = _form_data_atual(origem, db)
+            form_origem = form_data_atual(origem, db)
             data.contratantes = form_origem.get("contratantes") or []
             # So aditivo assinado e' citado como celebrado; a numeracao conta tambem os rascunhos.
             data.aditivos_anteriores = _aditivos_anteriores(origem.contract_id, db, so_assinados=True)
@@ -173,97 +192,134 @@ def previa_documento(
         tmp_path.unlink(missing_ok=True)
 
 
-def _substabelecimento_do_distrato(distrato: DistratoRequest, origem: ContractDB | None) -> SubstabelecimentoRequest:
-    """Substabelecimento sem reserva a favor do novo patrono, preenchido com o contrato e o distrato."""
-    d = distrato.substabelecimento
-    nomes = [nome_contratante(c) for c in distrato.contratantes] or ["o CONTRATANTE"]
-    primeiro = distrato.contratantes[0] if distrato.contratantes else {}
-    if len(distrato.contratantes) == 1 and primeiro.get("cnpj"):
-        outorgante = {"razao_social": nomes[0], "cnpj": primeiro["cnpj"]}
-    elif len(distrato.contratantes) == 1:
-        outorgante = {"nome": nomes[0], "cpf": primeiro.get("cpf") or None}
-    else:  # varios contratantes: o texto cita todos, sem documento
-        outorgante = {"nome": " e ".join(nomes)}
-    return SubstabelecimentoRequest(
-        contrato_origem_id=distrato.contrato_origem_id,
-        data_documento=distrato.data_documento,
-        outorgante=outorgante,
-        substabelecentes=d.substabelecentes,
-        substabelecidos=d.substabelecidos,
-        endereco_substabelecidos=d.endereco_substabelecidos,
-        processos=d.processos,
-    )
+def _processos_novos(existente: ContractDB, data: SubstabelecimentoRequest, db: Session) -> tuple[SubstabelecimentoRequest, int]:
+    """O substabelecimento existente com os processos de `data` que ainda nao constam nele."""
+    atual = SubstabelecimentoRequest(**form_data_atual(existente, db))
+    todos = acrescentar_processos(atual.processos, data.processos)
+    return atual.model_copy(update={"processos": todos}), len(todos) - len(atual.processos)
 
 
-def _gravar(db: Session, tipo: str, data, origem: ContractDB | None, user: CurrentUser) -> str:
-    """Gera o DOCX e grava contrato, versao 1 e auditoria (sem commit). Devolve o contract_id."""
-    contract_id, filepath = get_generator(tipo).generate(data)
-    form_dict = data.model_dump(mode="json")
-    nome = nome_exibicao(data)
-    origem_id = origem.contract_id if origem else None
+def _norm(texto: str) -> str:
+    return " ".join((texto or "").casefold().split())
 
-    db.add(ContractDB(
-        contract_id=contract_id,
-        status="rascunho",
-        client_name=nome,
-        client_email=email_contato(data),
-        tipo_contrato=tipo,
-        contrato_origem_id=origem_id,
-        current_version=1,
-        created_by=user.email,
-        updated_by=user.email,
-        created_at=utcnow(),
-        updated_at=utcnow(),
-        cliente_docs=serialize_cliente_docs(
-            {"contratantes": [data.outorgante.model_dump()]}
-            if isinstance(data, SubstabelecimentoRequest)
-            else form_dict
-        ),
-    ))
-    db.flush()
-    db.add(ContractVersionDB(
-        contract_id=contract_id,
-        version_number=1,
-        form_data_json=json.dumps(form_dict, ensure_ascii=False),
-        file_path=filepath,
-        created_by=user.email,
-        created_at=utcnow(),
-    ))
-    rotulo = ROTULO_DOCUMENTO[tipo]
-    db.add(AuditLogDB(
-        contract_id=contract_id, action="criacao", version_number=1, user_email=user.email,
-        detail=f"{rotulo} gerado para {nome}", created_at=utcnow(),
-    ))
-    if origem_id:
-        db.add(AuditLogDB(
-            contract_id=origem_id, action="documento_complementar", user_email=user.email,
-            detail=f"{rotulo} criado ({contract_id})", created_at=utcnow(),
-        ))
-    return contract_id
+
+def _partes_diferem(atual: SubstabelecimentoRequest, data: SubstabelecimentoRequest) -> bool:
+    """Substabelecentes, substabelecidos ou endereco informados diferem dos do documento existente.
+    Acrescentar mantem as partes do documento: se a pessoa informou outras, o DOCX final diria que
+    o processo foi substabelecido a quem ela nao escolheu."""
+    def pessoas(lista) -> list[tuple]:
+        return [(_norm(p.nome), _norm(p.oab)) for p in lista]
+
+    def substabelecentes(lista) -> list[tuple]:
+        return [(_norm(p.nome), _norm(p.oab), _norm(p.email)) for p in lista]
+
+    if substabelecentes(atual.substabelecentes) != substabelecentes(data.substabelecentes):
+        return True
+    if pessoas(atual.substabelecidos) != pessoas(data.substabelecidos):
+        return True
+    novo_endereco = _norm(data.endereco_substabelecidos)
+    return bool(novo_endereco) and novo_endereco != _norm(atual.endereco_substabelecidos)
+
+
+@router.get("/substabelecimento-existente")
+def substabelecimento_existente(
+    documento: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """O cliente (CPF/CNPJ) ja tem substabelecimento? Orienta 'acrescentar o processo' ou 'criar novo'."""
+    for c in substabelecimentos_do_outorgante(db, so_digitos(documento)):
+        try:
+            _check_access(c, user)
+        except HTTPException:
+            continue
+        lock = travado(c, db)
+        form = form_data_atual(c, db)
+        return {
+            "existe": True,
+            "contract_id": c.contract_id,
+            "client_name": c.client_name,
+            "status": c.status,
+            "pode_acrescentar": not lock,
+            "motivo": MOTIVO_TRAVADO if lock else None,
+            "processos": [p.get("numero", "") for p in form.get("processos", [])],
+            # A tela pre-preenche as partes com estas (no modo acrescentar elas valem para o documento todo).
+            "substabelecentes": form.get("substabelecentes", []),
+            "substabelecidos": form.get("substabelecidos", []),
+            "endereco_substabelecidos": form.get("endereco_substabelecidos", ""),
+        }
+    return {"existe": False}
 
 
 @router.post("/{tipo}")
 def gerar_documento(
     tipo: str,
     corpo: dict = Body(...),
+    acrescentar_a: str | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     data, origem, aviso = _montar(tipo, corpo, user, db)
 
+    # Mesmo outorgante: acrescenta o(s) processo(s) ao substabelecimento existente (nova versao).
+    if acrescentar_a and isinstance(data, SubstabelecimentoRequest):
+        alvo = db.query(ContractDB).filter(ContractDB.contract_id == acrescentar_a).first()
+        if not alvo or alvo.tipo_contrato != TIPO_SUBSTABELECIMENTO or alvo.status == "cancelado":
+            raise HTTPException(404, "Substabelecimento a acrescentar não encontrado")
+        _check_access(alvo, user)
+        doc_alvo = documento_do_outorgante(form_data_atual(alvo, db))
+        if not doc_alvo or doc_alvo != so_digitos(data.outorgante.cnpj or data.outorgante.cpf):
+            raise HTTPException(422, "O substabelecimento a acrescentar é de outro outorgante")
+        if travado(alvo, db):
+            aviso = f"Foi criado um novo substabelecimento porque {MOTIVO_TRAVADO}."
+        else:
+            atual = SubstabelecimentoRequest(**form_data_atual(alvo, db))
+            if _partes_diferem(atual, data):
+                raise HTTPException(422, (
+                    "As partes ou o endereço informados diferem do substabelecimento existente. "
+                    "Para acrescentar o processo, mantenha os mesmos substabelecentes, substabelecidos e endereço; "
+                    "para outras partes, crie um novo substabelecimento."
+                ))
+            combinado, novos = _processos_novos(alvo, data, db)
+            if novos == 0 and combinado.model_dump(mode="json") == atual.model_dump(mode="json"):
+                return {
+                    "success": True, "message": "Os processos já constavam no substabelecimento",
+                    "contract_id": alvo.contract_id, "download_url": f"/api/contract/{alvo.contract_id}/download",
+                    "aviso": None, "documentos_gerados_junto": [], "acrescentado": True, "processos_novos": 0,
+                }
+            try:
+                nova_versao(db, alvo, combinado, user.email, f"{novos} processo(s) acrescentado(s)")
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error("Falha ao acrescentar processo: %s", e)
+                raise HTTPException(500, MSG_ERRO_INTERNO)
+            return {
+                "success": True, "message": "Processo acrescentado ao substabelecimento existente",
+                "contract_id": alvo.contract_id, "download_url": f"/api/contract/{alvo.contract_id}/download",
+                "aviso": None, "documentos_gerados_junto": [], "acrescentado": True, "processos_novos": novos,
+            }
+
+    # Todos os DOCX nascem juntos com os registros: se algo falhar, nenhum arquivo fica solto.
+    arquivos: list[str] = []
     try:
-        contract_id = _gravar(db, tipo, data, origem, user)
+        contract_id, arquivo = gravar_novo(db, tipo, data, origem, user.email)
+        arquivos.append(arquivo)
         extras = []
         if isinstance(data, DistratoRequest) and data.substabelecer_e_devolver and data.substabelecimento:
-            sub = _substabelecimento_do_distrato(data, origem)
-            extras.append(_gravar(db, TIPO_SUBSTABELECIMENTO, sub, origem, user))
+            sub = substabelecimento_do_distrato(data, contract_id)
+            cid, arquivo = gravar_novo(db, TIPO_SUBSTABELECIMENTO, sub, origem, user.email)
+            arquivos.append(arquivo)
+            extras.append(cid)
         db.commit()
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
+        for f in arquivos:
+            Path(f).unlink(missing_ok=True)
         logger.error("Falha ao gerar %s: %s", tipo, e)
-        raise HTTPException(500, str(e))
+        raise HTTPException(500, MSG_ERRO_INTERNO)
 
     logger.info("%s gerado por %s: %s", tipo, user.email, contract_id)
     return {

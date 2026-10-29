@@ -67,4 +67,17 @@ assert.deepEqual(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_perm
 assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "a definir" } } as never, "E").length, 1);
 assert.deepEqual(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "em 2 vezes" } } as never, "E"), []);
 
+// Êxito variável precisa de faixa completa (item 7).
+const variavel = (faixas: object[]) =>
+  ({ honorarios: ["exito"], exito: { subtipo: "percentual_variavel", faixas_percentual: faixas } }) as never;
+assert.equal(errosDoEscopo(variavel([]), "E").length, 1);
+assert.equal(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "" }]), "E").length, 1);
+assert.deepEqual(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "10" }]), "E"), []);
+assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "a combinar" }]), "E").length, 1);
+assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "300" }]), "E").length, 1);
+assert.equal(errosDoEscopo(variavel([{ faixa: "a", percentual: "10" }, { faixa: "b", percentual: "" }]), "E").length, 1);
+assert.deepEqual(errosDoEscopo(variavel([{ faixa: "a", percentual: "10,5%" }, { faixa: "", percentual: "" }]), "E"), []);
+// Período invertido (revisão da Angela).
+assert.equal(errosDoEscopo({ honorarios: ["mensalidade"], mensalidade: { data_inicio: "2026-12-31", data_fim: "2026-01-10" } } as never, "E").length, 1);
+
 console.log("validacaoHonorarios.ts ok");
