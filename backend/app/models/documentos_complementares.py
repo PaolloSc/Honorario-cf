@@ -129,6 +129,8 @@ class DistratoRequest(_ComOrigem):
     ressalva_exito: bool = True
     # Inclui a clausula de substabelecer sem reserva e devolver documentos.
     substabelecer_e_devolver: bool = False
+    # Distrato que envolve processo judicial: o substabelecimento sem reserva e' obrigatorio.
+    contencioso: bool = False
     # Dados do substabelecimento gerado junto (so com substabelecer_e_devolver). Distratos salvos
     # antes dessa opcao nao o tem e nao geram nada novo.
     substabelecimento: Optional["SubstabelecimentoDoDistrato"] = None
@@ -139,6 +141,8 @@ class DistratoRequest(_ComOrigem):
 
     @model_validator(mode="after")
     def _pagamento_completo(self):
+        if self.contencioso:
+            self.substabelecer_e_devolver = True
         if self.pagamento_valor and not self.pagamento_data:
             raise ValueError("Informe a data limite do pagamento")
         return self

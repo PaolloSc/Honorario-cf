@@ -128,18 +128,26 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
 
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Quitação</h3>
       <Checkbox
-        label="Ressalvar honorários e reembolsos a vencer (inclusive êxito)"
+        label="Ressalvar honorários de êxito (proporcionais) e de sucumbência"
         checked={estado.ressalva_exito}
         onChange={(v) => set({ ressalva_exito: v })}
-        hint="Marcado, acrescenta à quitação a ressalva de honorários e reembolsos vincendos, inclusive de êxito. Desmarcado (padrão, como no modelo), a quitação é total."
+        hint="Marcado (padrão): o êxito é devido de forma proporcional ao trabalho feito até o distrato, mais a sucumbência (art. 23 da Lei 8.906/94). Desmarcado, a quitação é total."
+      />
+      <Checkbox
+        label="Envolve processo judicial"
+        checked={estado.contencioso}
+        onChange={(v) => set({ contencioso: v })}
+        hint="Marcado, o substabelecimento sem reserva de poderes acompanha sempre o distrato e é gerado junto."
       />
       <Checkbox
         label="Substabelecer sem reserva de poderes e devolver documentos"
-        checked={estado.substabelecer_e_devolver}
-        onChange={(v) => set({ substabelecer_e_devolver: v })}
-        hint="Marcado, o distrato também passa os processos aos novos advogados, sem reserva de poderes, e prevê a devolução dos documentos do cliente."
+        checked={estado.substabelecer_e_devolver || estado.contencioso}
+        onChange={(v) => { if (!estado.contencioso) set({ substabelecer_e_devolver: v }); }}
+        hint={estado.contencioso
+          ? "Obrigatório quando há processo judicial."
+          : "Sem processo judicial é opcional. Marcado, o distrato também passa os processos aos novos advogados e prevê a devolução dos documentos do cliente."}
       />
-      {estado.substabelecer_e_devolver && (
+      {(estado.substabelecer_e_devolver || estado.contencioso) && (
         <>
           <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecimento gerado junto</h3>
           <p className="text-xs text-muted mb-2">O cliente e a data vêm do contrato e do distrato. Informe quem assina, quem recebe os poderes e os processos.</p>

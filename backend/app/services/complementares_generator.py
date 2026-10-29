@@ -281,6 +281,26 @@ class AditivoGenerator(ComplementarGenerator):
         self._assinaturas_partes(doc, data, signatario_roles)
 
 
+# ── Clausulas do distrato que o Dr. e a revisao juridica ajustam: ficam aqui, fora da logica ──
+DISTRATO_SEM_VALOR = "As Partes declaram que os honorários contratuais foram integralmente quitados, não havendo valores pendentes."
+DISTRATO_ENCARGOS = (
+    "Em caso de atraso no pagamento, incidirão multa de 10% (dez por cento), juros de 1% (um por cento) ao mês "
+    "e correção monetária sobre o valor devido. O presente Distrato, assinado pelas partes e por duas "
+    "testemunhas, constitui título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil."
+)
+DISTRATO_SUBSTABELECIMENTO = (
+    "O Contratado substabelecerá, sem reserva de poderes, os processos judiciais em favor do novo patrono, que a "
+    "Contratante se obriga a indicar em até 10 (dez) dias contados da assinatura deste Distrato. O Contratado "
+    "responderá apenas pelos prazos processuais que vencerem nesse período, nos termos do art. 5º, § 3º, da "
+    "Lei n.º 8.906/94, e restituirá os documentos físicos ou digitais sob sua guarda mediante recibo."
+)
+DISTRATO_RESSALVA_EXITO = (
+    ", ressalvados os honorários de êxito, que serão devidos de forma proporcional ao trabalho realizado até a "
+    "data deste Distrato, caso venham a se tornar exigíveis nos termos do contrato original, bem como os "
+    "honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
+)
+
+
 class DistratoGenerator(ComplementarGenerator):
     """Texto do modelo do escritorio para distrato; os dados do modelo de referencia nao entram no codigo."""
 
@@ -318,27 +338,23 @@ class DistratoGenerator(ComplementarGenerator):
             "Por motivos supervenientes à assinatura do referido instrumento, as partes decidem de comum "
             "acordo firmar o presente Distrato nas seguintes condições:"
         )
-        sub = 0
+        subclausulas: list[str] = []
         if data.pagamento_valor:
-            sub += 1
             forma = _sem_ponto(data.pagamento_forma) or f"Pix (CNPJ {ESCRITORIO_CNPJ})"
-            doc.add_paragraph(
-                f"{k}.{sub}. A Contratante pagará ao Contratado, até o dia {self._data_curta(data.pagamento_data)}, "
+            subclausulas.append(
+                f"A Contratante pagará ao Contratado, até o dia {self._data_curta(data.pagamento_data)}, "
                 f"o valor de {valor_com_extenso(data.pagamento_valor)}, por meio de {forma}."
             )
+            subclausulas.append(DISTRATO_ENCARGOS)
+        else:
+            subclausulas.append(DISTRATO_SEM_VALOR)
         if data.substabelecer_e_devolver:
-            sub += 1
-            doc.add_paragraph(
-                f"{k}.{sub}. O Contratado compromete-se a substabelecer sem reserva de poderes a favor do novo "
-                "patrono a ser indicado pela Contratante, bem como a restituir eventuais documentos físicos ou "
-                "digitais que estejam sob sua guarda."
-            )
+            subclausulas.append(DISTRATO_SUBSTABELECIMENTO)
+        for i, texto in enumerate(subclausulas, 1):
+            doc.add_paragraph(f"{k}.{i}. {texto}")
 
-        # Com ressalva (opcao do formulario), a quitacao exclui os honorarios e reembolsos vincendos.
-        ressalva = (
-            ", ressalvados reembolsos e honorários vincendos, inclusive de êxito, caso exigíveis nos termos do contrato original"
-            if data.ressalva_exito else ""
-        )
+        # Com ressalva (opcao do formulario), a quitacao preserva o exito proporcional e a sucumbencia.
+        ressalva = DISTRATO_RESSALVA_EXITO if data.ressalva_exito else ""
         clausula(
             "Salvo as obrigações previstas neste Distrato, as partes, com o presente instrumento, se dão mútua, "
             "total, completa, irrevogável e irretratável quitação, declarando que nada têm a reclamar extra ou "

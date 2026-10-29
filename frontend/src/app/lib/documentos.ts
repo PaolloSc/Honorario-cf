@@ -37,6 +37,8 @@ export interface DistratoForm extends PoderesForm {
   objeto_contrato_origem: string;
   ressalva_exito: boolean;
   substabelecer_e_devolver: boolean;
+  /** Envolve processo judicial: o substabelecimento sem reserva é obrigatório. */
+  contencioso: boolean;
   /** Pagamento pendente ao escritório; sem valor, a cláusula não entra no distrato. */
   pagamento_valor: string;
   pagamento_data: string;
@@ -144,7 +146,7 @@ export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocument
   if (tipo === "distrato") {
     return {
       data_documento: hoje, data_contrato_origem: "", objeto_contrato_origem: "",
-      ressalva_exito: false, substabelecer_e_devolver: false,
+      ressalva_exito: true, substabelecer_e_devolver: false, contencioso: false,
       pagamento_valor: "", pagamento_data: "", pagamento_forma: "",
       substabelecentes: [], substabelecidos: [substabelecidoVazio()], endereco_substabelecidos: "",
       processos: [processoVazio()],
@@ -217,12 +219,13 @@ export function montarPayload(
       data_contrato_origem: e.data_contrato_origem,
       objeto_contrato_origem: e.objeto_contrato_origem.trim(),
       ressalva_exito: e.ressalva_exito,
-      substabelecer_e_devolver: e.substabelecer_e_devolver,
+      substabelecer_e_devolver: e.substabelecer_e_devolver || e.contencioso,
+      contencioso: e.contencioso,
       pagamento_valor: valorEmReais(e.pagamento_valor),
       pagamento_data: valorEmReais(e.pagamento_valor) ? e.pagamento_data || null : null,
       pagamento_forma: e.pagamento_forma.trim(),
       // O substabelecimento so vai junto quando a opcao esta marcada.
-      substabelecimento: e.substabelecer_e_devolver ? payloadPoderes(e) : null,
+      substabelecimento: e.substabelecer_e_devolver || e.contencioso ? payloadPoderes(e) : null,
     };
   }
   const e = estado as SubstabelecimentoForm;
@@ -274,6 +277,7 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
       objeto_contrato_origem: fd.objeto_contrato_origem ?? "",
       ressalva_exito: !!fd.ressalva_exito,
       substabelecer_e_devolver: !!fd.substabelecer_e_devolver,
+      contencioso: !!fd.contencioso,
       pagamento_valor: fd.pagamento_valor ? String(fd.pagamento_valor).replace(".", ",") : "",
       pagamento_data: fd.pagamento_data ?? "",
       pagamento_forma: fd.pagamento_forma ?? "",
@@ -333,7 +337,7 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
       if (!v || v <= 0) e.pagamento_valor = "Informe um valor maior que zero";
       else obrig("pagamento_data", d.pagamento_data, "Informe a data limite do pagamento");
     }
-    if (d.substabelecer_e_devolver) validarPoderes(d);
+    if (d.substabelecer_e_devolver || d.contencioso) validarPoderes(d);
   } else {
     const s = estado as SubstabelecimentoForm;
     obrig("outorgante", s.outorgante_nome, "Informe o outorgante");

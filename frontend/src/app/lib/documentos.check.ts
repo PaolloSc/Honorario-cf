@@ -68,6 +68,11 @@ assert.equal(pg.pagamento_valor, 4000);
 assert.equal(pg.pagamento_data, "2026-11-30");
 assert.equal((montarPayload("distrato", dis, "o") as any).pagamento_valor, null);
 assert.equal((estadoDoFormData("distrato", pg, "h") as any).pagamento_valor, "4000");
+// Processo judicial (contencioso): o substabelecimento é obrigatório e vai junto, mesmo sem marcar a opção.
+const disCont = { ...dis, contencioso: true };
+for (const k of ["substabelecentes", "processos.0.numero"]) assert.ok(validar("distrato", disCont)[k], k);
+assert.equal((montarPayload("distrato", disCont, "o") as any).substabelecer_e_devolver, true);
+assert.equal((estadoInicial("distrato", "2026-10-16") as any).ressalva_exito, true);
 const disSub = { ...dis, substabelecer_e_devolver: true };
 for (const k of ["substabelecentes", "processos.0.numero", "substabelecidos.0.nome", "substabelecidos.0.oab"]) assert.ok(validar("distrato", disSub)[k], k);
 const disOk = {

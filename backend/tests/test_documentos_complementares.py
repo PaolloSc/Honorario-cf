@@ -355,7 +355,7 @@ def test_distrato_quitacao_total_com_substabelecer(client):
     assert "assessoria jurídica empresarial" in texto
     assert "Por motivos supervenientes" in texto
     assert RESSALVA not in texto  # quitacao total
-    assert "substabelecer sem reserva de poderes" in texto
+    assert "substabelecerá, sem reserva de poderes" in texto
     assert "02 (duas) vias" in texto and "testemunhas abaixo" in texto
     assert "TESTEMUNHAS" in texto.upper()
     assert "07 de outubro de 2026" in texto
@@ -363,7 +363,8 @@ def test_distrato_quitacao_total_com_substabelecer(client):
 
 
 # Redacao aprovada pelo socio (HCF-126).
-RESSALVA = "ressalvados reembolsos e honorários vincendos, inclusive de êxito, caso exigíveis nos termos do contrato original"
+RESSALVA = ("ressalvados os honorários de êxito, que serão devidos de forma proporcional ao trabalho realizado até a data "
+            "deste Distrato")
 @pytest.mark.parametrize("ressalva,substabelecer", [
     (True, True), (True, False), (False, False),
 ])
@@ -373,7 +374,7 @@ def test_distrato_flags_sao_independentes(client, ressalva, substabelecer):
 
     assert (RESSALVA in texto) is ressalva
     assert "mútua, total, completa, irrevogável e irretratável quitação" in texto  # com e sem ressalva
-    assert ("substabelecer sem reserva de poderes" in texto) is substabelecer
+    assert ("substabelecerá, sem reserva de poderes" in texto) is substabelecer
 
 
 def test_distrato_cita_so_aditivos_assinados(client):
@@ -615,7 +616,8 @@ def test_distrato_com_ressalva_acrescenta_a_ressalva_a_quitacao(client):
                                                     "substabelecer_e_devolver": False}))
     assert "nesse sentido, " + RESSALVA in texto
     assert texto.index("irretratável quitação") < texto.index(RESSALVA)  # qualifica a quitacao
-    assert "plena, geral, rasa" not in texto and "substabelecer sem reserva" not in texto
+    assert "art. 23 da Lei n.º 8.906/94" in texto
+    assert "plena, geral, rasa" not in texto and "substabelecerá" not in texto
 
 
 def test_distrato_total_usa_a_quitacao_do_modelo_sem_ressalva(client):
@@ -643,13 +645,53 @@ def test_distrato_pagamento_com_forma_informada_e_substabelecimento_numerados(cl
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, **forma}))
     assert "por meio de transferência bancária (Banco Exemplo, ag. 0001, c/c 12345-6)." in texto
     assert "Pix (CNPJ" not in texto
-    assert "2.2. O Contratado compromete-se a substabelecer sem reserva de poderes" in texto
+    assert "2.3. O Contratado substabelecerá, sem reserva de poderes" in texto
 
 
 def test_distrato_sem_valor_nao_tem_clausula_de_pagamento(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, "pagamento_data": "2026-11-30"}))
     assert "pagará ao Contratado" not in texto and "Pix" not in texto
-    assert "2.1. O Contratado compromete-se a substabelecer" in texto
+    assert "2.1. As Partes declaram que os honorários contratuais foram integralmente quitados" in texto
+    assert "2.2. O Contratado substabelecerá" in texto
+
+
+def test_distrato_sem_valor_declara_honorarios_quitados(client):
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert ("As Partes declaram que os honorários contratuais foram integralmente quitados, "
+            "não havendo valores pendentes.") in texto
+    assert "multa" not in texto and "título executivo" not in texto
+
+
+def test_distrato_com_valor_traz_multa_juros_correcao_e_titulo_executivo(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **PAGAMENTO}))
+    assert "2.2. Em caso de atraso no pagamento, incidirão multa de 10% (dez por cento), juros de 1% (um por cento) ao mês e correção monetária" in texto
+    assert "título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil" in texto
+    assert "integralmente quitados" not in texto
+
+
+def test_distrato_substabelecimento_prazo_de_dez_dias_e_recibo(client):
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert "em até 10 (dez) dias contados da assinatura deste Distrato" in texto
+    assert "prazos processuais que vencerem nesse período, nos termos do art. 5º, § 3º, da Lei n.º 8.906/94" in texto
+    assert "mediante recibo" in texto
+
+
+def test_distrato_contencioso_obriga_o_substabelecimento_junto(client):
+    # Mesmo com a opcao desligada, "contencioso" liga a clausula e gera o substabelecimento junto.
+    r = _gerar(client, "distrato", {**DISTRATO, "contencioso": True, "substabelecer_e_devolver": False})
+    assert r.status_code == 200 and len(r.json()["documentos_gerados_junto"]) == 1
+    assert "substabelecerá, sem reserva de poderes" in _texto(client, r.json()["contract_id"])
+
+
+def test_distrato_contencioso_sem_dados_do_substabelecimento_da_422(client):
+    sem = {k: v for k, v in DISTRATO.items() if k != "substabelecimento"}
+    assert _gerar(client, "distrato", {**sem, "contencioso": True}).status_code == 422
+
+
+def test_distrato_consultivo_nao_gera_substabelecimento(client):
+    r = _gerar(client, "distrato", {**DISTRATO, "contencioso": False, "substabelecer_e_devolver": False})
+    assert r.status_code == 200 and not r.json().get("documentos_gerados_junto")
+    assert "substabelecerá" not in _texto(client, r.json()["contract_id"])
 
 
 @pytest.mark.parametrize("extra", [
