@@ -194,6 +194,6 @@ def test_ajustes_da_revisao_da_angela_no_prazo_e_nas_faixas():
     req = _req("exito", **base, faixas_percentual=[{"faixa": "até 100 mil", "percentual": "10"}, {"faixa": "", "percentual": ""}])
     texto = _texto(req)
     assert "até 100 mil" in texto
-    for pct in ("300", "-5"):
+    for pct in ("300", "-5", "abc"):
         with pytest.raises(ValidationError):
             ContratoRequest(**_req("exito", **base, faixas_percentual=[{"faixa": "x", "percentual": pct}]))

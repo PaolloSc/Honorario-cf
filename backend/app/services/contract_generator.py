@@ -1176,7 +1176,7 @@ class ContractGenerator:
         if ac.valor_diligencia:
             clauses.append(
                 f"Cada diligência realizada pelo C&F fora do seu escritório será cobrada à razão de "
-                f"{valor_com_extenso(ac.valor_diligencia)} por ato, a título de reembolso."
+                f"{valor_com_extenso(ac.valor_diligencia)} por ato, a título de ressarcimento de despesas."
             )
             chaves.append("acess.diligencia")
         # Sucumbencia/renuncia so faz sentido quando ha honorario de exito pactuado.

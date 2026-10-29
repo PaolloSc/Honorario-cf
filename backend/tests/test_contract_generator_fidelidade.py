@@ -688,12 +688,10 @@ def test_exito_variavel_faixas_com_percentual_por_extenso():
     e["exito"].update(subtipo="percentual_variavel", percentual=None, faixas_percentual=[
         {"faixa": "até R$ 1 milhão", "percentual": "10"},
         {"faixa": "acima", "percentual": "7,5%"},
-        {"faixa": "outros", "percentual": "a combinar"},
     ])
     paras = _paras_for(_req_escopos([e]))
     assert _has(paras, "10% (dez por cento)")
     assert _has(paras, "7,5% (sete vírgula cinco por cento)")
-    assert _has(paras, "a combinar")
 
 
 def test_texto_livre_so_baixa_inicial_de_palavra_comum():
