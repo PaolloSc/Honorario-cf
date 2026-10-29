@@ -994,10 +994,13 @@ class ContractGenerator:
             self._apply_table_grid(table)
             self._set_table_header(table, "Faixa de Valor", "Percentual")
             for faixa in ex.faixas_percentual:
+                if not (faixa.get("faixa") or "").strip() and not (faixa.get("percentual") or "").strip():
+                    continue  # linha em branco da tela
                 row = table.add_row().cells
                 row[0].text = faixa.get("faixa", "")
                 row[1].text = self._percentual_digitado(faixa.get("percentual", ""))
-        elif ex.percentual:
+        elif ex.percentual and ex.subtipo != SubtipoExito.PERCENTUAL_VARIAVEL:
+            # variavel nao herda o percentual fixo que ficou escondido na troca de subtipo
             num(
                 f"Os honorários de êxito corresponderão a {percentual_com_extenso(ex.percentual)} "
                 f"sobre {beneficio}{base}.", chave="incidencia"
@@ -1091,10 +1094,6 @@ class ContractGenerator:
             "previsto neste Contrato será considerado inválido e ineficaz.",
             "As obrigações de pagamento previstas neste Contrato serão devidas, independentemente "
             "de notificação, tão logo se dê o seu vencimento.",
-            f"O atraso no pagamento sujeitará a CONTRATANTE a juros de {percentual_com_extenso(1)} "
-            f"ao mês, multa de {percentual_com_extenso(10)} sobre o valor em atraso e "
-            "atualização monetária pelo IPCA, sem prejuízo da suspensão dos serviços ou da "
-            "rescisão contratual, a critério do C&F.",
             "Em caso de mudanças legislativas/regulatórias relevantes que alterem a carga "
             "tributária, os custos de conformidade, ou a forma de incidência/retenção de "
             "tributos aplicáveis aos serviços, as Partes renegociarão, de boa-fé, os valores "
@@ -1105,6 +1104,18 @@ class ContractGenerator:
             "fiscal (inclusive em eventual migração de regime tributário), sem alteração do "
             "escopo ou do valor líquido pactuado.",
         ]
+        # Sem penalidade (Acessorios) so a multa sai; juros, IPCA e suspensao/rescisao ficam.
+        j, m = percentual_com_extenso(1), percentual_com_extenso(10)
+        encargos = (
+            f"juros de {j} ao mês, multa de {m} sobre o valor em atraso e atualização monetária pelo IPCA"
+            if data.acessorios.tem_penalidade_inadimplemento
+            else f"juros de {j} ao mês e atualização monetária pelo IPCA"
+        )
+        clauses.insert(
+            len(clauses) - 2,  # antes das mudancas legislativas (ultimas duas do bloco)
+            f"O atraso no pagamento sujeitará a CONTRATANTE a {encargos}, sem prejuízo da "
+            "suspensão dos serviços ou da rescisão contratual, a critério do C&F.",
+        )
 
         if com_parte_relacionada:
             clauses.append(
@@ -1162,6 +1173,13 @@ class ContractGenerator:
             "por quilômetro rodado.",
             f"O custo de cada cópia reprográfica reembolsável pela CONTRATANTE é de {valor_com_extenso(0.40)}.",
         ]
+        chaves = ["acess.custas", "acess.credlocaliza", "acess.km", "acess.copia"]
+        if ac.valor_diligencia:
+            clauses.append(
+                f"Cada diligência realizada pelo C&F fora do seu escritório será cobrada à razão de "
+                f"{valor_com_extenso(ac.valor_diligencia)} por ato, a título de ressarcimento de despesas."
+            )
+            chaves.append("acess.diligencia")
         # Sucumbencia/renuncia so faz sentido quando ha honorario de exito pactuado.
         if has_exito:
             clauses.append(
@@ -1172,7 +1190,6 @@ class ContractGenerator:
                 "sucumbências sem anuência do C&F, o valor correspondente será descontado do "
                 "benefício econômico para fins de cálculo do êxito ou devido diretamente ao C&F."
             )
-        chaves = ["acess.custas", "acess.credlocaliza", "acess.km", "acess.copia"]
         chaves += ["acess.sucumbencia"] if has_exito else []
         for chave, clause in zip(chaves, clauses, strict=True):
             self._add_clausula(doc, clause, chave=chave)
@@ -1242,14 +1259,48 @@ class ContractGenerator:
             return f"O presente Contrato vigorará a partir de {inicio}."
         return None
 
+    def _periodo_dos_honorarios(self, data: ContratoRequest) -> tuple[str, str] | None:
+        """(inicio, fim) dd/mm/aaaa do "Período do contrato" (hora trabalhada) e do "Período da
+        mensalidade" da etapa 3, do primeiro início ao último fim, só quando TODOS os honorários
+        do contrato têm período. None caso contrário, ou se o prazo específico foi informado em
+        Acessórios (frase própria)."""
+        if self._frase_vigencia(data.acessorios):
+            return None
+        datas = []
+        for e in data.escopos:
+            por_tipo = {TipoHonorario.HORA_TRABALHADA: e.hora_trabalhada, TipoHonorario.MENSALIDADE: e.mensalidade}
+            for tipo in e.honorarios:  # exito, pro-labore ou permuta no contrato: sem periodo, fica indeterminado
+                h = por_tipo.get(tipo)
+                if not h or not h.data_inicio or not h.data_fim:
+                    return None
+                try:
+                    ini, fim = datetime.fromisoformat(h.data_inicio), datetime.fromisoformat(h.data_fim)
+                except ValueError:
+                    return None
+                if ini > fim:
+                    return None
+                datas.append((ini, fim))
+        if not datas:
+            return None
+        ini = min(d[0] for d in datas)
+        fim = max(d[1] for d in datas)
+        return f"{ini.day:02d}/{ini.month:02d}/{ini.year}", f"{fim.day:02d}/{fim.month:02d}/{fim.year}"
+
     def _add_term_and_termination(self, doc: Document, data: ContratoRequest) -> None:
         self._add_secao(doc, "PRAZO, RESCISÃO E OUTROS EFEITOS")
-        self._add_clausula(
-            doc,
-            "Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
-            "presente Contrato é celebrado por tempo indeterminado, até que seja esgotado o "
-            "objeto contratado.", chave="prazo.indeterminado"
-        )
+        periodo = self._periodo_dos_honorarios(data)
+        if periodo:
+            texto_prazo = (
+                f"Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
+                f"presente Contrato é celebrado por prazo determinado, de {periodo[0]} a {periodo[1]}."
+            )
+        else:
+            texto_prazo = (
+                "Ressalvada a hipótese de prazo específico pactuado entre as Partes, o "
+                "presente Contrato é celebrado por tempo indeterminado, até que seja esgotado o "
+                "objeto contratado."
+            )
+        self._add_clausula(doc, texto_prazo, chave="prazo.indeterminado")
         vigencia = self._frase_vigencia(data.acessorios)
         if vigencia:
             self._add_clausula(doc, vigencia, ilvl=2, chave="prazo.vigencia")
@@ -1567,7 +1618,9 @@ class ContractGenerator:
                 parts.append(f"{valor_com_extenso(v)} de mensalidade" if v else "Mensalidade")
             elif tipo == TipoHonorario.EXITO and escopo.exito:
                 v = escopo.exito.percentual
-                parts.append(f"{percentual_com_extenso(v)} de êxito" if v else "Êxito")
+                # variavel nao herda o percentual fixo escondido (mesma regra da clausula)
+                fixo = v and escopo.exito.subtipo != SubtipoExito.PERCENTUAL_VARIAVEL
+                parts.append(f"{percentual_com_extenso(v)} de êxito" if fixo else "Êxito")
             elif tipo == TipoHonorario.PERMUTA and escopo.permuta:
                 parts.append(f"Permuta com serviços de {escopo.permuta.objeto_permuta}")
         return " + ".join(parts) if parts else "A definir"
