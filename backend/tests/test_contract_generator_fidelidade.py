@@ -320,6 +320,32 @@ def test_clausulas_adicionais_numeradas_antes_do_foro():
     assert _has(paras, "12.1. Fica eleito o foro")
 
 
+def test_clausulas_adicionais_varias_ordem_e_campos_vazios_ignorados():
+    # A tela envia uma lista como texto, uma clausula por linha; campos vazios nao geram clausula.
+    req = _base_req()
+    req["acessorios"]["clausulas_adicionais"] = "Terceira.\n\n   \nPrimeira.\nSegunda."
+    paras = _preview_paras(req)
+    assert _has(paras, "11.1. Terceira.")
+    assert _has(paras, "11.2. Primeira.")
+    assert _has(paras, "11.3. Segunda.")
+    assert not _has(paras, "11.4.")
+    assert _has(paras, "12.1. Fica eleito o foro")
+
+
+def test_clausula_adicional_unica_antiga_continua_como_primeira():
+    req = _base_req()
+    req["acessorios"]["clausulas_adicionais"] = "Unica clausula antiga."
+    paras = _preview_paras(req)
+    assert _has(paras, "11.1. Unica clausula antiga.")
+    assert not _has(paras, "11.2.")
+
+
+def test_sem_clausulas_adicionais_nao_cria_secao():
+    req = _base_req()
+    req["acessorios"]["clausulas_adicionais"] = "  \n \n"
+    assert not _has(_preview_paras(req), "DISPOSIÇÕES ADICIONAIS")
+
+
 def test_exito_incidencia_fundida_com_beneficio():
     paras = _paras_for(_req_com_exito())
     assert _has(paras, "Os honorários de êxito corresponderão a 20% (vinte por cento) sobre o "
