@@ -545,3 +545,20 @@ def test_leiaute_prodrest_20261020_finnfse_no_infdps_e_fora_do_ibscbs(schema):
         assert tags[tags.index("tpEmit") + 1:tags.index("tpEmit") + 3] == ["finNFSe", "cLocEmi"]
         assert inf.findtext(f"{{{NS_DPS}}}finNFSe") == "0"
         assert inf.find(f".//{{{NS_DPS}}}IBSCBS/{{{NS_DPS}}}finNFSe") is None
+
+
+def test_endereco_do_tomador_aceita_cmun_opcional():
+    assert run._endereco("32240030;Rua Macapa;169;Amazonas;3118601") == {
+        "CEP": "32240030", "xLgr": "Rua Macapa", "nro": "169", "xBairro": "Amazonas", "cMun": "3118601"}
+    assert run._endereco("30130000;Av X;1;Centro")["cMun"] == "3106200"
+
+
+def test_main_tomador_cnpj_nome_e_cmun_vao_na_dps(monkeypatch, capsys, pfx, schema):
+    monkeypatch.setenv("NFSE_CERT_PFX_B64", base64.b64encode(pfx).decode())
+    monkeypatch.setenv("NFSE_CERT_PFX_SENHA", "senha-de-teste")
+    capturado = {}
+    monkeypatch.setattr(run, "montar_dps", lambda p: capturado.setdefault("p", p) and montar_dps(p))
+    assert run.main(["--cnpj", CNPJ, "--dry-run", "--tomador-cnpj", "39.156.495/0001-88", "--tomador-nome",
+                     "Tomador Teste Ltda", "--tomador-end", "32240030;Rua Macapa;169;Amazonas;3118601"]) == 0
+    p = capturado["p"]
+    assert (p.tomador_cnpj, p.tomador_nome, p.tomador_end["cMun"]) == ("39156495000188", "Tomador Teste Ltda", "3118601")
