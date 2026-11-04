@@ -9,9 +9,12 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+import logging
+
 from app.config import settings
+from app.utils.erros import MSG_ERRO_INTERNO
 from app.database import init_db
-from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, documentos, drafts, email, emissor, faturamento, legalone_opcoes, nfse, nfse_internal, participacoes, tax_codes, testemunhas, users
+from app.routers import admin_credenciais, clientes, cnpj, colaboradores, contract, contracts, docuseal, documentos, drafts, email, emissor, faturamento, legalone_opcoes, nfse, nfse_internal, participacoes, processos, tax_codes, testemunhas, users
 
 init_db()
 
@@ -41,6 +44,22 @@ async def _validacao_sem_eco(request: Request, exc: RequestValidationError):
     certificado isso ecoaria o segredo na resposta: devolve so onde e por que falhou."""
     erros = [{"loc": e.get("loc"), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()]
     return JSONResponse(status_code=422, content={"detail": erros})
+
+
+@app.middleware("http")
+async def _erro_interno_generico(request: Request, call_next):
+    """500 nunca devolve SQL, parametros nem texto cru de terceiros: o detalhe fica so no log.
+
+    Fica DENTRO do CORSMiddleware (registrado antes dele): um handler de Exception do Starlette
+    roda por fora e a resposta sairia sem cabecalho CORS, escondendo a mensagem do navegador.
+    """
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        logging.getLogger("app.erros").error("Erro nao tratado em %s %s", request.method, request.url.path, exc_info=exc)
+        return JSONResponse(status_code=500, content={"detail": MSG_ERRO_INTERNO})
+
+
 app.add_middleware(SlowAPIMiddleware)
 
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
@@ -80,6 +99,7 @@ app.include_router(users.router)
 app.include_router(participacoes.router)
 app.include_router(nfse.router)
 app.include_router(documentos.router)
+app.include_router(processos.router)
 app.include_router(emissor.router)
 app.include_router(emissor.emitidas_router)
 app.include_router(faturamento.router)

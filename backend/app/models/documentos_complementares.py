@@ -15,6 +15,9 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.models.limites import LimiteTamanhos
+from app.services import cnj
+
 TIPO_ADITIVO = "aditivo"
 TIPO_DISTRATO = "distrato"
 TIPO_SUBSTABELECIMENTO = "substabelecimento"
@@ -28,15 +31,6 @@ ROTULO_DOCUMENTO = {
 
 # Numero unico do CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO (DD = digito verificador, mod 97)
 _DATA_ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
-_CNJ = re.compile(r"^(\d{7})-(\d{2})\.(\d{4})\.(\d)\.(\d{2})\.(\d{4})$")
-
-
-def _cnj_valido(numero: str) -> bool:
-    m = _CNJ.match(numero)
-    if not m:
-        return False
-    seq, dv, ano, j, tr, origem = m.groups()
-    return 98 - (int(seq + ano + j + tr + origem + "00") % 97) == int(dv)
 
 
 class AditivoAnterior(BaseModel):
@@ -47,7 +41,7 @@ class AditivoAnterior(BaseModel):
     objeto: str = ""
 
 
-class _DocumentoComplementar(BaseModel):
+class _DocumentoComplementar(LimiteTamanhos):
     contrato_origem_id: Optional[str] = None
     data_documento: Optional[str] = None  # ISO yyyy-mm-dd; vazio = hoje
     email_destinatario: Optional[str] = None
@@ -185,10 +179,11 @@ class Processo(BaseModel):
     @field_validator("numero")
     @classmethod
     def _numero_cnj(cls, v: str) -> str:
-        v = v.strip()
-        if not _cnj_valido(v):
-            raise ValueError("Número de processo inválido (padrão CNJ 0000000-00.0000.0.00.0000, com dígito verificador)")
-        return v
+        # aceita com ou sem pontuacao; o documento sempre sai com a mascara
+        mascarado = cnj.normalizar(v)
+        if not mascarado or not cnj.digito_valido(mascarado):
+            raise ValueError("Número de processo inválido (20 dígitos, padrão CNJ 0000000-00.0000.0.00.0000, com dígito verificador)")
+        return mascarado
 
 
 class SubstabelecimentoRequest(_DocumentoComplementar):
@@ -198,6 +193,8 @@ class SubstabelecimentoRequest(_DocumentoComplementar):
     substabelecidos: list[Substabelecido] = Field(min_length=1)
     endereco_substabelecidos: str = ""  # opcional: sem endereco, a frase some do texto
     processos: list[Processo] = Field(min_length=1)
+    # Preenchido quando o substabelecimento nasce de um distrato: editar o distrato o regera.
+    distrato_origem_id: Optional[str] = None
 
 
 class SubstabelecimentoDoDistrato(BaseModel):

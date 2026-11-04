@@ -219,10 +219,11 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
           <div className="space-y-2 mt-1">
             {recipients.map((r, i) => (
               <div key={i}>
-                <label className="block text-xs text-primary-dark mb-0.5">
+                <label htmlFor={`destinatario-${i}`} className="block text-xs text-primary-dark mb-0.5">
                   {r.nome || `Contratante ${i + 1}`}
                 </label>
                 <input
+                  id={`destinatario-${i}`}
                   type="email"
                   value={r.email}
                   onChange={(e) =>

@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, reviewContract, type ColaboradorWizard, type Testemunha } from "@/app/lib/api";
+import { ehErro422, textoDoErro } from "@/app/lib/erro422";
+import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
+import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
 import { ComboBox } from "@/components/ui/FormField";
@@ -14,6 +16,7 @@ interface Step7EnvioProps {
   editContractId?: string;
   onSaveComplete?: (contractId: string) => void;
   onDataChange?: (data: ContratoFormData) => void;
+  onIrParaEtapa?: (etapa: number) => void;
   // Chamado quando o contrato (novo ou nova versão) é gravado — o wizard descarta o rascunho.
   onContractGenerated?: () => void;
   // Levantado pro ContractWizard (que não desmonta ao trocar de passo) — sem isso,
@@ -251,6 +254,12 @@ function applyFix(data: ContratoFormData, trecho: string, sugestao: string): Con
     }
   }
 
+  for (const [id, a] of Object.entries(data.ajustes_texto ?? {})) {
+    if (a.texto.includes(t)) {
+      return { ...data, ajustes_texto: { ...data.ajustes_texto, [id]: { ...a, texto: a.texto.replace(t, sugestao) } } };
+    }
+  }
+
   const acessoriosFields = ["descricao_limitacao_reembolso", "criterio_extincao_exito", "clausulas_adicionais"] as const;
   for (const field of acessoriosFields) {
     const val = data.acessorios[field];
@@ -267,6 +276,7 @@ export default function Step7Envio({
   editContractId,
   onSaveComplete,
   onDataChange,
+  onIrParaEtapa,
   onContractGenerated,
   correcoesAplicadas,
   onCorrecoesAplicadasChange,
@@ -296,6 +306,9 @@ export default function Step7Envio({
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [socioEscritorio, setSocioEscritorio] = useState("");
   const isEdit = !!editContractId;
+  // `data` do render atual, para os callbacks assíncronos não usarem uma cópia velha.
+  const dataRef = useRef(data);
+  dataRef.current = data;
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   // Prévia gerada junto da revisão (antes de existir contractId — cobre a criação).
@@ -303,6 +316,7 @@ export default function Step7Envio({
   // Varredura de português/padrão via DeepSeek, roda sozinha ao chegar neste passo.
   const [reviewFindings, setReviewFindings] = useState<Array<{ trecho: string; problema: string; sugestao: string }>>([]);
   const [reviewStatus, setReviewStatus] = useState<"idle" | "checking" | "done" | "error">("idle");
+  const [reviewErro, setReviewErro] = useState("");
   // Indice do achado com "Aplicar correção" em andamento (desabilita só aquele botão).
   const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
 
@@ -335,7 +349,15 @@ export default function Step7Envio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colaboradores, data.participacao.responsavel_gestao, data.participacao.participantes]);
 
+  // Cláusulas ajustáveis (painel "Ajustar texto") e ajustes que deixaram de existir.
+  const [itens, setItens] = useState<ItemClausula[]>([]);
+  const [descartados, setDescartados] = useState<AjusteDescartado[]>([]);
+  const [salvandoAjuste, setSalvandoAjuste] = useState(false);
+
   const reviewStarted = useRef(false);
+  // Contrato novo já criado nesta tela: se o e-mail falhar, tentar de novo reaproveita o
+  // mesmo contrato (com os mesmos dados) em vez de gerar outro e outra participação.
+  const criadoAgora = useRef<{ id: string; dados: string } | null>(null);
 
   useEffect(() => {
     // Só faz sentido revisar o texto ainda não gerado (criação). Em edição o
@@ -348,6 +370,7 @@ export default function Step7Envio({
     reviewContract(data)
       .then((r) => {
         if (r.preview_html) setReviewPreviewHtml(r.preview_html);
+        aplicarPrevia(r.itens, r.ajustes_descartados);
         if (!r.enabled) {
           setReviewStatus("idle");
           return;
@@ -355,9 +378,50 @@ export default function Step7Envio({
         setReviewFindings(r.findings);
         setReviewStatus("done");
       })
-      .catch(() => setReviewStatus("error"));
+      .catch((e) => {
+        // regra do contrato (422): diz qual campo corrigir em vez do aviso genérico
+        setReviewErro(ehErro422(e) ? textoDoErro(e) : "");
+        setReviewStatus("error");
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Guarda as cláusulas da prévia e os ajustes cuja cláusula deixou de existir (o texto fica
+  // no painel para copiar; só some quando a pessoa descarta).
+  const aplicarPrevia = (novos?: ItemClausula[], sumidos: AjusteDescartado[] = []) => {
+    if (novos) setItens(novos);
+    setDescartados(sumidos);
+  };
+
+  const descartarAjusteSumido = (id: string) => {
+    if (!onDataChange) return;
+    const resto = { ...(dataRef.current.ajustes_texto ?? {}) };
+    delete resto[id];
+    onDataChange({ ...dataRef.current, ajustes_texto: resto });
+    setDescartados((d) => d.filter((x) => x.id !== id));
+  };
+
+  // Grava (ou remove, com texto === null) o ajuste de uma cláusula e refaz a prévia.
+  const alterarAjuste = async (item: ItemClausula, texto: string | null) => {
+    if (!onDataChange) return;
+    const ajustes = { ...(data.ajustes_texto ?? {}) };
+    const limpo = texto === null ? null : texto.replace(/\s+/g, " ").trim();
+    if (limpo === null || limpo === item.padrao) delete ajustes[item.id];
+    else ajustes[item.id] = { texto: limpo, padrao: item.padrao };
+    const updated = { ...data, ajustes_texto: ajustes };
+    onDataChange(updated);
+    dataRef.current = updated;
+    setSalvandoAjuste(true);
+    try {
+      const r = await previewTexto(updated);
+      setReviewPreviewHtml(r.preview_html);
+      aplicarPrevia(r.itens, r.ajustes_descartados);
+    } catch {
+      setMessage("Não foi possível atualizar a prévia com o ajuste.");
+    } finally {
+      setSalvandoAjuste(false);
+    }
+  };
 
   // Aplica a sugestão da IA no campo aberto de onde ela veio e reroda a revisão,
   // pra prévia e lista já saírem atualizadas sem a pessoa ter que digitar nada.
@@ -374,6 +438,7 @@ export default function Step7Envio({
     try {
       const r = await reviewContract(updated);
       if (r.preview_html) setReviewPreviewHtml(r.preview_html);
+      aplicarPrevia(r.itens, r.ajustes_descartados);
       setReviewFindings(r.enabled ? r.findings : []);
     } catch {
       // Se a nova revisão falhar, o campo já foi corrigido — só tira o achado da lista.
@@ -407,10 +472,13 @@ export default function Step7Envio({
         if (!result.success) throw new Error(result.message || "Erro ao salvar contrato");
         resultContractId = result.contract_id;
         onContractGenerated?.();
+      } else if (criadoAgora.current && criadoAgora.current.dados === JSON.stringify(data)) {
+        resultContractId = criadoAgora.current.id;
       } else {
         const result = await generateContract(data);
         if (!result.success) throw new Error(result.message || "Erro ao gerar contrato");
         resultContractId = result.contract_id!;
+        criadoAgora.current = { id: resultContractId, dados: JSON.stringify(data) };
         onContractGenerated?.();
       }
 
@@ -452,7 +520,7 @@ export default function Step7Envio({
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -498,7 +566,7 @@ export default function Step7Envio({
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -570,7 +638,7 @@ export default function Step7Envio({
       }
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Erro desconhecido");
+      setMessage(textoDoErro(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -610,10 +678,11 @@ export default function Step7Envio({
           <div className="space-y-2 mt-1">
             {recipients.map((r, i) => (
               <div key={i}>
-                <label className="block text-xs text-muted mb-0.5">
+                <label htmlFor={`destinatario-${i}`} className="block text-xs text-muted mb-0.5">
                   {r.nome || `Contratante ${i + 1}`}
                 </label>
                 <input
+                  id={`destinatario-${i}`}
                   type="email"
                   value={r.email}
                   onChange={(e) => updateRecipient(i, e.target.value)}
@@ -713,7 +782,9 @@ export default function Step7Envio({
 
       {reviewStatus === "error" && (
         <div className="bg-warning/[0.1] border border-warning rounded-lg p-4 text-sm text-foreground">
-          Não foi possível concluir a verificação de português. Você pode revisar manualmente e prosseguir.
+          {reviewErro
+            ? `Este contrato não passa nas regras atuais: ${reviewErro} Volte à etapa correspondente e corrija.`
+            : "Não foi possível concluir a verificação de português. Você pode revisar manualmente e prosseguir."}
         </div>
       )}
 
@@ -838,6 +909,19 @@ export default function Step7Envio({
             />
           </div>
         </div>
+      )}
+
+      {itens.length > 0 && (
+        <AjustarTexto
+          itens={itens}
+          descartados={descartados}
+          salvando={salvandoAjuste}
+          onSalvar={(item, texto) => void alterarAjuste(item, texto)}
+          onVoltar={(item) => void alterarAjuste(item, null)}
+          onDescartarSumido={descartarAjusteSumido}
+          onReaplicar={(item) => item.ajuste !== null && void alterarAjuste(item, item.ajuste)}
+          onIrParaEtapa={(n) => onIrParaEtapa?.(n)}
+        />
       )}
 
       {isEdit && status === "idle" && (

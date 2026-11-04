@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -37,6 +38,7 @@ from app.services.contract_dispatch import get_generator as get_consumidor_gen
 from app.services.contract_dispatch import parse_form_data
 from app.services.contract_generator import ContractGenerator
 from app.utils.participacao import valor_participacao, valor_participante
+from app.utils.erros import MSG_ERRO_INTERNO
 
 
 def get_consumidor_generator():
@@ -130,6 +132,82 @@ def _map_natureza_wizard(natureza_text: str | None) -> tuple[bool, bool]:
         eh_cap = True
     return eh_cap, eh_perf
 
+def campos_rascunho_participacao(data: ContratoRequest, user_email: str, user_name: str) -> dict:
+    """Campos da ficha de participacao (rascunho) derivados do wizard; usado ao criar e ao editar."""
+    tipo = _infer_tipo_honorario(data)
+    participacao_data = data.participacao
+
+    participantes_wizard = (participacao_data.participantes if participacao_data else None) or []
+
+    # Parse valores da wizard
+    pct = _parse_percentual(
+        participacao_data.percentual_ou_valor if participacao_data else None
+    )
+    # Natureza vem agora por advogado; usa a do primeiro participante como base.
+    primeira_natureza = participantes_wizard[0].natureza if participantes_wizard else None
+    eh_cap, eh_perf = _map_natureza_wizard(primeira_natureza)
+    pct_captacao = pct if eh_cap else 0.0
+    pct_performance = pct if eh_perf else 0.0
+
+    # Email: prioriza campo estruturado novo, fallback parse do legado, fallback user.
+    email_novo = (participacao_data.contato_financeiro_email or "").strip() if participacao_data else ""
+    email_wizard = email_novo or _parse_email(
+        participacao_data.contato_financeiro_cliente if participacao_data else None
+    )
+    beneficiario_email = email_wizard or user_email
+    # Nome: junta os nomes de todos os participantes. Fallback user_name.
+    beneficiario_nome = (
+        ", ".join(p.nome for p in participantes_wizard) if participantes_wizard else user_name
+    )
+
+    # Backend natureza = contratual/societario (campo legal, nao wizard)
+    natureza_val = "contratual"
+
+    # Motivos: usa texto da wizard quando aplicável
+    motivo_cap = (
+        participacao_data.responsavel_captacao
+        if participacao_data and pct_captacao > 0 and participacao_data.responsavel_captacao
+        else None
+    )
+    motivo_perf = (
+        participacao_data.responsavel_gestao
+        if participacao_data and pct_performance > 0 and participacao_data.responsavel_gestao
+        else None
+    )
+
+    obs_extra = ""
+    if participacao_data:
+        # Mesma formatacao da ficha (R$ 5.000,00, nao R$ 5000.00).
+        valor_geral = valor_participacao(participacao_data.model_dump())
+        valor_str = valor_geral[1] if valor_geral else "-"
+        participantes_str = "; ".join(
+            f"{p.nome} ({p.natureza or '-'}, {valor_participante(p.model_dump()) or 'geral'})"
+            for p in participantes_wizard
+        ) or "-"
+        obs_extra = (
+            f"Rascunho automatico do wizard. "
+            f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
+            f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
+            f"Valor wizard: {valor_str} · "
+            f"Participantes: {participantes_str}"
+        )
+    else:
+        obs_extra = "Rascunho automatico do wizard."
+
+    return {
+        "beneficiario_email": beneficiario_email,
+        "beneficiario_nome": beneficiario_nome or "",
+        "tipo_honorario": tipo,
+        "percentual_captacao": pct_captacao,
+        "percentual_performance": pct_performance,
+        "motivo_captacao": motivo_cap,
+        "motivo_performance": motivo_perf,
+        "natureza": natureza_val,
+        "cliente_cpf_cnpj": _extract_cpf_cnpj(data),
+        "observacoes": obs_extra,
+    }
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/contract", tags=["Contract"])
 
@@ -204,81 +282,12 @@ def generate_contract(
         # ── Plano A: cria Participação rascunho automática para o financeiro ──
         # Percentuais zerados + aprovada=False. Setor financeiro complementa e aprova.
         try:
-            tipo = _infer_tipo_honorario(data)
-            participacao_data = data.participacao
-
-            participantes_wizard = (participacao_data.participantes if participacao_data else None) or []
-
-            # Parse valores da wizard
-            pct = _parse_percentual(
-                participacao_data.percentual_ou_valor if participacao_data else None
-            )
-            # Natureza vem agora por advogado; usa a do primeiro participante como base.
-            primeira_natureza = participantes_wizard[0].natureza if participantes_wizard else None
-            eh_cap, eh_perf = _map_natureza_wizard(primeira_natureza)
-            pct_captacao = pct if eh_cap else 0.0
-            pct_performance = pct if eh_perf else 0.0
-
-            # Email: prioriza campo estruturado novo, fallback parse do legado, fallback user.
-            email_novo = (participacao_data.contato_financeiro_email or "").strip() if participacao_data else ""
-            email_wizard = email_novo or _parse_email(
-                participacao_data.contato_financeiro_cliente if participacao_data else None
-            )
-            beneficiario_email = email_wizard or user.email
-            # Nome: junta os nomes de todos os participantes. Fallback user.name.
-            beneficiario_nome = (
-                ", ".join(p.nome for p in participantes_wizard) if participantes_wizard else user.name
-            )
-
-            # Backend natureza = contratual/societario (campo legal, nao wizard)
-            natureza_val = "contratual"
-
-            # Motivos: usa texto da wizard quando aplicável
-            motivo_cap = (
-                participacao_data.responsavel_captacao
-                if participacao_data and pct_captacao > 0 and participacao_data.responsavel_captacao
-                else None
-            )
-            motivo_perf = (
-                participacao_data.responsavel_gestao
-                if participacao_data and pct_performance > 0 and participacao_data.responsavel_gestao
-                else None
-            )
-
-            obs_extra = ""
-            if participacao_data:
-                # Mesma formatacao da ficha (R$ 5.000,00, nao R$ 5000.00).
-                valor_geral = valor_participacao(participacao_data.model_dump())
-                valor_str = valor_geral[1] if valor_geral else "-"
-                participantes_str = "; ".join(
-                    f"{p.nome} ({p.natureza or '-'}, {valor_participante(p.model_dump()) or 'geral'})"
-                    for p in participantes_wizard
-                ) or "-"
-                obs_extra = (
-                    f"Rascunho automatico do wizard. "
-                    f"Captacao responsavel: {participacao_data.responsavel_captacao or '-'} · "
-                    f"Gestao: {participacao_data.responsavel_gestao or '-'} · "
-                    f"Valor wizard: {valor_str} · "
-                    f"Participantes: {participantes_str}"
-                )
-            else:
-                obs_extra = "Rascunho automatico do wizard."
-
             rascunho = ParticipacaoDB(
+                **campos_rascunho_participacao(data, user.email, user.name),
                 contract_id=contract_id,
-                beneficiario_email=beneficiario_email,
-                beneficiario_nome=beneficiario_nome or "",
-                tipo_honorario=tipo,
-                percentual_captacao=pct_captacao,
-                percentual_performance=pct_performance,
-                motivo_captacao=motivo_cap,
-                motivo_performance=motivo_perf,
-                natureza=natureza_val,
-                cliente_cpf_cnpj=_extract_cpf_cnpj(data),
                 data_inicio=utcnow().date(),
                 vinculo_ativo=True,
                 aprovada=False,
-                observacoes=obs_extra,
                 created_by=user.email,
                 created_at=utcnow(),
             )
@@ -287,7 +296,7 @@ def generate_contract(
                 AuditLogDB(
                     contract_id=contract_id,
                     action="participacao_rascunho",
-                    detail=f"Rascunho automático criado para revisão do financeiro (tipo={tipo})",
+                    detail=f"Rascunho automático criado para revisão do financeiro (tipo={rascunho.tipo_honorario})",
                     user_email=user.email,
                     created_at=utcnow(),
                 )
@@ -309,7 +318,34 @@ def generate_contract(
     except Exception as e:
         db.rollback()
         logger.error("Failed to generate contract: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
+
+
+def _previa_com_itens(data: ContratoRequest) -> dict:
+    """Monta o DOCX em arquivo temporario e devolve a previa em HTML + a lista de
+    clausulas (id, texto atual/padrao, ajuste) para o painel 'Ajustar texto'."""
+    import tempfile
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        doc = get_generator()._build_document(data)
+        doc.save(str(tmp_path))
+        ctx = doc._cf_itens
+        html = _docx_to_html(tmp_path, frozenset(i["texto"] for i in ctx.itens if i["ajustado"]))
+        return {"preview_html": html, "itens": ctx.itens, "ajustes_descartados": ctx.descartados()}
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+@router.post("/preview-texto")
+def preview_texto(data: ContratoRequest, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Previa + clausulas ajustaveis, sem IA e sem gravar (usada ao salvar um ajuste)."""
+    return _previa_com_itens(data)
 
 
 @router.post("/review")
@@ -323,34 +359,23 @@ def review_contract(
     (nao a clausula padrao do contrato, que nao ha' onde editar ali). A previa
     (preview_html) e' sempre retornada; achados so' quando DEEPSEEK_API_KEY esta
     configurada (enabled=False caso contrario, sem erro)."""
-    import tempfile
-
-    gen = get_generator()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-    tmp_path = Path(tmp.name)
-    tmp.close()
     try:
-        gen._build_document(data).save(str(tmp_path))
-        preview_html = _docx_to_html(tmp_path)
+        previa = _previa_com_itens(data)
 
         if not contract_reviewer.is_configured():
-            return {"enabled": False, "findings": [], "preview_html": preview_html}
+            return {"enabled": False, "findings": [], **previa}
 
-        text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"))
+        aplicados = {i["id"] for i in previa["itens"] if i["ajustado"]}
+        text = contract_reviewer.extract_open_fields(data.model_dump(mode="json"), aplicados)
         findings = contract_reviewer.review_text(text) if text.strip() else []
-        findings = contract_reviewer.so_do_digitado(findings, data.model_dump(mode="json"))
-        return {"enabled": True, "findings": findings, "preview_html": preview_html}
+        findings = contract_reviewer.so_do_digitado(findings, data.model_dump(mode="json"), aplicados)
+        return {"enabled": True, "findings": findings, **previa}
     except contract_reviewer.ContractReviewError as e:
         logger.warning("Revisao do contrato indisponivel: %s", e)
-        return {"enabled": True, "findings": [], "preview_html": preview_html, "error": str(e)}
+        return {"enabled": True, "findings": [], **previa, "error": "Revisão por IA indisponível no momento."}
     except Exception as e:
         logger.error("Falha na revisao do contrato: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        try:
-            tmp_path.unlink()
-        except OSError:
-            pass
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
 
 
 @router.post("/generate-consumidor", response_model=ContratoResponse)
@@ -415,7 +440,7 @@ def generate_contrato_consumidor(
     except Exception as e:
         db.rollback()
         logger.error("Failed to generate consumer contract: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
 
 
 @router.get("/{contract_id}/download")
@@ -441,6 +466,8 @@ def download_contract(
     query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
     if version:
         ver = query.filter(ContractVersionDB.version_number == version).first()
+        if ver is None:
+            raise HTTPException(404, f"Versao {version} nao encontrada")
     else:
         ver = query.order_by(ContractVersionDB.version_number.desc()).first()
 
@@ -450,7 +477,14 @@ def download_contract(
 
     filepath: Path | None = None
 
-    if ver and ver.file_path:
+    generico = output_dir / f"contrato_{contract_id}.docx"
+    # Contratos antigos: varias versoes apontam para o mesmo arquivo generico, que so tem o
+    # texto da mais nova. Para as outras, o arquivo nao serve: regenera da form_data.
+    generico_de_outra_versao = bool(
+        ver and ver.file_path and Path(ver.file_path).name == generico.name
+        and ver.version_number != contract.current_version
+    )
+    if ver and ver.file_path and not generico_de_outra_versao:
         stored = Path(ver.file_path)
         if stored.exists():
             filepath = stored
@@ -459,8 +493,10 @@ def download_contract(
             if candidate.exists():
                 filepath = candidate
 
-    if filepath is None:
-        fallback = output_dir / f"contrato_{contract_id}.docx"
+    # O arquivo generico e' sempre o da versao mais nova: so serve para ela.
+    pedida_e_a_atual = ver is None or ver.version_number == contract.current_version
+    if filepath is None and pedida_e_a_atual:
+        fallback = generico
         if fallback.exists():
             filepath = fallback
 
@@ -476,7 +512,11 @@ def download_contract(
             # este e' o caminho normal de download, nao um caso de borda.
             contrato_data, gen_tipo = parse_form_data(form_data)
             _, new_filepath = gen_tipo.generate(contrato_data, contract_id=contract_id)
-            filepath = Path(new_filepath)
+            # O gerador grava sempre no nome generico (o da versao mais nova): move para o nome
+            # da versao pedida, senao a proxima consulta devolveria o texto errado.
+            destino = Path(new_filepath).with_name(f"contrato_{contract_id}_v{ver.version_number}.docx")
+            shutil.move(new_filepath, destino)
+            filepath = destino
             # Update stored path
             ver.file_path = str(filepath)
             db.commit()
@@ -576,8 +616,9 @@ def _inline_html(paragraph) -> str:
     return "".join(bits) or escape(_clean_preview_text(paragraph.text))
 
 
-def _docx_to_html(filepath: Path) -> str:
-    """Render the generated DOCX as simple HTML for inline preview (no external deps)."""
+def _docx_to_html(filepath: Path, ajustados: frozenset[str] = frozenset()) -> str:
+    """Render the generated DOCX as simple HTML for inline preview (no external deps).
+    Paragrafos cujo texto esta em `ajustados` (editados na etapa 7) saem com class="ajustado"."""
     from html import escape
 
     from docx import Document
@@ -605,6 +646,8 @@ def _docx_to_html(filepath: Path) -> str:
                 parts.append(f"<h1>{text}</h1>")
             elif style.startswith("Heading"):
                 parts.append(f"<h3>{text}</h3>")
+            elif p.text.strip() in ajustados:
+                parts.append(f'<p class="ajustado">{text}</p>')
             else:
                 parts.append(f"<p>{text}</p>")
         elif child.tag == qn("w:tbl"):
@@ -643,6 +686,7 @@ def _docx_to_html(filepath: Path) -> str:
         "h1{text-align:center;font-size:1.1rem}"
         "h3{font-size:1rem;margin-top:1.2rem}"
         "p{text-align:justify}"
+        "p.ajustado{background:#fef3c7;border-left:3px solid #d97706;padding:2px 6px}"
         "table{border-collapse:collapse;width:100%;margin:.5rem 0}"
         "td,th{border:1px solid #000;padding:6px}"
         "th{text-align:center}"
@@ -680,7 +724,7 @@ def preview_contrato_consumidor(
         return HTMLResponse(content=_docx_to_html(tmp_path))
     except Exception as e:
         logger.error("Failed to preview consumer contract: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=MSG_ERRO_INTERNO)
     finally:
         try:
             tmp_path.unlink()
@@ -708,17 +752,75 @@ _MARCA_RISCADO = "background:rgba(239,68,68,.18);color:#b91c1c;text-decoration:l
 _MARCA_IA = "background:rgba(34,197,94,.22);text-decoration:none;border-radius:2px;padding:0 1px"
 
 
-def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
-    """Amarelo = o que a pessoa digitou. Onde a IA propoe outro texto, o digitado sai
-    riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar)."""
+def _padrao_do_texto(digitado: str):
+    """Regex que acha no html o texto digitado, mesmo escrito um pouco diferente no
+    contrato: inicial maiuscula/minuscula, espacos repetidos, aspas, ponto final.
+    Com fronteira de palavra nas pontas ("sim" nao casa em "Assim") e fora de tags.
+    Unica busca, usada para achar e para marcar. None se nao ha o que procurar."""
     from html import escape
 
-    for texto in textos:
+    miolo = (digitado or "").strip().rstrip(".;, ").strip()
+    if not miolo:
+        return None
+    partes: list[str] = []
+    primeira = True
+    for pedaco in re.split(r"(\s+)", miolo):
+        if not pedaco:
+            continue
+        if pedaco.isspace():
+            partes.append(r"\s+")
+            continue
+        for c in pedaco:
+            if c in "\"'":
+                partes.append("(?:" + "|".join(re.escape(x) for x in (c, escape(c), escape(c, quote=False), "&#39;")) + ")")
+            elif primeira and c.isalpha():
+                partes.append("[" + re.escape(c.lower()) + re.escape(c.upper()) + "]")
+            else:
+                partes.append(re.escape(escape(c)))
+            primeira = False
+    return re.compile(r"(?<!\w)" + "".join(partes) + r"(?!\w)(?![^<]*>)"), miolo
+
+
+def _achar_no_html(html: str, digitado: str, destaque: bool = True) -> str | None:
+    """Trecho do html que corresponde ao texto digitado, como esta no contrato (sem
+    escape), ou None. Com destaque=True, texto curto (<12) ou so' numero/percentual
+    ("10%") so' vale se tiver uma unica ocorrencia: melhor sem destaque que no lugar
+    errado. destaque=False so' diz se o campo foi escrito no contrato (vai a IA)."""
+    from html import unescape
+
+    padrao = _padrao_do_texto(digitado)
+    if not padrao:
+        return None
+    regex, miolo = padrao
+    achados = [m.group(0) for m in regex.finditer(html)]
+    if not achados:
+        return None
+    if destaque and (len(miolo) < 12 or not re.search(r"[^\W\d_]", miolo)) and len(achados) != 1:
+        return None
+    return unescape(achados[0])
+
+
+def _marcar_digitados(html: str, textos: list, achados: list[dict]) -> str:
+    """Amarelo = o que a pessoa digitou. Onde a IA propoe outro texto, o digitado sai
+    riscado e a sugestao logo depois, em verde (o que o contrato recebe se aplicar).
+    O mesmo texto digitado em mais de um honorario e' destacado em cada ocorrencia."""
+    from html import escape
+
+    # Cada trecho vira um intervalo; o mais longo vence quando dois se sobrepoem
+    # (nada de <mark> dentro de <mark>), e o texto curto nunca cai dentro de tag.
+    # Um item e' o texto ou (texto, trechos do html onde o gerador o escreveu): fora
+    # desses trechos nunca marca. Cada item usa uma ocorrencia (texto igual em dois
+    # honorarios = dois itens = duas marcas).
+    itens = [(t, None) if isinstance(t, str) else t for t in textos]
+    escolhidos: list[tuple[int, int, str]] = []
+    for texto, spans in sorted(itens, key=lambda it: -len(it[0])):
         alvo = escape(texto)
         dentro = alvo
         for a in achados:
-            trecho = escape((a.get("trecho") or "").strip())
-            if trecho and trecho in dentro:
+            bruto = (a.get("trecho") or "").strip()
+            # a IA ve o texto como digitado; o contrato pode ter descido a inicial
+            trecho = next((escape(t) for t in (bruto, bruto[:1].swapcase() + bruto[1:]) if t and escape(t) in dentro), "")
+            if trecho:
                 # ponytail: casa por substring; trecho dentro de sugestao ja inserida
                 # nao e' tratado (o revisor ja descarta trechos aninhados).
                 dentro = dentro.replace(
@@ -727,27 +829,40 @@ def _marcar_digitados(html: str, textos: list[str], achados: list[dict]) -> str:
                     f'<ins style="{_MARCA_IA}">{escape(a.get("sugestao") or "")}</ins>',
                     1,
                 )
-        html = html.replace(alvo, f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>', 1)
+        marcado = f'<mark style="{_MARCA_DIGITADO}">{dentro}</mark>'
+        regex = _padrao_do_texto(texto)[0]
+        for m in regex.finditer(html):
+            if spans is not None and not any(i0 <= m.start() and m.end() <= f for i0, f in spans):
+                continue
+            if any(m.start() < f and i0 < m.end() for i0, f, _ in escolhidos):
+                continue
+            escolhidos.append((m.start(), m.end(), marcado))
+            break
+    for ini, fim, marcado in sorted(escolhidos, reverse=True):
+        html = html[:ini] + marcado + html[fim:]
     return html
 
 
-@router.post("/preview-honorarios")
-def preview_honorarios(
-    body: PreviaHonorariosRequest,
-    user: CurrentUser = Depends(get_current_user),
-) -> dict:
-    """Previa so' da secao de honorarios, para o pop-up do wizard: o texto digitado
-    vem destacado e, com revisar=True, a correcao da IA aparece no lugar. Nada e' gravado."""
+_BLOCO = re.compile(r"<(?:p|h1|h3|table)(?=[\s>])")
+
+
+def _blocos(html: str) -> list[tuple[int, int]]:
+    """Intervalos (inicio, fim) dos paragrafos/titulos/tabelas do html do contrato."""
+    ini = [m.start() for m in _BLOCO.finditer(html)]
+    return list(zip(ini, ini[1:] + [len(html)]))
+
+
+def _html_honorarios(escopos: list, acessorios) -> str:
     import tempfile
-    from html import escape
 
-    from app.utils.currency import percentual_com_extenso
-
-    data = ContratoRequest(
-        contratantes=[_CONTRATANTE_PREVIA],
-        escopos=body.escopos,
-        acessorios=body.acessorios or Acessorios(),
-        participacao={"tem_participacao": False},
+    data = ContratoRequest.model_validate(
+        {
+            "contratantes": [_CONTRATANTE_PREVIA],
+            "escopos": escopos,
+            "acessorios": acessorios or Acessorios(),
+            "participacao": {"tem_participacao": False},
+        },
+        context={"previa": True},  # pop-up com formulario pela metade
     )
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
     tmp_path = Path(tmp.name)
@@ -763,16 +878,73 @@ def preview_honorarios(
     # Secoes saem como <h3> numerado; recorta da secao 3 ate a seguinte.
     inicio = html.rfind("<h3>", 0, html.find("OUTRAS DISPOSIÇÕES SOBRE HONORÁRIOS"))
     fim = html.rfind("<h3>", 0, html.find("CLÁUSULAS GERAIS"))
-    html = html[inicio:fim]
+    return html[inicio:fim]
+
+
+def _tirar_texto(obj, texto: str):
+    """Copia do dump com todo valor igual a `texto` esvaziado."""
+    if isinstance(obj, dict):
+        return {k: _tirar_texto(v, texto) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_tirar_texto(v, texto) for v in obj]
+    return "" if obj == texto else obj
+
+
+def _trechos_do_campo(html: str, body: "PreviaHonorariosRequest", texto: str) -> list[tuple[int, int]] | None:
+    """Onde o gerador escreveu o campo: gera o contrato de novo sem o texto e fica com
+    os blocos que sumiram ou mudaram. Falhou = None (sem destaque, nunca no lugar errado;
+    o campo continua indo a IA)."""
+    from collections import Counter
+
+    try:
+        sem = body.model_dump(mode="json")
+        sem = PreviaHonorariosRequest(**_tirar_texto(sem, texto))
+        html_sem = _html_honorarios(sem.escopos, sem.acessorios)
+    except Exception:
+        logger.warning("Previa: nao foi possivel localizar o campo no contrato", exc_info=True)
+        return None
+    restam = Counter(html_sem[i:f] for i, f in _blocos(html_sem))
+    spans = []
+    for i, f in _blocos(html):
+        if restam[html[i:f]] > 0:
+            restam[html[i:f]] -= 1
+        else:
+            spans.append((i, f))
+    return spans
+
+
+@router.post("/preview-honorarios")
+def preview_honorarios(
+    body: PreviaHonorariosRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Previa so' da secao de honorarios, para o pop-up do wizard: o texto digitado
+    vem destacado e, com revisar=True, a correcao da IA aparece no lugar. Nada e' gravado."""
+    from app.utils.currency import percentual_com_extenso
+
+    html = _html_honorarios(body.escopos, body.acessorios)
 
     dump = {"escopos": [e.model_dump(mode="json") for e in body.escopos]}
     # O gerador tira a pontuacao final do que foi digitado; o destaque tem de casar.
     completos = contract_reviewer.campos_abertos(dump)
-    # O contrato desce a inicial de "Até R$ 500" / "Um desconto de 5%"; a busca no html
-    # (e o destaque) tem de usar o texto como o gerador o escreveu, nao como foi digitado.
-    como_sai = ContractGenerator._texto_livre
-    completos = [c for c in completos if len(como_sai(c[1])) >= 3 and escape(como_sai(c[1])) in html]
-    textos = [como_sai(t) for _, t, _ in completos]
+    # O contrato pode escrever o texto diferente do digitado (inicial, ponto final,
+    # espacos); a busca no html e o destaque usam o texto como saiu no contrato.
+    # Cada campo so' vale dentro dos blocos onde o gerador o escreveu.
+    trechos: dict = {}
+    como_sai = []
+    for c in completos:
+        if c[1] not in trechos:
+            trechos[c[1]] = _trechos_do_campo(html, body, c[1])
+        sp = trechos[c[1]]
+        if sp is None:
+            # nao deu para localizar: o campo vai a IA (procurado no html todo), sem destaque
+            como_sai.append((c, _achar_no_html(html, c[1], destaque=False), None, []))
+            continue
+        regiao = "".join(html[i:f] for i, f in sp)
+        como_sai.append((c, _achar_no_html(regiao, c[1], destaque=False), _achar_no_html(regiao, c[1]), sp))
+    # Vai a IA o que foi escrito no contrato; so' recebe destaque o que se acha sem duvida.
+    completos = [c for c, escrito, _, _ in como_sai if escrito and len(escrito) >= 3]
+    textos: list = [(achado, sp) for _, _, achado, sp in como_sai if achado and len(achado) >= 3]
     # Desconto percentual nao e' texto livre, mas e' a "especificacao" que a pessoa preencheu.
     for h in (e.model_dump(mode="json").get(k) or {} for e in body.escopos for k in contract_reviewer.HONORARIO_ROTULOS):
         if h.get("tem_desconto") and h.get("desconto_tipo") != "livre" and h.get("desconto_percentual"):

@@ -3,8 +3,8 @@
 import assert from "node:assert/strict";
 import { cnpjValido } from "./cnpj.ts";
 import {
-  agruparDerivados, cnjValido, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
-  formatarOabNumero, lerOab, oabsDoTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
+  agruparDerivados, cnjValido, formatarCnj, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
+  formatarOabNumero, lerOab, trocarUfOab, oabsDoTexto, oabTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
 } from "./documentos.ts";
 
 const validar = (t: any, e: any) => validarBase(t, e, cnpjValido);
@@ -14,6 +14,9 @@ assert.ok(cnjValido("1234567-49.2020.8.13.0024"));
 assert.ok(cnjValido("1111111-60.2023.4.06.0000"));
 assert.ok(!cnjValido("1234567-50.2020.8.13.0024")); // DV errado
 assert.ok(!cnjValido("123"));
+assert.ok(cnjValido("12345674920208130024")); // sem máscara
+assert.equal(formatarCnj("12345674920208130024"), "1234567-49.2020.8.13.0024");
+assert.equal(formatarCnj("123"), "123");
 assert.ok(!cnjValido(""));
 
 assert.ok(ehDocumentoComplementar("distrato"));
@@ -101,6 +104,22 @@ assert.deepEqual(oabVazia(), { numero: "", uf: "MG" });
 assert.deepEqual(lerOab("OAB/MG nº 36.959"), { numero: "36.959", uf: "MG" });
 assert.deepEqual(lerOab("OAB/SP sob o n.º 101.728"), { numero: "101.728", uf: "SP" });
 assert.deepEqual(lerOab("123456"), { numero: "123.456", uf: "MG" });
+// OAB fora do padrao nunca e' reescrita (achados da revisao): sufixo, outra UF, varias OABs, texto livre.
+assert.deepEqual(lerOab("OAB/MG n.º 36.959-A"), { numero: "36.959-A", uf: "MG" });
+assert.equal(oabTexto(lerOab("OAB/MG n.º 36.959-A")), "OAB/MG n.º 36.959-A");
+assert.deepEqual(lerOab("OAB-SP 12345"), { numero: "12.345", uf: "SP" });
+assert.deepEqual(lerOab("OAB/RJ sob o nº 1.234-b"), { numero: "1.234-B", uf: "RJ" });
+const duas = "OAB/MG n.º 111.111 e OAB/SP n.º 222.222";
+assert.equal(oabTexto(lerOab(duas)), duas);
+assert.equal(oabTexto(lerOab(duas), true), duas);
+const livre = "advogado inscrito na OAB 36.959 (MG)";
+assert.equal(oabTexto(lerOab(livre)), livre);
+assert.equal(oabTexto({ ...lerOab(duas), numero: "333" }), "OAB/MG n.º 333"); // editou: vale o que digitou
+assert.deepEqual(lerOab(""), { numero: "", uf: "MG" });
+// Trocar so a UF de um texto original limpa o numero (nao gera "OAB/SP n.º OABMGN11").
+assert.deepEqual(trocarUfOab(lerOab(duas), "SP"), { numero: "", uf: "SP" });
+assert.deepEqual(trocarUfOab({ numero: "36.959", uf: "MG" }, "SP"), { numero: "36.959", uf: "SP" });
+assert.equal(formatarOabNumero("36959-a"), "36.959-A");
 
 // OABs do cadastro de colaboradores: texto "numero/UF" (admin) <-> lista validada.
 assert.deepEqual(oabsDoTexto("36.959/mg, 1234/SP"), [{ numero: "36959", uf: "MG" }, { numero: "1234", uf: "SP" }]);

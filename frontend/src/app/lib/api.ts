@@ -232,6 +232,40 @@ async function request<T>(
   return res.json();
 }
 
+export interface ItemClausula {
+  id: string; // chave fixa da cláusula (nunca o número)
+  numero: string; // número que o Word mostra; só para a tela
+  clausula: string;
+  texto: string;
+  padrao: string;
+  ajustado: boolean;
+  // Texto guardado do ajuste (mesmo pendente, para reaplicar); null se nao ha ajuste.
+  ajuste: string | null;
+  padrao_ajuste: string | null; // texto padrão da época em que o ajuste foi feito
+  status: "ok" | "padrao_mudou" | null;
+  editavel: boolean;
+  etapa: number | null;
+}
+
+export interface AjusteDescartado {
+  id: string;
+  texto: string;
+}
+
+export interface PreviaTexto {
+  preview_html: string;
+  itens: ItemClausula[];
+  ajustes_descartados: AjusteDescartado[];
+}
+
+// Previa + cláusulas ajustáveis, sem IA (usada ao salvar/desfazer um ajuste de texto).
+export async function previewTexto(data: unknown) {
+  return request<PreviaTexto>("/api/contract/preview-texto", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 // Varredura de portugues/padrao via DeepSeek antes de gerar o contrato definitivo.
 // Chamada pode demorar (LLM) — usa timeout proprio, maior que o default de 8s.
 export async function reviewContract(data: unknown) {
@@ -239,6 +273,8 @@ export async function reviewContract(data: unknown) {
     enabled: boolean;
     findings: Array<{ trecho: string; problema: string; sugestao: string }>;
     preview_html?: string;
+    itens?: ItemClausula[];
+    ajustes_descartados?: AjusteDescartado[];
     error?: string;
   }>("/api/contract/review", {
     method: "POST",
@@ -381,6 +417,51 @@ export interface ColaboradorWizard {
   email: string;
   role: string;
   oabs?: OabCadastro[];
+}
+
+export interface ConsultaProcesso {
+  valido: boolean;
+  numero: string;
+  erro?: string;
+  justica?: string;
+  tribunal?: string | null;
+  // Partes do Legal One do escritório (só leitura); null se o processo não está lá ou não há acesso.
+  legalone: { cliente: string[]; contraria: string[]; descricao: string } | null;
+}
+
+export interface ProcessoPlanilha {
+  linha: number;
+  valido: boolean;
+  numero: string;
+  erro?: string;
+  tribunal?: string | null;
+  tipo: string;
+  descricao: string;
+}
+
+async function chamarProcessos<T>(path: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetchAutenticado(`${API_BASE}${path}`, { ...init, signal: controller.signal });
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => null);
+      throw new Error(typeof corpo?.detail === "string" ? corpo.detail : "Não foi possível concluir a consulta.");
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export const consultarProcesso = (numero: string) =>
+  chamarProcessos<ConsultaProcesso>(`/api/processos/cnj?numero=${encodeURIComponent(numero)}`);
+
+export function importarPlanilhaProcessos(arquivo: File) {
+  const form = new FormData();
+  form.append("arquivo", arquivo);
+  return chamarProcessos<{ aviso: string; processos: ProcessoPlanilha[]; validos: number; invalidos: number }>(
+    "/api/processos/planilha", { method: "POST", body: form });
 }
 
 export async function listColaboradores(opts?: { participavel?: boolean }) {
@@ -646,22 +727,59 @@ export async function getContract(contractId: string) {
   return request<ContractDetail>(`/api/contracts/${contractId}`);
 }
 
+// Versão que ESTA aba carregou de cada contrato: o PUT a devolve ao servidor, que recusa
+// (409) se outra aba/pessoa já gravou uma versão mais nova.
+const versaoCarregada: Record<string, number> = {};
+export const EVENTO_VERSAO_DESATUALIZADA = "contrato-versao-desatualizada";
+
+/** "Salvar sobre a versão atual": o próximo Salvar desta aba parte da versão que está no servidor. */
+export function adotarVersaoAtual(contractId: string, versaoAtual: number) {
+  versaoCarregada[contractId] = versaoAtual;
+}
+
 export async function getContractFormData(contractId: string, version?: number) {
   const qs = version ? `?version=${version}` : "";
-  return request<ContractFormDataResponse>(`/api/contracts/${contractId}/form-data${qs}`);
+  const r = await request<ContractFormDataResponse>(`/api/contracts/${contractId}/form-data${qs}`);
+  if (!version) versaoCarregada[contractId] = r.version_number;
+  return r;
 }
 
 export async function updateContract(contractId: string, formData: Record<string, unknown>) {
-  return request<{
-    success: boolean;
-    message: string;
-    contract_id: string;
-    version: number;
-    download_url: string;
-  }>(`/api/contracts/${contractId}`, {
-    method: "PUT",
-    body: JSON.stringify({ form_data: formData }),
-  });
+  try {
+    const r = await request<{
+      success: boolean;
+      message: string;
+      contract_id: string;
+      version: number;
+      download_url: string;
+    }>(`/api/contracts/${contractId}`, {
+      method: "PUT",
+      body: JSON.stringify({ form_data: formData, version: versaoCarregada[contractId] ?? null }),
+    });
+    versaoCarregada[contractId] = r.version;
+    return r;
+  } catch (e) {
+    if (!(e instanceof ConflitoError)) throw e;
+    let detail: { codigo?: string; motivo?: string; sugestao?: string; versao_atual?: number } = {};
+    try {
+      detail = JSON.parse(e.message.slice(e.message.indexOf("{"))).detail ?? {};
+    } catch {
+      /* mensagem sem JSON: cai no texto padrão */
+    }
+    if (detail.codigo === "versao_desatualizada") {
+      // Nada foi gravado e a tela NÃO recarrega sozinha (o digitado seria perdido): o aviso
+      // global (AvisoVersaoDesatualizada) oferece o botão "Recarregar".
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(EVENTO_VERSAO_DESATUALIZADA, { detail: { motivo: detail.motivo, contractId, versaoAtual: (detail as { versao_atual?: number }).versao_atual } }));
+      throw new Error(`${detail.motivo ?? "Este contrato foi alterado em outra aba."} Nada foi salvo; o que você digitou continua na tela.`);
+    }
+    if (detail.codigo === "contrato_travado") throw new Error(`${detail.motivo} ${detail.sugestao ?? ""}`.trim());
+    throw new Error("Não foi possível salvar: o contrato foi alterado por outra pessoa ou está travado. Recarregue a página e tente de novo.");
+  }
+}
+
+/** Arquiva a assinatura no DocuSeal e volta o contrato enviado a rascunho (nada muda se o DocuSeal falhar). */
+export async function cancelarEnvioAssinatura(contractId: string) {
+  return request<{ success: boolean; status: string }>(`/api/docuseal/${contractId}/cancelar-envio`, { method: "POST" });
 }
 
 export async function updateContractStatus(contractId: string, status: string) {
@@ -1009,12 +1127,37 @@ export async function previewDocumento(tipo: string, payload: unknown, signal?: 
   return res.text();
 }
 
-export async function gerarDocumento(tipo: string, payload: unknown) {
+export interface SubstabelecimentoExistente {
+  existe: boolean;
+  contract_id?: string;
+  client_name?: string;
+  status?: string;
+  pode_acrescentar?: boolean;
+  motivo?: string | null;
+  processos?: string[];
+  substabelecentes?: Array<{ nome: string; email: string; oab: string }>;
+  substabelecidos?: Array<{ nome: string; oab: string }>;
+  endereco_substabelecidos?: string;
+}
+
+// O cliente (CPF/CNPJ) já tem substabelecimento? Orienta "acrescentar o processo" ou "criar novo".
+export async function substabelecimentoExistente(documento: string) {
+  return request<SubstabelecimentoExistente>(
+    `/api/documentos/substabelecimento-existente?documento=${encodeURIComponent(documento)}`,
+  );
+}
+
+// acrescentarA: contract_id de um substabelecimento do mesmo outorgante, que recebe os processos.
+export async function gerarDocumento(tipo: string, payload: unknown, acrescentarA?: string) {
   return request<{
     success: boolean;
     message: string;
     contract_id: string;
     download_url: string;
     aviso: string | null;
-  }>(`/api/documentos/${tipo}`, { method: "POST", body: JSON.stringify(payload) });
+    acrescentado?: boolean;
+  }>(`/api/documentos/${tipo}${acrescentarA ? `?acrescentar_a=${encodeURIComponent(acrescentarA)}` : ""}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

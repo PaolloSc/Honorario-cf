@@ -119,21 +119,21 @@ def _frases_do_honorario(chave: str, h: dict) -> list[str]:
         obj = modelos[chave](**h)
         # Os metodos dos blocos nao usam estado do gerador (template/saida).
         gen = ContractGenerator.__new__(ContractGenerator)
-        getattr(gen, f"_add_{chave}")(Document(), obj, frases.append)
+        getattr(gen, f"_add_{chave}")(Document(), obj, lambda texto, **_: frases.append(texto))
     except Exception as e:  # dado incompleto no meio do wizard
         logger.info("Revisao sem frase de contexto para %s: %s", chave, e)
         return []
     return frases
 
 
-def extract_open_fields(data: dict) -> str:
+def extract_open_fields(data: dict, aplicados: set[str] | None = None) -> str:
     """Extrai so' os campos de texto livre digitados no formulario (nao a clausula
     padrao do contrato, que quem preenche o wizard nao tem como editar ali).
 
     Campos que entram no meio de uma frase pronta do contrato (desconto,
     parcelamento, vencimento do exito) vao acompanhados dessa frase, para a
     sugestao se encaixar nela."""
-    return texto_para_revisao(campos_abertos(data))
+    return texto_para_revisao(campos_abertos(data, aplicados))
 
 
 def texto_para_revisao(campos: list[tuple[str, str, str | None]]) -> str:
@@ -145,11 +145,12 @@ def texto_para_revisao(campos: list[tuple[str, str, str | None]]) -> str:
     return chr(10).join(linhas)
 
 
-def open_fields(data: dict) -> list[tuple[str, str]]:
-    return [(label, text) for label, text, _ in campos_abertos(data)]
+def open_fields(data: dict, aplicados: set[str] | None = None) -> list[tuple[str, str]]:
+    return [(label, text) for label, text, _ in campos_abertos(data, aplicados)]
 
 
-def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
+def campos_abertos(data: dict, aplicados: set[str] | None = None) -> list[tuple[str, str, str | None]]:
+    # aplicados: ids dos ajustes que entraram no contrato; None = todos (sem informacao do gerador).
     lines: list[tuple[str, str, str | None]] = []
 
     def add(label: str, value, frases: list[str] | None = None) -> None:
@@ -177,6 +178,7 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
         add(f"{prefix} - documentos", escopo.get("documentos"))
         add(f"{prefix} - consulta", escopo.get("consulta"))
         permuta = escopo.get("permuta") or {}
+        add(f"{prefix} - permuta: objeto", permuta.get("objeto_permuta"))
         add(f"{prefix} - permuta: descrição", permuta.get("descricao"))
         add(f"{prefix} - permuta: forma de pagamento da torna", permuta.get("forma_pagamento_torna"))
 
@@ -187,6 +189,13 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
         add(f"{prefix} - êxito: honorário deduzido", exito.get("honorario_deduzido"))
         add(f"{prefix} - êxito: vencimento", exito.get("vencimento"), frases_exito)
         add(f"{prefix} - êxito: forma de parcelamento", exito.get("forma_parcelamento"), frases_exito)
+        # forma_pagamento e' chave (a_vista, parcelado...) ou texto livre; so' o livre vai.
+        forma = exito.get("forma_pagamento")
+        # "a definir" e' o placeholder que o formulario grava ao escolher "Outro".
+        if forma not in ("a_vista", "parcelado", "conforme_cumprimento") and (forma or "").strip().lower() != "a definir":
+            add(f"{prefix} - êxito: forma de pagamento", forma, frases_exito)
+        for faixa in exito.get("faixas_percentual") or []:
+            add(f"{prefix} - êxito: faixa de valor", faixa.get("faixa"))
 
         pro_labore = escopo.get("pro_labore") or {}
         frases_pl = _frases_do_honorario("pro_labore", pro_labore) if pro_labore else []
@@ -197,6 +206,8 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
         mensalidade = escopo.get("mensalidade") or {}
         frases_m = _frases_do_honorario("mensalidade", mensalidade) if mensalidade else []
         add(f"{prefix} - mensalidade: observação de vencimento", mensalidade.get("dia_vencimento_obs"), frases_m)
+        for faixa in mensalidade.get("faixas_preco") or []:
+            add(f"{prefix} - mensalidade: faixa de preço", faixa.get("faixa"))
 
         for chave, rotulo in HONORARIO_ROTULOS.items():
             h = escopo.get(chave) or {}
@@ -209,6 +220,10 @@ def campos_abertos(data: dict) -> list[tuple[str, str, str | None]]:
     add("Limitação do reembolso", acessorios.get("descricao_limitacao_reembolso"))
     add("Critério de extinção do êxito", acessorios.get("criterio_extincao_exito"))
     add("Cláusulas adicionais", acessorios.get("clausulas_adicionais"))
+    for id_, ajuste in (data.get("ajustes_texto") or {}).items():
+        if aplicados is not None and id_ not in aplicados:
+            continue  # padrao mudou ou clausula descartada: nao esta no contrato, a IA nao le
+        add(f"Cláusula {id_} (ajustada à mão)", ajuste.get("texto"))
 
     return lines
 
@@ -276,11 +291,11 @@ def review_text(document_text: str, avisar_ambiguidade: bool = False) -> list[di
     return _drop_nested_trechos(findings) + avisos
 
 
-def so_do_digitado(findings: list[dict], data: dict) -> list[dict]:
+def so_do_digitado(findings: list[dict], data: dict, aplicados: set[str] | None = None) -> list[dict]:
     """O modelo recebe "rotulo: texto" e as vezes critica o rotulo (hifen, "do" vs
     "para"), que nao e' texto de ninguem. Fica so' o achado cujo trecho esta no
     que a pessoa digitou."""
-    textos = [t for _, t in open_fields(data)]
+    textos = [t for _, t in open_fields(data, aplicados)]
     return [f for f in findings if any((f.get("trecho") or "").strip() in t for t in textos)]
 
 
