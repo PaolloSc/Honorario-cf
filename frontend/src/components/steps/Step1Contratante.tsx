@@ -60,7 +60,7 @@ function emptyPF(): ContratantePF {
   return {
     tipo: "PF",
     nome: "",
-    nacionalidade: "Brasileira",
+    nacionalidade: "Brasileiro(a)",
     cpf: "",
     profissao: "",
     estado_civil: "Solteiro(a)",
@@ -530,7 +530,7 @@ function PJForm({
 }
 
 function emptyRepresentante(): RepresentantePJ {
-  return { nome: "", nacionalidade: "Brasileira", profissao: "Empresário" };
+  return { nome: "", nacionalidade: "Brasileiro(a)", profissao: "Empresário" };
 }
 
 function RepresentantesForm({
@@ -768,7 +768,7 @@ function PFForm({
         <Input
           value={data.nacionalidade}
           onChange={(e) => onUpdate({ nacionalidade: e.target.value })}
-          placeholder="Brasileira"
+          placeholder="Brasileiro(a)"
         />
       </FormField>
 
