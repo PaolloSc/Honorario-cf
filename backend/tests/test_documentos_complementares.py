@@ -929,7 +929,7 @@ PARTE_PF = {"nome": "Maria Souza", "cpf": "123.456.789-09", "nacionalidade": "br
 
 
 def test_aditivo_sem_origem_usa_as_partes_informadas_e_o_numero_escolhido(client):
-    cid = _id(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": [PARTE_PJ], "numero": 3})
+    cid = _id(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": [PARTE_PJ], "numero": 3, "objeto_contrato_origem": "assessoria jurídica"})
     texto = _texto(client, cid)
     assert "ANTIGA COMERCIAL LTDA" in texto and "11.222.333/0001-81" in texto and "José da Silva" in texto
     assert "Rua Velha, 10" in texto and "lixo" not in texto and "descartado" not in texto
@@ -951,9 +951,42 @@ def test_distrato_sem_origem_gera_com_substabelecimento_e_pode_repetir(client):
     [{"razao_social": "X LTDA", "cnpj": "11.222.333"}],  # CNPJ curto
 ])
 def test_documento_sem_origem_exige_nome_e_documento_da_parte(client, partes):
-    assert _gerar(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": partes}).status_code == 422
+    assert _gerar(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": partes, "objeto_contrato_origem": "x"}).status_code == 422
 
 
 def test_com_origem_as_partes_do_cliente_continuam_descartadas(client):
     cid = _id(client, "aditivo", {**ADITIVO, "contratantes": [PARTE_PF]})
     assert "Maria Souza" not in _texto(client, cid)
+
+
+SEM_ORIGEM = {**ADITIVO, "contrato_origem_id": None, "contratantes": [PARTE_PF], "objeto_contrato_origem": "assessoria jurídica trabalhista"}
+
+
+def test_distrato_pj_sem_origem_usa_o_representante_legal(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "contrato_origem_id": None, "contratantes": [PARTE_PJ]}))
+    assert "neste ato representada por José da Silva, CPF 111.222.333-44" in texto
+
+
+def test_aditivo_sem_origem_pede_o_objeto_e_cita_data_por_extenso(client):
+    r = _gerar(client, "aditivo", {**SEM_ORIGEM, "objeto_contrato_origem": "  "})
+    assert r.status_code == 422 and "objeto_contrato_origem" in r.text
+    texto = _texto(client, _id(client, "aditivo", SEM_ORIGEM))
+    assert ("As partes firmaram, em 15 de janeiro de 2020, Contrato de Prestação de Serviços Advocatícios, "
+            "tendo por objeto assessoria jurídica trabalhista;") in texto
+
+
+def test_aditivo_sem_origem_cita_anteriores_so_se_informados(client):
+    p = {**SEM_ORIGEM, "numero": 3}
+    assert "Aditivo Contratual, tendo" not in _texto(client, _id(client, "aditivo", p)).split("Resolvem")[0]
+    anteriores = [{"numero": 2, "data_documento": "2022-03-10", "objeto": "reajuste"}, {"numero": 1, "data_documento": "2021-02-01"},
+                  {"numero": 3, "data_documento": "2023-01-01"}, {"numero": 9}]  # 3 e 9 nao sao anteriores ao 3
+    texto = _texto(client, _id(client, "aditivo", {**p, "aditivos_anteriores": anteriores}))
+    i1, i2 = texto.index("Em fevereiro de 2021, as partes firmaram o 1º Aditivo Contratual;"), texto.index(
+        "Em março de 2022, as partes firmaram o 2º Aditivo Contratual, tendo por objeto reajuste;")
+    assert i1 < i2 and "3º Aditivo Contratual;" not in texto and "9º Aditivo" not in texto
+
+
+def test_aditivo_com_origem_ignora_objeto_e_anteriores_do_cliente(client):
+    texto = _texto(client, _id(client, "aditivo", {**ADITIVO, "objeto_contrato_origem": "inventado",
+                                                  "aditivos_anteriores": [{"numero": 1, "data_documento": "2021-02-01"}]}))
+    assert "inventado" not in texto and "1º Aditivo Contratual;" not in texto

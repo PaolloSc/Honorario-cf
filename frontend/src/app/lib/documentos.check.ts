@@ -193,13 +193,18 @@ assert.deepEqual(agruparDerivados(itens).map((g) => `${g.derivado ? ">" : ""}${g
 
 // Sem contrato de origem (contrato antigo): partes digitadas vao em `contratantes`; com origem, nada disso.
 {
-  const adi = { ...(estadoInicial("aditivo", "2026-11-05") as any), data_contrato_origem: "1990-03-01", objeto: "x",
+  const adi = { ...(estadoInicial("aditivo", "2026-11-05") as any), data_contrato_origem: "1990-03-01", objeto: "x", objeto_contrato_origem: "assessoria", anteriores: [{ numero: "1", data: "1991-01-02", objeto: "" }],
     alteracoes: [{ tipo: "adicionar", clausula: "", texto: "t" }], numero: "2",
     partes: [{ pj: true, nome: "ANTIGA LTDA", documento: "11.222.333/0001-81", endereco: "Rua A", nacionalidade: "", estado_civil: "", profissao: "", representante_nome: "Jose", representante_cpf: "111.222.333-44" }] };
   assert.deepEqual(validarBase("aditivo", adi, cnpjValido, true), {});
   const p = montarPayload("aditivo", adi, null) as any;
   assert.equal(p.contrato_origem_id, null);
   assert.equal(p.numero, 2);
+  assert.equal(p.objeto_contrato_origem, "assessoria");
+  assert.deepEqual(p.aditivos_anteriores, [{ numero: 1, data_documento: "1991-01-02", objeto: "" }]);
+  assert.deepEqual((montarPayload("aditivo", { ...adi, numero: "1" }, null) as any).aditivos_anteriores, []);
+  assert.ok("objeto_contrato_origem" in validarBase("aditivo", { ...adi, objeto_contrato_origem: " " }, cnpjValido, true));
+  assert.ok("aditivos_anteriores.0.numero" in validarBase("aditivo", { ...adi, anteriores: [{ numero: "2", data: "", objeto: "" }] }, cnpjValido, true));
   assert.deepEqual(p.contratantes, [{ razao_social: "ANTIGA LTDA", cnpj: "11.222.333/0001-81", endereco: "Rua A", representantes: [{ nome: "Jose", cpf: "111.222.333-44" }] }]);
   assert.ok(!("contratantes" in (montarPayload("aditivo", adi, "o") as any)) && !("numero" in (montarPayload("aditivo", adi, "o") as any)));
   // Sem origem a parte vazia e' cobrada; com origem, nao.
