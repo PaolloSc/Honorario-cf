@@ -39,6 +39,10 @@ def _get_token(cred: tuple[str, str]) -> Optional[str]:
     return _token
 
 
+def configurado() -> bool:
+    return _credenciais() is not None
+
+
 def partes_do_processo(numero_cnj: str) -> Optional[dict]:
     """{"cliente": [...], "contraria": [...]} do processo, ou None (sem credencial, nao achou, erro).
 

@@ -5,6 +5,7 @@ import io
 import logging
 import re
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, wait
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
@@ -17,6 +18,8 @@ router = APIRouter(prefix="/api/processos", tags=["Processos"])
 LIMITE_BYTES = 2_000_000
 LIMITE_LINHAS = 500
 LIMITE_DESCOMPRIMIDO = 20_000_000  # um .xlsx pequeno pode expandir a centenas de MB (zip bomb)
+LIMITE_CONSULTA_PARTES = 50  # linhas sem descricao consultadas no Legal One por importacao
+PRAZO_CONSULTA_PARTES = 15  # segundos no total: passou, a importacao segue sem as partes que faltaram
 MSG_INVALIDO = "Número fora do padrão CNJ (20 dígitos) ou com dígito verificador errado"
 
 
@@ -76,6 +79,33 @@ def _linhas(nome: str, conteudo: bytes) -> tuple[list[list[str]], int]:
     return [[c.strip() for c in row] for row in csv.reader(io.StringIO(texto), dialeto)][: LIMITE_LINHAS + 1], 1
 
 
+def _completar_partes(itens: list[dict]) -> tuple[int, int]:
+    """Linhas validas sem descricao: busca as partes no Legal One (em paralelo, com prazo total) e preenche.
+    Nunca levanta: sem credencial, falha ou prazo estourado, a linha segue como veio. Devolve (preenchidas, nao consultadas)."""
+    pendentes = [i for i in itens if i["valido"] and not i["descricao"].strip()]
+    consultar, sobra = pendentes[:LIMITE_CONSULTA_PARTES], max(0, len(pendentes) - LIMITE_CONSULTA_PARTES)
+    if not consultar or not legalone_leitura.configurado():
+        return 0, 0
+    ex = ThreadPoolExecutor(max_workers=8)
+    try:
+        futuros = {ex.submit(legalone_leitura.partes_do_processo, i["numero"]): i for i in consultar}
+        feitos, _ = wait(futuros, timeout=PRAZO_CONSULTA_PARTES)
+        preenchidas = 0
+        for f in feitos:
+            try:
+                partes = f.result()
+            except Exception:  # partes_do_processo ja' engole falhas; isto e' so' cinto de seguranca
+                continue
+            desc = legalone_leitura.descricao(partes) if partes else ""
+            if desc:
+                futuros[f]["descricao"] = desc
+                futuros[f]["partes_legalone"] = True
+                preenchidas += 1
+        return preenchidas, sobra
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+
 @router.post("/planilha")
 def importar_planilha(arquivo: UploadFile, user: CurrentUser = Depends(get_current_user)) -> dict:
     """.xlsx ou .csv: uma linha por processo. Com cabecalho (numero/processo/cnj, tipo, descricao/partes) as
@@ -117,5 +147,11 @@ def importar_planilha(arquivo: UploadFile, user: CurrentUser = Depends(get_curre
             # tipo so' vai se for texto curto de verdade; vazio deixa o padrao "Processo"
             "tipo": celula(linha, "tipo")[:80], "descricao": celula(linha, "descricao")[:500],
         })
-    aviso = f"A planilha tem {abas} abas; só a primeira foi lida." if abas > 1 else ""
+    avisos = [f"A planilha tem {abas} abas; só a primeira foi lida."] if abas > 1 else []
+    preenchidas, sobra = _completar_partes(saida)
+    if preenchidas:
+        avisos.append(f"{preenchidas} processo(s) tiveram as partes trazidas do Legal One.")
+    if sobra:
+        avisos.append(f"As partes só foram buscadas em {LIMITE_CONSULTA_PARTES} processos; {sobra} ficaram sem consulta.")
+    aviso = " ".join(avisos)
     return {"aviso": aviso, "processos": saida, "validos": sum(1 for p in saida if p["valido"]), "invalidos": sum(1 for p in saida if not p["valido"])}
