@@ -157,9 +157,9 @@ def test_extract_open_fields_empty_when_no_free_text_filled():
     assert contract_reviewer.extract_open_fields(data) == ""
 
 
-def test_extract_open_fields_inclui_endereco_e_observacoes_de_vencimento():
-    """Endereço e observações de vencimento também são texto livre que vai pro contrato,
-    mas a revisão só olhava escopo/acessórios — passavam batido erros de digitação neles."""
+def test_extract_open_fields_ignora_endereco_e_inclui_observacoes_de_vencimento():
+    """Endereço das partes vem da consulta de CNPJ (sem acento): a IA não o revisa.
+    Observações de vencimento são texto livre e continuam sendo revisadas."""
     data = {
         "contratantes": [
             {"tipo": "PF", "endereco": "Rua das Aacacias, 100, apartameto 302"},
@@ -184,8 +184,10 @@ def test_extract_open_fields_inclui_endereco_e_observacoes_de_vencimento():
 
     text = contract_reviewer.extract_open_fields(data)
 
-    assert "Rua das Aacacias, 100, apartameto 302" in text
-    assert "Av. Contorno, 500, sla 10" in text
+    assert "Rua das Aacacias" not in text
+    assert "Av. Contorno" not in text
+    assert "endereço" not in text
+    assert "IGNORE dados cadastrais" in contract_reviewer._SYSTEM_PROMPT
     assert "o valor da causa atulizado" in text
     assert "apos a homologacao do acôrdo" in text
     assert "excto em mes de recesso" in text
