@@ -1,5 +1,6 @@
 "use client";
 
+import { filtrarOpcoes, opcaoParaConfirmar } from "@/components/ui/comboBoxBusca";
 import { ReactNode, createContext, useContext, useId, useMemo, useRef, useState } from "react";
 
 // O FormField passa o id do campo para o controle dentro dele: o <label> fica associado (for/id)
@@ -186,11 +187,6 @@ interface ComboBoxProps {
   className?: string;
 }
 
-// Remove acentos pra busca "monica" achar "Mônica" tambem.
-function semAcento(s: string): string {
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
-}
-
 // Select com busca: a lista so' abre depois que a pessoa comeca a digitar (nao
 // so' ao clicar no campo) e filtra pelo INICIO do nome, ignorando acento (ex.:
 // "monica" ou "G" acham "Mônica"/"Gabriel", mas "G" nao acha "Chagas").
@@ -203,10 +199,7 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
   const selected = options.find((o) => o.value === value);
   const showList = editing && query.trim().length > 0;
 
-  const filtered = useMemo(() => {
-    const q = semAcento(query.trim().toLowerCase());
-    return options.filter((o) => semAcento(o.label.toLowerCase()).startsWith(q));
-  }, [options, query]);
+  const filtered = useMemo(() => filtrarOpcoes(options, query), [options, query]);
 
   return (
     <div className={`relative ${className}`}>
@@ -223,7 +216,22 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
           setQuery(livre ? value : "");
         }}
         onBlur={() => {
+          // Digitou o nome e saiu sem clicar na lista (ex.: foi direto ao botão Enviar):
+          // confirma a opção inequívoca em vez de deixar o campo vazio.
+          if (!livre && editing) {
+            const op = opcaoParaConfirmar(options, query);
+            if (op && op.value !== value) onChange(op.value);
+          }
           blurTimeout.current = setTimeout(() => setEditing(false), 150);
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || livre) return;
+          const op = opcaoParaConfirmar(options, query);
+          if (!op) return;
+          e.preventDefault();
+          onChange(op.value);
+          setQuery("");
+          setEditing(false);
         }}
         placeholder={placeholder}
         className={`w-full px-3 py-2 rounded-lg border ${
