@@ -4,6 +4,7 @@ import io
 import pytest
 from openpyxl import Workbook
 
+from app.routers import processos as processos_router
 from app.services import cnj, legalone_leitura
 from tests.test_documentos_complementares import PROC_A, PROC_B, SUBSTABELECIMENTO, _gerar, auth_e_origem  # noqa: F401
 
@@ -226,3 +227,61 @@ def test_planilha_com_varias_abas_avisa_que_so_a_primeira_foi_lida(client):
 ])
 def test_orgaos_nacionais(j, tr, esperado):
     assert cnj.decodificar(_com_dv("1234567", "2022", j, tr, "0000")).tribunal == esperado
+
+
+# --- Planilha: partes do Legal One para linhas sem descricao ------------------------------------
+
+def _com_legalone(monkeypatch, partes_por_numero, falha=()):
+    monkeypatch.setattr(legalone_leitura, "configurado", lambda: True)
+
+    def fake(numero):
+        if numero in falha:
+            raise RuntimeError("boom")
+        return partes_por_numero.get(numero)
+
+    monkeypatch.setattr(legalone_leitura, "partes_do_processo", fake)
+
+
+def test_planilha_busca_partes_no_legalone_so_das_linhas_sem_descricao(client, monkeypatch):
+    _com_legalone(monkeypatch, {PROC_B["numero"]: {"cliente": ["Ana"], "contraria": ["Banco X"]}})
+    r = _enviar(client, "p.xlsx", _xlsx([["Número", "Descrição"], [PROC_A["numero"], "A x B"], [PROC_B["numero"], ""]]))
+    j = r.json()
+    assert j["processos"][0]["descricao"] == "A x B" and not j["processos"][0].get("partes_legalone")
+    assert j["processos"][1]["descricao"] == "Ana x Banco X" and j["processos"][1]["partes_legalone"] is True
+    assert "1 processo(s) tiveram as partes trazidas do Legal One" in j["aviso"]
+
+
+def test_planilha_segue_quando_o_legalone_falha_ou_nao_conhece(client, monkeypatch):
+    _com_legalone(monkeypatch, {}, falha={PROC_A["numero"]})
+    r = _enviar(client, "p.xlsx", _xlsx([["Número"], [PROC_A["numero"]], [PROC_B["numero"]]]))
+    assert r.status_code == 200 and r.json()["validos"] == 2
+    assert [p["descricao"] for p in r.json()["processos"]] == ["", ""]
+
+
+def test_planilha_sem_credencial_nao_consulta(client, monkeypatch):
+    monkeypatch.delenv("LEGALONE_API_CLIENT_ID", raising=False)
+    monkeypatch.delenv("LEGALONE_API_CLIENT_SECRET", raising=False)
+    chamadas = []
+    monkeypatch.setattr(legalone_leitura, "partes_do_processo", lambda n: chamadas.append(n))
+    assert _enviar(client, "p.xlsx", _xlsx([["Número"], [PROC_A["numero"]]])).status_code == 200
+    assert not chamadas
+
+
+def test_planilha_limita_a_consulta_a_50_linhas(client, monkeypatch):
+    nums = [_com_dv(f"{i:07d}", "2022", "8", "13", "0024") for i in range(1, 56)]
+    chamadas = []
+    monkeypatch.setattr(processos_router, "LIMITE_CONSULTA_PARTES", 50)
+    _com_legalone(monkeypatch, {})
+    monkeypatch.setattr(legalone_leitura, "partes_do_processo", lambda n: chamadas.append(n))
+    r = _enviar(client, "p.xlsx", _xlsx([["Número"], *[[n] for n in nums]]))
+    assert len(chamadas) == 50 and "55" not in r.json()["aviso"] and "5 ficaram sem consulta" in r.json()["aviso"]
+
+
+def test_planilha_prazo_estourado_nao_trava_a_importacao(client, monkeypatch):
+    import time
+    monkeypatch.setattr(processos_router, "PRAZO_CONSULTA_PARTES", 0.2)
+    monkeypatch.setattr(legalone_leitura, "configurado", lambda: True)
+    monkeypatch.setattr(legalone_leitura, "partes_do_processo", lambda n: time.sleep(1.5))
+    t = time.time()
+    r = _enviar(client, "p.xlsx", _xlsx([["Número"], [PROC_A["numero"]]]))
+    assert r.status_code == 200 and time.time() - t < 1.2

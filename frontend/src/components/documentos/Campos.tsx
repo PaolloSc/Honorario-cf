@@ -254,7 +254,7 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
       set({ processos: [...estado.processos.filter((p) => !vazios(p)), ...acrescentar] });
       setInfoProcesso((a) => {
         const b = { ...a };
-        r.processos.forEach((p) => { if (p.valido && p.tribunal) b[p.numero] = { tribunal: p.tribunal, partes: false }; });
+        r.processos.forEach((p) => { if (p.valido && p.tribunal) b[p.numero] = { tribunal: p.tribunal, partes: !!p.partes_legalone }; });
         return b;
       });
       const ignorados = r.processos.filter((p) => !p.valido).map((p) => `linha ${p.linha}`);
