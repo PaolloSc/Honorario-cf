@@ -5,6 +5,8 @@ import { consultarProcesso, importarPlanilhaProcessos, listColaboradores, lookup
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import {
   alteracaoVazia,
+  parteVazia,
+  type ParteForm,
   cnjValido,
   formatarCnj,
   formatarOabNumero,
@@ -36,15 +38,89 @@ const botaoLink = "text-xs font-medium text-primary hover:underline";
 const botaoRemover = "text-xs font-medium text-danger hover:underline";
 const cartao = "rounded-lg border border-border bg-background/60 p-3 mb-3";
 
+// ── Partes do contrato original (contrato antigo, fora do sistema) ───────────────────────────
+
+export function CamposPartes({ partes, onChange, erros }: { partes: ParteForm[]; onChange: (p: ParteForm[]) => void; erros: Erros }) {
+  const [msgCnpj, setMsgCnpj] = useState("");
+  const set = (i: number, parcial: Partial<ParteForm>) => onChange(partes.map((p, k) => (k === i ? { ...p, ...parcial } : p)));
+  // CNPJ completo e válido: traz razão social e endereço como no cadastro de contratos; sem achar, digita-se à mão.
+  const mudarDocumento = async (i: number, valor: string) => {
+    const p = partes[i];
+    const documento = p.pj ? formatarCNPJ(valor) : valor;
+    set(i, { documento });
+    setMsgCnpj("");
+    if (!p.pj || limparCNPJ(documento).length !== 14 || !cnpjValido(documento)) return;
+    try {
+      const d = await lookupCNPJ(documento);
+      onChange(partes.map((x, k) => (k === i ? { ...x, documento, nome: x.nome.trim() ? x.nome : d.razao_social } : x)));
+    } catch {
+      setMsgCnpj("CNPJ não encontrado na consulta. Preencha a razão social manualmente.");
+    }
+  };
+  return (
+    <>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mb-1">Partes do contrato original</h3>
+      <p className="text-xs text-muted mb-2">Contrato fora do sistema: informe quem o assinou como contratante. O escritório entra como contratada.</p>
+      {erros.partes && <p className="text-xs text-danger mb-1">{erros.partes}</p>}
+      {partes.map((p, i) => (
+        <div key={i} className={cartao}>
+          <div className="flex gap-4 mb-2 text-sm">
+            <label className="flex items-center gap-2"><input type="radio" checked={!p.pj} onChange={() => set(i, { pj: false, documento: "" })} /> Pessoa física</label>
+            <label className="flex items-center gap-2"><input type="radio" checked={p.pj} onChange={() => set(i, { pj: true, documento: "" })} /> Pessoa jurídica</label>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+            <FormField label={p.pj ? "CNPJ" : "CPF"} required error={erros[`contratantes.${i}.documento`]} hint={msgCnpj || undefined}>
+              <Input value={p.documento} onChange={(e) => mudarDocumento(i, e.target.value)} error={!!erros[`contratantes.${i}.documento`]} />
+            </FormField>
+            <FormField label={p.pj ? "Razão social" : "Nome"} required error={erros[`contratantes.${i}.nome`]}>
+              <Input value={p.nome} onChange={(e) => set(i, { nome: e.target.value })} error={!!erros[`contratantes.${i}.nome`]} />
+            </FormField>
+          </div>
+          <FormField label={p.pj ? "Endereço da sede" : "Endereço"} hint="Opcional. Sai na qualificação da parte.">
+            <Input value={p.endereco} onChange={(e) => set(i, { endereco: e.target.value })} />
+          </FormField>
+          {p.pj ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+              <FormField label="Representante legal (opcional)">
+                <Input value={p.representante_nome} onChange={(e) => set(i, { representante_nome: e.target.value })} />
+              </FormField>
+              <FormField label="CPF do representante">
+                <Input value={p.representante_cpf} onChange={(e) => set(i, { representante_cpf: e.target.value })} />
+              </FormField>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4">
+              <FormField label="Nacionalidade (opcional)"><Input value={p.nacionalidade} onChange={(e) => set(i, { nacionalidade: e.target.value })} /></FormField>
+              <FormField label="Estado civil (opcional)"><Input value={p.estado_civil} onChange={(e) => set(i, { estado_civil: e.target.value })} /></FormField>
+              <FormField label="Profissão (opcional)"><Input value={p.profissao} onChange={(e) => set(i, { profissao: e.target.value })} /></FormField>
+            </div>
+          )}
+          {partes.length > 1 && (
+            <button type="button" className={botaoRemover} onClick={() => onChange(partes.filter((_, k) => k !== i))}>Remover parte</button>
+          )}
+        </div>
+      ))}
+      <button type="button" className={botaoLink} onClick={() => onChange([...partes, parteVazia()])}>+ Adicionar parte</button>
+      <div className="mb-4" />
+    </>
+  );
+}
+
 // ── Aditivo ───────────────────────────────────────────────────────────────
 
-export function CamposAditivo({ estado, onChange, erros }: Props<AditivoForm>) {
+export function CamposAditivo({ estado, onChange, erros, semOrigem = false }: Props<AditivoForm> & { semOrigem?: boolean }) {
   const set = (parcial: Partial<AditivoForm>) => onChange({ ...estado, ...parcial });
   const setAlteracao = (i: number, parcial: Partial<Alteracao>) =>
     set({ alteracoes: estado.alteracoes.map((a, k) => (k === i ? { ...a, ...parcial } : a)) });
 
   return (
     <>
+      {semOrigem && <CamposPartes partes={estado.partes} onChange={(partes) => set({ partes })} erros={erros} />}
+      {semOrigem && (
+        <FormField label="Número deste aditivo" required error={erros.numero} hint="1 se for o primeiro; 2 se já houve um aditivo antes, e assim por diante.">
+          <Input className="sm:max-w-[8rem]" inputMode="numeric" value={estado.numero} onChange={(e) => set({ numero: e.target.value.replace(/\D/g, "").slice(0, 2) })} error={!!erros.numero} />
+        </FormField>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
         <FormField label="Data do aditivo" required error={erros.data_documento}>
           <Input type="date" value={estado.data_documento} onChange={(e) => set({ data_documento: e.target.value })} error={!!erros.data_documento} />
@@ -96,10 +172,11 @@ export function CamposAditivo({ estado, onChange, erros }: Props<AditivoForm>) {
 
 // ── Distrato ──────────────────────────────────────────────────────────────
 
-export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>) {
+export function CamposDistrato({ estado, onChange, erros, semOrigem = false }: Props<DistratoForm> & { semOrigem?: boolean }) {
   const set = (parcial: Partial<DistratoForm>) => onChange({ ...estado, ...parcial });
   return (
     <>
+      {semOrigem && <CamposPartes partes={estado.partes} onChange={(partes) => set({ partes })} erros={erros} />}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
         <FormField label="Data do distrato" required error={erros.data_documento}>
           <Input type="date" value={estado.data_documento} onChange={(e) => set({ data_documento: e.target.value })} error={!!erros.data_documento} />
