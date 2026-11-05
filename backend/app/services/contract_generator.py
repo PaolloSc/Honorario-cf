@@ -1681,6 +1681,7 @@ class ContractGenerator:
     def _preco_resumo(self, escopo: EscopoItem) -> str:
         parts = []
         for tipo in escopo.honorarios:
+            n = len(parts)
             # Valor zerado ou vazio não aparece: fica só o tipo de honorário.
             if tipo == TipoHonorario.HORA_TRABALHADA and escopo.hora_trabalhada:
                 v = escopo.hora_trabalhada.valor_hora
@@ -1698,4 +1699,16 @@ class ContractGenerator:
                 parts.append(f"{percentual_com_extenso(v)} de êxito" if fixo else "Êxito")
             elif tipo == TipoHonorario.PERMUTA and escopo.permuta:
                 parts.append(f"Permuta com serviços de {escopo.permuta.objeto_permuta}")
+            # Valor devido so' se houver outra fase/instancia (honorarios adicionais): tambem
+            # entra no quadro, senao o cliente le um preco menor que o contratado.
+            if len(parts) > n:
+                obj = getattr(escopo, tipo.value, None)
+                extras = [
+                    f"{valor_com_extenso(ad.valor_total)} caso haja "
+                    f"{self._texto_livre(ad.descricao_fase) or 'outra fase ou instância'}"
+                    for ad in (getattr(obj, "adicionais", None) or [])
+                    if ad.valor_total
+                ]
+                if extras:
+                    parts[-1] += ", acrescido de " + "; e de ".join(extras)
         return " + ".join(parts) if parts else "A definir"
