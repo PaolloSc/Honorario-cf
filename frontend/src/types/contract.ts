@@ -209,6 +209,8 @@ export interface Exito extends ComDesconto {
   vencimento: string;
   vencimento_data?: string;
   vencimento_obs?: string;
+  /** Prazo em dias após o recebimento de qualquer valor pela CONTRATANTE. */
+  vencimento_dias?: number;
   forma_pagamento: string;
   numero_parcelas?: number;
   valor_parcela?: number;

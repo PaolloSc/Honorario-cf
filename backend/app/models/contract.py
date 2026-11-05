@@ -245,6 +245,8 @@ class Exito(_ComDesconto):
     vencimento: str = ""
     vencimento_data: Optional[str] = None
     vencimento_obs: Optional[str] = None
+    # Prazo em dias apos o recebimento de qualquer valor pela CONTRATANTE (substitui o texto livre)
+    vencimento_dias: Optional[int] = Field(None, ge=1)
     forma_pagamento: str = ""
     numero_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
