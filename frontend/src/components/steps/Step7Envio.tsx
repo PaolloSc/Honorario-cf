@@ -288,9 +288,16 @@ export default function Step7Envio({
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
   const [participacaoWarning, setParticipacaoWarning] = useState("");
   const [emailWarning, setEmailWarning] = useState("");
-  const [recipients, setRecipients] = useState<Array<{ email: string; nome: string }>>(
-    () => data.contratantes.map((c) => ({ email: c.email || "", nome: getContratanteNome(c) }))
-  );
+  // Escolhas de envio voltam do rascunho/contrato salvo (data.envio); dados antigos não têm.
+  const envioSalvo = data.envio;
+  const [recipients, setRecipients] = useState<Array<{ email: string; nome: string }>>(() => {
+    const salvos = envioSalvo?.recipients;
+    const mesmos = salvos?.length === data.contratantes.length;
+    return data.contratantes.map((c, i) => ({
+      email: (mesmos ? salvos![i]?.email : undefined) ?? c.email ?? "",
+      nome: getContratanteNome(c),
+    }));
+  });
   const [signatureSent, setSignatureSent] = useState(false);
   // Contratantes que podem receber o link também pelo WhatsApp, logo após o envio.
   const [whatsappEnvio, setWhatsappEnvio] = useState<
@@ -298,18 +305,41 @@ export default function Step7Envio({
   >([]);
   // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
   const [roster, setRoster] = useState<Testemunha[]>([]);
-  const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
-  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
+  const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>(() => envioSalvo?.testemunhaIds ?? []);
+  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>(
+    () => envioSalvo?.testemunhasExtras ?? []
+  );
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   // Colaboradores do escritorio: autopreenchimento de testemunhas.
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
-  const [socioEscritorio, setSocioEscritorio] = useState("");
+  const [socioEscritorio, setSocioEscritorio] = useState(() => envioSalvo?.socioEscritorio ?? "");
   const [avisoSocio, setAvisoSocio] = useState(false);
   const isEdit = !!editContractId;
   // `data` do render atual, para os callbacks assíncronos não usarem uma cópia velha.
   const dataRef = useRef(data);
   dataRef.current = data;
+
+  // Leva as escolhas de envio para o estado do wizard (autosave do rascunho e
+  // form_data do contrato). Sem envio salvo, só grava depois que a pessoa mexe:
+  // abrir a etapa não deve, sozinho, marcar o formulário como alterado.
+  const envioTocado = useRef(false);
+  const tocarEnvio = () => {
+    envioTocado.current = true;
+  };
+  useEffect(() => {
+    if (!onDataChange) return;
+    if (!envioTocado.current && !dataRef.current.envio) return;
+    const envio = {
+      recipients,
+      testemunhaIds: selectedTestemunhaIds,
+      testemunhasExtras: extraTestemunhas,
+      socioEscritorio,
+    };
+    if (JSON.stringify(envio) === JSON.stringify(dataRef.current.envio)) return;
+    onDataChange({ ...dataRef.current, envio });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipients, selectedTestemunhaIds, extraTestemunhas, socioEscritorio]);
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   // Prévia gerada junto da revisão (antes de existir contractId — cobre a criação).
@@ -459,6 +489,7 @@ export default function Step7Envio({
   }, [contractId, status]);
 
   const updateRecipient = (index: number, email: string) => {
+    tocarEnvio();
     setRecipients((prev) => prev.map((r, i) => (i === index ? { ...r, email } : r)));
   };
 
@@ -688,6 +719,7 @@ export default function Step7Envio({
         colaboradores={colaboradores}
         value={socioEscritorio}
         onChange={(v) => {
+          tocarEnvio();
           setSocioEscritorio(v);
           if (v) setAvisoSocio(false);
         }}
@@ -746,7 +778,10 @@ export default function Step7Envio({
                 <div key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
                   <span className="flex-1">{t.nome} ({t.email})</span>
                   <button
-                    onClick={() => setSelectedTestemunhaIds((prev) => prev.filter((id) => id !== t.id))}
+                    onClick={() => {
+                      tocarEnvio();
+                      setSelectedTestemunhaIds((prev) => prev.filter((id) => id !== t.id));
+                    }}
                     className="text-danger hover:opacity-80 text-xs font-medium"
                   >
                     Remover
@@ -757,7 +792,10 @@ export default function Step7Envio({
               <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
                 <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
                 <button
-                  onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
+                  onClick={() => {
+                    tocarEnvio();
+                    setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i));
+                  }}
                   className="text-danger hover:opacity-80 text-xs font-medium"
                 >
                   Remover
@@ -792,6 +830,7 @@ export default function Step7Envio({
               const nome = newTestemunhaNome.trim();
               const email = newTestemunhaEmail.trim();
               if (!nome || !email) return;
+              tocarEnvio();
               const match = roster.find((t) => t.nome.trim().toLowerCase() === nome.toLowerCase());
               if (match) {
                 setSelectedTestemunhaIds((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));

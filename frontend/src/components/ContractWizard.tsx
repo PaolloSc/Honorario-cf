@@ -156,6 +156,7 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       };
     })(),
     email_destinatario: data.email_destinatario,
+    envio: data.envio,
   };
 }
 
