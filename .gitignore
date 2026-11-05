@@ -21,3 +21,7 @@ backend/_tmp_planilha.xlsx
 # cache incremental do tsc (regenerado a cada type check)
 tsconfig.tsbuildinfo
 .vercel
+
+# E2E (Playwright)
+e2e/node_modules/
+e2e/report/
