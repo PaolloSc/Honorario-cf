@@ -97,7 +97,24 @@ export default function ContractsPage() {
               + Ação de Consumo
             </a>
           )}
+<<<<<<< HEAD
           {/* Aditivo e distrato nascem na página do contrato; o substabelecimento sai junto com o distrato. */}
+=======
+          {/* Aditivo e distrato nascem na página do contrato; para contrato antigo fora do sistema, estes atalhos.
+              O substabelecimento sai junto com o distrato. */}
+          <a
+            href="/documentos/novo?tipo=aditivo"
+            className="px-5 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-background transition text-sm"
+          >
+            Aditivo de contrato antigo
+          </a>
+          <a
+            href="/documentos/novo?tipo=distrato"
+            className="px-5 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-background transition text-sm"
+          >
+            Distrato de contrato antigo
+          </a>
+>>>>>>> origin/feat/documentos-sem-contrato
         </div>
       </div>
 

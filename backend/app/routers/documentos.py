@@ -141,6 +141,36 @@ def _validar_distrato_origem(data: SubstabelecimentoRequest, user: CurrentUser, 
         raise _erro_campo("distrato_origem_id", "O distrato é de outro cliente")
 
 
+_CAMPOS_PARTE = ("nome", "razao_social", "cnpj", "cpf", "nacionalidade", "estado_civil", "profissao", "endereco", "email")
+
+
+def _partes_informadas(data) -> list[dict]:
+    """Documento sem contrato de origem: as partes vem do cliente. Fica so' o que a qualificacao usa
+    (nome, documento, endereco...), com o documento conferido, e ao menos uma parte com nome e CPF/CNPJ."""
+    partes = []
+    for i, c in enumerate(data.contratantes):
+        if not isinstance(c, dict):
+            raise _erro_campo(f"contratantes.{i}", "Parte inválida")
+        p = {k: str(c[k]).strip() for k in _CAMPOS_PARTE if isinstance(c.get(k), (str, int)) and str(c[k]).strip()}
+        reps = [
+            {k: str(r[k]).strip() for k in ("nome", "cpf") if isinstance(r.get(k), str) and r[k].strip()}
+            for r in (c.get("representantes") or []) if isinstance(r, dict) and isinstance(r.get("nome"), str) and r["nome"].strip()
+        ]
+        if reps:
+            p["representantes"] = reps
+        if not (p.get("nome") or p.get("razao_social")):
+            raise _erro_campo(f"contratantes.{i}.nome", "Informe o nome da parte")
+        if p.get("cnpj"):
+            p.pop("cpf", None)
+        doc = so_digitos(p.get("cnpj") or p.get("cpf"))
+        if len(doc) != (14 if p.get("cnpj") else 11):
+            raise _erro_campo(f"contratantes.{i}.documento", "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)")
+        partes.append(p)
+    if not partes:
+        raise _erro_campo("contratantes", "Informe ao menos uma parte do contrato original")
+    return partes[:10]
+
+
 def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
     """Valida o corpo e completa os campos que o servidor deriva do contrato de origem."""
     if tipo not in REQUESTS:
@@ -172,6 +202,9 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
                 data.numero = len(_derivados(origem.contract_id, db, TIPO_ADITIVO)) + 1
             if tipo == TIPO_DISTRATO and _derivados(origem.contract_id, db, TIPO_DISTRATO):
                 raise HTTPException(409, "Já existe um distrato para este contrato")
+    elif not isinstance(data, SubstabelecimentoRequest):
+        data.contratantes = _partes_informadas(data)  # sem origem (contrato antigo fora do sistema)
+        data.aditivos_anteriores = []
     return data, origem, aviso
 
 

@@ -24,14 +24,59 @@ export const ROTULO_ALTERACAO: Record<TipoAlteracao, string> = {
   adicionar: "Adicionar cláusula",
 };
 export interface Alteracao { tipo: TipoAlteracao; clausula: string; texto: string }
+
+/** Parte do contrato original, informada à mão quando o contrato é antigo e não está no sistema. */
+export interface ParteForm {
+  pj: boolean;
+  nome: string;
+  documento: string;
+  endereco: string;
+  nacionalidade: string;
+  estado_civil: string;
+  profissao: string;
+  representante_nome: string;
+  representante_cpf: string;
+}
+export const parteVazia = (): ParteForm => ({
+  pj: true, nome: "", documento: "", endereco: "", nacionalidade: "", estado_civil: "", profissao: "",
+  representante_nome: "", representante_cpf: "",
+});
+
+function parteDoContratante(c: Record<string, any>): ParteForm { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const rep = (c.representantes ?? [])[0] ?? {};
+  return {
+    pj: !!c.cnpj || !c.cpf, nome: c.razao_social ?? c.nome ?? "", documento: c.cnpj ?? c.cpf ?? "", endereco: c.endereco ?? "",
+    nacionalidade: c.nacionalidade ?? "", estado_civil: c.estado_civil ?? "", profissao: c.profissao ?? "",
+    representante_nome: rep.nome ?? "", representante_cpf: rep.cpf ?? "",
+  };
+}
+
+function contratanteDaParte(p: ParteForm): Record<string, unknown> {
+  const doc = p.documento.trim();
+  const base: Record<string, unknown> = p.pj
+    ? { razao_social: p.nome.trim(), cnpj: doc, endereco: p.endereco.trim() }
+    : {
+        nome: p.nome.trim(), cpf: doc, endereco: p.endereco.trim(),
+        nacionalidade: p.nacionalidade.trim(), estado_civil: p.estado_civil.trim(), profissao: p.profissao.trim(),
+      };
+  if (p.pj && p.representante_nome.trim()) {
+    base.representantes = [{ nome: p.representante_nome.trim(), cpf: p.representante_cpf.trim() }];
+  }
+  return base;
+}
 export const alteracaoVazia = (): Alteracao => ({ tipo: "alterar", clausula: "", texto: "" });
 export interface AditivoForm {
+  /** Só sem contrato de origem: partes digitadas e número deste aditivo. */
+  partes: ParteForm[];
+  numero: string;
   data_documento: string;
   data_contrato_origem: string;
   objeto: string;
   alteracoes: Alteracao[];
 }
 export interface DistratoForm extends PoderesForm {
+  /** Só sem contrato de origem: partes digitadas. */
+  partes: ParteForm[];
   data_documento: string;
   data_contrato_origem: string;
   objeto_contrato_origem: string;
@@ -144,11 +189,13 @@ export const substabelecidoVazio = (): Substabelecido => ({ nome: "", oab: oabVa
 export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocumento {
   if (tipo === "aditivo") {
     return {
+      partes: [parteVazia()], numero: "1",
       data_documento: hoje, data_contrato_origem: "", objeto: "", alteracoes: [alteracaoVazia()],
     };
   }
   if (tipo === "distrato") {
     return {
+      partes: [parteVazia()],
       data_documento: hoje, data_contrato_origem: "", objeto_contrato_origem: "",
       ressalva_exito: true, substabelecer_e_devolver: true, contencioso: false, prazo_substabelecimento_dias: "10",
       pagamento_valor: "", pagamento_data: "", pagamento_forma: "",
@@ -203,10 +250,15 @@ export function montarPayload(
   origemId: string | null,
 ): Record<string, unknown> {
   const base = { contrato_origem_id: origemId, data_documento: estado.data_documento || null };
+  // Sem contrato de origem (contrato antigo fora do sistema) as partes vão no payload.
+  const semOrigem = (e: AditivoForm | DistratoForm) =>
+    origemId ? {} : { contratantes: e.partes.map(contratanteDaParte) };
   if (tipo === "aditivo") {
     const e = estado as AditivoForm;
     return {
       ...base,
+      ...semOrigem(e),
+      ...(origemId ? {} : { numero: Number(e.numero) || 1 }),
       data_contrato_origem: e.data_contrato_origem,
       objeto: e.objeto.trim(),
       alteracoes: e.alteracoes.map((a) => ({
@@ -220,6 +272,7 @@ export function montarPayload(
     const e = estado as DistratoForm;
     return {
       ...base,
+      ...semOrigem(e),
       data_contrato_origem: e.data_contrato_origem,
       objeto_contrato_origem: e.objeto_contrato_origem.trim(),
       ressalva_exito: e.ressalva_exito,
@@ -260,12 +313,19 @@ function poderesDoFormData(fd: Record<string, any>): PoderesForm {
   };
 }
 
+function partesDoFormData(fd: Record<string, any>): ParteForm[] { // eslint-disable-line @typescript-eslint/no-explicit-any
+  // Só vale para documento sem origem; com origem as partes vêm do contrato e este campo nem aparece.
+  return !fd.contrato_origem_id && fd.contratantes?.length ? fd.contratantes.map(parteDoContratante) : [parteVazia()];
+}
+
 /** Form salvo (form_data da API) -> estado do formulário, para editar um rascunho. */
 export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, hoje: string): EstadoDocumento { // eslint-disable-line @typescript-eslint/no-explicit-any
   const base = estadoInicial(tipo, hoje);
   if (tipo === "aditivo") {
     return {
       ...(base as AditivoForm),
+      partes: partesDoFormData(fd),
+      numero: String(fd.numero ?? 1),
       data_documento: fd.data_documento ?? hoje,
       data_contrato_origem: fd.data_contrato_origem ?? "",
       objeto: fd.objeto ?? "",
@@ -277,6 +337,7 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
   }
   if (tipo === "distrato") {
     return {
+      partes: partesDoFormData(fd),
       data_documento: fd.data_documento ?? hoje,
       data_contrato_origem: fd.data_contrato_origem ?? "",
       objeto_contrato_origem: fd.objeto_contrato_origem ?? "",
@@ -305,7 +366,7 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
 export type Erros = Record<string, string>;
 
 // cnpjOk vem de cnpj.ts (injetado para este arquivo rodar puro no node, sem extensão de import).
-export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c: string) => boolean): Erros {
+export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c: string) => boolean, semOrigem = false): Erros {
   const e: Erros = {};
   const obrig = (chave: string, valor: string | undefined | null, msg = "Campo obrigatório") => {
     if (!valor || !String(valor).trim()) e[chave] = msg;
@@ -325,6 +386,21 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     });
   };
 
+  if (semOrigem && tipo !== "substabelecimento") {
+    const partes = (estado as AditivoForm | DistratoForm).partes;
+    if (!partes.length) e.partes = "Informe ao menos uma parte do contrato original";
+    partes.forEach((p, i) => {
+      obrig(`contratantes.${i}.nome`, p.nome);
+      const dig = p.documento.replace(/\D/g, "");
+      if (p.pj ? !(dig.length === 14 && cnpjOk(p.documento)) : dig.length !== 11) {
+        e[`contratantes.${i}.documento`] = p.pj ? "CNPJ inválido" : "CPF deve ter 11 dígitos";
+      }
+    });
+    if (tipo === "aditivo") {
+      const n = Number((estado as AditivoForm).numero);
+      if (!Number.isInteger(n) || n < 1 || n > 99) e.numero = "Informe o número do aditivo (1 a 99)";
+    }
+  }
   if (tipo === "aditivo") {
     const a = estado as AditivoForm;
     obrig("data_contrato_origem", a.data_contrato_origem);

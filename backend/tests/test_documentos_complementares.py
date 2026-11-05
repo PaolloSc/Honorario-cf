@@ -919,3 +919,41 @@ def test_substabelecimento_do_distrato_aparece_na_lista_do_contrato(client):
     r = client.get(f"/api/contracts/{ORIGEM}/documentos")
     assert r.status_code == 200, r.text
     assert sorted(d["tipo_contrato"] for d in r.json()["documentos"]) == ["distrato", "substabelecimento"]
+
+
+# ── Documento sem contrato de origem (contrato antigo, fora do sistema) ──────────────────────
+
+PARTE_PJ = {"razao_social": "ANTIGA COMERCIAL LTDA", "cnpj": "11.222.333/0001-81", "endereco": "Rua Velha, 10, Belo Horizonte/MG",
+            "representantes": [{"nome": "José da Silva", "cpf": "111.222.333-44"}], "lixo": "descartado"}
+PARTE_PF = {"nome": "Maria Souza", "cpf": "123.456.789-09", "nacionalidade": "brasileira", "estado_civil": "casada"}
+
+
+def test_aditivo_sem_origem_usa_as_partes_informadas_e_o_numero_escolhido(client):
+    cid = _id(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": [PARTE_PJ], "numero": 3})
+    texto = _texto(client, cid)
+    assert "ANTIGA COMERCIAL LTDA" in texto and "11.222.333/0001-81" in texto and "José da Silva" in texto
+    assert "Rua Velha, 10" in texto and "lixo" not in texto and "descartado" not in texto
+    assert texto.startswith("3º ADITIVO")
+
+
+def test_distrato_sem_origem_gera_com_substabelecimento_e_pode_repetir(client):
+    p = {**DISTRATO, "contrato_origem_id": None, "contratantes": [PARTE_PF]}
+    cid = _id(client, "distrato", p)
+    assert "Maria Souza" in _texto(client, cid) and "123.456.789-09" in _texto(client, cid)
+    assert _gerar(client, "distrato", p).status_code == 200  # sem origem nao ha como saber que e' repetido
+
+
+@pytest.mark.parametrize("partes", [
+    [],
+    [{"cpf": "123.456.789-09"}],                         # sem nome
+    [{"nome": "Fulano"}],                                # sem documento
+    [{"nome": "Fulano", "cpf": "123"}],                  # CPF curto
+    [{"razao_social": "X LTDA", "cnpj": "11.222.333"}],  # CNPJ curto
+])
+def test_documento_sem_origem_exige_nome_e_documento_da_parte(client, partes):
+    assert _gerar(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": partes}).status_code == 422
+
+
+def test_com_origem_as_partes_do_cliente_continuam_descartadas(client):
+    cid = _id(client, "aditivo", {**ADITIVO, "contratantes": [PARTE_PF]})
+    assert "Maria Souza" not in _texto(client, cid)
