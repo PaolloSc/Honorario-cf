@@ -370,16 +370,14 @@ SEM_VALOR = ("As Partes reconhecem que os honorários e despesas devidos até a 
 SUCUMBENCIA = "ressalvados os honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
 REMISSAO = "além dos aqui previstos, ressalvado o disposto na cláusula 3."
 SUBSTAB = "substabelecerá, sem reserva de poderes, ao(s) advogado(s) indicado(s) por escrito pela CONTRATANTE"
-@pytest.mark.parametrize("ressalva,substabelecer", [
-    (True, True), (True, False), (False, False),
-])
-def test_distrato_flags_sao_independentes(client, ressalva, substabelecer):
-    payload = {**DISTRATO, "ressalva_exito": ressalva, "substabelecer_e_devolver": substabelecer}
+@pytest.mark.parametrize("ressalva", [True, False])
+def test_distrato_ressalva_e_opcional_e_substabelecimento_sempre_presente(client, ressalva):
+    payload = {**DISTRATO, "ressalva_exito": ressalva}
     texto = _texto(client, _id(client, "distrato", payload))
 
     assert (RESSALVA in texto) is ressalva
     assert "mútua, total, completa, irrevogável e irretratável quitação" in texto  # com e sem ressalva
-    assert ("substabelecerá, sem reserva de poderes" in texto) is substabelecer
+    assert "substabelecerá, sem reserva de poderes" in texto  # decisao 05/11: sempre junto
 
 
 def test_distrato_cita_so_aditivos_assinados(client):
@@ -634,12 +632,11 @@ def test_substabelecimento_com_varios_continua_no_plural(client):
 
 
 def test_distrato_com_ressalva_acrescenta_a_ressalva_a_quitacao(client):
-    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True,
-                                                    "substabelecer_e_devolver": False}))
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True}))
     assert "nesse sentido. " + RESSALVA in texto
     assert texto.index("irretratável quitação") < texto.index(RESSALVA)  # qualifica a quitacao
     assert "art. 23 da Lei n.º 8.906/94" in texto
-    assert "plena, geral, rasa" not in texto and "substabelecerá" not in texto
+    assert "plena, geral, rasa" not in texto
 
 
 def test_distrato_total_usa_a_quitacao_do_modelo_sem_ressalva(client):
@@ -732,16 +729,14 @@ def test_distrato_prazo_do_substabelecimento_fora_de_1_a_90_da_422(client, dias)
 
 
 @pytest.mark.parametrize("com_valor", [True, False])
-@pytest.mark.parametrize("substabelecer", [True, False])
 @pytest.mark.parametrize("ressalva", [True, False])
-def test_distrato_todas_as_combinacoes_valor_substabelecimento_ressalva(client, com_valor, substabelecer, ressalva):
-    payload = {**DISTRATO, "substabelecer_e_devolver": substabelecer, "ressalva_exito": ressalva,
-               **(PAGAMENTO if com_valor else {})}
+def test_distrato_todas_as_combinacoes_valor_e_ressalva_com_substabelecimento_sempre(client, com_valor, ressalva):
+    payload = {**DISTRATO, "ressalva_exito": ressalva, **(PAGAMENTO if com_valor else {})}
     texto = _texto(client, _id(client, "distrato", payload))
     assert ("pagará à CONTRATADA" in texto) is com_valor
     assert ("título executivo extrajudicial" in texto) is com_valor
     assert (SEM_VALOR in texto) is (not com_valor)
-    assert (SUBSTAB in texto) is substabelecer
+    assert SUBSTAB in texto  # substabelecimento: sempre
     assert (RESSALVA in texto) is ressalva
     assert SUCUMBENCIA in texto  # sucumbencia: sempre, independe do checkbox do exito
     assert REMISSAO in texto  # clausula 4 remete a 3, que sempre tem ressalva
@@ -760,10 +755,10 @@ def test_distrato_contencioso_sem_dados_do_substabelecimento_da_422(client):
     assert _gerar(client, "distrato", {**sem, "contencioso": True}).status_code == 422
 
 
-def test_distrato_consultivo_nao_gera_substabelecimento(client):
+def test_distrato_mesmo_pedindo_sem_substabelecimento_ele_sai_junto(client):
     r = _gerar(client, "distrato", {**DISTRATO, "contencioso": False, "substabelecer_e_devolver": False})
-    assert r.status_code == 200 and not r.json().get("documentos_gerados_junto")
-    assert "substabelecerá" not in _texto(client, r.json()["contract_id"])
+    assert r.status_code == 200 and len(r.json()["documentos_gerados_junto"]) == 1
+    assert "substabelecerá" in _texto(client, r.json()["contract_id"])
 
 
 @pytest.mark.parametrize("extra", [
@@ -905,13 +900,12 @@ def test_distrato_com_a_opcao_gera_os_dois_documentos(client):
     assert "EMPRESA EXEMPLO LTDA" in texto and "07 de outubro de 2026" in texto
 
 
-def test_distrato_sem_a_opcao_gera_so_o_distrato(client):
-    payload = {**DISTRATO, "substabelecer_e_devolver": False}
-    r = _gerar(client, "distrato", payload)
+def test_distrato_gera_sempre_o_distrato_e_o_substabelecimento(client):
+    r = _gerar(client, "distrato", {**DISTRATO, "substabelecer_e_devolver": False})
     assert r.status_code == 200, r.text
-    assert r.json()["documentos_gerados_junto"] == []
+    assert len(r.json()["documentos_gerados_junto"]) == 1
     assert len(_derivados_do_origem("distrato")) == 1
-    assert _derivados_do_origem("substabelecimento") == []
+    assert len(_derivados_do_origem("substabelecimento")) == 1
 
 
 def test_distrato_com_a_opcao_sem_dados_do_substabelecimento_e_rejeitado(client):

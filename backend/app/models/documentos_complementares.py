@@ -127,9 +127,9 @@ class DistratoRequest(_ComOrigem):
     objeto_contrato_origem: str = Field(min_length=1)
     # Com ressalva dos honorarios e reembolsos vincendos, inclusive de exito (True, padrao) ou quitacao total (False).
     ressalva_exito: bool = True
-    # Inclui a clausula de substabelecer sem reserva e devolver documentos.
-    substabelecer_e_devolver: bool = False
-    # Distrato que envolve processo judicial: o substabelecimento sem reserva e' obrigatorio.
+    # O substabelecimento sem reserva vai SEMPRE junto (decisao do usuario, 05/11/2026): o validador
+    # forca True. Os campos ficam para ler distratos salvos antes (opcao / "contencioso").
+    substabelecer_e_devolver: bool = True
     contencioso: bool = False
     # Prazo, em dias da indicacao do novo patrono, para substabelecer (clausula de substabelecimento).
     prazo_substabelecimento_dias: int = Field(default=10, ge=1, le=90)
@@ -143,8 +143,7 @@ class DistratoRequest(_ComOrigem):
 
     @model_validator(mode="after")
     def _pagamento_completo(self):
-        if self.contencioso:
-            self.substabelecer_e_devolver = True
+        self.substabelecer_e_devolver = True
         if self.pagamento_valor and not self.pagamento_data:
             raise ValueError("Informe a data limite do pagamento")
         return self

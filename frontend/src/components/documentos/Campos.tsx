@@ -131,32 +131,16 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
         label="Ressalvar honorários de êxito (proporcionais)"
         checked={estado.ressalva_exito}
         onChange={(v) => set({ ressalva_exito: v })}
-        hint="Já vem marcado quando o contrato de origem tem honorário de êxito. O êxito é devido na proporção dos serviços prestados até o distrato, Desmarcado, não há ressalva de êxito. Os honorários de sucumbência (art. 23 da Lei 8.906/94) são sempre ressalvados."
+        hint="Já vem marcado quando o contrato de origem tem honorário de êxito. O êxito é devido na proporção dos serviços prestados até o distrato. Desmarcado, não há ressalva de êxito. Os honorários de sucumbência (art. 23 da Lei 8.906/94) são sempre ressalvados."
       />
-      <Checkbox
-        label="Envolve processo judicial"
-        checked={estado.contencioso}
-        onChange={(v) => set({ contencioso: v })}
-        hint="Marcado, o substabelecimento sem reserva de poderes acompanha sempre o distrato e é gerado junto."
-      />
-      <Checkbox
-        label="Substabelecer sem reserva de poderes e devolver documentos"
-        checked={estado.substabelecer_e_devolver || estado.contencioso}
-        onChange={(v) => { if (!estado.contencioso) set({ substabelecer_e_devolver: v }); }}
-        hint={estado.contencioso
-          ? "Obrigatório quando há processo judicial."
-          : "Sem processo judicial é opcional. Marcado, o distrato também passa os processos aos novos advogados e prevê a devolução dos documentos do cliente."}
-      />
-      {(estado.substabelecer_e_devolver || estado.contencioso) && (
-        <>
+      <>
           <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecimento gerado junto</h3>
-          <p className="text-xs text-muted mb-2">O cliente e a data vêm do contrato e do distrato. Informe quem assina, quem recebe os poderes e os processos: ao sair do número CNJ, o tribunal aparece e, se o processo estiver no Legal One, as partes são preenchidas.</p>
+          <p className="text-xs text-muted mb-2">O substabelecimento sempre acompanha o distrato e é assinado só pelos advogados (o cliente não assina). O cliente e a data vêm do contrato e do distrato. Informe quem assina, quem recebe os poderes e os processos: ao sair do número CNJ, o tribunal aparece e, se o processo estiver no Legal One, as partes são preenchidas.</p>
           <FormField label="Prazo para substabelecer (dias)" required error={erros.prazo_substabelecimento_dias} hint="Contado da indicação, por escrito, do novo advogado pelo cliente.">
             <Input inputMode="numeric" value={estado.prazo_substabelecimento_dias} onChange={(e) => set({ prazo_substabelecimento_dias: e.target.value.replace(/\D/g, "") })} error={!!erros.prazo_substabelecimento_dias} />
           </FormField>
           <CamposPoderes estado={estado} onChange={set} erros={erros} />
-        </>
-      )}
+      </>
     </>
   );
 }
