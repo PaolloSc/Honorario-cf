@@ -35,6 +35,7 @@ from app.models.contract import (
     TipoPessoa,
     VariacaoPrecoMensalidade,
 )
+from app.utils.parcelas import data_iso, dividir_parcelas
 from app.utils.currency import (
     formatar_percentual,
     formatar_valor,
@@ -890,28 +891,56 @@ class ContractGenerator:
         venc = self._vencimento_combined(data, obs, legacy, recorrente=recorrente)
         return f", com vencimento {venc}" if venc else ""
 
+    def _parcelas_auto(self, total, n, primeira, dia) -> str | None:
+        """'N parcelas mensais e sucessivas de R$ X, a primeira com vencimento em dd/mm/aaaa e as
+        demais todo dia D'. None sem total, sem 2+ parcelas ou sem data valida da 1a parcela
+        (o texto antigo entra no lugar)."""
+        d1 = data_iso(primeira)
+        if not (total and n and n > 1 and d1):
+            return None
+        valores = dividir_parcelas(total, n)
+        if valores[0] == valores[-1]:
+            partes = f"{numero_com_extenso(n, 'parcelas', fem=True)} mensais e sucessivas de {valor_com_extenso(float(valores[0]))}"
+        else:
+            partes = (
+                f"{numero_com_extenso(n, 'parcelas', fem=True)} mensais e sucessivas, sendo "
+                f"{numero_com_extenso(n - 1, 'parcelas', fem=True)} de {valor_com_extenso(float(valores[0]))} "
+                f"e a última de {valor_com_extenso(float(valores[-1]))}"
+            )
+        return f"{partes}, a primeira com vencimento em {d1.day:02d}/{d1.month:02d}/{d1.year} e as demais todo dia {dia or d1.day:02d}"
+
+    def _frase_pro_labore(self, pl: "_ProLaboreBase", abertura: str) -> str:
+        total = f", no valor total de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
+        customizado = self._texto_livre(pl.parcelamento_customizado)
+        mensal = pl.tipo_parcelamento == "mensal" and pl.numero_parcelas
+        auto = self._parcelas_auto(pl.valor_total, pl.numero_parcelas, pl.data_primeira_parcela, pl.dia_vencimento) if mensal else None
+        if pl.tipo_parcelamento == "customizado" and customizado:
+            return f"{abertura}{total} serão pagos da seguinte forma: {customizado}."
+        if auto:
+            return f"{abertura}{total} serão pagos em {auto}."
+        if mensal and pl.valor_parcela:
+            return (
+                f"{abertura}{total} serão pagos em "
+                f"{numero_com_extenso(pl.numero_parcelas, 'parcelas', fem=True)} de "
+                f"{valor_com_extenso(pl.valor_parcela)}"
+                f"{self._com_vencimento(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}."
+            )
+        total = f", no valor de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
+        return (
+            f"{abertura}{total} serão pagos em parcela única"
+            f"{self._com_vencimento(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}."
+        )
+
     def _add_pro_labore(self, doc: Document, pl: "ProLabore", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
             doc.add_heading("PRÓ-LABORE", level=3)
-        total = f", no valor total de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
-        customizado = self._texto_livre(pl.parcelamento_customizado)
-        if pl.tipo_parcelamento == "customizado" and customizado:
-            num(f"Os honorários pró-labore{total} serão pagos da seguinte forma: {customizado}.", chave="pagamento")
-        elif pl.tipo_parcelamento == "mensal" and pl.numero_parcelas and pl.valor_parcela:
-            num(
-                f"Os honorários pró-labore{total} serão pagos em "
-                f"{numero_com_extenso(pl.numero_parcelas, 'parcelas', fem=True)} de "
-                f"{valor_com_extenso(pl.valor_parcela)}"
-                f"{self._com_vencimento(pl.vencimento_parcelas_data, pl.vencimento_parcelas_obs, pl.vencimento_parcelas, recorrente=True)}.", chave="pagamento"
-            )
-        else:
-            total = f", no valor de {valor_com_extenso(pl.valor_total)}," if pl.valor_total else ""
-            num(
-                f"Os honorários pró-labore{total} serão pagos em parcela única"
-                f"{self._com_vencimento(pl.vencimento_data, pl.vencimento_obs, pl.vencimento)}.", chave="pagamento"
-            )
-
+        num(self._frase_pro_labore(pl, "Os honorários pró-labore"), chave="pagamento")
         self._add_desconto(pl, num)
+        # Valores devidos só se houver outra fase/instância (opcionais; texto condicional).
+        for i, ad in enumerate(pl.adicionais, 1):
+            fase = self._texto_livre(ad.descricao_fase) or "outra fase ou instância"
+            num(self._frase_pro_labore(ad, f"Caso haja {fase}, os honorários pró-labore adicionais"),
+                chave=f"pagamento_adicional{i}")
 
     def _add_mensalidade(self, doc: Document, m: "Mensalidade", num: "_Numerador", com_subtitulo: bool = False) -> None:
         venc = self._com_vencimento(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)
@@ -1061,6 +1090,16 @@ class ContractGenerator:
         if perm.tem_torna and perm.valor_torna:
             forma = self._texto_livre(perm.forma_pagamento_torna)
             forma = f", da seguinte forma: {forma}" if forma else ""
+            auto = self._parcelas_auto(
+                perm.valor_torna, perm.numero_parcelas_torna, perm.data_primeira_parcela_torna, perm.dia_vencimento_torna
+            )
+            if auto:  # parcelamento automatico prevalece sobre a forma digitada
+                num(
+                    "A CONTRATANTE pagará ainda ao C&F, a título de torna, "
+                    f"o valor total de {valor_com_extenso(perm.valor_torna)}, em {auto}.", chave="torna"
+                )
+                self._add_desconto(perm, num)
+                return
             num(
                 "A CONTRATANTE pagará ainda ao C&F, a título de torna, "
                 f"{valor_com_extenso(perm.valor_torna)}{forma}.", chave="torna"
