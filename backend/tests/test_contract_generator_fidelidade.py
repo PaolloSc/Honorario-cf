@@ -843,3 +843,32 @@ def test_assinaturas_tem_o_mesmo_espaco_para_contratante_contratado_e_testemunha
             assert linha.text == "_" * 32
             if slot.text:
                 assert slot.text.endswith(CAMPO_ASSINATURA + "}}") and ";type=signature;role=" in slot.text
+
+
+def test_sucumbencia_texto_exato_com_somado_ao_beneficio():
+    paras = _paras_for(_req_escopos([_escopo("exito")]))
+    assert _has(paras,
+        "As Partes pactuam ainda que: (i) em caso de êxito, ainda que parcial, os honorários sucumbenciais "
+        "fixados pertencem exclusivamente ao C&F; (ii) em caso de acordo que inclua renúncia a sucumbências, "
+        "o C&F deverá ser previamente consultado; e (iii) se a CONTRATANTE concordar com a redução ou renúncia "
+        "de sucumbências sem anuência do C&F, o valor correspondente será somado ao benefício econômico para "
+        "fins de cálculo do êxito ou devido diretamente ao C&F.")
+    assert not _has(paras, "descontado do benefício")
+
+
+def test_exito_vencimento_em_dias_e_parcelas_iguais_e_mensais():
+    esc = _escopo("exito")
+    esc["exito"].update(vencimento_dias=10, forma_pagamento="parcelado", numero_parcelas=3,
+                        vencimento="", forma_parcelamento="")
+    paras = _paras_for(_req_escopos([esc]))
+    assert _has(paras,
+        "Os honorários de êxito terão vencimento em 10 (dez) dias após o recebimento de qualquer valor pela "
+        "CONTRATANTE e serão pagos da seguinte forma: 3 (três) parcelas iguais e mensais.")
+
+
+def test_exito_vencimento_em_dias_a_vista():
+    esc = _escopo("exito")
+    esc["exito"].update(vencimento_dias=15, forma_pagamento="a_vista", forma_parcelamento="")
+    paras = _paras_for(_req_escopos([esc]))
+    assert _has(paras, "Os honorários de êxito terão vencimento em 15 (quinze) dias após o recebimento de "
+                       "qualquer valor pela CONTRATANTE e serão pagos à vista.")

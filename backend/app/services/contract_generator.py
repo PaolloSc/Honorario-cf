@@ -1062,7 +1062,21 @@ class ContractGenerator:
         if ex.vencimento or ex.vencimento_data or ex.vencimento_obs:
             venc = self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)
         parcelamento = self._texto_livre(ex.forma_parcelamento)
-        if forma:
+        if ex.vencimento_dias:
+            if forma == "parcelado" and ex.numero_parcelas:
+                pag = f" da seguinte forma: {numero_com_extenso(ex.numero_parcelas, 'parcelas', fem=True)} iguais e mensais"
+            elif forma in FORMA_PAGAMENTO_LABELS:
+                pag = f" {FORMA_PAGAMENTO_LABELS[forma]}"
+            elif forma or parcelamento:
+                pag = f" da seguinte forma: {self._texto_livre(forma) or parcelamento}"
+            else:
+                pag = ""
+            num(
+                f"Os honorários de êxito terão vencimento em {numero_com_extenso(ex.vencimento_dias, 'dias')} "
+                f"após o recebimento de qualquer valor pela CONTRATANTE"
+                f"{' e serão pagos' + pag if pag else ''}.", chave="pagamento"
+            )
+        elif forma:
             if forma == "parcelado" and ex.numero_parcelas:
                 parcela = f" de {valor_com_extenso(ex.valor_parcela)}" if ex.valor_parcela else ""
                 forma_txt = f"em {numero_com_extenso(ex.numero_parcelas, 'parcelas', fem=True)}{parcela}"
@@ -1245,7 +1259,7 @@ class ContractGenerator:
                 "honorários sucumbenciais fixados pertencem exclusivamente ao C&F; (ii) em caso "
                 "de acordo que inclua renúncia a sucumbências, o C&F deverá ser previamente "
                 "consultado; e (iii) se a CONTRATANTE concordar com a redução ou renúncia de "
-                "sucumbências sem anuência do C&F, o valor correspondente será descontado do "
+                "sucumbências sem anuência do C&F, o valor correspondente será somado ao "
                 "benefício econômico para fins de cálculo do êxito ou devido diretamente ao C&F."
             )
         chaves += ["acess.sucumbencia"] if has_exito else []
