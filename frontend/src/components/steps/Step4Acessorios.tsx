@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import FormField, { Input, TextArea, Toggle } from "@/components/ui/FormField";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import type { Acessorios } from "@/types/contract";
+import { clausulasDoTexto, clausulasParaTexto } from "@/app/lib/clausulasAdicionais";
  
 interface Step4Props {
   acessorios: Acessorios;
@@ -11,6 +13,21 @@ interface Step4Props {
 }
  
 export default function Step4Acessorios({ acessorios, onChange }: Step4Props) {
+  // Lista editável; o contrato guarda um texto com uma cláusula por linha. Os campos vazios
+  // (recém-adicionados) só existem aqui: ao salvar são descartados.
+  const [clausulas, setClausulas] = useState(() => clausulasDoTexto(acessorios.clausulas_adicionais));
+  useEffect(() => {
+    // Rascunho/contrato carregado de fora: refaz a lista. Edição local não dispara (o texto bate).
+    if (clausulasParaTexto(clausulas) !== (acessorios.clausulas_adicionais ?? "")) {
+      setClausulas(clausulasDoTexto(acessorios.clausulas_adicionais));
+    }
+  }, [acessorios.clausulas_adicionais]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const atualizarClausulas = (novas: string[]) => {
+    setClausulas(novas);
+    onChange({ ...acessorios, clausulas_adicionais: clausulasParaTexto(novas) });
+  };
+
   return (
     <div>
       <h2 className="text-xl font-bold text-primary mb-2">
@@ -116,16 +133,40 @@ export default function Step4Acessorios({ acessorios, onChange }: Step4Props) {
 
         <FormField
           label="Cláusulas adicionais"
-          hint="Uma cláusula por linha. Serão incluídas numeradas em seção própria, antes do Foro."
+          hint="Serão incluídas numeradas, na ordem, em seção própria antes do Foro. Campos vazios são ignorados."
         >
-          <TextArea
-            value={acessorios.clausulas_adicionais || ""}
-            onChange={(e) =>
-              onChange({ ...acessorios, clausulas_adicionais: e.target.value })
-            }
-            placeholder="Digite cada cláusula adicional em uma linha..."
-            rows={4}
-          />
+          <div className="space-y-2">
+            {clausulas.map((c, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <TextArea
+                  value={c}
+                  onChange={(e) =>
+                    atualizarClausulas(clausulas.map((x, idx) => (idx === i ? e.target.value : x)))
+                  }
+                  placeholder={`Cláusula adicional ${i + 1}...`}
+                  rows={2}
+                  aria-label={`Cláusula adicional ${i + 1}`}
+                />
+                {clausulas.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => atualizarClausulas(clausulas.filter((_, idx) => idx !== i))}
+                    className="text-danger text-sm hover:underline shrink-0 pt-2"
+                    aria-label={`Remover cláusula adicional ${i + 1}`}
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => atualizarClausulas([...clausulas, ""])}
+              className="px-3 py-1.5 border border-dashed border-primary-light text-primary rounded-lg text-sm font-medium hover:bg-primary-light/20 transition"
+            >
+              + Adicionar cláusula
+            </button>
+          </div>
         </FormField>
       </div>
     </div>

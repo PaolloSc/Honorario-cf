@@ -68,8 +68,14 @@ on:
       tomador_cpf:
         description: 'CPF do tomador (11 digitos); vazio = CNPJ de teste'
         required: false
+      tomador_cnpj:
+        description: 'CNPJ do tomador (14 digitos); vazio = CNPJ de teste. Ignorado se tomador_cpf for informado'
+        required: false
+      tomador_nome:
+        description: 'Nome do tomador; vazio = nome ficticio de teste'
+        required: false
       tomador_end:
-        description: 'Endereco do tomador: CEP;logradouro;numero;bairro (BH). Obrigatorio com IBS/CBS (E0239)'
+        description: 'Endereco do tomador: CEP;logradouro;numero;bairro[;cMun IBGE] (cMun vazio = BH). Obrigatorio com IBS/CBS (E0239)'
         required: false
       descricao:
         description: 'xDescServ; vazio = texto de teste sem acento'
@@ -130,6 +136,8 @@ jobs:
           VALOR: ${{ inputs.valor }}
           TOMADOR_CPF: ${{ inputs.tomador_cpf }}
           TOMADOR_END: ${{ inputs.tomador_end }}
+          TOMADOR_CNPJ: ${{ inputs.tomador_cnpj }}
+          TOMADOR_NOME: ${{ inputs.tomador_nome }}
           DESCRICAO: ${{ inputs.descricao }}
           VER_APLIC: ${{ inputs.ver_aplic }}
           DRY_RUN: ${{ inputs.dry_run }}
@@ -149,6 +157,8 @@ jobs:
           ARGS+=(--valor "$VALOR")
           [ -n "$TOMADOR_CPF" ] && ARGS+=(--tomador-cpf "$TOMADOR_CPF")
           [ -n "$TOMADOR_END" ] && ARGS+=(--tomador-end "$TOMADOR_END")
+          [ -n "$TOMADOR_CNPJ" ] && ARGS+=(--tomador-cnpj "$TOMADOR_CNPJ")
+          [ -n "$TOMADOR_NOME" ] && ARGS+=(--tomador-nome "$TOMADOR_NOME")
           [ -n "$DESCRICAO" ] && ARGS+=(--descricao "$DESCRICAO")
           [ -n "$VER_APLIC" ] && ARGS+=(--ver-aplic "$VER_APLIC")
           [ "$DRY_RUN" = "true" ] && ARGS+=(--dry-run)
