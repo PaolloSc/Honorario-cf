@@ -83,8 +83,12 @@ export function errosDoEscopo(
   }
   if (escopo.honorarios.includes("pro_labore") && pl) {
     errors.push(...errosParcelamento(pl, `${label}: pró-labore`));
-    (pl.adicionais ?? []).forEach((ad, i) => {
-      const rot = `${label}: pró-labore adicional ${i + 1}`;
+  }
+  for (const hon of ["hora_trabalhada", "pro_labore", "mensalidade", "exito"] as const) {
+    if (!escopo.honorarios.includes(hon)) continue;
+    const nome = hon === "pro_labore" ? "pró-labore adicional" : `adicional de ${ROTULOS[hon]}`;
+    (escopo[hon]?.adicionais ?? []).forEach((ad, i) => {
+      const rot = `${label}: ${nome} ${i + 1}`;
       if (!ad.descricao_fase?.trim()) errors.push(`${rot}: informe a fase ou instância (ex.: 2ª instância).`);
       if (!(ad.valor_total > 0)) errors.push(`${rot}: informe o valor (maior que zero).`);
       errors.push(...errosParcelamento(ad, rot));

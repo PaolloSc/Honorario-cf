@@ -20,7 +20,7 @@ import type {
   HoraTrabalhada,
   Mensalidade,
   ProLabore,
-  ProLaboreAdicional,
+  HonorarioAdicional,
   Exito,
   Permuta,
   TipoHonorario,
@@ -69,6 +69,89 @@ interface TextoLivreProps {
   // Texto mexido e ainda não aprovado no pop-up; onAbrir abre a prévia pra aprovar.
   pendente: boolean;
   onAbrir: () => void;
+}
+
+/** Valor devido só se houver outra fase ou instância (ex.: 2ª instância, fase recursal).
+ * Serve a todo honorário com valor: pró-labore, hora trabalhada, mensalidade e êxito. */
+function AdicionaisCampos({
+  rotulo,
+  adicionais = [],
+  onChange,
+}: {
+  rotulo: string;
+  adicionais?: HonorarioAdicional[];
+  onChange: (adicionais: HonorarioAdicional[]) => void;
+}) {
+  return (
+    <>
+      {adicionais.map((ad, k) => {
+        const setAd = (partial: Partial<HonorarioAdicional>) =>
+          onChange(adicionais.map((x, j) => (j === k ? { ...x, ...partial } : x)));
+        const mensal = ad.tipo_parcelamento === "mensal";
+        return (
+          <div key={k} className="border-t border-border mt-4 pt-4">
+            <p className="text-sm font-medium text-foreground mb-3">{rotulo} {k + 1}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField label="Fase ou instância" required hint='Ex.: "2ª instância", "fase recursal", "execução". O contrato diz "caso haja ...".'>
+                <Input value={ad.descricao_fase} onChange={(e) => setAd({ descricao_fase: e.target.value })} />
+              </FormField>
+              <FormField label="Valor Total (R$)" required>
+                <CurrencyInput
+                  value={ad.valor_total || undefined}
+                  onChange={(v) =>
+                    setAd({ valor_total: v ?? 0, valor_parcela: dividirParcelas(v ?? 0, ad.numero_parcelas ?? 0)[0] ?? ad.valor_parcela })
+                  }
+                  placeholder="0,00"
+                />
+              </FormField>
+              <FormField label="Tipo de parcelamento">
+                <Select
+                  value={mensal ? "mensal" : ""}
+                  onChange={(e) =>
+                    setAd({ tipo_parcelamento: e.target.value === "mensal" ? "mensal" : undefined, tem_parcelamento: e.target.value === "mensal" })
+                  }
+                  options={[
+                    { value: "", label: "Parcela única" },
+                    { value: "mensal", label: "Mensal" },
+                  ]}
+                />
+              </FormField>
+              {!mensal && (
+                <FormField label="Vencimento (data)">
+                  <DatePicker value={ad.vencimento_data} onChange={(v) => setAd({ vencimento_data: v })} />
+                </FormField>
+              )}
+              {mensal && (
+                <ParcelasCampos
+                  total={ad.valor_total}
+                  numero={ad.numero_parcelas}
+                  data={ad.data_primeira_parcela}
+                  dia={ad.dia_vencimento}
+                  onChange={(p) =>
+                    setAd({ numero_parcelas: p.numero, data_primeira_parcela: p.data, dia_vencimento: p.dia, valor_parcela: p.valorParcela })
+                  }
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              className="text-sm text-danger hover:underline mt-2"
+              onClick={() => onChange(adicionais.filter((_, j) => j !== k))}
+            >
+              Remover
+            </button>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        className="text-sm text-primary hover:underline mt-3"
+        onClick={() => onChange([...adicionais, { descricao_fase: "", valor_total: 0, tem_parcelamento: false }])}
+      >
+        + {rotulo} (outra fase ou instância)
+      </button>
+    </>
+  );
 }
 
 function DescontoCampos({
@@ -511,6 +594,11 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         {...textoLivre(escopo, "hora_trabalhada")}
                       />
                     </div>
+                    <AdicionaisCampos
+                      rotulo="Honorário adicional"
+                      adicionais={escopo.hora_trabalhada.adicionais}
+                      onChange={(adicionais) => updateHoraTrabalhada(idx, { adicionais })}
+                    />
                   </div>
                 )}
 
@@ -616,84 +704,11 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       />
                     </div>
 
-                    {/* Pró-labore adicional: só devido se houver outra fase ou instância (opcional) */}
-                    {(escopo.pro_labore.adicionais ?? []).map((ad, k) => {
-                      const setAd = (partial: Partial<ProLaboreAdicional>) =>
-                        updateProLabore(idx, {
-                          adicionais: (escopo.pro_labore!.adicionais ?? []).map((x, j) => (j === k ? { ...x, ...partial } : x)),
-                        });
-                      const mensal = ad.tipo_parcelamento === "mensal";
-                      return (
-                        <div key={k} className="border-t border-border mt-4 pt-4">
-                          <p className="text-sm font-medium text-foreground mb-3">Pró-labore adicional {k + 1}</p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField label="Fase ou instância" required hint='Ex.: "2ª instância", "fase recursal", "execução". O contrato diz "caso haja ...".'>
-                              <Input value={ad.descricao_fase} onChange={(e) => setAd({ descricao_fase: e.target.value })} />
-                            </FormField>
-                            <FormField label="Valor Total (R$)" required>
-                              <CurrencyInput
-                                value={ad.valor_total || undefined}
-                                onChange={(v) =>
-                                  setAd({ valor_total: v ?? 0, valor_parcela: dividirParcelas(v ?? 0, ad.numero_parcelas ?? 0)[0] ?? ad.valor_parcela })
-                                }
-                                placeholder="0,00"
-                              />
-                            </FormField>
-                            <FormField label="Tipo de parcelamento">
-                              <Select
-                                value={mensal ? "mensal" : ""}
-                                onChange={(e) =>
-                                  setAd({ tipo_parcelamento: e.target.value === "mensal" ? "mensal" : undefined, tem_parcelamento: e.target.value === "mensal" })
-                                }
-                                options={[
-                                  { value: "", label: "Parcela única" },
-                                  { value: "mensal", label: "Mensal" },
-                                ]}
-                              />
-                            </FormField>
-                            {!mensal && (
-                              <FormField label="Vencimento (data)">
-                                <DatePicker value={ad.vencimento_data} onChange={(v) => setAd({ vencimento_data: v })} />
-                              </FormField>
-                            )}
-                            {mensal && (
-                              <ParcelasCampos
-                                total={ad.valor_total}
-                                numero={ad.numero_parcelas}
-                                data={ad.data_primeira_parcela}
-                                dia={ad.dia_vencimento}
-                                onChange={(p) =>
-                                  setAd({ numero_parcelas: p.numero, data_primeira_parcela: p.data, dia_vencimento: p.dia, valor_parcela: p.valorParcela })
-                                }
-                              />
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className="text-sm text-danger hover:underline mt-2"
-                            onClick={() =>
-                              updateProLabore(idx, { adicionais: (escopo.pro_labore!.adicionais ?? []).filter((_, j) => j !== k) })
-                            }
-                          >
-                            Remover
-                          </button>
-                        </div>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className="text-sm text-primary hover:underline mt-3"
-                      onClick={() =>
-                        updateProLabore(idx, {
-                          adicionais: [
-                            ...(escopo.pro_labore!.adicionais ?? []),
-                            { descricao_fase: "", valor_total: 0, tem_parcelamento: false } as ProLaboreAdicional,
-                          ],
-                        })
-                      }
-                    >
-                      + Pró-labore adicional (outra fase ou instância)
-                    </button>
+                    <AdicionaisCampos
+                      rotulo="Pró-labore adicional"
+                      adicionais={escopo.pro_labore.adicionais}
+                      onChange={(adicionais) => updateProLabore(idx, { adicionais })}
+                    />
                   </div>
                 )}
 
@@ -779,6 +794,11 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         {...textoLivre(escopo, "mensalidade")}
                       />
                     </div>
+                    <AdicionaisCampos
+                      rotulo="Honorário adicional"
+                      adicionais={escopo.mensalidade.adicionais}
+                      onChange={(adicionais) => updateMensalidade(idx, { adicionais })}
+                    />
                   </div>
                 )}
 
@@ -1002,6 +1022,11 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         {...textoLivre(escopo, "exito")}
                       />
                     </div>
+                    <AdicionaisCampos
+                      rotulo="Honorário adicional"
+                      adicionais={escopo.exito.adicionais}
+                      onChange={(adicionais) => updateExito(idx, { adicionais })}
+                    />
                   </div>
                 )}
 
