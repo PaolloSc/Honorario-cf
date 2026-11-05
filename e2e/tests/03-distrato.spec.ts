@@ -92,9 +92,15 @@ test.describe("distrato no modelo do escritorio", () => {
     await expect(texto).toContainText("restituirá os documentos e bens recebidos, com prestação de contas");
 
     await page.getByRole("button", { name: /Gerar distrato/ }).click();
-    await expect(page.getByText(/gerado|sucesso/i).first()).toBeVisible({ timeout: 60_000 });
-    const docs = await (await api()).get(`/api/contracts/${origem.id}/documentos`);
-    const tipos = ((await docs.json()).documentos as { tipo_contrato: string }[]).map((d) => d.tipo_contrato).sort();
-    expect(tipos).toEqual(["distrato", "substabelecimento"]);
+    // /gerado/ casaria com o titulo "Substabelecimento gerado junto": confere pela API, esperando a geracao terminar.
+    await expect
+      .poll(
+        async () => {
+          const docs = await (await api()).get(`/api/contracts/${origem.id}/documentos`);
+          return ((await docs.json()).documentos as { tipo_contrato: string }[]).map((d) => d.tipo_contrato).sort();
+        },
+        { timeout: 60_000 },
+      )
+      .toEqual(["distrato", "substabelecimento"]);
   });
 });
