@@ -766,3 +766,26 @@ def test_texto_livre_cdg27_moeda_nao_e_nome_composto_e_hifen_maiusculo_e():
     assert livre("Segunda-feira seguinte") == "segunda-feira seguinte"
     # Nome composto por espaço continua protegido.
     assert livre("Segunda Vara Cível") == "Segunda Vara Cível"
+
+
+def test_exito_termina_em_ainda_que_parcial_sem_base_de_calculo():
+    req = _req_com_exito()
+    req["escopos"][0]["exito"]["base_calculo"] = "o valor da causa"
+    paras = _paras_for(req)
+    assert not _has(paras, "tendo como base de cálculo")
+    assert _has(paras, "(Benefício), ainda que parcial.")
+
+
+def test_exito_incidencia_qualquer_valor_recebido():
+    req = _req_com_exito()
+    req["escopos"][0]["exito"]["incidencia"] = "qualquer_valor_recebido"
+    assert _has(_paras_for(req), "sobre qualquer valor recebido pela CONTRATANTE, corrigido "
+                                 "monetariamente (Benefício), ainda que parcial.")
+
+
+def test_exito_beneficio_tributario_antigo_vira_fiscal():
+    req = _req_com_exito()
+    req["escopos"][0]["exito"]["incidencia"] = "beneficio_tributario"
+    paras = _paras_for(req)
+    assert _has(paras, "sobre o benefício fiscal, corrigido")
+    assert not _has(paras, "benefício tributário")
