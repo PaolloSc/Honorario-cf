@@ -952,7 +952,31 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         })()}
                       </FormField>
 
-                      <FormField label="Vencimento">
+                      {escopo.exito.forma_pagamento === "parcelado" && (
+                        <FormField label="Número de parcelas" hint="Parcelas iguais e mensais.">
+                          <Input
+                            type="number"
+                            min={2}
+                            value={escopo.exito.numero_parcelas ?? ""}
+                            onChange={(e) => updateExito(idx, { numero_parcelas: e.target.value ? Number(e.target.value) : undefined })}
+                            placeholder="Ex.: 3"
+                          />
+                        </FormField>
+                      )}
+
+                      <FormField label="Vencimento (dias após o recebimento)" hint='O contrato diz "N dias após o recebimento de qualquer valor pela CONTRATANTE".'>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={escopo.exito.vencimento_dias ?? ""}
+                          onChange={(e) => updateExito(idx, { vencimento_dias: e.target.value ? Number(e.target.value) : undefined })}
+                          placeholder="Ex.: 10"
+                        />
+                      </FormField>
+
+                      {/* Texto livre antigo: só aparece em contrato que já o tinha e sem prazo em dias */}
+                      {!escopo.exito.vencimento_dias && (escopo.exito.vencimento || escopo.exito.vencimento_data) && (
+                      <FormField label="Vencimento (texto antigo)">
                         <Input
                           value={escopo.exito.vencimento || vencimentoLegado(escopo.exito.vencimento_data)}
                           onChange={(e) => {
@@ -968,6 +992,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                           placeholder="Ex.: 10 dias após o recebimento do Benefício"
                         />
                       </FormField>
+                      )}
 
                       <FormField label="Forma de parcelamento">
                         <Input
