@@ -21,6 +21,7 @@ import { validateHonorarios } from "@/app/lib/validacaoHonorarios";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
 import { getContractFormData, getDraft } from "@/app/lib/api";
 import { cnpjValido } from "@/app/lib/cnpj";
+import { validarContratantes } from "@/app/lib/validarContratantes";
 import { prepararModelo, type ModoModelo } from "@/app/lib/modeloContrato";
 import { dataDaApi } from "@/app/lib/datas";
 import { lerLocal, useDonoRascunho } from "@/app/lib/rascunhoLocal";
@@ -158,77 +159,10 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
   };
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function isEmail(value: string | undefined): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text(value));
-}
-
-function isValidCPF(cpf: string): boolean {
-  const d = cpf.replace(/\D/g, "");
-  if (d.length !== 11) return false;
-  // Reject known invalid patterns (all same digit)
-  if (/^(\d)\1{10}$/.test(d)) return false;
-  // First check digit
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(d[i]) * (10 - i);
-  let check = 11 - (sum % 11);
-  if (check >= 10) check = 0;
-  if (parseInt(d[9]) !== check) return false;
-  // Second check digit
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(d[i]) * (11 - i);
-  check = 11 - (sum % 11);
-  if (check >= 10) check = 0;
-  if (parseInt(d[10]) !== check) return false;
-  return true;
-}
-
-function validateContratantes(data: ContratoFormData): string[] {
-  const errors: string[] = [];
-
-  if (data.contratantes.length === 0) {
-    errors.push("Adicione pelo menos um contratante.");
-    return errors;
-  }
-
-  data.contratantes.forEach((contratante, index) => {
-    const label = `Contratante ${index + 1}`;
-
-    if (contratante.tipo === "PF") {
-      if (!text(contratante.nome)) errors.push(`${label}: informe o nome completo.`);
-      if (!isValidCPF(contratante.cpf)) errors.push(`${label}: CPF inválido.`);
-      if (!text(contratante.estado_civil)) errors.push(`${label}: informe o estado civil.`);
-      if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
-      if (!text(contratante.endereco)) errors.push(`${label}: informe o endereço completo.`);
-      return;
-    }
-
-    if (!cnpjValido(contratante.cnpj)) errors.push(`${label}: CNPJ inválido.`);
-    if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
-    if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ ou informe a Razão Social.`);
-    if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ ou informe o endereço.`);
-    // Quem tem nome aqui assina o contrato: sem e-mail, ficava fora da assinatura
-    // sem aviso — e empresa que exige dois administradores saía com um só.
-    (contratante.representantes ?? []).forEach((rep) => {
-      if (text(rep.nome) && !isEmail(rep.email)) {
-        errors.push(`${label}: informe o e-mail do representante ${text(rep.nome)} (ele assina o contrato).`);
-      }
-      if (text(rep.cpf) && !isValidCPF(rep.cpf!)) {
-        errors.push(`${label}: CPF inválido do representante ${text(rep.nome) || "sem nome"}.`);
-      }
-    });
-  });
-
-  return errors;
-}
-
 function validateStep(step: number, data: ContratoFormData): string[] {
   switch (step) {
     case 1:
-      return validateContratantes(data);
+      return validarContratantes(data, cnpjValido);
     case 2:
       return validateEscopos(data);
     case 3:
@@ -620,7 +554,9 @@ export default function ContractWizard({
           <button
             type="button"
             onClick={goNext}
+            // Nao desabilita: o clique mostra a lista do que falta (botao desabilitado nao dizia nada).
             aria-disabled={!canGoNext}
+            title={!canGoNext ? currentStepErrors[0] : undefined}
             className={`px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition ${canGoNext ? "" : "opacity-50"}`}
           >
             Próximo
