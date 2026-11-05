@@ -588,17 +588,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </div>
 
+                      <div className="md:col-span-2">
+                        <AdicionaisCampos
+                          rotulo="Honorário adicional"
+                          adicionais={escopo.hora_trabalhada.adicionais}
+                          onChange={(adicionais) => updateHoraTrabalhada(idx, { adicionais })}
+                        />
+                      </div>
+
                       <DescontoCampos
                         h={escopo.hora_trabalhada}
                         onChange={(p) => updateHoraTrabalhada(idx, p)}
                         {...textoLivre(escopo, "hora_trabalhada")}
                       />
                     </div>
-                    <AdicionaisCampos
-                      rotulo="Honorário adicional"
-                      adicionais={escopo.hora_trabalhada.adicionais}
-                      onChange={(adicionais) => updateHoraTrabalhada(idx, { adicionais })}
-                    />
                   </div>
                 )}
 
@@ -697,18 +700,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         );
                       })()}
 
+                      <div className="md:col-span-2">
+                        <AdicionaisCampos
+                          rotulo="Pró-labore adicional"
+                          adicionais={escopo.pro_labore.adicionais}
+                          onChange={(adicionais) => updateProLabore(idx, { adicionais })}
+                        />
+                      </div>
+
                       <DescontoCampos
                         h={escopo.pro_labore}
                         onChange={(p) => updateProLabore(idx, p)}
                         {...textoLivre(escopo, "pro_labore")}
                       />
                     </div>
-
-                    <AdicionaisCampos
-                      rotulo="Pró-labore adicional"
-                      adicionais={escopo.pro_labore.adicionais}
-                      onChange={(adicionais) => updateProLabore(idx, { adicionais })}
-                    />
                   </div>
                 )}
 
@@ -788,17 +793,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         />
                       </div>
 
+                      <div className="md:col-span-2">
+                        <AdicionaisCampos
+                          rotulo="Honorário adicional"
+                          adicionais={escopo.mensalidade.adicionais}
+                          onChange={(adicionais) => updateMensalidade(idx, { adicionais })}
+                        />
+                      </div>
+
                       <DescontoCampos
                         h={escopo.mensalidade}
                         onChange={(p) => updateMensalidade(idx, p)}
                         {...textoLivre(escopo, "mensalidade")}
                       />
                     </div>
-                    <AdicionaisCampos
-                      rotulo="Honorário adicional"
-                      adicionais={escopo.mensalidade.adicionais}
-                      onChange={(adicionais) => updateMensalidade(idx, { adicionais })}
-                    />
                   </div>
                 )}
 
@@ -1016,17 +1024,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         </FormField>
                       )}
 
+                      <div className="md:col-span-2">
+                        <AdicionaisCampos
+                          rotulo="Honorário adicional"
+                          adicionais={escopo.exito.adicionais}
+                          onChange={(adicionais) => updateExito(idx, { adicionais })}
+                        />
+                      </div>
+
                       <DescontoCampos
                         h={escopo.exito}
                         onChange={(p) => updateExito(idx, p)}
                         {...textoLivre(escopo, "exito")}
                       />
                     </div>
-                    <AdicionaisCampos
-                      rotulo="Honorário adicional"
-                      adicionais={escopo.exito.adicionais}
-                      onChange={(adicionais) => updateExito(idx, { adicionais })}
-                    />
                   </div>
                 )}
 
