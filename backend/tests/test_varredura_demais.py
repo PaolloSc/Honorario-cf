@@ -151,3 +151,17 @@ def test_resumo_do_escopo_nao_traz_percentual_fixo_no_exito_variavel():
 
     e = EscopoItem(**_req("exito", subtipo="percentual_variavel", percentual=10)["escopos"][0])
     assert "10%" not in ContractGenerator()._preco_resumo(e)
+
+
+def test_quadro_de_preco_inclui_honorario_adicional_de_outra_fase():
+    """O adicional (fase recursal etc.) so' aparecia no corpo; o quadro mostrava um preco menor."""
+    from app.models.contract import EscopoItem
+    from app.services.contract_generator import ContractGenerator
+
+    ad = {"descricao_fase": "fase recursal", "valor_total": 5000}
+    e = EscopoItem(**_req("pro_labore", adicionais=[ad])["escopos"][0])
+    preco = ContractGenerator()._preco_resumo(e)
+    assert "de pró-labore, acrescido de R$ 5.000,00" in preco and "caso haja fase recursal" in preco
+    # sem adicional, o quadro nao muda
+    e2 = EscopoItem(**_req("pro_labore")["escopos"][0])
+    assert "acrescido" not in ContractGenerator()._preco_resumo(e2)
