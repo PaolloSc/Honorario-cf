@@ -30,6 +30,8 @@ export function prepararModelo(dados: Record<string, unknown>, modo: ModoModelo)
     copia.contratantes = [];
     copia.incluir_partes_relacionadas = false;
     delete copia.email_destinatario;
+    // outro cliente: os e-mails de envio do modelo não servem
+    if (copia.envio) copia.envio = { ...(copia.envio as Record<string, unknown>), recipients: undefined };
     participacao.contato_financeiro_nome = "";
     participacao.contato_financeiro_email = "";
     participacao.contato_financeiro_telefone = "";

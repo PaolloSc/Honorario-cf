@@ -312,6 +312,16 @@ export interface ContratoFormData {
   email_destinatario?: string;
   // Cláusulas reescritas na etapa 7: id ("2.2") -> texto novo + texto padrão da época.
   ajustes_texto?: Record<string, { texto: string; padrao: string }>;
+  // Escolhas da etapa 7 (e-mails de envio, testemunhas, sócio que assina): vão
+  // no rascunho e no form_data para não sumirem ao reabrir. Ausente em dados antigos.
+  envio?: EnvioSalvo;
+}
+
+export interface EnvioSalvo {
+  recipients?: Array<{ email: string; nome: string }>;
+  testemunhaIds?: number[];
+  testemunhasExtras?: Array<{ email: string; name: string }>;
+  socioEscritorio?: string;
 }
  
 export interface ContratoResponse {
