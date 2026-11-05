@@ -395,7 +395,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
               <div className="space-y-4">
                 <p className="text-xs font-medium text-muted uppercase tracking-wide">
-                  Selecione os tipos de honorário aplicáveis:
+                  Selecione os tipos de honorário aplicáveis (pelo menos um):<span className="text-danger ml-1">*</span>
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -416,7 +416,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       Hora Trabalhada - Detalhes
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField label="Valor da Hora (R$)">
+                      <FormField label="Valor da Hora (R$)" required>
                         <CurrencyInput
                           value={escopo.hora_trabalhada.valor_hora || undefined}
                           onChange={(v) =>
@@ -518,7 +518,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       Pró-labore - Detalhes
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField label="Valor Total (R$)">
+                      <FormField label="Valor Total (R$)" required={escopo.pro_labore.tipo_parcelamento !== "customizado"}>
                         <CurrencyInput
                           value={escopo.pro_labore.valor_total || undefined}
                           onChange={(v) =>
@@ -566,7 +566,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                             {tipo === "mensal" && (
                               <>
-                                <FormField label="Número de parcelas">
+                                <FormField label="Número de parcelas" required>
                                   <Input
                                     type="number"
                                     value={pl.numero_parcelas || ""}
@@ -576,7 +576,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                                     placeholder="0"
                                   />
                                 </FormField>
-                                <FormField label="Valor da Parcela (R$)">
+                                <FormField label="Valor da Parcela (R$)" required>
                                   <CurrencyInput
                                     value={pl.valor_parcela || undefined}
                                     onChange={(v) =>
@@ -598,7 +598,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                             {tipo === "customizado" && (
                               <div className="md:col-span-2">
-                                <FormField label="Parcelamento customizado">
+                                <FormField label="Parcelamento customizado" required>
                                   <TextArea
                                     value={pl.parcelamento_customizado || ""}
                                     onChange={(e) => {
@@ -632,7 +632,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       Mensalidade - Detalhes
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField label="Valor Mensal (R$)">
+                      <FormField label="Valor Mensal (R$)" required={!escopo.mensalidade.faixas_preco?.length}>
                         <CurrencyInput
                           value={escopo.mensalidade.valor || undefined}
                           onChange={(v) =>
@@ -939,7 +939,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                       Permuta - Detalhes
                     </p>
                     <div className="grid grid-cols-1 gap-4">
-                      <FormField label="Objeto da permuta">
+                      <FormField label="Objeto da permuta" required>
                         <Input
                           value={escopo.permuta.objeto_permuta || ""}
                           onChange={(e) =>

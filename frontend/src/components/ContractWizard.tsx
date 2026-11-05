@@ -16,7 +16,8 @@ import type {
   Participacao,
 } from "@/types/contract";
 import RascunhosPendentes from "@/components/RascunhosPendentes";
-import { errosDoEscopo } from "@/app/lib/validacaoHonorarios";
+import { validateEscopos, validateAcessorios, validateParticipacao } from "@/app/lib/validacaoPassos";
+import { validateHonorarios } from "@/app/lib/validacaoHonorarios";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
 import { getContractFormData, getDraft } from "@/app/lib/api";
 import { cnpjValido } from "@/app/lib/cnpj";
@@ -221,85 +222,6 @@ function validateContratantes(data: ContratoFormData): string[] {
     });
   });
 
-  return errors;
-}
-
-function validateEscopos(data: ContratoFormData): string[] {
-  const errors: string[] = [];
-
-  if (data.escopos.length === 0) {
-    errors.push("Selecione pelo menos um escopo.");
-    return errors;
-  }
-
-  data.escopos.forEach((escopo, index) => {
-    const label = `Escopo ${index + 1}`;
-
-    if (escopo.tipo === "consultoria_elaboracao_documentos" && !text(escopo.documentos)) {
-      errors.push(`${label}: informe os documentos a elaborar.`);
-    }
-
-    if (escopo.tipo === "consultoria_opiniao_legal" && !text(escopo.consulta)) {
-      errors.push(`${label}: informe a consulta ou tema do parecer.`);
-    }
-
-    if (escopo.tipo === "outro" && !text(escopo.descricao_custom)) {
-      errors.push(`${label}: descreva o escopo.`);
-    }
-  });
-
-  return errors;
-}
-
-function validateHonorarios(data: ContratoFormData): string[] {
-  const errors: string[] = [];
-
-  data.escopos.forEach((escopo, index) => {
-    const label = `Escopo ${index + 1}`;
-
-    if (escopo.honorarios.length === 0) {
-      errors.push(`${label}: selecione pelo menos um tipo de honorário.`);
-    }
-    errors.push(...errosDoEscopo(escopo, label));
-  });
-
-  return errors;
-}
-
-function validateAcessorios(_data: ContratoFormData): string[] {
-  return [];
-}
-
-// Mesmo critério da ficha (backend/app/utils/participacao.py): sem valor_tipo,
-// o wizard mostra "percentual" marcado.
-function temValor(tipo: string | undefined, pct?: string, valor?: number, outro?: string): boolean {
-  const t = tipo || "percentual";
-  if (t === "percentual") return Boolean(pct?.toString().trim());
-  if (t === "valor") return valor != null;
-  return Boolean(outro?.trim());
-}
-
-function validateParticipacao(data: ContratoFormData): string[] {
-  const errors: string[] = [];
-  if (!data.participacao.responsavel_gestao?.trim()) {
-    errors.push("Informe o responsável pela gestão do contrato.");
-  }
-
-  // Cada advogado marcado precisa de valor próprio ou de um valor geral — senão a
-  // ficha chega ao financeiro sem valor nenhum.
-  const p = data.participacao;
-  if (p.tem_participacao) {
-    const temGeral =
-      (p.valor_tipo != null && temValor(p.valor_tipo, p.valor_percentual, p.valor_monetario, p.valor_outro)) ||
-      Boolean(p.percentual_ou_valor?.trim());
-    if (!temGeral) {
-      for (const part of p.participantes ?? []) {
-        if (!temValor(part.valor_tipo, part.percentual, part.valor_monetario, part.valor_outro)) {
-          errors.push(`Informe o valor de ${part.nome} ou o critério geral da participação.`);
-        }
-      }
-    }
-  }
   return errors;
 }
 
@@ -698,9 +620,8 @@ export default function ContractWizard({
           <button
             type="button"
             onClick={goNext}
-            disabled={!canGoNext}
-            title={!canGoNext ? currentStepErrors[0] : undefined}
-            className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-disabled={!canGoNext}
+            className={`px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition ${canGoNext ? "" : "opacity-50"}`}
           >
             Próximo
           </button>

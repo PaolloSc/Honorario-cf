@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { cnpjValido } from "./cnpj.ts";
 import {
   agruparDerivados, valorEmReais, cnjValido, formatarCnj, ehDocumentoComplementar, errosDaApi, estadoDoFormData, estadoInicial,
-  formatarOabNumero, lerOab, trocarUfOab, oabsDoTexto, oabTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, type AditivoForm, type SubstabelecimentoForm,
+  formatarOabNumero, lerOab, trocarUfOab, oabsDoTexto, oabTexto, oabsParaTexto, montarPayload, oabVazia, validar as validarBase, resumoDosErros, rotuloDoCampo, type AditivoForm, type SubstabelecimentoForm,
 } from "./documentos.ts";
 
 const validar = (t: any, e: any) => validarBase(t, e, cnpjValido);
@@ -221,3 +221,11 @@ assert.deepEqual(agruparDerivados(itens).map((g) => `${g.derivado ? ">" : ""}${g
 }
 
 console.log("documentos.ts ok");
+
+// Mensagem diz QUAL campo falta (não só "corrija os campos").
+assert.equal(rotuloDoCampo("alteracoes.1.texto"), "Alteração 2: novo texto");
+assert.equal(rotuloDoCampo("objeto_contrato_origem"), "Objeto do contrato original");
+assert.equal(
+  resumoDosErros(validar("aditivo", { ...ad, objeto: "", data_contrato_origem: "" })),
+  "Preencha ou corrija: Data do contrato original; Objeto do aditivo.",
+);
