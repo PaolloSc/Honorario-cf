@@ -12,12 +12,15 @@ import { previewHonorarios } from "@/app/lib/api";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import DatePicker from "@/components/ui/DatePicker";
+import { dividirParcelas } from "@/app/lib/parcelas";
+import ParcelasCampos from "@/components/steps/ParcelasCampos";
 import type {
   ComDesconto,
   EscopoItem,
   HoraTrabalhada,
   Mensalidade,
   ProLabore,
+  ProLaboreAdicional,
   Exito,
   Permuta,
   TipoHonorario,
@@ -522,7 +525,10 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         <CurrencyInput
                           value={escopo.pro_labore.valor_total || undefined}
                           onChange={(v) =>
-                            updateProLabore(idx, { valor_total: v ?? 0 })
+                            updateProLabore(idx, {
+                              valor_total: v ?? 0,
+                              valor_parcela: dividirParcelas(v ?? 0, escopo.pro_labore?.numero_parcelas ?? 0)[0] ?? escopo.pro_labore?.valor_parcela,
+                            })
                           }
                           placeholder="0,00"
                         />
@@ -566,33 +572,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                             {tipo === "mensal" && (
                               <>
-                                <FormField label="Número de parcelas" required>
-                                  <Input
-                                    type="number"
-                                    value={pl.numero_parcelas || ""}
-                                    onChange={(e) =>
-                                      updateProLabore(idx, { numero_parcelas: parseInt(e.target.value) || 0 })
-                                    }
-                                    placeholder="0"
-                                  />
-                                </FormField>
-                                <FormField label="Valor da Parcela (R$)" required>
-                                  <CurrencyInput
-                                    value={pl.valor_parcela || undefined}
-                                    onChange={(v) =>
-                                      updateProLabore(idx, { valor_parcela: v ?? 0 })
-                                    }
-                                    placeholder="0,00"
-                                  />
-                                </FormField>
-                                <FormField label="Vencimento 1ª parcela (data)">
-                                  <DatePicker
-                                    value={pl.vencimento_parcelas_data}
-                                    onChange={(v) =>
-                                      updateProLabore(idx, { vencimento_parcelas_data: v })
-                                    }
-                                  />
-                                </FormField>
+                                <ParcelasCampos
+                                  total={pl.valor_total}
+                                  numero={pl.numero_parcelas}
+                                  data={pl.data_primeira_parcela}
+                                  dia={pl.dia_vencimento}
+                                  onChange={(p) =>
+                                    updateProLabore(idx, {
+                                      numero_parcelas: p.numero,
+                                      data_primeira_parcela: p.data,
+                                      dia_vencimento: p.dia,
+                                      valor_parcela: p.valorParcela,
+                                    })
+                                  }
+                                />
                               </>
                             )}
 
@@ -622,6 +615,85 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         {...textoLivre(escopo, "pro_labore")}
                       />
                     </div>
+
+                    {/* Pró-labore adicional: só devido se houver outra fase ou instância (opcional) */}
+                    {(escopo.pro_labore.adicionais ?? []).map((ad, k) => {
+                      const setAd = (partial: Partial<ProLaboreAdicional>) =>
+                        updateProLabore(idx, {
+                          adicionais: (escopo.pro_labore!.adicionais ?? []).map((x, j) => (j === k ? { ...x, ...partial } : x)),
+                        });
+                      const mensal = ad.tipo_parcelamento === "mensal";
+                      return (
+                        <div key={k} className="border-t border-border mt-4 pt-4">
+                          <p className="text-sm font-medium text-foreground mb-3">Pró-labore adicional {k + 1}</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField label="Fase ou instância" required hint='Ex.: "2ª instância", "fase recursal", "execução". O contrato diz "caso haja ...".'>
+                              <Input value={ad.descricao_fase} onChange={(e) => setAd({ descricao_fase: e.target.value })} />
+                            </FormField>
+                            <FormField label="Valor Total (R$)" required>
+                              <CurrencyInput
+                                value={ad.valor_total || undefined}
+                                onChange={(v) =>
+                                  setAd({ valor_total: v ?? 0, valor_parcela: dividirParcelas(v ?? 0, ad.numero_parcelas ?? 0)[0] ?? ad.valor_parcela })
+                                }
+                                placeholder="0,00"
+                              />
+                            </FormField>
+                            <FormField label="Tipo de parcelamento">
+                              <Select
+                                value={mensal ? "mensal" : ""}
+                                onChange={(e) =>
+                                  setAd({ tipo_parcelamento: e.target.value === "mensal" ? "mensal" : undefined, tem_parcelamento: e.target.value === "mensal" })
+                                }
+                                options={[
+                                  { value: "", label: "Parcela única" },
+                                  { value: "mensal", label: "Mensal" },
+                                ]}
+                              />
+                            </FormField>
+                            {!mensal && (
+                              <FormField label="Vencimento (data)">
+                                <DatePicker value={ad.vencimento_data} onChange={(v) => setAd({ vencimento_data: v })} />
+                              </FormField>
+                            )}
+                            {mensal && (
+                              <ParcelasCampos
+                                total={ad.valor_total}
+                                numero={ad.numero_parcelas}
+                                data={ad.data_primeira_parcela}
+                                dia={ad.dia_vencimento}
+                                onChange={(p) =>
+                                  setAd({ numero_parcelas: p.numero, data_primeira_parcela: p.data, dia_vencimento: p.dia, valor_parcela: p.valorParcela })
+                                }
+                              />
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="text-sm text-danger hover:underline mt-2"
+                            onClick={() =>
+                              updateProLabore(idx, { adicionais: (escopo.pro_labore!.adicionais ?? []).filter((_, j) => j !== k) })
+                            }
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="text-sm text-primary hover:underline mt-3"
+                      onClick={() =>
+                        updateProLabore(idx, {
+                          adicionais: [
+                            ...(escopo.pro_labore!.adicionais ?? []),
+                            { descricao_fase: "", valor_total: 0, tem_parcelamento: false } as ProLaboreAdicional,
+                          ],
+                        })
+                      }
+                    >
+                      + Pró-labore adicional (outra fase ou instância)
+                    </button>
                   </div>
                 )}
 
@@ -976,7 +1048,20 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                               placeholder="0,00"
                             />
                           </FormField>
-                          <FormField label="Forma de pagamento">
+                          <ParcelasCampos
+                            total={escopo.permuta.valor_torna ?? 0}
+                            numero={escopo.permuta.numero_parcelas_torna}
+                            data={escopo.permuta.data_primeira_parcela_torna}
+                            dia={escopo.permuta.dia_vencimento_torna}
+                            onChange={(p) =>
+                              updatePermuta(idx, {
+                                numero_parcelas_torna: p.numero || undefined,
+                                data_primeira_parcela_torna: p.data,
+                                dia_vencimento_torna: p.dia,
+                              })
+                            }
+                          />
+                          <FormField label="Forma de pagamento" hint="Ignorada se a torna for parcelada acima.">
                             <Input
                               value={escopo.permuta.forma_pagamento_torna || ""}
                               onChange={(e) =>

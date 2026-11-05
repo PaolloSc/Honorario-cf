@@ -155,7 +155,16 @@ export interface HoraTrabalhada extends ComDesconto {
   tem_hora_fora_expediente: boolean;
 }
  
+/** Pró-labore devido só se houver outra fase ou instância (ex.: 2ª instância, fase recursal). */
+export interface ProLaboreAdicional extends Omit<ProLabore, "adicionais"> {
+  descricao_fase: string;
+}
+
 export interface ProLabore extends ComDesconto {
+  /** 1ª parcela em data fixa; as demais todo mês no dia_vencimento (padrão: o dia da 1ª). */
+  data_primeira_parcela?: string;
+  dia_vencimento?: number;
+  adicionais?: ProLaboreAdicional[];
   valor_total: number;
   tem_parcelamento: boolean; // legado: virou tipo_parcelamento "mensal"
   tipo_parcelamento?: "mensal" | "customizado";
@@ -218,6 +227,10 @@ export interface Permuta extends ComDesconto {
   tem_torna: boolean;
   valor_torna?: number;
   forma_pagamento_torna?: string;
+  /** Torna parcelada: valor_torna / numero_parcelas, 1ª em data fixa (sobrepõe a forma digitada). */
+  numero_parcelas_torna?: number;
+  data_primeira_parcela_torna?: string;
+  dia_vencimento_torna?: number;
 }
  
 export interface EscopoItem {

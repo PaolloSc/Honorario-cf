@@ -13,7 +13,7 @@ assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado" })),
 assert.equal(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcelamento_customizado: "  " })), "E").length, 1);
 // Com texto, mensal ou parcela única: passa.
 assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcelamento_customizado: "50/50" })), "E"), []);
-assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal", numero_parcelas: 2, valor_parcela: 500 })), "E"), []);
+assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal", numero_parcelas: 2, data_primeira_parcela: "2026-12-15" })), "E"), []);
 assert.deepEqual(errosDoEscopo(escopo(pl({})), "E"), []);
 // Pró-labore desmarcado não valida dado que ficou para trás.
 assert.deepEqual(
@@ -58,10 +58,18 @@ assert.deepEqual(errosDoEscopo({ honorarios: [], hora_trabalhada: { valor_hora: 
 
 // Pró-labore mensal, permuta e êxito "Outro" (achados 11 e 12 da varredura).
 const mensal = (extra: object) => escopo(pl({ tipo_parcelamento: "mensal", valor_total: 12000, ...extra }));
-assert.equal(errosDoEscopo(mensal({}), "E").length, 1); // sem nº nem valor da parcela
-assert.equal(errosDoEscopo(mensal({ numero_parcelas: 3, valor_parcela: 1000 }), "E").length, 1); // 3000 != 12000
-assert.deepEqual(errosDoEscopo(mensal({ numero_parcelas: 3, valor_parcela: 4000 }), "E"), []);
-assert.deepEqual(errosDoEscopo(mensal({ valor_total: 10000, numero_parcelas: 3, valor_parcela: 3333.33 }), "E"), []);
+assert.equal(errosDoEscopo(mensal({}), "E").length, 2); // sem nº de parcelas nem data da 1ª
+assert.equal(errosDoEscopo(mensal({ numero_parcelas: 3 }), "E").length, 1); // falta a data da 1ª
+assert.deepEqual(errosDoEscopo(mensal({ numero_parcelas: 5, data_primeira_parcela: "2026-12-15" }), "E"), []); // parcela é calculada
+// Pró-labore adicional: fase, valor e (se mensal) parcelas + data
+const comAd = (ad: object) => escopo(pl({ adicionais: [ad] }));
+assert.equal(errosDoEscopo(comAd({ descricao_fase: "", valor_total: 0 }), "E").length, 2);
+assert.deepEqual(errosDoEscopo(comAd({ descricao_fase: "2ª instância", valor_total: 14000 }), "E"), []);
+assert.equal(errosDoEscopo(comAd({ descricao_fase: "2ª instância", valor_total: 14000, tipo_parcelamento: "mensal", numero_parcelas: 5 }), "E").length, 1);
+// Torna parcelada precisa de valor e data da 1ª parcela
+const torna = (extra: object) => ({ honorarios: ["permuta"], permuta: { objeto_permuta: "x", tem_torna: true, numero_parcelas_torna: 4, ...extra } }) as never;
+assert.equal(errosDoEscopo(torna({}), "E").length, 2);
+assert.deepEqual(errosDoEscopo(torna({ valor_torna: 6000, data_primeira_parcela_torna: "2026-12-05" }), "E"), []);
 assert.equal(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: " " } } as never, "E").length, 1);
 assert.deepEqual(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: "imóvel" } } as never, "E"), []);
 assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "a definir" } } as never, "E").length, 1);

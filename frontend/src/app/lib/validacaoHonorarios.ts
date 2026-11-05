@@ -12,6 +12,19 @@ const ROTULOS = {
 
 type Honorario = keyof typeof ROTULOS;
 
+// Parcelamento mensal automático: a parcela sai de valor_total / nº de parcelas, então o que o
+// usuário informa é o nº de parcelas e a data da 1ª.
+function errosParcelamento(
+  pl: { tipo_parcelamento?: string; numero_parcelas?: number; data_primeira_parcela?: string },
+  rotulo: string,
+): string[] {
+  if (pl.tipo_parcelamento !== "mensal") return [];
+  const errors: string[] = [];
+  if ((pl.numero_parcelas ?? 0) <= 0) errors.push(`${rotulo} mensal precisa do número de parcelas.`);
+  if (!pl.data_primeira_parcela) errors.push(`${rotulo} mensal precisa do vencimento da 1ª parcela.`);
+  return errors;
+}
+
 export function errosDoEscopo(
   escopo: Pick<EscopoItem, "honorarios" | Honorario>,
   label: string,
@@ -68,14 +81,19 @@ export function errosDoEscopo(
       errors.push(`${label}: informe o valor de ${rotulo} (maior que zero).`);
     }
   }
-  if (escopo.honorarios.includes("pro_labore") && pl?.tipo_parcelamento === "mensal") {
-    const n = pl.numero_parcelas ?? 0;
-    const v = pl.valor_parcela ?? 0;
-    if (n <= 0 || v <= 0) {
-      errors.push(`${label}: pró-labore mensal precisa do número de parcelas e do valor da parcela.`);
-    } else if ((pl.valor_total ?? 0) > 0 && Math.abs(n * v - pl.valor_total) > 0.01 * n) {
-      errors.push(`${label}: pró-labore: número de parcelas × valor da parcela não bate com o valor total.`);
-    }
+  if (escopo.honorarios.includes("pro_labore") && pl) {
+    errors.push(...errosParcelamento(pl, `${label}: pró-labore`));
+    (pl.adicionais ?? []).forEach((ad, i) => {
+      const rot = `${label}: pró-labore adicional ${i + 1}`;
+      if (!ad.descricao_fase?.trim()) errors.push(`${rot}: informe a fase ou instância (ex.: 2ª instância).`);
+      if (!(ad.valor_total > 0)) errors.push(`${rot}: informe o valor (maior que zero).`);
+      errors.push(...errosParcelamento(ad, rot));
+    });
+  }
+  const pm = escopo.permuta;
+  if (escopo.honorarios.includes("permuta") && pm?.tem_torna && pm.numero_parcelas_torna) {
+    if (!((pm.valor_torna ?? 0) > 0)) errors.push(`${label}: informe o valor da torna para parcelá-la.`);
+    if (!pm.data_primeira_parcela_torna) errors.push(`${label}: informe o vencimento da 1ª parcela da torna.`);
   }
   if (escopo.honorarios.includes("permuta") && !escopo.permuta?.objeto_permuta?.trim()) {
     errors.push(`${label}: informe o objeto da permuta.`);

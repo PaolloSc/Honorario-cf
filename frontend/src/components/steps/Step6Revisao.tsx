@@ -258,7 +258,13 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
       if (ht.duracao_meses) s += ` · ${ht.duracao_meses} meses`;
       parts.push(s);
     } else if (tipo === "pro_labore" && escopo.pro_labore) {
-      parts.push(`${formatCurrency(escopo.pro_labore.valor_total)} pró-labore`);
+      const pl = escopo.pro_labore;
+      const parc = pl.tipo_parcelamento === "mensal" && pl.numero_parcelas ? ` em ${pl.numero_parcelas}x` : "";
+      parts.push(`${formatCurrency(pl.valor_total)}${parc} pró-labore`);
+      for (const ad of pl.adicionais ?? []) {
+        const p2 = ad.tipo_parcelamento === "mensal" && ad.numero_parcelas ? ` em ${ad.numero_parcelas}x` : "";
+        parts.push(`${formatCurrency(ad.valor_total)}${p2} pró-labore adicional (${ad.descricao_fase || "outra fase"})`);
+      }
     } else if (tipo === "mensalidade" && escopo.mensalidade) {
       let s = `${formatCurrency(escopo.mensalidade.valor)}/mês`;
       if (escopo.mensalidade.duracao_meses) s += ` · ${escopo.mensalidade.duracao_meses} meses`;
