@@ -181,14 +181,19 @@ class AditivoGenerator(ComplementarGenerator):
         )
 
         # Considerandos: contrato de origem, aditivos anteriores e o atual.
-        quando = f" em {_data(data.data_contrato_origem).year}" if data.data_contrato_origem else ""
         doc.add_paragraph("Considerando que:")
-        doc.add_paragraph(f"As partes firmaram Contrato de Prestação de Serviços Advocatícios{quando};")
-        for ant in data.aditivos_anteriores:
+        if data.objeto_contrato_origem:  # contrato antigo, fora do sistema: data por extenso e objeto
             doc.add_paragraph(
-                f"Em {_mes_ano(ant.data_documento)}, as partes firmaram o {ant.numero}º Aditivo "
-                f"Contratual, tendo por objeto {_sem_ponto(ant.objeto)};"
+                f"As partes firmaram, em {self._data_extenso(data.data_contrato_origem)}, Contrato de Prestação de "
+                f"Serviços Advocatícios, tendo por objeto {_sem_ponto(data.objeto_contrato_origem)};"
             )
+        else:
+            quando = f" em {_data(data.data_contrato_origem).year}" if data.data_contrato_origem else ""
+            doc.add_paragraph(f"As partes firmaram Contrato de Prestação de Serviços Advocatícios{quando};")
+        for ant in data.aditivos_anteriores:
+            quando_ant = f"Em {_mes_ano(ant.data_documento)}, as" if ant.data_documento else "As"
+            objeto_ant = f", tendo por objeto {_sem_ponto(ant.objeto)}" if ant.objeto.strip() else ""
+            doc.add_paragraph(f"{quando_ant} partes firmaram o {ant.numero}º Aditivo Contratual{objeto_ant};")
         ordinal = f"{data.numero}º " if data.numero > 1 else ""
         doc.add_paragraph(
             f"Em {_mes_ano(data.data_documento)}, as partes acordaram o presente aditivo, "
@@ -316,7 +321,10 @@ class DistratoGenerator(ComplementarGenerator):
     def _corpo(self, doc: Document, data: DistratoRequest) -> None:
         for c in data.contratantes:
             denominada = "denominada" if c.get("cnpj") else "denominado(a)"  # PJ: feminino; PF: sem presumir o genero
-            doc.add_paragraph(f"{self._qualificar(c, com_representantes=False)}; {denominada} apenas CONTRATANTE;")
+            # Sem contrato de origem o representante legal e' informado na tela e entra na qualificacao.
+            doc.add_paragraph(
+                f"{self._qualificar(c, com_representantes=not data.contrato_origem_id)}; {denominada} apenas CONTRATANTE;"
+            )
         doc.add_paragraph(
             f"{ESCRITORIO_NOME}, pessoa jurídica de direito interno, sociedade simples de prestação de "
             f"serviços advocatícios, inscrita no CNPJ n.º {ESCRITORIO_CNPJ}, com sede na "

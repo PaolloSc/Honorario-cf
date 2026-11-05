@@ -36,9 +36,20 @@ _DATA_ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
 class AditivoAnterior(BaseModel):
     """Aditivo ja cadastrado no contrato de origem (servidor)."""
 
-    numero: int
+    numero: int = Field(ge=1, le=99)
     data_documento: Optional[str] = None
     objeto: str = ""
+
+    @field_validator("data_documento")
+    @classmethod
+    def _data_iso(cls, v):
+        if v in (None, ""):
+            return None
+        try:
+            date.fromisoformat(v)
+        except (ValueError, TypeError):
+            raise ValueError("Data inválida (use AAAA-MM-DD)")
+        return v
 
 
 class _DocumentoComplementar(LimiteTamanhos):
@@ -114,6 +125,9 @@ class AditivoRequest(_ComOrigem):
     # o contrato de honorarios nao guarda essa data, entao o advogado informa.
     data_contrato_origem: str = Field(min_length=1)
     numero: int = Field(default=1, ge=1, le=99)  # servidor (com origem): 1 + aditivos ja existentes
+    # Sem contrato de origem: objeto do contrato original (obrigatorio) e, se o numero for > 1, os aditivos
+    # anteriores (opcional: so' saem no texto se informados) vem do cliente.
+    objeto_contrato_origem: str = ""
 
     @model_validator(mode="after")
     def _ao_menos_uma_alteracao(self):

@@ -25,6 +25,8 @@ export const ROTULO_ALTERACAO: Record<TipoAlteracao, string> = {
 };
 export interface Alteracao { tipo: TipoAlteracao; clausula: string; texto: string }
 
+export interface AnteriorForm { numero: string; data: string; objeto: string }
+
 /** Parte do contrato original, informada à mão quando o contrato é antigo e não está no sistema. */
 export interface ParteForm {
   pj: boolean;
@@ -69,6 +71,9 @@ export interface AditivoForm {
   /** Só sem contrato de origem: partes digitadas e número deste aditivo. */
   partes: ParteForm[];
   numero: string;
+  /** Só sem origem: objeto do contrato original (obrigatório) e aditivos anteriores citados (opcional). */
+  objeto_contrato_origem: string;
+  anteriores: AnteriorForm[];
   data_documento: string;
   data_contrato_origem: string;
   objeto: string;
@@ -189,7 +194,7 @@ export const substabelecidoVazio = (): Substabelecido => ({ nome: "", oab: oabVa
 export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocumento {
   if (tipo === "aditivo") {
     return {
-      partes: [parteVazia()], numero: "1",
+      partes: [parteVazia()], numero: "1", objeto_contrato_origem: "", anteriores: [],
       data_documento: hoje, data_contrato_origem: "", objeto: "", alteracoes: [alteracaoVazia()],
     };
   }
@@ -258,7 +263,15 @@ export function montarPayload(
     return {
       ...base,
       ...semOrigem(e),
-      ...(origemId ? {} : { numero: Number(e.numero) || 1 }),
+      ...(origemId ? {} : {
+        numero: Number(e.numero) || 1,
+        objeto_contrato_origem: e.objeto_contrato_origem.trim(),
+        // Só os preenchidos (número + data ou objeto); o texto dos anteriores é opcional.
+        aditivos_anteriores: Number(e.numero) > 1
+          ? e.anteriores.filter((a) => Number(a.numero) >= 1)
+              .map((a) => ({ numero: Number(a.numero), data_documento: a.data || null, objeto: a.objeto.trim() }))
+          : [],
+      }),
       data_contrato_origem: e.data_contrato_origem,
       objeto: e.objeto.trim(),
       alteracoes: e.alteracoes.map((a) => ({
@@ -326,6 +339,9 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
       ...(base as AditivoForm),
       partes: partesDoFormData(fd),
       numero: String(fd.numero ?? 1),
+      objeto_contrato_origem: fd.objeto_contrato_origem ?? "",
+      anteriores: (!fd.contrato_origem_id ? fd.aditivos_anteriores ?? [] : []).map(
+        (a: { numero: number; data_documento?: string; objeto?: string }) => ({ numero: String(a.numero), data: a.data_documento ?? "", objeto: a.objeto ?? "" })),
       data_documento: fd.data_documento ?? hoje,
       data_contrato_origem: fd.data_contrato_origem ?? "",
       objeto: fd.objeto ?? "",
@@ -399,6 +415,11 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
     if (tipo === "aditivo") {
       const n = Number((estado as AditivoForm).numero);
       if (!Number.isInteger(n) || n < 1 || n > 99) e.numero = "Informe o número do aditivo (1 a 99)";
+      obrig("objeto_contrato_origem", (estado as AditivoForm).objeto_contrato_origem, "Informe o objeto do contrato original");
+      (estado as AditivoForm).anteriores.forEach((a, i) => {
+        const k = Number(a.numero);
+        if (Number.isInteger(n) && (!Number.isInteger(k) || k < 1 || k >= n)) e[`aditivos_anteriores.${i}.numero`] = `Informe um número de 1 a ${n - 1}`;
+      });
     }
   }
   if (tipo === "aditivo") {

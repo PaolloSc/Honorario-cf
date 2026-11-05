@@ -117,9 +117,37 @@ export function CamposAditivo({ estado, onChange, erros, semOrigem = false }: Pr
     <>
       {semOrigem && <CamposPartes partes={estado.partes} onChange={(partes) => set({ partes })} erros={erros} />}
       {semOrigem && (
+        <FormField label="Objeto do contrato original" required error={erros.objeto_contrato_origem} hint='Completa "tendo por objeto …" no considerando do aditivo.'>
+          <TextArea value={estado.objeto_contrato_origem} onChange={(e) => set({ objeto_contrato_origem: e.target.value })} error={!!erros.objeto_contrato_origem} placeholder="assessoria jurídica trabalhista" />
+        </FormField>
+      )}
+      {semOrigem && (
         <FormField label="Número deste aditivo" required error={erros.numero} hint="1 se for o primeiro; 2 se já houve um aditivo antes, e assim por diante.">
           <Input className="sm:max-w-[8rem]" inputMode="numeric" value={estado.numero} onChange={(e) => set({ numero: e.target.value.replace(/\D/g, "").slice(0, 2) })} error={!!erros.numero} />
         </FormField>
+      )}
+      {semOrigem && Number(estado.numero) > 1 && (
+        <div className="mb-4">
+          <p className="text-sm font-medium text-foreground">Aditivos anteriores (opcional)</p>
+          <p className="text-xs text-muted mb-2">Se informar, o texto cita cada um deles. Sem preencher, nada é citado.</p>
+          {estado.anteriores.map((a, i) => (
+            <div key={i} className={cartao}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4">
+                <FormField label="Nº do aditivo" error={erros[`aditivos_anteriores.${i}.numero`]}>
+                  <Input inputMode="numeric" value={a.numero} onChange={(e) => set({ anteriores: estado.anteriores.map((x, k) => (k === i ? { ...x, numero: e.target.value.replace(/\D/g, "").slice(0, 2) } : x)) })} error={!!erros[`aditivos_anteriores.${i}.numero`]} />
+                </FormField>
+                <FormField label="Data">
+                  <Input type="date" value={a.data} onChange={(e) => set({ anteriores: estado.anteriores.map((x, k) => (k === i ? { ...x, data: e.target.value } : x)) })} />
+                </FormField>
+                <FormField label="Objeto (opcional)">
+                  <Input value={a.objeto} onChange={(e) => set({ anteriores: estado.anteriores.map((x, k) => (k === i ? { ...x, objeto: e.target.value } : x)) })} />
+                </FormField>
+              </div>
+              <button type="button" className={botaoRemover} onClick={() => set({ anteriores: estado.anteriores.filter((_, k) => k !== i) })}>Remover</button>
+            </div>
+          ))}
+          <button type="button" className={botaoLink} onClick={() => set({ anteriores: [...estado.anteriores, { numero: "", data: "", objeto: "" }] })}>+ Citar aditivo anterior</button>
+        </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
         <FormField label="Data do aditivo" required error={erros.data_documento}>

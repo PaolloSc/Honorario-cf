@@ -27,6 +27,7 @@ from app.models.documentos_complementares import (
     TIPO_SUBSTABELECIMENTO,
     TIPOS_COMPLEMENTARES,
     AditivoAnterior,
+    AditivoRequest,
     DistratoRequest,
     SubstabelecimentoRequest,
 )
@@ -196,6 +197,8 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
             # Servidor manda nos campos derivados do contrato de origem.
             form_origem = form_data_atual(origem, db)
             data.contratantes = form_origem.get("contratantes") or []
+            if isinstance(data, AditivoRequest):
+                data.objeto_contrato_origem = ""  # so' vale sem origem
             # So aditivo assinado e' citado como celebrado; a numeracao conta tambem os rascunhos.
             data.aditivos_anteriores = _aditivos_anteriores(origem.contract_id, db, so_assinados=True)
             if tipo == TIPO_ADITIVO:
@@ -204,7 +207,18 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
                 raise HTTPException(409, "Já existe um distrato para este contrato")
     elif not isinstance(data, SubstabelecimentoRequest):
         data.contratantes = _partes_informadas(data)  # sem origem (contrato antigo fora do sistema)
-        data.aditivos_anteriores = []
+        if isinstance(data, AditivoRequest):
+            data.objeto_contrato_origem = data.objeto_contrato_origem.strip()
+            if not data.objeto_contrato_origem:
+                raise _erro_campo("objeto_contrato_origem", "Informe o objeto do contrato original")
+            # So' vale o que e' anterior a este aditivo; um numero por vez.
+            vistos = {}
+            for a in data.aditivos_anteriores:
+                if a.numero < data.numero:
+                    vistos[a.numero] = a
+            data.aditivos_anteriores = [vistos[k] for k in sorted(vistos)]
+        else:
+            data.aditivos_anteriores = []
     return data, origem, aviso
 
 
