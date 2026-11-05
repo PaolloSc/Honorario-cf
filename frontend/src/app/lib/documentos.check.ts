@@ -48,14 +48,21 @@ assert.ok(validar("aditivo", { ...ad, alteracoes: [] }).alteracoes);
 assert.deepEqual(Object.keys(validar("aditivo", { ...ad, objeto: "", alteracoes: [alt("alterar"), alt("excluir"), alt("adicionar")] })).sort(),
   ["alteracoes.0.clausula", "alteracoes.0.texto", "alteracoes.1.clausula", "alteracoes.2.texto", "objeto"]);
 
-// Distrato exige a data e o objeto do contrato original.
+// Distrato exige a data e o objeto do contrato original e, sempre, os dados do substabelecimento
+// (decisão de 05/11/2026: o substabelecimento sem reserva sempre acompanha o distrato).
 assert.deepEqual(Object.keys(validar("distrato", estadoInicial("distrato", "2026-10-16"))).sort(),
-  ["data_contrato_origem", "objeto_contrato_origem"]);
+  ["data_contrato_origem", "objeto_contrato_origem", "processos.0.numero", "substabelecentes", "substabelecidos.0.nome", "substabelecidos.0.oab"]);
 
-// Distrato: só com "substabelecer e devolver" pede e envia os dados do substabelecimento.
-const dis = { ...(estadoInicial("distrato", "2026-10-16") as any), data_contrato_origem: "2020-01-01", objeto_contrato_origem: "x" };
+const dadosSub = {
+  substabelecentes: [{ nome: "Sócia", email: "s@cf.com", oab: { numero: "1", uf: "MG" } }],
+  substabelecidos: [{ nome: "Novo", oab: { numero: "2", uf: "SP" } }],
+  processos: [{ tipo: "Processo", numero: "1234567-49.2020.8.13.0024", descricao: "" }],
+};
+const dis = { ...(estadoInicial("distrato", "2026-10-16") as any), data_contrato_origem: "2020-01-01", objeto_contrato_origem: "x", ...dadosSub };
 assert.deepEqual(validar("distrato", dis), {});
-assert.equal((montarPayload("distrato", dis, "o") as any).substabelecimento, null);
+const pBase = montarPayload("distrato", dis, "o") as any;
+assert.equal(pBase.substabelecer_e_devolver, true);
+assert.ok(pBase.substabelecimento, "substabelecimento sempre vai junto");
 // Pagamento: valor em reais no formato brasileiro; com valor exige a data; sem valor não envia nada.
 assert.equal(valorEmReais("4.000,50"), 4000.5);
 assert.equal(valorEmReais("R$ 4000"), 4000);
@@ -75,12 +82,8 @@ assert.equal(pg.pagamento_valor, 4000);
 assert.equal(pg.pagamento_data, "2026-11-30");
 assert.equal((montarPayload("distrato", dis, "o") as any).pagamento_valor, null);
 assert.equal((estadoDoFormData("distrato", pg, "h") as any).pagamento_valor, "4000");
-// Processo judicial (contencioso): o substabelecimento é obrigatório e vai junto, mesmo sem marcar a opção.
-const disCont = { ...dis, contencioso: true };
-for (const k of ["substabelecentes", "processos.0.numero"]) assert.ok(validar("distrato", disCont)[k], k);
-assert.equal((montarPayload("distrato", disCont, "o") as any).substabelecer_e_devolver, true);
 assert.equal((estadoInicial("distrato", "2026-10-16") as any).ressalva_exito, true);
-const disSub = { ...dis, substabelecer_e_devolver: true };
+const disSub = { ...(estadoInicial("distrato", "2026-10-16") as any), data_contrato_origem: "2020-01-01", objeto_contrato_origem: "x" };
 // Prazo do substabelecimento: 1 a 90 dias (padrão 10).
 assert.equal((montarPayload("distrato", disSub, "o") as any).prazo_substabelecimento_dias, 10);
 for (const dias of ["0", "91", ""]) assert.ok(validar("distrato", { ...disSub, prazo_substabelecimento_dias: dias }).prazo_substabelecimento_dias, dias);
