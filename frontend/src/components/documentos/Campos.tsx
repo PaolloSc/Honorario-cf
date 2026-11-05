@@ -128,10 +128,10 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
 
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Quitação</h3>
       <Checkbox
-        label="Ressalvar honorários de êxito (proporcionais) e de sucumbência"
+        label="Ressalvar honorários de êxito (proporcionais)"
         checked={estado.ressalva_exito}
         onChange={(v) => set({ ressalva_exito: v })}
-        hint="Já vem marcado quando o contrato de origem tem honorário de êxito. O êxito é devido na proporção dos serviços prestados até o distrato, mais a sucumbência (art. 23 da Lei 8.906/94). Desmarcado, a quitação é total."
+        hint="Já vem marcado quando o contrato de origem tem honorário de êxito. O êxito é devido na proporção dos serviços prestados até o distrato, Desmarcado, não há ressalva de êxito. Os honorários de sucumbência (art. 23 da Lei 8.906/94) são sempre ressalvados."
       />
       <Checkbox
         label="Envolve processo judicial"
