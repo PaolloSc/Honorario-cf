@@ -799,14 +799,15 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                       <FormField label="Incidência">
                         <Select
-                          value={escopo.exito.incidencia || ""}
+                          value={escopo.exito.incidencia === "beneficio_tributario" ? "beneficio_fiscal" : escopo.exito.incidencia || ""}
                           onChange={(e) =>
                             updateExito(idx, { incidencia: e.target.value })
                           }
                           options={[
                             { value: "beneficio_economico", label: "Benefício econômico" },
                             { value: "beneficio_financeiro", label: "Benefício financeiro" },
-                            { value: "beneficio_tributario", label: "Benefício tributário" },
+                            { value: "beneficio_fiscal", label: "Benefício fiscal" },
+                            { value: "qualquer_valor_recebido", label: "Qualquer valor recebido pelo cliente" },
                             { value: "todos", label: "Todos os benefícios" },
                           ]}
                           placeholder="Selecione..."
