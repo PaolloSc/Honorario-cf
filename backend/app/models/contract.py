@@ -3,7 +3,7 @@
 import re
 from datetime import date
 from enum import Enum
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
  
 from pydantic import BaseModel, Field, ValidationInfo, model_validator
 
@@ -392,6 +392,9 @@ class ContratoRequest(LimiteTamanhos):
     email_destinatario: Optional[str] = None
     # {id da clausula (ex.: "7.2"): ajuste}; aplicado pelo gerador ao montar o DOCX.
     ajustes_texto: dict[str, AjusteTexto] = Field(default_factory=dict)
+    # Escolhas da etapa 7 (e-mails de envio, testemunhas, socio que assina): so
+    # guardadas no form_data para a tela reabrir com elas; o gerador nao usa.
+    envio: Optional[dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _conferir(self, info: ValidationInfo) -> "ContratoRequest":
