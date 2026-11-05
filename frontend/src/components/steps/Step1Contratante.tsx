@@ -109,13 +109,19 @@ export default function Step1Contratante({
     Record<string, { situacao: string; socios: SocioReceita[] }>
   >({});
 
+  // Lista corrente (não a do render que iniciou a consulta de CNPJ): a resposta atrasada aplica só
+  // os campos dela sobre o que já foi digitado, sem apagar e-mail etc. Atualizada também na
+  // própria chamada, para duas atualizações no mesmo tick não se sobrescreverem.
+  const atual = useRef(contratantes);
+  atual.current = contratantes;
   const updateContratante = useCallback(
     (index: number, partial: Partial<Contratante>) => {
-      const updated = [...contratantes];
+      const updated = [...atual.current];
       updated[index] = { ...updated[index], ...partial } as Contratante;
+      atual.current = updated;
       onChange(updated);
     },
-    [contratantes, onChange]
+    [onChange]
   );
 
   const addContratante = useCallback(() => {
