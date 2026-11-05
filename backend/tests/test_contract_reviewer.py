@@ -202,3 +202,27 @@ def test_so_do_digitado_descarta_critica_ao_rotulo():
         {"trecho": "vencimeto", "sugestao": "vencimento"},
     ]
     assert [a["trecho"] for a in so_do_digitado(achados, data)] == ["vencimeto"]
+
+
+def test_thinking_desligado_por_padrao_e_ligavel_por_config(monkeypatch):
+    enviados = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"content": [{"type": "text", "text": "[]"}]}
+
+    def fake_post(*a, **kw):
+        enviados.append(kw)
+        return FakeResponse()
+
+    monkeypatch.setattr(contract_reviewer.settings, "deepseek_api_key", "fake-key")
+    monkeypatch.setattr(contract_reviewer.httpx, "post", fake_post)
+    contract_reviewer.review_text("x")
+    assert enviados[-1]["json"]["thinking"] == {"type": "disabled"}
+    assert enviados[-1]["timeout"] == 90.0
+    monkeypatch.setattr(contract_reviewer.settings, "deepseek_thinking", True)
+    contract_reviewer.review_text("x")
+    assert "thinking" not in enviados[-1]["json"] and enviados[-1]["timeout"] == 240.0
