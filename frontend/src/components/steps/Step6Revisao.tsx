@@ -261,10 +261,6 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
       const pl = escopo.pro_labore;
       const parc = pl.tipo_parcelamento === "mensal" && pl.numero_parcelas ? ` em ${pl.numero_parcelas}x` : "";
       parts.push(`${formatCurrency(pl.valor_total)}${parc} pró-labore`);
-      for (const ad of pl.adicionais ?? []) {
-        const p2 = ad.tipo_parcelamento === "mensal" && ad.numero_parcelas ? ` em ${ad.numero_parcelas}x` : "";
-        parts.push(`${formatCurrency(ad.valor_total)}${p2} pró-labore adicional (${ad.descricao_fase || "outra fase"})`);
-      }
     } else if (tipo === "mensalidade" && escopo.mensalidade) {
       let s = `${formatCurrency(escopo.mensalidade.valor)}/mês`;
       if (escopo.mensalidade.duracao_meses) s += ` · ${escopo.mensalidade.duracao_meses} meses`;
@@ -275,6 +271,12 @@ function PrecoResumo({ escopo }: { escopo: EscopoItem }) {
       parts.push(`Permuta: ${escopo.permuta.objeto_permuta}`);
     } else {
       parts.push(HONORARIO_LABELS[tipo] || tipo);
+    }
+    const comAdicional = tipo === "permuta" ? undefined : escopo[tipo];
+    for (const ad of comAdicional?.adicionais ?? []) {
+      const p2 = ad.tipo_parcelamento === "mensal" && ad.numero_parcelas ? ` em ${ad.numero_parcelas}x` : "";
+      const nome = tipo === "pro_labore" ? "pró-labore adicional" : `adicional de ${(HONORARIO_LABELS[tipo] || tipo).toLowerCase()}`;
+      parts.push(`${formatCurrency(ad.valor_total)}${p2} ${nome} (${ad.descricao_fase || "outra fase"})`);
     }
   }
  

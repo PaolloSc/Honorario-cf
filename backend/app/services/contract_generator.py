@@ -887,6 +887,7 @@ class ContractGenerator:
             )
 
         self._add_desconto(ht, num)
+        self._add_adicionais(ht, num)
 
     def _com_vencimento(self, data: str | None, obs: str | None, legacy: str | None, *, recorrente: bool = False) -> str:
         """', com vencimento X' — ou '' quando o vencimento não foi informado."""
@@ -938,11 +939,13 @@ class ContractGenerator:
             doc.add_heading("PRÓ-LABORE", level=3)
         num(self._frase_pro_labore(pl, "Os honorários pró-labore"), chave="pagamento")
         self._add_desconto(pl, num)
-        # Valores devidos só se houver outra fase/instância (opcionais; texto condicional).
-        for i, ad in enumerate(pl.adicionais, 1):
+        self._add_adicionais(pl, num, "os honorários pró-labore adicionais")
+
+    def _add_adicionais(self, h, num: "_Numerador", nome: str = "os honorários adicionais") -> None:
+        """Valores devidos só se houver outra fase/instância (opcionais; texto condicional)."""
+        for i, ad in enumerate(h.adicionais, 1):
             fase = self._texto_livre(ad.descricao_fase) or "outra fase ou instância"
-            num(self._frase_pro_labore(ad, f"Caso haja {fase}, os honorários pró-labore adicionais"),
-                chave=f"pagamento_adicional{i}")
+            num(self._frase_pro_labore(ad, f"Caso haja {fase}, {nome}"), chave=f"pagamento_adicional{i}")
 
     def _add_mensalidade(self, doc: Document, m: "Mensalidade", num: "_Numerador", com_subtitulo: bool = False) -> None:
         venc = self._com_vencimento(m.dia_vencimento_data, m.dia_vencimento_obs, m.dia_vencimento, recorrente=True)
@@ -1001,6 +1004,7 @@ class ContractGenerator:
             num(f"{ativo} no sistema do Tribunal ou do respectivo órgão.", chave="ativo")
 
         self._add_desconto(m, num)
+        self._add_adicionais(m, num)
 
     def _add_exito(self, doc: Document, ex: "Exito", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:
@@ -1079,6 +1083,7 @@ class ContractGenerator:
             )
 
         self._add_desconto(ex, num)
+        self._add_adicionais(ex, num)
 
     def _add_permuta(self, doc: Document, perm: "Permuta", num: "_Numerador", com_subtitulo: bool = False) -> None:
         if com_subtitulo:

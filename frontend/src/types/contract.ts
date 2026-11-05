@@ -140,6 +140,7 @@ export interface ComDesconto {
 }
 
 export interface HoraTrabalhada extends ComDesconto {
+  adicionais?: HonorarioAdicional[];
   valor_hora: number;
   tem_teto_mensal: boolean;
   valor_teto_mensal?: number;
@@ -155,8 +156,9 @@ export interface HoraTrabalhada extends ComDesconto {
   tem_hora_fora_expediente: boolean;
 }
  
-/** Pró-labore devido só se houver outra fase ou instância (ex.: 2ª instância, fase recursal). */
-export interface ProLaboreAdicional extends Omit<ProLabore, "adicionais"> {
+/** Valor devido só se houver outra fase ou instância (ex.: 2ª instância, fase recursal).
+ * Existe em todo honorário com valor: pró-labore, hora trabalhada, mensalidade e êxito. */
+export interface HonorarioAdicional extends Omit<ProLabore, "adicionais"> {
   descricao_fase: string;
 }
 
@@ -164,7 +166,7 @@ export interface ProLabore extends ComDesconto {
   /** 1ª parcela em data fixa; as demais todo mês no dia_vencimento (padrão: o dia da 1ª). */
   data_primeira_parcela?: string;
   dia_vencimento?: number;
-  adicionais?: ProLaboreAdicional[];
+  adicionais?: HonorarioAdicional[];
   valor_total: number;
   tem_parcelamento: boolean; // legado: virou tipo_parcelamento "mensal"
   tipo_parcelamento?: "mensal" | "customizado";
@@ -183,6 +185,7 @@ export interface ProLabore extends ComDesconto {
 }
  
 export interface Mensalidade extends ComDesconto {
+  adicionais?: HonorarioAdicional[];
   valor: number;
   subtipo: SubtipoMensalidade;
   dia_vencimento: string;
@@ -198,6 +201,7 @@ export interface Mensalidade extends ComDesconto {
 }
  
 export interface Exito extends ComDesconto {
+  adicionais?: HonorarioAdicional[];
   subtipo: SubtipoExito;
   percentual?: number;
   incidencia: string;

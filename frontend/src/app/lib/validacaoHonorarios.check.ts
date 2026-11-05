@@ -66,6 +66,14 @@ const comAd = (ad: object) => escopo(pl({ adicionais: [ad] }));
 assert.equal(errosDoEscopo(comAd({ descricao_fase: "", valor_total: 0 }), "E").length, 2);
 assert.deepEqual(errosDoEscopo(comAd({ descricao_fase: "2ª instância", valor_total: 14000 }), "E"), []);
 assert.equal(errosDoEscopo(comAd({ descricao_fase: "2ª instância", valor_total: 14000, tipo_parcelamento: "mensal", numero_parcelas: 5 }), "E").length, 1);
+// Adicional também existe na mensalidade e no êxito (mesmas regras)
+const mensAd = (ad: object) => ({ honorarios: ["mensalidade"], mensalidade: { valor: 2000, subtipo: "por_processo", dia_vencimento: "10", adicionais: [ad] } }) as never;
+assert.deepEqual(errosDoEscopo(mensAd({ descricao_fase: "", valor_total: 0 }), "E"), [
+  "E: adicional de mensalidade 1: informe a fase ou instância (ex.: 2ª instância).",
+  "E: adicional de mensalidade 1: informe o valor (maior que zero).",
+]);
+assert.deepEqual(errosDoEscopo(mensAd({ descricao_fase: "2ª instância", valor_total: 5000 }), "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "x", adicionais: [{ descricao_fase: "", valor_total: 1 }] } } as never, "E").length, 1);
 // Torna parcelada precisa de valor e data da 1ª parcela
 const torna = (extra: object) => ({ honorarios: ["permuta"], permuta: { objeto_permuta: "x", tem_torna: true, numero_parcelas_torna: 4, ...extra } }) as never;
 assert.equal(errosDoEscopo(torna({}), "E").length, 2);
