@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
  
 import re
+from datetime import date
 from enum import Enum
 from typing import Literal, Optional
  
@@ -170,7 +171,7 @@ class HoraTrabalhada(_ComDesconto):
     tem_hora_fora_expediente: bool = True
  
  
-class ProLabore(_ComDesconto):
+class _ProLaboreBase(_ComDesconto):
     valor_total: float
     tem_parcelamento: bool = False  # legado: virou tipo_parcelamento="mensal"
     tipo_parcelamento: Optional[Literal["mensal", "customizado"]] = None
@@ -183,6 +184,10 @@ class ProLabore(_ComDesconto):
     vencimento_parcelas: Optional[str] = None
     vencimento_parcelas_data: Optional[str] = None
     vencimento_parcelas_obs: Optional[str] = None
+    # Parcelamento automatico: 1a parcela em data fixa, demais no dia de cada mes (dia_vencimento
+    # ou o dia da 1a parcela); o valor de cada parcela sai de valor_total / numero_parcelas.
+    data_primeira_parcela: Optional[str] = None
+    dia_vencimento: Optional[int] = Field(None, ge=1, le=31)
     # legado: a vigencia foi para Acessorios (vigencia_*)
     data_inicio: Optional[str] = None
     data_fim: Optional[str] = None
@@ -194,6 +199,15 @@ class ProLabore(_ComDesconto):
         if isinstance(data, dict) and not data.get("tipo_parcelamento") and data.get("tem_parcelamento"):
             data = {**data, "tipo_parcelamento": "mensal"}
         return data
+
+
+class ProLaboreAdicional(_ProLaboreBase):
+    """Pró-labore devido só se houver outra fase ou instância (ex.: 2ª instância, fase recursal)."""
+    descricao_fase: str = ""
+
+
+class ProLabore(_ProLaboreBase):
+    adicionais: list[ProLaboreAdicional] = Field(default_factory=list)
  
  
 class Mensalidade(_ComDesconto):
@@ -247,6 +261,10 @@ class Permuta(_ComDesconto):
     tem_torna: bool = False
     valor_torna: Optional[float] = None
     forma_pagamento_torna: Optional[str] = None
+    # Torna parcelada (valor_torna / numero_parcelas; 1a parcela em data fixa)
+    numero_parcelas_torna: Optional[int] = Field(None, ge=1)
+    data_primeira_parcela_torna: Optional[str] = None
+    dia_vencimento_torna: Optional[int] = Field(None, ge=1, le=31)
  
  
 class EscopoItem(BaseModel):
@@ -426,6 +444,24 @@ def _conferir_participacao(p: "Participacao") -> None:
             raise ValueError("O valor da participação não pode ser negativo.")
 
 
+
+def _checar_parcelamento_pl(pl, pre: str, rotulo: str) -> None:
+    if pl.tipo_parcelamento != "mensal":
+        return
+    n = pl.numero_parcelas or 0
+    if pl.data_primeira_parcela:  # parcelamento automatico: a parcela sai do total
+        try:
+            date.fromisoformat(pl.data_primeira_parcela[:10])
+        except ValueError:
+            raise ValueError(pre + f"{rotulo}: data da primeira parcela inválida.")
+        if n < 1 or not pl.valor_total or pl.valor_total <= 0:
+            raise ValueError(pre + f"{rotulo} parcelado precisa do valor total e do número de parcelas.")
+        return
+    if not (n > 0 and pl.valor_parcela and pl.valor_parcela > 0):
+        raise ValueError(pre + f"{rotulo} mensal precisa do número de parcelas e do valor da parcela.")
+    if pl.valor_total > 0 and abs(n * pl.valor_parcela - pl.valor_total) > 0.01 * n:
+        raise ValueError(pre + f"{rotulo}: número de parcelas × valor da parcela não bate com o valor total.")
+
 def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
     h = e.honorarios
     pre = f"Escopo {i}: "
@@ -462,11 +498,11 @@ def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
         checks.append((e.hora_trabalhada.valor_hora, "hora trabalhada"))
     pl = e.pro_labore
     if TipoHonorario.PRO_LABORE in h and pl:
-        if pl.tipo_parcelamento == "mensal":
-            if not (pl.numero_parcelas and pl.numero_parcelas > 0 and pl.valor_parcela and pl.valor_parcela > 0):
-                raise ValueError(pre + "pró-labore mensal precisa do número de parcelas e do valor da parcela.")
-            if pl.valor_total > 0 and abs(pl.numero_parcelas * pl.valor_parcela - pl.valor_total) > 0.01 * pl.numero_parcelas:
-                raise ValueError(pre + "pró-labore: número de parcelas × valor da parcela não bate com o valor total.")
+        _checar_parcelamento_pl(pl, pre, "pró-labore")
+        for ad in pl.adicionais:
+            _checar_parcelamento_pl(ad, pre, "pró-labore adicional")
+            if not (ad.tipo_parcelamento == "customizado" and (ad.parcelamento_customizado or "").strip()):
+                checks.append((ad.valor_total, "pró-labore adicional"))
         # parcelamento descrito em texto pode ficar sem total
         if not (pl.tipo_parcelamento == "customizado" and (pl.parcelamento_customizado or "").strip()):
             checks.append((pl.valor_total, "pró-labore"))
