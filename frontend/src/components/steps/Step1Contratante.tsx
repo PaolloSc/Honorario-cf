@@ -5,6 +5,7 @@ import FormField, {
   Input,
   Select,
 } from "@/components/ui/FormField";
+import { consultaCompleta } from "@/app/lib/validarContratantes";
 import { lookupCNPJ, sugerirClientes, type SocioReceita, type SugestaoCliente } from "@/app/lib/api";
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import type {
@@ -15,7 +16,7 @@ import type {
   RepresentantePJ,
   TipoPessoa,
 } from "@/types/contract";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function toTitleCase(str: string): string {
   return str
@@ -108,13 +109,19 @@ export default function Step1Contratante({
     Record<string, { situacao: string; socios: SocioReceita[] }>
   >({});
 
+  // Lista corrente (não a do render que iniciou a consulta de CNPJ): a resposta atrasada aplica só
+  // os campos dela sobre o que já foi digitado, sem apagar e-mail etc. Atualizada também na
+  // própria chamada, para duas atualizações no mesmo tick não se sobrescreverem.
+  const atual = useRef(contratantes);
+  atual.current = contratantes;
   const updateContratante = useCallback(
     (index: number, partial: Partial<Contratante>) => {
-      const updated = [...contratantes];
+      const updated = [...atual.current];
       updated[index] = { ...updated[index], ...partial } as Contratante;
+      atual.current = updated;
       onChange(updated);
     },
-    [contratantes, onChange]
+    [onChange]
   );
 
   const addContratante = useCallback(() => {
@@ -200,16 +207,24 @@ export default function Step1Contratante({
           ...prev,
           [limparCNPJ(cnpj)]: { situacao: data.situacao_cadastral || "", socios: data.socios ?? [] },
         }));
+        // cnpj junto: updateContratante usa a lista do render em que a consulta começou, que
+        // ainda tinha o CNPJ sem o último dígito; sem isso o campo voltava a 13 dígitos.
         updateContratante(index, {
+          cnpj: limparCNPJ(cnpj),
           razao_social: data.razao_social,
           endereco: data.endereco,
         });
-        setCnpjLoaded((prev) => new Set(prev).add(index));
-        setCnpjManual((prev) => {
+        // Receita sem razão social ou sem endereço: não trava os campos (readOnly e vazio
+        // impedia de avançar); o usuário completa à mão.
+        const completa = consultaCompleta(data);
+        const trocar = (add: boolean) => (prev: Set<number>) => {
           const next = new Set(prev);
-          next.delete(index);
+          if (add) next.add(index);
+          else next.delete(index);
           return next;
-        });
+        };
+        setCnpjLoaded(trocar(completa));
+        setCnpjManual(trocar(!completa));
       } catch (err) {
         console.error("[CNPJ Lookup] Error:", err);
         const msg = err instanceof Error ? err.message : "erro desconhecido";
@@ -217,7 +232,7 @@ export default function Step1Contratante({
         setCnpjManual((prev) => new Set(prev).add(index));
         // Razão social/endereço de OUTRO CNPJ (consulta anterior) não podem sobrar no
         // contrato do novo; o que foi digitado à mão fica.
-        if (cnpjLoaded.has(index)) updateContratante(index, { razao_social: "", endereco: "" });
+        if (cnpjLoaded.has(index)) updateContratante(index, { cnpj: limparCNPJ(cnpj), razao_social: "", endereco: "" });
         setCnpjLoaded((prev) => {
           const next = new Set(prev);
           next.delete(index);
@@ -424,20 +439,31 @@ function PJForm({
         }]
       : []);
 
+  // Consulta sozinha quando o CNPJ digitado fica válido; uma vez por CNPJ (o botão força de novo).
+  const ultimoAuto = useRef("");
+  function mudarCNPJ(valor: string) {
+    const cnpj = limparCNPJ(valor);
+    onUpdate({ cnpj });
+    if (cnpjValido(cnpj) && cnpj !== ultimoAuto.current) {
+      ultimoAuto.current = cnpj;
+      onCNPJLookup(cnpj);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="CNPJ" required hint="Digite o CNPJ para buscar dados automaticamente">
         <div className="flex gap-2">
           <Input
             value={formatarCNPJ(data.cnpj)}
-            onChange={(e) => onUpdate({ cnpj: limparCNPJ(e.target.value) })}
+            onChange={(e) => mudarCNPJ(e.target.value)}
             placeholder="00.000.000/0000-00 ou 12.ABC.345/01DE-35"
             maxLength={18}
             required
           />
           <button
             type="button"
-            onClick={() => onCNPJLookup(data.cnpj)}
+            onClick={() => { ultimoAuto.current = limparCNPJ(data.cnpj); onCNPJLookup(data.cnpj); }}
             disabled={loadingCNPJ}
             className="px-3 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark transition disabled:opacity-50 whitespace-nowrap"
           >
@@ -585,7 +611,7 @@ function RepresentantesForm({
                 placeholder="000.000.000-00"
               />
             </FormField>
-            <FormField label="E-mail do Representante" required hint="Obrigatório: o representante assina o contrato.">
+            <FormField label="E-mail do Representante" hint="Opcional. Se informado, o representante assina; sem e-mail de nenhum representante, assina o e-mail da empresa.">
               <Input
                 type="email"
                 value={rep.email || ""}

@@ -34,6 +34,11 @@ function isValidCPF(cpf: string): boolean {
   return true;
 }
 
+/** A consulta de CNPJ trouxe razão social E endereço? Se não, os campos continuam editáveis. */
+export function consultaCompleta(d: { razao_social?: string; endereco?: string }): boolean {
+  return !!text(d.razao_social) && !!text(d.endereco);
+}
+
 export function validarContratantes(data: { contratantes: Contratante[] }, cnpjValido: (c: string) => boolean): string[] {
   const errors: string[] = [];
 
@@ -47,7 +52,8 @@ export function validarContratantes(data: { contratantes: Contratante[] }, cnpjV
 
     if (contratante.tipo === "PF") {
       if (!text(contratante.nome)) errors.push(`${label}: informe o nome completo.`);
-      if (!isValidCPF(contratante.cpf ?? "")) errors.push(`${label}: CPF inválido.`);
+      if (!text(contratante.cpf)) errors.push(`${label}: informe o CPF.`);
+      else if (!isValidCPF(contratante.cpf ?? "")) errors.push(`${label}: CPF inválido.`);
       if (!text(contratante.estado_civil)) errors.push(`${label}: informe o estado civil.`);
       if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
       if (!text(contratante.endereco)) errors.push(`${label}: informe o endereço completo.`);
@@ -58,15 +64,15 @@ export function validarContratantes(data: { contratantes: Contratante[] }, cnpjV
     if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
     if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ ou informe a Razão Social.`);
     if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ ou informe o endereço.`);
-    // Quem tem nome aqui assina o contrato: sem e-mail, ficava fora da assinatura
-    // sem aviso — e empresa que exige dois administradores saía com um só.
+    // E-mail do representante é opcional: com e-mail ele assina; se nenhum tiver, assina o
+    // e-mail da empresa (obrigatório acima). Preenchido, tem de ser válido.
     (contratante.representantes ?? []).forEach((rep, i) => {
       // Linha so com os padroes (nacionalidade/profissao) e' ignorada; com nome, CPF ou e-mail, vale o minimo.
       if (!text(rep.nome) && (text(rep.cpf) || text(rep.email))) {
         errors.push(`${label}: informe o nome do representante ${i + 1}.`);
       }
-      if (text(rep.nome) && !isEmail(rep.email)) {
-        errors.push(`${label}: informe o e-mail do representante ${text(rep.nome)} (ele assina o contrato).`);
+      if (text(rep.email) && !isEmail(rep.email)) {
+        errors.push(`${label}: e-mail inválido do representante ${text(rep.nome) || i + 1}.`);
       }
       if (text(rep.cpf) && !isValidCPF(rep.cpf!)) {
         errors.push(`${label}: CPF inválido do representante ${text(rep.nome) || "sem nome"}.`);
