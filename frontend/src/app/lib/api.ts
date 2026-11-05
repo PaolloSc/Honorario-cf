@@ -437,6 +437,8 @@ export interface ProcessoPlanilha {
   tribunal?: string | null;
   tipo: string;
   descricao: string;
+  /** A descrição (partes) veio do Legal One, não da planilha. */
+  partes_legalone?: boolean;
 }
 
 async function chamarProcessos<T>(path: string, init?: RequestInit): Promise<T> {
