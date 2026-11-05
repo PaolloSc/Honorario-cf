@@ -34,6 +34,11 @@ function isValidCPF(cpf: string): boolean {
   return true;
 }
 
+/** A consulta de CNPJ trouxe razão social E endereço? Se não, os campos continuam editáveis. */
+export function consultaCompleta(d: { razao_social?: string; endereco?: string }): boolean {
+  return !!text(d.razao_social) && !!text(d.endereco);
+}
+
 export function validarContratantes(data: { contratantes: Contratante[] }, cnpjValido: (c: string) => boolean): string[] {
   const errors: string[] = [];
 
@@ -47,7 +52,8 @@ export function validarContratantes(data: { contratantes: Contratante[] }, cnpjV
 
     if (contratante.tipo === "PF") {
       if (!text(contratante.nome)) errors.push(`${label}: informe o nome completo.`);
-      if (!isValidCPF(contratante.cpf ?? "")) errors.push(`${label}: CPF inválido.`);
+      if (!text(contratante.cpf)) errors.push(`${label}: informe o CPF.`);
+      else if (!isValidCPF(contratante.cpf ?? "")) errors.push(`${label}: CPF inválido.`);
       if (!text(contratante.estado_civil)) errors.push(`${label}: informe o estado civil.`);
       if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
       if (!text(contratante.endereco)) errors.push(`${label}: informe o endereço completo.`);

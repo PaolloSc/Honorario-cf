@@ -5,6 +5,7 @@ import FormField, {
   Input,
   Select,
 } from "@/components/ui/FormField";
+import { consultaCompleta } from "@/app/lib/validarContratantes";
 import { lookupCNPJ, sugerirClientes, type SocioReceita, type SugestaoCliente } from "@/app/lib/api";
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import type {
@@ -204,12 +205,17 @@ export default function Step1Contratante({
           razao_social: data.razao_social,
           endereco: data.endereco,
         });
-        setCnpjLoaded((prev) => new Set(prev).add(index));
-        setCnpjManual((prev) => {
+        // Receita sem razão social ou sem endereço: não trava os campos (readOnly e vazio
+        // impedia de avançar); o usuário completa à mão.
+        const completa = consultaCompleta(data);
+        const trocar = (add: boolean) => (prev: Set<number>) => {
           const next = new Set(prev);
-          next.delete(index);
+          if (add) next.add(index);
+          else next.delete(index);
           return next;
-        });
+        };
+        setCnpjLoaded(trocar(completa));
+        setCnpjManual(trocar(!completa));
       } catch (err) {
         console.error("[CNPJ Lookup] Error:", err);
         const msg = err instanceof Error ? err.message : "erro desconhecido";

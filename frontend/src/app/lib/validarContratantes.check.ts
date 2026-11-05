@@ -2,7 +2,7 @@
 //   node src/app/lib/validarContratantes.check.ts
 import assert from "node:assert/strict";
 import { cnpjValido } from "./cnpj.ts";
-import { validarContratantes as v } from "./validarContratantes.ts";
+import { consultaCompleta, validarContratantes as v } from "./validarContratantes.ts";
 
 const CPF = "529.982.247-25"; // CPF valido de teste
 const CNPJ = "11.222.333/0001-81";
@@ -32,4 +32,11 @@ assert.deepEqual(erros([{ ...pj, endereco: "", razao_social: "" }]),
 assert.deepEqual(erros([]), ["Adicione pelo menos um contratante."]);
 // PJ + PF juntos, cada um com seu rotulo
 assert.deepEqual(erros([pj, { ...pf, email: "x" }]), ["Contratante 2: informe um e-mail válido."]);
+// CPF vazio pede o CPF; CPF errado continua "inválido"
+assert.deepEqual(erros([{ ...pf, cpf: "" }]), ["Contratante 1: informe o CPF."]);
+assert.deepEqual(erros([{ ...pf, cpf: "111.111.111-11" }]), ["Contratante 1: CPF inválido."]);
+// Consulta de CNPJ com endereço (ou razão) vazio não trava os campos
+assert.equal(consultaCompleta({ razao_social: "ACME", endereco: "" }), false);
+assert.equal(consultaCompleta({ razao_social: "", endereco: "Rua A" }), false);
+assert.equal(consultaCompleta({ razao_social: "ACME", endereco: "Rua A, 1" }), true);
 console.log("validarContratantes.ts ok");
