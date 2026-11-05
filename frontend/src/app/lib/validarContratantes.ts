@@ -64,15 +64,15 @@ export function validarContratantes(data: { contratantes: Contratante[] }, cnpjV
     if (!isEmail(contratante.email)) errors.push(`${label}: informe um e-mail válido.`);
     if (!text(contratante.razao_social)) errors.push(`${label}: busque o CNPJ ou informe a Razão Social.`);
     if (!text(contratante.endereco)) errors.push(`${label}: busque o CNPJ ou informe o endereço.`);
-    // Quem tem nome aqui assina o contrato: sem e-mail, ficava fora da assinatura
-    // sem aviso — e empresa que exige dois administradores saía com um só.
+    // E-mail do representante é opcional: com e-mail ele assina; se nenhum tiver, assina o
+    // e-mail da empresa (obrigatório acima). Preenchido, tem de ser válido.
     (contratante.representantes ?? []).forEach((rep, i) => {
       // Linha so com os padroes (nacionalidade/profissao) e' ignorada; com nome, CPF ou e-mail, vale o minimo.
       if (!text(rep.nome) && (text(rep.cpf) || text(rep.email))) {
         errors.push(`${label}: informe o nome do representante ${i + 1}.`);
       }
-      if (text(rep.nome) && !isEmail(rep.email)) {
-        errors.push(`${label}: informe o e-mail do representante ${text(rep.nome)} (ele assina o contrato).`);
+      if (text(rep.email) && !isEmail(rep.email)) {
+        errors.push(`${label}: e-mail inválido do representante ${text(rep.nome) || i + 1}.`);
       }
       if (text(rep.cpf) && !isValidCPF(rep.cpf!)) {
         errors.push(`${label}: CPF inválido do representante ${text(rep.nome) || "sem nome"}.`);
