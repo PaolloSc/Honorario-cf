@@ -816,3 +816,30 @@ def test_extincao_do_contrato_tem_o_novo_caput():
     paras = _paras_for(_req_escopos([_escopo("pro_labore")]))
     assert _has(paras, "Em caso de extinção do Contrato, serão aplicadas as seguintes regras a depender do(s) "
                        "tipo(s) de honorário(s) contratado(s): (i) os honorários vencidos")
+
+
+def test_assinaturas_tem_o_mesmo_espaco_para_contratante_contratado_e_testemunha():
+    """A tag do DocuSeal (branca) quebrava em 2-3 linhas na celula e empurrava a linha
+    das partes para baixo; a celula da testemunha comecava vazia. Agora a 1a linha de
+    toda celula tem altura fixa e a tag fixa o tamanho do campo."""
+    import docx as _docx
+    from app.services.contract_generator import ALTURA_TAG, CAMPO_ASSINATURA, ESPACO_ASSINATURA
+
+    for roles in (None, [
+        {"email": "a@a.com", "name": "Fulano de Tal com Nome Bem Comprido", "role": "Contratante"},
+        {"email": "cf@cf.br", "name": "Carvalho & Furtado Advogados", "role": "Contratado"},
+        {"email": "t@t.br", "name": "Testemunha Um", "role": "Testemunha 1"},
+    ]):
+        _, path = ContractGenerator().generate(ContratoRequest(**_base_req()), contract_id="ASSIN_IGUAL",
+                                               signatario_roles=roles)
+        celulas = [c for t in _docx.Document(path).tables
+                   if t._tbl.tblPr.first_child_found_in("w:tblBorders") is None
+                   for r in t.rows for c in r.cells if len(c.paragraphs) > 1 and c.paragraphs[1].text.startswith("_")]
+        assert len(celulas) >= 3
+        for c in celulas:
+            slot, linha = c.paragraphs[0], c.paragraphs[1]
+            assert slot.paragraph_format.line_spacing == ALTURA_TAG, slot.text
+            assert linha.paragraph_format.space_before == ESPACO_ASSINATURA
+            assert linha.text == "_" * 32
+            if slot.text:
+                assert slot.text.endswith(CAMPO_ASSINATURA + "}}") and ";type=signature;role=" in slot.text
