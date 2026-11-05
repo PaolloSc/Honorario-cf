@@ -56,9 +56,18 @@ export default function Step6Revisao({ data }: Step6Props) {
                 <p>{c.razao_social} - CNPJ: {c.cnpj}</p>
                 <p>{c.endereco}</p>
                 <p>{c.email}</p>
-                {c.representante_nome && (
-                  <p>Representante: {c.representante_nome}</p>
-                )}
+                {(c.representantes?.length
+                  ? c.representantes.filter((r) => r.nome)
+                  : c.representante_nome
+                    ? [{ nome: c.representante_nome, cpf: c.representante_cpf, email: c.representante_email }]
+                    : []
+                ).map((r, k) => (
+                  <p key={k}>
+                    Representante: {r.nome}
+                    {r.cpf ? ` - CPF: ${r.cpf}` : ""}
+                    {r.email ? ` - ${r.email}` : ""}
+                  </p>
+                ))}
               </div>
             )}
           </div>
