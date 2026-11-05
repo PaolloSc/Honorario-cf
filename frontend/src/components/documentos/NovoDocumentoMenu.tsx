@@ -22,7 +22,7 @@ function Bloco({ href, titulo, descricao, alerta, children }: {
   );
 }
 
-/** Seção da página do contrato com os três documentos que nascem dele: aditivo, substabelecimento e distrato. */
+/** Seção da página do contrato com os documentos que nascem dele: aditivo e distrato (o substabelecimento sai junto com o distrato, não há ação separada). */
 export default function NovoDocumentoMenu({
   contratoId,
   distratoId,
@@ -31,7 +31,7 @@ export default function NovoDocumentoMenu({
   contratoId: string;
   /** contract_id do distrato já criado (não cancelado), se houver. */
   distratoId?: string;
-  /** Lista de documentos ainda carregando: o 3º bloco não mostra nenhum dos dois estados. */
+  /** Lista de documentos ainda carregando: o bloco do distrato não mostra nenhum dos dois estados. */
   carregando?: boolean;
 }) {
   const url = (tipo: string) => `/documentos/novo?tipo=${tipo}&origem=${contratoId}`;
@@ -39,12 +39,9 @@ export default function NovoDocumentoMenu({
     <section aria-labelledby="docs-do-contrato" className="mb-8 border-t border-border pt-6">
       <h2 id="docs-do-contrato" className="font-display text-base font-semibold text-foreground">Documentos deste contrato</h2>
       <p className="text-sm text-muted mt-1 mb-3.5">Partes e dados do contrato já vêm preenchidos.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <Bloco href={url("aditivo")} titulo="Fazer aditivo" descricao="Muda objeto, valor ou empresas atendidas">
           <path d="M12 5v14M5 12h14" />
-        </Bloco>
-        <Bloco href={url("substabelecimento")} titulo="Fazer substabelecimento" descricao="Passa processos para outros advogados">
-          <path d="M7 7h11l-3-3M17 17H6l3 3" />
         </Bloco>
         {carregando ? (
           <div aria-busy="true" aria-label="Carregando" className={`${CARTAO} border-border animate-pulse`}>
