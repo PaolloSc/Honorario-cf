@@ -284,7 +284,7 @@ class AditivoGenerator(ComplementarGenerator):
 # ── Clausulas do distrato que o Dr. e a revisao juridica ajustam: ficam aqui, fora da logica ──
 DISTRATO_SEM_VALOR = (
     "As Partes reconhecem que os honorários e despesas devidos até a data deste instrumento foram "
-    "integralmente pagos, nada havendo a pagar a qualquer título."
+    "integralmente pagos, nada havendo a pagar a qualquer título, ressalvado o disposto na cláusula {quitacao}."
 )
 DISTRATO_ENCARGOS = (
     "Em caso de atraso no pagamento, incidirão multa de 10% (dez por cento), juros de 1% (um por cento) ao mês "
@@ -297,11 +297,15 @@ DISTRATO_SUBSTABELECIMENTO = (
     "CONTRATANTE, em até {prazo} da indicação, e restituirá os documentos e bens recebidos, com prestação de "
     "contas, nos termos do art. 9º do Código de Ética e Disciplina da OAB."
 )
+# So o exito e' opcional (checkbox) e proporcional/condicionado; a sucumbencia (art. 23) e' ressalvada SEMPRE,
+# em oracao propria. {ainda}: ", ainda," quando ha ressalva de exito antes.
 DISTRATO_RESSALVA_EXITO = (
     ". Ficam ressalvados os honorários de êxito previstos no contrato originário, devidos na proporção dos "
-    "serviços prestados até esta data, apurados se e quando implementada a condição, bem como os honorários "
-    "de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
+    "serviços prestados até esta data, apurados se e quando implementada a condição"
 )
+DISTRATO_RESSALVA_SUCUMBENCIA = ". Ficam{ainda} ressalvados os honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
+# Cláusula de extinção (sempre remete à da quitação, que sempre tem ao menos a ressalva de sucumbência).
+DISTRATO_REMISSAO_QUITACAO = ", ressalvado o disposto na cláusula {quitacao}"
 
 
 class DistratoGenerator(ComplementarGenerator):
@@ -351,16 +355,19 @@ class DistratoGenerator(ComplementarGenerator):
             )
             subclausulas.append(DISTRATO_ENCARGOS)
         else:
-            subclausulas.append(DISTRATO_SEM_VALOR)
+            subclausulas.append(DISTRATO_SEM_VALOR.format(quitacao=n + 1))  # a quitacao e' a clausula seguinte
         if data.substabelecer_e_devolver:
-            prazo = numero_com_extenso(data.prazo_substabelecimento_dias, "dias")
+            dias = data.prazo_substabelecimento_dias
+            prazo = numero_com_extenso(dias, "dia" if dias == 1 else "dias")
             subclausulas.append(DISTRATO_SUBSTABELECIMENTO.format(prazo=prazo))
         for i, texto in enumerate(subclausulas, 1):
             doc.add_paragraph(f"{k}.{i}. {texto}")
 
-        # Com ressalva (opcao do formulario), a quitacao preserva o exito proporcional e a sucumbencia.
-        ressalva = DISTRATO_RESSALVA_EXITO if data.ressalva_exito else ""
-        clausula(
+        # A quitacao sempre preserva a sucumbencia; o exito proporcional so com a opcao do formulario.
+        ressalva = (DISTRATO_RESSALVA_EXITO if data.ressalva_exito else "") + DISTRATO_RESSALVA_SUCUMBENCIA.format(
+            ainda=", ainda," if data.ressalva_exito else ""
+        )
+        quitacao = clausula(
             "Salvo as obrigações previstas neste Distrato, as partes, com o presente instrumento, se dão mútua, "
             "total, completa, irrevogável e irretratável quitação, declarando que nada têm a reclamar extra ou "
             f"judicialmente uma da outra, renunciando a qualquer direito ou pretensão nesse sentido{ressalva}."
@@ -368,7 +375,8 @@ class DistratoGenerator(ComplementarGenerator):
         clausula(
             "O Contrato objeto do presente Distrato resta extinto, sem qualquer ônus, penalidade, dever e/ou "
             "obrigação adicionais entre si, além dos expressamente pactuados neste instrumento, reconhecendo "
-            "ambas as Partes que não há pendências, créditos ou débitos entre elas além dos aqui previstos."
+            "ambas as Partes que não há pendências, créditos ou débitos entre elas além dos aqui previstos"
+            f"{DISTRATO_REMISSAO_QUITACAO.format(quitacao=quitacao)}."
         )
         clausula(
             "A tolerância de qualquer das partes com descumprimento de obrigações constantes no presente "

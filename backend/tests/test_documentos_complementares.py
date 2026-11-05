@@ -366,7 +366,9 @@ def test_distrato_quitacao_total_com_substabelecer(client):
 RESSALVA = ("Ficam ressalvados os honorários de êxito previstos no contrato originário, devidos na proporção dos "
             "serviços prestados até esta data, apurados se e quando implementada a condição")
 SEM_VALOR = ("As Partes reconhecem que os honorários e despesas devidos até a data deste instrumento foram "
-             "integralmente pagos, nada havendo a pagar a qualquer título.")
+             "integralmente pagos, nada havendo a pagar a qualquer título, ressalvado o disposto na cláusula 3.")
+SUCUMBENCIA = "ressalvados os honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
+REMISSAO = "além dos aqui previstos, ressalvado o disposto na cláusula 3."
 SUBSTAB = "substabelecerá, sem reserva de poderes, ao(s) advogado(s) indicado(s) por escrito pela CONTRATANTE"
 @pytest.mark.parametrize("ressalva,substabelecer", [
     (True, True), (True, False), (False, False),
@@ -701,6 +703,29 @@ def test_distrato_substabelecimento_prazo_configuravel_e_art_9_do_ced(client, ex
             "contas, nos termos do art. 9º do Código de Ética e Disciplina da OAB.") in texto
 
 
+def test_distrato_ressalva_de_sucumbencia_em_oracao_propria_mesmo_sem_a_de_exito(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": False}))
+    assert "nesse sentido. Ficam ressalvados os honorários de sucumbência, nos termos do art. 23" in texto
+    assert "êxito previstos" not in texto and "na proporção" not in texto
+
+
+def test_distrato_sucumbencia_nao_herda_proporcao_nem_condicao_do_exito(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True}))
+    assert "implementada a condição. Ficam, ainda, ressalvados os honorários de sucumbência" in texto
+
+
+def test_distrato_clausula_4_e_2_1_sem_valor_remetem_a_clausula_3(client):
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert "3. Salvo as obrigações" in texto and "4. O Contrato objeto" in texto
+    assert "nada havendo a pagar a qualquer título, ressalvado o disposto na cláusula 3." in texto
+    assert "além dos aqui previstos, ressalvado o disposto na cláusula 3." in texto
+
+
+def test_distrato_prazo_de_um_dia_fica_no_singular(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "prazo_substabelecimento_dias": 1}))
+    assert "em até 1 (um) dia da indicação" in texto and "1 (um) dias" not in texto
+
+
 @pytest.mark.parametrize("dias", [0, 91, -3])
 def test_distrato_prazo_do_substabelecimento_fora_de_1_a_90_da_422(client, dias):
     assert _gerar(client, "distrato", {**DISTRATO, "prazo_substabelecimento_dias": dias}).status_code == 422
@@ -718,6 +743,8 @@ def test_distrato_todas_as_combinacoes_valor_substabelecimento_ressalva(client, 
     assert (SEM_VALOR in texto) is (not com_valor)
     assert (SUBSTAB in texto) is substabelecer
     assert (RESSALVA in texto) is ressalva
+    assert SUCUMBENCIA in texto  # sucumbencia: sempre, independe do checkbox do exito
+    assert REMISSAO in texto  # clausula 4 remete a 3, que sempre tem ressalva
     assert "a contento" not in texto
 
 
