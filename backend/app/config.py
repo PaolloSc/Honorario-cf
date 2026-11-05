@@ -33,9 +33,11 @@ class Settings(BaseSettings):
     # DeepSeek expoe endpoint compativel com a API da Anthropic.
     deepseek_api_key: str = ""
     deepseek_api_base: str = "https://api.deepseek.com/anthropic"
-    # deepseek-v4-pro (thinking mode) pega erros de portugues que o deepseek-chat
-    # (sem thinking) deixa passar em testes reais — ver contract_reviewer.py.
-    deepseek_model: str = "deepseek-v4-pro"
+    # Medido em 05/11/2026 (texto de ~15 campos, 7 erros plantados): v4-pro com thinking
+    # levou ~125s e estourou max_tokens sem devolver nada (0 achados); v4-flash sem thinking
+    # levou ~6,6s e achou os 7. Thinking so' se DEEPSEEK_THINKING=true.
+    deepseek_model: str = "deepseek-v4-flash"
+    deepseek_thinking: bool = False
 
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
 

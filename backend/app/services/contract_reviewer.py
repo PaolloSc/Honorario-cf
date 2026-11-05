@@ -252,6 +252,8 @@ def review_text(document_text: str, avisar_ambiguidade: bool = False) -> list[di
         "system": _SYSTEM_PROMPT + (_AVISO_AMBIGUIDADE if avisar_ambiguidade else ""),
         "messages": [{"role": "user", "content": document_text[:60000]}],
     }
+    if not settings.deepseek_thinking:
+        body["thinking"] = {"type": "disabled"}  # sem raciocinio oculto: ~6s em vez de ~125s
     headers = {
         "x-api-key": settings.deepseek_api_key,
         "anthropic-version": "2023-06-01",
@@ -263,8 +265,8 @@ def review_text(document_text: str, avisar_ambiguidade: bool = False) -> list[di
             f"{settings.deepseek_api_base}/v1/messages",
             json=body,
             headers=headers,
-            # deepseek-v4-pro (thinking mode) chegou a levar 211s em teste real.
-            timeout=240.0,
+            # com thinking ligado chegou a levar 211s; sem ele fica em segundos.
+            timeout=240.0 if settings.deepseek_thinking else 90.0,
         )
         resp.raise_for_status()
     except httpx.HTTPError as e:
