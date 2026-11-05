@@ -191,4 +191,33 @@ const itens = [
 assert.deepEqual(agruparDerivados(itens).map((g) => `${g.derivado ? ">" : ""}${g.item.contract_id}`),
   ["x", "p1", ">d1", ">d2", "o"]);
 
+// Sem contrato de origem (contrato antigo): partes digitadas vao em `contratantes`; com origem, nada disso.
+{
+  const adi = { ...(estadoInicial("aditivo", "2026-11-05") as any), data_contrato_origem: "1990-03-01", objeto: "x", objeto_contrato_origem: "assessoria", anteriores: [{ numero: "1", data: "1991-01-02", objeto: "" }],
+    alteracoes: [{ tipo: "adicionar", clausula: "", texto: "t" }], numero: "2",
+    partes: [{ pj: true, nome: "ANTIGA LTDA", documento: "11.222.333/0001-81", endereco: "Rua A", nacionalidade: "", estado_civil: "", profissao: "", representante_nome: "Jose", representante_cpf: "111.222.333-44" }] };
+  assert.deepEqual(validarBase("aditivo", adi, cnpjValido, true), {});
+  const p = montarPayload("aditivo", adi, null) as any;
+  assert.equal(p.contrato_origem_id, null);
+  assert.equal(p.numero, 2);
+  assert.equal(p.objeto_contrato_origem, "assessoria");
+  assert.deepEqual(p.aditivos_anteriores, [{ numero: 1, data_documento: "1991-01-02", objeto: "" }]);
+  assert.deepEqual((montarPayload("aditivo", { ...adi, numero: "1" }, null) as any).aditivos_anteriores, []);
+  assert.ok("objeto_contrato_origem" in validarBase("aditivo", { ...adi, objeto_contrato_origem: " " }, cnpjValido, true));
+  assert.ok("aditivos_anteriores.0.numero" in validarBase("aditivo", { ...adi, anteriores: [{ numero: "2", data: "", objeto: "" }] }, cnpjValido, true));
+  assert.deepEqual(p.contratantes, [{ razao_social: "ANTIGA LTDA", cnpj: "11.222.333/0001-81", endereco: "Rua A", representantes: [{ nome: "Jose", cpf: "111.222.333-44" }] }]);
+  assert.ok(!("contratantes" in (montarPayload("aditivo", adi, "o") as any)) && !("numero" in (montarPayload("aditivo", adi, "o") as any)));
+  // Sem origem a parte vazia e' cobrada; com origem, nao.
+  const vazio = estadoInicial("distrato", "2026-11-05");
+  assert.ok("contratantes.0.nome" in validarBase("distrato", vazio, cnpjValido, true) && "contratantes.0.documento" in validarBase("distrato", vazio, cnpjValido, true));
+  assert.ok(!("contratantes.0.nome" in validarBase("distrato", vazio, cnpjValido, false)));
+  assert.ok("contratantes.0.documento" in validarBase("distrato", { ...vazio, partes: [{ ...(vazio as any).partes[0], pj: false, nome: "Maria", documento: "123" }] }, cnpjValido, true));
+  // Editar: o form salvo devolve as partes digitadas; com origem o campo volta vazio.
+  const salvo = { contrato_origem_id: null, contratantes: [{ nome: "Maria", cpf: "123.456.789-09", estado_civil: "casada" }], numero: 3 };
+  const volta = estadoDoFormData("aditivo", salvo, "2026-11-05") as any;
+  assert.equal(volta.numero, "3");
+  assert.deepEqual([volta.partes[0].pj, volta.partes[0].nome, volta.partes[0].documento, volta.partes[0].estado_civil], [false, "Maria", "123.456.789-09", "casada"]);
+  assert.equal((estadoDoFormData("aditivo", { ...salvo, contrato_origem_id: "o" }, "2026-11-05") as any).partes[0].nome, "");
+}
+
 console.log("documentos.ts ok");

@@ -36,9 +36,20 @@ _DATA_ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
 class AditivoAnterior(BaseModel):
     """Aditivo ja cadastrado no contrato de origem (servidor)."""
 
-    numero: int
+    numero: int = Field(ge=1, le=99)
     data_documento: Optional[str] = None
     objeto: str = ""
+
+    @field_validator("data_documento")
+    @classmethod
+    def _data_iso(cls, v):
+        if v in (None, ""):
+            return None
+        try:
+            date.fromisoformat(v)
+        except (ValueError, TypeError):
+            raise ValueError("Data inválida (use AAAA-MM-DD)")
+        return v
 
 
 class _DocumentoComplementar(LimiteTamanhos):
@@ -61,8 +72,10 @@ class _DocumentoComplementar(LimiteTamanhos):
 
 
 class _ComOrigem(_DocumentoComplementar):
-    contrato_origem_id: str = Field(min_length=1)
-    contratantes: list[dict] = Field(default_factory=list)  # servidor: copia do contrato de origem
+    # Sem contrato_origem_id o documento e' independente (contrato antigo fora do sistema): as partes
+    # vem do cliente, em `contratantes`. Com origem, o servidor as copia do contrato e descarta as do cliente.
+    contrato_origem_id: Optional[str] = Field(default=None, min_length=1)
+    contratantes: list[dict] = Field(default_factory=list)
     aditivos_anteriores: list[AditivoAnterior] = Field(default_factory=list)  # servidor
 
 
@@ -111,7 +124,10 @@ class AditivoRequest(_ComOrigem):
     # Quando o contrato original foi firmado (nao a data de cadastro na plataforma). Obrigatoria:
     # o contrato de honorarios nao guarda essa data, entao o advogado informa.
     data_contrato_origem: str = Field(min_length=1)
-    numero: int = 1  # servidor: 1 + aditivos ja existentes
+    numero: int = Field(default=1, ge=1, le=99)  # servidor (com origem): 1 + aditivos ja existentes
+    # Sem contrato de origem: objeto do contrato original (obrigatorio) e, se o numero for > 1, os aditivos
+    # anteriores (opcional: so' saem no texto se informados) vem do cliente.
+    objeto_contrato_origem: str = ""
 
     @model_validator(mode="after")
     def _ao_menos_uma_alteracao(self):

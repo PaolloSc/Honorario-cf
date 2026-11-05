@@ -67,6 +67,14 @@ def consultar(http: httpx.Client, c_mun: str, c_trib_nac: str, c_trib_mun: str |
     return 0
 
 
+def _endereco(texto: str) -> dict:
+    """'CEP;logradouro;numero;bairro[;cMun]' -> dict da DPS; sem o 5o campo, municipio = BH."""
+    partes = [x.strip() for x in texto.split(";")]
+    d = dict(zip(("CEP", "xLgr", "nro", "xBairro"), partes[:4]))
+    d["cMun"] = partes[4] if len(partes) > 4 and partes[4] else "3106200"
+    return d
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cnpj", required=True)
@@ -88,7 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tomador-cnpj", default="11222333000181")
     ap.add_argument("--sem-ibscbs", action="store_true")
     ap.add_argument("--tomador-cpf", help="usa CPF no lugar do CNPJ do tomador (11 digitos)")
-    ap.add_argument("--tomador-end", help="CEP;logradouro;numero;bairro (municipio = o da emissao); E0239 exige com IBS/CBS")
+    ap.add_argument("--tomador-nome", help="nome do tomador (padrao: ficticio de teste)")
+    ap.add_argument("--tomador-end", help="CEP;logradouro;numero;bairro[;cMun IBGE] (cMun padrao = BH 3106200); E0239 exige com IBS/CBS")
     ap.add_argument("--descricao", help="xDescServ (padrao: texto de teste sem acento)")
     ap.add_argument("--ver-aplic", help="verAplic (padrao do smoke)")
     ap.add_argument("--assinatura", default="sha256", choices=sorted(PERFIS))
@@ -145,8 +154,8 @@ def main(argv: list[str] | None = None) -> int:
         reg_ap_trib_sn=a.reg_ap_trib_sn, tp_ret_issqn=a.tp_ret_issqn, p_tot_trib_sn=a.p_tot_trib_sn,
         **({"tomador_cpf": re.sub(r"\D", "", a.tomador_cpf)} if a.tomador_cpf else {}),
         **({"descricao": a.descricao} if a.descricao else {}),
-        **({"tomador_end": dict(zip(("CEP", "xLgr", "nro", "xBairro"), (x.strip() for x in a.tomador_end.split(";"))), cMun="3106200")}
-           if a.tomador_end else {}),
+        **({"tomador_nome": a.tomador_nome} if a.tomador_nome else {}),
+        **({"tomador_end": _endereco(a.tomador_end)} if a.tomador_end else {}),
         **({"ver_aplic": a.ver_aplic} if a.ver_aplic else {}),
     )
     if erros := regras_locais(params):
