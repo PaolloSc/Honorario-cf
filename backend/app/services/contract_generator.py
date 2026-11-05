@@ -92,7 +92,14 @@ PALAVRAS_MINUSCULAS_NO_MEIO = frozenset("""
 CLAUSE_NUM_ID = 10
 
 # Folga acima de cada linha de assinatura (espaco para assinar a mao no impresso).
-ESPACO_ASSINATURA = Pt(16)
+ESPACO_ASSINATURA = Pt(28)  # folga acima da linha, igual em toda assinatura
+# 1a linha de cada celula de assinatura: a tag do DocuSeal (ou vazia, nas testemunhas em
+# papel). Altura fixa e fonte minima: a tag nao quebra linha e nao empurra a linha de
+# assinatura para baixo conforme o tamanho do nome — todos os blocos ficam iguais.
+ALTURA_TAG = Pt(6)
+FONTE_TAG = Pt(4)
+# Com a fonte minima, o campo do DocuSeal teria o tamanho do texto; fixa-se o tamanho (px).
+CAMPO_ASSINATURA = ";width=200;height=34"
 
 
 # Secoes cujo texto nao pode ser ajustado na etapa 7 (id da secao -> etapa do wizard onde
@@ -473,13 +480,16 @@ class ContractGenerator:
             # linha e o nome nao entra espaco, senao o rotulo desgruda dela.
             e_linha = set(paragraph.text.strip()) == {"_"}
             paragraph.paragraph_format.space_before = ESPACO_ASSINATURA if e_linha else Pt(0)
+        e_slot = assinatura and (is_tag or not paragraph.text.strip())
+        if e_slot:
+            paragraph.paragraph_format.line_spacing = ALTURA_TAG
 
         for run in paragraph.runs:
             if is_heading and not is_tag:
                 run.text = run.text.upper()
             run.font.name = "Segoe UI"
             run._element.rPr.rFonts.set(qn("w:eastAsia"), "Segoe UI")
-            run.font.size = Pt(12)
+            run.font.size = FONTE_TAG if e_slot and is_tag else Pt(12)
             # Tags DocuSeal ({{...}}) ficam brancas: invisiveis no Word, legiveis p/ o DocuSeal.
             run.font.color.rgb = RGBColor(255, 255, 255) if is_tag else RGBColor(0, 0, 0)
             if is_heading:
@@ -1622,7 +1632,7 @@ class ContractGenerator:
             # 1o paragrafo da celula recebe o campo de assinatura (tag DocuSeal).
             # A tag e' escrita em branco: o DocuSeal a le normalmente, mas ela nao
             # polui o DOCX que o advogado abre no Word (aparecia como texto solto).
-            cell.paragraphs[0].text = tag
+            cell.paragraphs[0].text = tag[:-2] + CAMPO_ASSINATURA + "}}" if tag else ""
             cell.add_paragraph("_" * 32)
             for linha in label.split(chr(10)):
                 cell.add_paragraph(linha)
