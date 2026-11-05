@@ -16,7 +16,7 @@ import type {
   RepresentantePJ,
   TipoPessoa,
 } from "@/types/contract";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function toTitleCase(str: string): string {
   return str
@@ -430,20 +430,31 @@ function PJForm({
         }]
       : []);
 
+  // Consulta sozinha quando o CNPJ digitado fica válido; uma vez por CNPJ (o botão força de novo).
+  const ultimoAuto = useRef("");
+  function mudarCNPJ(valor: string) {
+    const cnpj = limparCNPJ(valor);
+    onUpdate({ cnpj });
+    if (cnpjValido(cnpj) && cnpj !== ultimoAuto.current) {
+      ultimoAuto.current = cnpj;
+      onCNPJLookup(cnpj);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="CNPJ" required hint="Digite o CNPJ para buscar dados automaticamente">
         <div className="flex gap-2">
           <Input
             value={formatarCNPJ(data.cnpj)}
-            onChange={(e) => onUpdate({ cnpj: limparCNPJ(e.target.value) })}
+            onChange={(e) => mudarCNPJ(e.target.value)}
             placeholder="00.000.000/0000-00 ou 12.ABC.345/01DE-35"
             maxLength={18}
             required
           />
           <button
             type="button"
-            onClick={() => onCNPJLookup(data.cnpj)}
+            onClick={() => { ultimoAuto.current = limparCNPJ(data.cnpj); onCNPJLookup(data.cnpj); }}
             disabled={loadingCNPJ}
             className="px-3 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark transition disabled:opacity-50 whitespace-nowrap"
           >
@@ -591,7 +602,7 @@ function RepresentantesForm({
                 placeholder="000.000.000-00"
               />
             </FormField>
-            <FormField label="E-mail do Representante" required hint="Obrigatório: o representante assina o contrato.">
+            <FormField label="E-mail do Representante" hint="Opcional. Se informado, o representante assina; sem e-mail de nenhum representante, assina o e-mail da empresa.">
               <Input
                 type="email"
                 value={rep.email || ""}
