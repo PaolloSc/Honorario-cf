@@ -30,7 +30,7 @@ test.describe("contrato de honorarios: wizard ate a previa", () => {
     await page.getByPlaceholder("000.000.000-00").fill("529.982.247-25");
     await page.locator("select").first().selectOption({ label: "Casado(a)" });
     await page.getByPlaceholder("email@exemplo.com").fill("qa@exemplo.com");
-    await page.getByPlaceholder("00000-000").fill("30112-010");
+    await page.getByPlaceholder("00000-000").first().fill("30112-010");
     await page.getByPlaceholder("Ex: 271").fill("271");
     await expect(page.getByPlaceholder("Preenchido automaticamente pelo CEP")).not.toHaveValue("", { timeout: 20_000 });
     await prox();

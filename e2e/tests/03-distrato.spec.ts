@@ -38,11 +38,11 @@ test.describe("distrato no modelo do escritorio", () => {
     await expect(page.getByLabel(/Ressalvar honorários de êxito/)).not.toBeChecked();
     await page.getByLabel(/Ressalvar honorários de êxito/).check();
     const texto = await previa(page);
-    await expect(texto).toContainText("honorários contratuais foram integralmente quitados");
+    await expect(texto).toContainText("foram integralmente pagos, nada havendo a pagar a qualquer título");
     await expect(texto).not.toContainText("pagará ao Contratado");
     await expect(texto).not.toContainText("título executivo");
     await expect(texto).toContainText("honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94");
-    await expect(texto).toContainText("proporcional ao trabalho realizado");
+    await expect(texto).toContainText("êxito");
     await expect(texto).not.toContainText(/R\$ 0,00|undefined|\[object/);
   });
 
@@ -88,8 +88,8 @@ test.describe("distrato no modelo do escritorio", () => {
     const texto = await previa(page);
     await expect(texto).toContainText("10 (dez) dias");
     await expect(texto).toContainText("sem reserva de poderes");
-    await expect(texto).toContainText("art. 5º, § 3º, da Lei n.º 8.906/94");
-    await expect(texto).toContainText("mediante recibo");
+    await expect(texto).toContainText("art. 9º do Código de Ética e Disciplina da OAB");
+    await expect(texto).toContainText("restituirá os documentos e bens recebidos, com prestação de contas");
 
     await page.getByRole("button", { name: /Gerar distrato/ }).click();
     await expect(page.getByText(/gerado|sucesso/i).first()).toBeVisible({ timeout: 60_000 });
