@@ -707,7 +707,7 @@ class ContractGenerator:
         doc.add_paragraph(
             "CONTRATADO: CARVALHO & FURTADO ADVOGADOS, sociedade simples de advocacia, "
                 "inscrita no CNPJ sob o n. 25.463.159/0001-73, com sede na Rua Antônio de Albuquerque, "
-                "n. 271, 5º andar, Savassi, Belo Horizonte/MG, doravante denominado simplesmente C&F."
+                "n. 271, 5º andar, Savassi, Belo Horizonte/MG, a seguir denominado simplesmente C&F."
         )
 
     def _qualificar_representante(self, r: "RepresentantePJ") -> str:
@@ -970,9 +970,9 @@ class ContractGenerator:
                 VariacaoPrecoMensalidade.REDUCAO_VOLUME: ", com redução por volume",
                 VariacaoPrecoMensalidade.VARIACAO_FASE_PROCESSUAL: ", com variação por fase processual",
             }.get(m.variacao_preco, "")
-            devida = "devida enquanto este estiver ativo" if processo else "devida enquanto esta estiver ativa"
+            devida = "devidos mensalmente enquanto este estiver ativo" if processo else "devidos mensalmente enquanto esta estiver ativa"
             num(
-                f"Os honorários serão pagos por mensalidade{valor} por {tipo_label}, "
+                f"Os honorários de mensalidade serão{valor} por {tipo_label}, "
                 f"{devida}{var_label}{venc}.", chave="pagamento_processo"
             )
 
@@ -1135,8 +1135,6 @@ class ContractGenerator:
             "contudo, igualmente ciente dos canais oficiais de contato do C&F e obrigando-se "
             "a realizar pagamentos somente em conta de titularidade do C&F ou mediante "
             "apresentação de boleto ou outro título em que este seja o beneficiário.",
-            "A CONTRATANTE reconhece que qualquer pagamento realizado em inobservância ao "
-            "previsto neste Contrato será considerado inválido e ineficaz.",
             "As obrigações de pagamento previstas neste Contrato serão devidas, independentemente "
             "de notificação, tão logo se dê o seu vencimento.",
             "Em caso de mudanças legislativas/regulatórias relevantes que alterem a carga "
@@ -1182,7 +1180,7 @@ class ContractGenerator:
             )
 
         chaves = [
-            "gerais.reajuste", "gerais.pagamento", "gerais.fraude", "gerais.pagamento_invalido",
+            "gerais.reajuste", "gerais.pagamento", "gerais.fraude",
             "gerais.vencimento", "gerais.mora", "gerais.mudanca_legislativa", "gerais.faturamento",
             "gerais.solidariedade",
         ]
@@ -1373,7 +1371,10 @@ class ContractGenerator:
             "(iv) os honorários vincendos pactuados por pró-labore serão devidos, "
             "proporcionalmente, observando-se os serviços executados e ainda não remunerados",
         ]
-        base_83 = "Em caso de extinção do Contrato: " + "; ".join(incisos[:-1])
+        base_83 = (
+            "Em caso de extinção do Contrato, serão aplicadas as seguintes regras a depender do(s) "
+            "tipo(s) de honorário(s) contratado(s): " + "; ".join(incisos[:-1])
+        )
 
         has_exito = any(TipoHonorario.EXITO in e.honorarios for e in data.escopos)
         criterio_exito = self._texto_livre(data.acessorios.criterio_extincao_exito)

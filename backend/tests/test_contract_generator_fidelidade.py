@@ -662,7 +662,7 @@ def test_vencimento_vazio_nao_vira_a_definir():
 
 def test_mensalidade_por_pasta_concorda_no_feminino():
     paras = _paras_for(_req_escopos([_escopo("mensalidade", mensalidade_subtipo="por_pasta")]))
-    assert _has(paras, "por pasta, devida enquanto esta estiver ativa, com vencimento")
+    assert _has(paras, "por pasta, devidos mensalmente enquanto esta estiver ativa, com vencimento")
     assert _has(paras, "Considera-se ativa a pasta que não tenha sido definitivamente extinta")
 
 
@@ -789,3 +789,30 @@ def test_exito_beneficio_tributario_antigo_vira_fiscal():
     paras = _paras_for(req)
     assert _has(paras, "sobre o benefício fiscal, corrigido")
     assert not _has(paras, "benefício tributário")
+
+
+def test_mensalidade_por_processo_nova_redacao():
+    esc = _escopo("mensalidade", mensalidade_subtipo="por_processo")
+    esc["mensalidade"]["dia_vencimento_data"] = "2026-01-10"  # o wizard manda a data
+    paras = _paras_for(_req_escopos([esc]))
+    assert _has(paras, "Os honorários de mensalidade serão de R$ 2.000,00 (dois mil reais) por processo, "
+                       "devidos mensalmente enquanto este estiver ativo, com vencimento todo dia 10.")
+
+
+def test_clausula_1_diz_a_seguir_e_nao_doravante():
+    paras = _paras_for(_req_escopos([_escopo("pro_labore")]))
+    assert _has(paras, "a seguir denominado simplesmente C&F")
+    assert not _has(paras, "doravante denominado simplesmente C&F")
+
+
+def test_removida_clausula_de_pagamento_invalido_e_numeracao_segue_sozinha():
+    paras = _preview_paras(_req_escopos([_escopo("pro_labore")]))
+    assert not _has(paras, "invalido e ineficaz") and not _has(paras, "inválido e ineficaz")
+    # a clausula seguinte (vencimento) assume o 4.4
+    assert any(p.startswith("4.4") and "tão logo se dê o seu vencimento" in p for p in paras)
+
+
+def test_extincao_do_contrato_tem_o_novo_caput():
+    paras = _paras_for(_req_escopos([_escopo("pro_labore")]))
+    assert _has(paras, "Em caso de extinção do Contrato, serão aplicadas as seguintes regras a depender do(s) "
+                       "tipo(s) de honorário(s) contratado(s): (i) os honorários vencidos")
