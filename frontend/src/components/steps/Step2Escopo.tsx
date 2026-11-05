@@ -82,7 +82,7 @@ export default function Step2Escopo({
         2. Delimitação do(s) Objeto(s) e Escopo(s)
       </h2>
       <p className="text-sm text-muted mb-6">
-        Selecione os escopos aplicáveis. Para cada escopo selecionado, preencha
+        Selecione os escopos aplicáveis (pelo menos um)<span className="text-danger">*</span>. Para cada escopo selecionado, preencha
         os detalhes adicionais que aparecem (Contexto Inteligente).
       </p>
 

@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import FormularioDocumento from "@/components/documentos/FormularioDocumento";
 import { ehDocumentoComplementar } from "@/app/lib/documentos";
 
-// /documentos/novo?tipo=aditivo|distrato|substabelecimento&origem=<contrato>
+// /documentos/novo?tipo=aditivo|distrato&origem=<contrato>; sem origem = contrato antigo fora do sistema
 function Conteudo() {
   const params = useSearchParams();
   const tipo = params.get("tipo");
@@ -19,11 +19,11 @@ function Conteudo() {
       </div>
     );
   }
-  if (tipo !== "substabelecimento" && !origem) {
+  if (tipo === "substabelecimento") {  // não existe substabelecimento avulso: nasce pelo distrato
     return (
       <div className="max-w-3xl mx-auto px-4 py-12">
-        <div className="rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
-          Aditivo e distrato partem de um contrato: abra o contrato e use &ldquo;Novo documento&rdquo;.
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-foreground">
+          O substabelecimento é gerado junto com o distrato: abra o contrato e use &ldquo;Encerrar contrato (distrato)&rdquo;.
         </div>
         <a href="/contracts" className="mt-4 inline-block text-sm text-primary hover:underline">Voltar para a lista</a>
       </div>

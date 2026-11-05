@@ -27,6 +27,7 @@ from app.models.documentos_complementares import (
     TIPO_SUBSTABELECIMENTO,
     TIPOS_COMPLEMENTARES,
     AditivoAnterior,
+    AditivoRequest,
     DistratoRequest,
     SubstabelecimentoRequest,
 )
@@ -108,6 +109,8 @@ def prefill(
         "aditivos_existentes": len(_derivados(origem.contract_id, db, TIPO_ADITIVO)),
         "data_contrato_origem": _data_contrato_origem(form),
         "status_origem": origem.status,
+        # Distrato: a ressalva de exito nasce marcada so quando o contrato de origem tem honorario de exito.
+        "origem_tem_exito": any(isinstance(e, dict) and e.get("exito") for e in (form.get("escopos") or [])),
         "aviso": None if origem.status == "assinado" else "O contrato original ainda não foi assinado.",
     }
 
@@ -139,6 +142,36 @@ def _validar_distrato_origem(data: SubstabelecimentoRequest, user: CurrentUser, 
         raise _erro_campo("distrato_origem_id", "O distrato é de outro cliente")
 
 
+_CAMPOS_PARTE = ("nome", "razao_social", "cnpj", "cpf", "nacionalidade", "estado_civil", "profissao", "endereco", "email")
+
+
+def _partes_informadas(data) -> list[dict]:
+    """Documento sem contrato de origem: as partes vem do cliente. Fica so' o que a qualificacao usa
+    (nome, documento, endereco...), com o documento conferido, e ao menos uma parte com nome e CPF/CNPJ."""
+    partes = []
+    for i, c in enumerate(data.contratantes):
+        if not isinstance(c, dict):
+            raise _erro_campo(f"contratantes.{i}", "Parte inválida")
+        p = {k: str(c[k]).strip() for k in _CAMPOS_PARTE if isinstance(c.get(k), (str, int)) and str(c[k]).strip()}
+        reps = [
+            {k: str(r[k]).strip() for k in ("nome", "cpf") if isinstance(r.get(k), str) and r[k].strip()}
+            for r in (c.get("representantes") or []) if isinstance(r, dict) and isinstance(r.get("nome"), str) and r["nome"].strip()
+        ]
+        if reps:
+            p["representantes"] = reps
+        if not (p.get("nome") or p.get("razao_social")):
+            raise _erro_campo(f"contratantes.{i}.nome", "Informe o nome da parte")
+        if p.get("cnpj"):
+            p.pop("cpf", None)
+        doc = so_digitos(p.get("cnpj") or p.get("cpf"))
+        if len(doc) != (14 if p.get("cnpj") else 11):
+            raise _erro_campo(f"contratantes.{i}.documento", "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)")
+        partes.append(p)
+    if not partes:
+        raise _erro_campo("contratantes", "Informe ao menos uma parte do contrato original")
+    return partes[:10]
+
+
 def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
     """Valida o corpo e completa os campos que o servidor deriva do contrato de origem."""
     if tipo not in REQUESTS:
@@ -164,12 +197,28 @@ def _montar(tipo: str, corpo: dict, user: CurrentUser, db: Session):
             # Servidor manda nos campos derivados do contrato de origem.
             form_origem = form_data_atual(origem, db)
             data.contratantes = form_origem.get("contratantes") or []
+            if isinstance(data, AditivoRequest):
+                data.objeto_contrato_origem = ""  # so' vale sem origem
             # So aditivo assinado e' citado como celebrado; a numeracao conta tambem os rascunhos.
             data.aditivos_anteriores = _aditivos_anteriores(origem.contract_id, db, so_assinados=True)
             if tipo == TIPO_ADITIVO:
                 data.numero = len(_derivados(origem.contract_id, db, TIPO_ADITIVO)) + 1
             if tipo == TIPO_DISTRATO and _derivados(origem.contract_id, db, TIPO_DISTRATO):
                 raise HTTPException(409, "Já existe um distrato para este contrato")
+    elif not isinstance(data, SubstabelecimentoRequest):
+        data.contratantes = _partes_informadas(data)  # sem origem (contrato antigo fora do sistema)
+        if isinstance(data, AditivoRequest):
+            data.objeto_contrato_origem = data.objeto_contrato_origem.strip()
+            if not data.objeto_contrato_origem:
+                raise _erro_campo("objeto_contrato_origem", "Informe o objeto do contrato original")
+            # So' vale o que e' anterior a este aditivo; um numero por vez.
+            vistos = {}
+            for a in data.aditivos_anteriores:
+                if a.numero < data.numero:
+                    vistos[a.numero] = a
+            data.aditivos_anteriores = [vistos[k] for k in sorted(vistos)]
+        else:
+            data.aditivos_anteriores = []
     return data, origem, aviso
 
 

@@ -437,6 +437,8 @@ export interface ProcessoPlanilha {
   tribunal?: string | null;
   tipo: string;
   descricao: string;
+  /** A descrição (partes) veio do Legal One, não da planilha. */
+  partes_legalone?: boolean;
 }
 
 async function chamarProcessos<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1096,6 +1098,8 @@ export interface PrefillDocumento {
   aditivos_existentes: number;
   data_contrato_origem: string | null;
   status_origem: string;
+  /** Algum escopo do contrato de origem tem honorário de êxito. */
+  origem_tem_exito?: boolean;
   aviso: string | null;
 }
 

@@ -21,6 +21,7 @@ import {
   estadoInicial,
   montarPayload,
   validar,
+  resumoDosErros,
   type AditivoForm,
   type DistratoForm,
   type Erros,
@@ -56,6 +57,8 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
   const sessionStatus = useAuthStatus();
   const editando = !!editContractId;
   const rotulo = ROTULO_TIPO[tipo];
+  // Aditivo/distrato de contrato antigo, fora do sistema: sem origem, as partes são digitadas.
+  const semOrigem = !origemId && tipo !== "substabelecimento";
 
   const [estado, setEstado] = useState<EstadoDocumento>(() =>
     initialFormData ? estadoDoFormData(tipo, initialFormData, hojeBrasilia()) : estadoInicial(tipo, hojeBrasilia()),
@@ -146,7 +149,10 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
             };
           }
           const a = atual as AditivoForm | DistratoForm;
-          return a.data_contrato_origem ? atual : { ...a, data_contrato_origem: p.data_contrato_origem ?? "" };
+          if (a.data_contrato_origem) return atual;
+          // Distrato: a ressalva de êxito nasce marcada só se o contrato de origem tem êxito (editável).
+          const ressalva = tipo === "distrato" && p.origem_tem_exito !== undefined ? { ressalva_exito: p.origem_tem_exito } : {};
+          return { ...a, ...ressalva, data_contrato_origem: p.data_contrato_origem ?? "" };
         });
       } catch (e) {
         if (ativo) setGeral(errosDaApi(e).geral);
@@ -164,13 +170,13 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
   const aplicarErroDaApi = (e: unknown) => {
     const r = errosDaApi(e);
     setErros(r.campos);
-    setGeral(r.geral || (Object.keys(r.campos).length ? "Corrija os campos destacados." : ""));
+    setGeral(r.geral || resumoDosErros(r.campos));
   };
 
   const conferir = (): Record<string, unknown> | null => {
-    const e = validar(tipo, estado, cnpjValido);
+    const e = validar(tipo, estado, cnpjValido, semOrigem);
     setErros(e);
-    setGeral(Object.keys(e).length ? "Corrija os campos destacados." : "");
+    setGeral(resumoDosErros(e));
     return Object.keys(e).length ? null : montarPayload(tipo, estado, origemId);
   };
 
@@ -242,6 +248,10 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
         <p className="text-sm text-muted mb-4">Sem contrato original: informe o cliente (outorgante) abaixo.</p>
       )}
 
+      {semOrigem && !editando && (
+        <p className="text-sm text-muted mb-4">Contrato antigo, fora do sistema: informe abaixo as partes, a data e o objeto do contrato original.</p>
+      )}
+
       {prefill && !editando && (
         <div className="rounded-lg border border-border bg-card p-4 mb-4 text-sm">
           <p className="font-medium text-foreground mb-1">
@@ -297,8 +307,8 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
         </>
       ) : (
         <div className="bg-card rounded-xl border border-border p-5">
-          {tipo === "aditivo" && <CamposAditivo estado={estado as AditivoForm} onChange={setEstado} erros={erros} />}
-          {tipo === "distrato" && <CamposDistrato estado={estado as DistratoForm} onChange={setEstado} erros={erros} />}
+          {tipo === "aditivo" && <CamposAditivo estado={estado as AditivoForm} onChange={setEstado} erros={erros} semOrigem={semOrigem} />}
+          {tipo === "distrato" && <CamposDistrato estado={estado as DistratoForm} onChange={setEstado} erros={erros} semOrigem={semOrigem} />}
           {tipo === "substabelecimento" && <CamposSubstabelecimento estado={estado as SubstabelecimentoForm} onChange={setEstado} erros={erros} />}
 
           {existente && (

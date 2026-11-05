@@ -144,6 +144,25 @@ async def _try_source(
         return None
 
 
+def _escolher(resultados: list[dict | None], brasil_pronta: bool, todas_prontas: bool) -> dict | None:
+    """Resultado a devolver, ou None se vale esperar mais. [0] é a BrasilAPI (única com QSA).
+
+    Prefere a BrasilAPI; se ela veio sem endereço, completa com o de outra base. Sem
+    endereço em nenhuma, só devolve quando todas terminaram (ou o prazo acabou)."""
+    validos = [r for r in resultados if r and r.get("razao_social")]
+    com_end = next((r for r in validos if r.get("endereco")), None)
+    brasil = resultados[0] if resultados[0] and resultados[0].get("razao_social") else None
+    if brasil and brasil.get("endereco"):
+        return brasil
+    if brasil and com_end:
+        return {**brasil, "endereco": com_end["endereco"]}
+    if com_end and brasil_pronta:
+        return com_end
+    if todas_prontas:
+        return brasil or (validos[0] if validos else None)
+    return None
+
+
 @router.get("/{cnpj}")
 async def lookup_cnpj(cnpj: str) -> dict:
     """Look up company data from public CNPJ APIs with fallback chain.
@@ -177,13 +196,13 @@ async def lookup_cnpj(cnpj: str) -> dict:
             for url, parser in sources
         ]
         brasilapi = tasks[0]
-        fallback: dict | None = None
         pending = set(tasks)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + 7.0
         try:
             # A BrasilAPI é a única com QSA: se ela responder dentro do prazo, ganha
             # mesmo chegando depois das outras; senão os sócios apareceriam só às vezes.
+            # Resposta sem endereço não encerra a busca: espera as demais (até o prazo).
             while pending:
                 done, pending = await asyncio.wait(
                     pending,
@@ -192,17 +211,12 @@ async def lookup_cnpj(cnpj: str) -> dict:
                 )
                 if not done:
                     break
-                for task in done:
-                    result = task.result()
-                    if not (result and result.get("razao_social")):
-                        continue
-                    if task is brasilapi:
-                        return result
-                    fallback = fallback or result
-                if fallback and brasilapi.done():
-                    return fallback
-            if fallback:
-                return fallback
+                escolhido = _escolher([t.result() if t.done() else None for t in tasks], brasilapi.done(), not pending)
+                if escolhido:
+                    return escolhido
+            escolhido = _escolher([t.result() if t.done() else None for t in tasks], True, True)
+            if escolhido:
+                return escolhido
         finally:
             for task in tasks:
                 if not task.done():

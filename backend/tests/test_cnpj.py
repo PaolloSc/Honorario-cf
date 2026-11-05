@@ -67,6 +67,45 @@ def test_brasilapi_falhando_usa_a_primeira_outra_fonte(client, monkeypatch):
     assert response.json()["razao_social"] == "Cnpjws"
 
 
+def test_brasilapi_sem_endereco_completa_com_outra_base(client, monkeypatch):
+    """1ª base responde sem endereço, 2ª tem: devolve o endereço (e mantém sócios da BrasilAPI)."""
+    _fake_fontes(
+        monkeypatch,
+        {"_parse_brasilapi": 0, "_parse_publica_cnpj_ws": 0.1, "_parse_open_cnpja": 0.2},
+        {
+            "_parse_brasilapi": {"razao_social": "Brasil", "endereco": "", "socios": [{"nome": "Ana"}]},
+            "_parse_publica_cnpj_ws": {"razao_social": "Cnpjws", "endereco": ""},
+            "_parse_open_cnpja": {"razao_social": "Cnpja", "endereco": "Rua A, 1"},
+        },
+    )
+    corpo = client.get("/api/cnpj/00000000000191").json()
+    assert corpo["endereco"] == "Rua A, 1"
+    assert corpo["razao_social"] == "Brasil" and corpo["socios"] == [{"nome": "Ana"}]
+
+
+def test_fonte_rapida_sem_endereco_nao_cancela_a_que_tem(client, monkeypatch):
+    _fake_fontes(
+        monkeypatch,
+        {"_parse_brasilapi": 0.3, "_parse_publica_cnpj_ws": 0, "_parse_open_cnpja": 0.1},
+        {
+            "_parse_brasilapi": None,
+            "_parse_publica_cnpj_ws": {"razao_social": "Cnpjws", "endereco": ""},
+            "_parse_open_cnpja": {"razao_social": "Cnpja", "endereco": "Rua B, 2"},
+        },
+    )
+    assert client.get("/api/cnpj/00000000000191").json()["endereco"] == "Rua B, 2"
+
+
+def test_nenhuma_base_com_endereco_devolve_sem_endereco(client, monkeypatch):
+    _fake_fontes(
+        monkeypatch,
+        {"_parse_brasilapi": 0, "_parse_publica_cnpj_ws": 0, "_parse_open_cnpja": 0},
+        {"_parse_brasilapi": {"razao_social": "Brasil", "endereco": ""}},
+    )
+    corpo = client.get("/api/cnpj/00000000000191").json()
+    assert corpo["razao_social"] == "Brasil" and corpo["endereco"] == ""
+
+
 def test_parse_brasilapi_extrai_socios_em_title_case():
     from app.routers.cnpj import _parse_brasilapi
 

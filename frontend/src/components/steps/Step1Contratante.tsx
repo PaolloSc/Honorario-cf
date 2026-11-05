@@ -5,6 +5,7 @@ import FormField, {
   Input,
   Select,
 } from "@/components/ui/FormField";
+import { consultaCompleta } from "@/app/lib/validarContratantes";
 import { lookupCNPJ, sugerirClientes, type SocioReceita, type SugestaoCliente } from "@/app/lib/api";
 import { cnpjValido, formatarCNPJ, limparCNPJ } from "@/app/lib/cnpj";
 import type {
@@ -15,7 +16,7 @@ import type {
   RepresentantePJ,
   TipoPessoa,
 } from "@/types/contract";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function toTitleCase(str: string): string {
   return str
@@ -204,12 +205,17 @@ export default function Step1Contratante({
           razao_social: data.razao_social,
           endereco: data.endereco,
         });
-        setCnpjLoaded((prev) => new Set(prev).add(index));
-        setCnpjManual((prev) => {
+        // Receita sem razão social ou sem endereço: não trava os campos (readOnly e vazio
+        // impedia de avançar); o usuário completa à mão.
+        const completa = consultaCompleta(data);
+        const trocar = (add: boolean) => (prev: Set<number>) => {
           const next = new Set(prev);
-          next.delete(index);
+          if (add) next.add(index);
+          else next.delete(index);
           return next;
-        });
+        };
+        setCnpjLoaded(trocar(completa));
+        setCnpjManual(trocar(!completa));
       } catch (err) {
         console.error("[CNPJ Lookup] Error:", err);
         const msg = err instanceof Error ? err.message : "erro desconhecido";
@@ -424,20 +430,31 @@ function PJForm({
         }]
       : []);
 
+  // Consulta sozinha quando o CNPJ digitado fica válido; uma vez por CNPJ (o botão força de novo).
+  const ultimoAuto = useRef("");
+  function mudarCNPJ(valor: string) {
+    const cnpj = limparCNPJ(valor);
+    onUpdate({ cnpj });
+    if (cnpjValido(cnpj) && cnpj !== ultimoAuto.current) {
+      ultimoAuto.current = cnpj;
+      onCNPJLookup(cnpj);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <FormField label="CNPJ" required hint="Digite o CNPJ para buscar dados automaticamente">
         <div className="flex gap-2">
           <Input
             value={formatarCNPJ(data.cnpj)}
-            onChange={(e) => onUpdate({ cnpj: limparCNPJ(e.target.value) })}
+            onChange={(e) => mudarCNPJ(e.target.value)}
             placeholder="00.000.000/0000-00 ou 12.ABC.345/01DE-35"
             maxLength={18}
             required
           />
           <button
             type="button"
-            onClick={() => onCNPJLookup(data.cnpj)}
+            onClick={() => { ultimoAuto.current = limparCNPJ(data.cnpj); onCNPJLookup(data.cnpj); }}
             disabled={loadingCNPJ}
             className="px-3 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark transition disabled:opacity-50 whitespace-nowrap"
           >
@@ -472,29 +489,25 @@ function PJForm({
         </p>
       )}
 
-      {loaded && (
-        <FormField label="Razão Social" required>
-          <Input
-            value={data.razao_social}
-            onChange={(e) => onUpdate({ razao_social: e.target.value })}
-            readOnly={!editavel}
-            placeholder={editavel ? "Digite a razão social" : "Preenchido automaticamente pelo CNPJ"}
-            className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
-          />
-        </FormField>
-      )}
+      <FormField label="Razão Social" required hint={loaded ? undefined : "Busque o CNPJ para preencher ou digite."}>
+        <Input
+          value={data.razao_social}
+          onChange={(e) => onUpdate({ razao_social: e.target.value })}
+          readOnly={!editavel}
+          placeholder={editavel ? "Digite a razão social" : "Preenchido automaticamente pelo CNPJ"}
+          className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
+        />
+      </FormField>
 
-      {loaded && (
-        <FormField label="Endereço" required>
-          <Input
-            value={data.endereco}
-            onChange={(e) => onUpdate({ endereco: e.target.value })}
-            readOnly={!editavel}
-            placeholder={editavel ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CNPJ"}
-            className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
-          />
-        </FormField>
-      )}
+      <FormField label="Endereço da sede" required hint={loaded ? undefined : "Busque o CNPJ para preencher ou digite."}>
+        <Input
+          value={data.endereco}
+          onChange={(e) => onUpdate({ endereco: e.target.value })}
+          readOnly={!editavel}
+          placeholder={editavel ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CNPJ"}
+          className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
+        />
+      </FormField>
 
       <div className="md:col-span-2">
         <RepresentantesForm
@@ -579,7 +592,7 @@ function RepresentantesForm({
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Nome do Representante">
+            <FormField label="Nome do Representante" required>
               <Input value={rep.nome} onChange={(e) => update(i, { nome: e.target.value })} />
             </FormField>
             <FormField label="CPF do Representante">
@@ -589,7 +602,7 @@ function RepresentantesForm({
                 placeholder="000.000.000-00"
               />
             </FormField>
-            <FormField label="E-mail do Representante">
+            <FormField label="E-mail do Representante" hint="Opcional. Se informado, o representante assina; sem e-mail de nenhum representante, assina o e-mail da empresa.">
               <Input
                 type="email"
                 value={rep.email || ""}
@@ -822,8 +835,7 @@ function PFForm({
         </FormField>
       )}
 
-      {enderecoRevelado && (
-        <FormField label="Endereço completo" required>
+      <FormField label="Endereço completo" required hint={enderecoRevelado ? undefined : "Digite o endereço ou informe o CEP acima para preencher."}>
           <Input
             value={data.endereco}
             onChange={(e) => onUpdate({ endereco: e.target.value })}
@@ -833,7 +845,6 @@ function PFForm({
             required
           />
         </FormField>
-      )}
     </div>
   );
 }
