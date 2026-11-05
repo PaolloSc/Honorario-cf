@@ -453,6 +453,47 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
   return e;
 }
 
+// ── Nome do campo que falta, para a mensagem "Faltam: ..." ────────────────
+
+const ROTULO_CAMPO: Record<string, string> = {
+  data_documento: "Data do documento",
+  data_contrato_origem: "Data do contrato original",
+  objeto_contrato_origem: "Objeto do contrato original",
+  objeto: "Objeto do aditivo",
+  numero: "Número do aditivo",
+  alteracoes: "Alterações (pelo menos uma)",
+  partes: "Partes do contrato original",
+  pagamento_valor: "Valor do pagamento",
+  pagamento_data: "Data limite do pagamento",
+  prazo_substabelecimento_dias: "Prazo para substabelecer (dias)",
+  substabelecentes: "Substabelecentes (pelo menos um)",
+  substabelecidos: "Substabelecidos (pelo menos um)",
+  processos: "Processos (pelo menos um)",
+  outorgante: "Outorgante",
+};
+const ROTULO_ITEM: Record<string, [string, Record<string, string>]> = {
+  contratantes: ["Parte", { nome: "nome", documento: "CPF/CNPJ" }],
+  aditivos_anteriores: ["Aditivo anterior", { numero: "número" }],
+  alteracoes: ["Alteração", { clausula: "cláusula do contrato original", texto: "novo texto" }],
+  substabelecidos: ["Substabelecido", { nome: "nome", oab: "OAB" }],
+  substabelecentes: ["Substabelecente", { oab: "OAB" }],
+  processos: ["Processo", { numero: "número (CNJ)" }],
+};
+
+/** Chave do erro ("alteracoes.1.texto") -> nome do campo para a pessoa ("Alteração 2: novo texto"). */
+export function rotuloDoCampo(chave: string): string {
+  const m = /^(\w+)\.(\d+)\.(\w+)$/.exec(chave);
+  const item = m && ROTULO_ITEM[m[1]];
+  if (m && item) return `${item[0]} ${Number(m[2]) + 1}: ${item[1][m[3]] ?? m[3]}`;
+  return ROTULO_CAMPO[chave] ?? chave;
+}
+
+/** "Faltam ou estão inválidos: A, B" — diz QUAL campo, não só "corrija". */
+export function resumoDosErros(erros: Erros): string {
+  const lista = Object.keys(erros).map(rotuloDoCampo);
+  return lista.length ? `Preencha ou corrija: ${lista.join("; ")}.` : "";
+}
+
 // ── Erros 422 da API em português, por campo ──────────────────────────────
 
 interface Erro422 { loc?: (string | number)[]; msg?: string; type?: string }

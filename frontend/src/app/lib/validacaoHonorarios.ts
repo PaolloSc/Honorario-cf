@@ -1,4 +1,4 @@
-import type { EscopoItem } from "@/types/contract";
+import type { ContratoFormData, EscopoItem } from "@/types/contract";
 
 // Regras da etapa 3 que dependem do conteúdo de cada honorário. Fica fora do
 // ContractWizard para poder ser verificada sem React (validacaoHonorarios.check.ts).
@@ -94,5 +94,21 @@ export function errosDoEscopo(
       errors.push(`${label}: o desconto de ${ROTULOS[hon]} não pode passar de 100%.`);
     }
   }
+  return errors;
+}
+
+// Etapa 3 inteira: tipo de honorário escolhido + regras de cada honorário.
+export function validateHonorarios(data: ContratoFormData): string[] {
+  const errors: string[] = [];
+
+  data.escopos.forEach((escopo, index) => {
+    const label = `Escopo ${index + 1}`;
+
+    if (escopo.honorarios.length === 0) {
+      errors.push(`${label}: selecione pelo menos um tipo de honorário.`);
+    }
+    errors.push(...errosDoEscopo(escopo, label));
+  });
+
   return errors;
 }

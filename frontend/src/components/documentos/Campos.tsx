@@ -59,7 +59,7 @@ export function CamposPartes({ partes, onChange, erros }: { partes: ParteForm[];
   };
   return (
     <>
-      <h3 className="font-display text-sm font-semibold text-primary-dark mb-1">Partes do contrato original</h3>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mb-1">Partes do contrato original<span className="text-danger ml-1">*</span></h3>
       <p className="text-xs text-muted mb-2">Contrato fora do sistema: informe quem o assinou como contratante. O escritório entra como contratada.</p>
       {erros.partes && <p className="text-xs text-danger mb-1">{erros.partes}</p>}
       {partes.map((p, i) => (
@@ -162,7 +162,7 @@ export function CamposAditivo({ estado, onChange, erros, semOrigem = false }: Pr
         <TextArea value={estado.objeto} onChange={(e) => set({ objeto: e.target.value })} error={!!erros.objeto} placeholder="prestação de serviços de consultoria trabalhista" />
       </FormField>
 
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Alterações no contrato original</h3>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Alterações no contrato original<span className="text-danger ml-1">*</span></h3>
       <p className="text-xs text-muted mb-2">Cada alteração vira um item numerado do aditivo.</p>
       {erros.alteracoes && <p className="text-xs text-danger mb-2">{erros.alteracoes}</p>}
       {estado.alteracoes.map((alt, i) => (
@@ -415,7 +415,7 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
 
   return (
     <>
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecentes (C&amp;F)</h3>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecentes (C&amp;F)<span className="text-danger ml-1">*</span></h3>
       <p className="text-xs text-muted mb-2">Quem passa os poderes: advogados do escritório. Escolha no cadastro de colaboradores; a OAB vem do cadastro, se houver. Eles assinam o documento.</p>
       {estado.substabelecentes.map((s, i) => (
         <div key={s.email} className={cartao}>
@@ -455,7 +455,7 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
       </div>
       {erros.substabelecentes && <p className="text-xs text-danger mt-1">{erros.substabelecentes}</p>}
 
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecidos</h3>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecidos<span className="text-danger ml-1">*</span></h3>
       <p className="text-xs text-muted mb-2">Quem recebe os poderes: os advogados que passam a atuar nos processos.</p>
       {erros.substabelecidos && <p className="text-xs text-danger mb-1">{erros.substabelecidos}</p>}
       {estado.substabelecidos.map((s, i) => (
@@ -500,7 +500,7 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
         <Input value={estado.endereco_substabelecidos} onChange={(e) => set({ endereco_substabelecidos: e.target.value })} placeholder="Rua …, nº, bairro, cidade/UF, CEP" />
       </FormField>
 
-      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Processos</h3>
+      <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Processos<span className="text-danger ml-1">*</span></h3>
       {erros.processos && <p className="text-xs text-danger mb-1">{erros.processos}</p>}
       {estado.processos.map((p, i) => {
         const aviso = p.numero.trim() && !cnjValido(p.numero) && !erros[`processos.${i}.numero`]
