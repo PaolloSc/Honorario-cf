@@ -55,3 +55,32 @@ def test_torna_da_permuta_parcelada():
     assert "a título de torna, o valor total de R$ 6.000,00 (" in t
     assert "em 4 (quatro) parcelas mensais e sucessivas de R$ 1.500,00 (" in t
     assert "a primeira com vencimento em 05/12/2026 e as demais todo dia 05" in t
+
+
+# Adicional (outra fase ou instância) em todo honorário com valor, não só no pró-labore.
+import pytest
+from pydantic import ValidationError
+
+from app.models.contract import ContratoRequest
+from tests.test_contract_generator_fidelidade import _escopo
+
+_AD = {"descricao_fase": "2ª instância", "valor_total": 6000, "tipo_parcelamento": "mensal",
+       "numero_parcelas": 3, "data_primeira_parcela": "2027-03-05"}
+
+
+@pytest.mark.parametrize("hon", ["hora_trabalhada", "mensalidade", "exito"])
+def test_adicional_nos_outros_honorarios(hon):
+    esc = _escopo(hon)
+    esc[hon]["adicionais"] = [dict(_AD)]
+    t = "\n".join(_paras_for(_req_escopos([esc])))
+    assert ("Caso haja 2ª instância, os honorários adicionais, no valor total de R$ 6.000,00 (seis mil reais), "
+            "serão pagos em 3 (três) parcelas mensais e sucessivas de R$ 2.000,00 (dois mil reais), "
+            "a primeira com vencimento em 05/03/2027 e as demais todo dia 05.") in t
+
+
+@pytest.mark.parametrize("hon", ["hora_trabalhada", "mensalidade", "exito"])
+def test_adicional_sem_valor_e_recusado(hon):
+    esc = _escopo(hon)
+    esc[hon]["adicionais"] = [{"descricao_fase": "execução", "valor_total": 0}]
+    with pytest.raises(ValidationError, match="adicional de"):
+        ContratoRequest(**_req_escopos([esc]))

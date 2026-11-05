@@ -169,6 +169,7 @@ class HoraTrabalhada(_ComDesconto):
     horas_trabalhadas: Optional[float] = None  # legado: campo saiu do wizard
     tem_hora_urgencia: bool = True
     tem_hora_fora_expediente: bool = True
+    adicionais: list["HonorarioAdicional"] = Field(default_factory=list)
  
  
 class _ProLaboreBase(_ComDesconto):
@@ -201,13 +202,18 @@ class _ProLaboreBase(_ComDesconto):
         return data
 
 
-class ProLaboreAdicional(_ProLaboreBase):
-    """Pró-labore devido só se houver outra fase ou instância (ex.: 2ª instância, fase recursal)."""
+class HonorarioAdicional(_ProLaboreBase):
+    """Valor devido só se houver outra fase ou instância (ex.: 2ª instância, fase recursal).
+    Existe em todo honorário com valor: pró-labore, hora trabalhada, mensalidade e êxito."""
     descricao_fase: str = ""
 
 
+ProLaboreAdicional = HonorarioAdicional  # nome antigo
+HoraTrabalhada.model_rebuild()
+
+
 class ProLabore(_ProLaboreBase):
-    adicionais: list[ProLaboreAdicional] = Field(default_factory=list)
+    adicionais: list[HonorarioAdicional] = Field(default_factory=list)
  
  
 class Mensalidade(_ComDesconto):
@@ -223,6 +229,7 @@ class Mensalidade(_ComDesconto):
     duracao_meses: Optional[int] = None
     faixas_preco: Optional[list[dict[str, str]]] = None
     fases_processuais: Optional[list[dict[str, str]]] = None
+    adicionais: list["HonorarioAdicional"] = Field(default_factory=list)
  
  
 class SubtipoExito(str, Enum):
@@ -253,6 +260,7 @@ class Exito(_ComDesconto):
     faixas_percentual: Optional[list[dict[str, str]]] = None
     deduz_outro_honorario: bool = False
     honorario_deduzido: Optional[str] = None
+    adicionais: list["HonorarioAdicional"] = Field(default_factory=list)
  
  
 class Permuta(_ComDesconto):
@@ -502,13 +510,18 @@ def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
     pl = e.pro_labore
     if TipoHonorario.PRO_LABORE in h and pl:
         _checar_parcelamento_pl(pl, pre, "pró-labore")
-        for ad in pl.adicionais:
-            _checar_parcelamento_pl(ad, pre, "pró-labore adicional")
-            if not (ad.tipo_parcelamento == "customizado" and (ad.parcelamento_customizado or "").strip()):
-                checks.append((ad.valor_total, "pró-labore adicional"))
         # parcelamento descrito em texto pode ficar sem total
         if not (pl.tipo_parcelamento == "customizado" and (pl.parcelamento_customizado or "").strip()):
             checks.append((pl.valor_total, "pró-labore"))
+    for tipo, obj, rotulo in ((TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada, "adicional de hora trabalhada"),
+                              (TipoHonorario.PRO_LABORE, pl, "pró-labore adicional"),
+                              (TipoHonorario.MENSALIDADE, e.mensalidade, "adicional de mensalidade"),
+                              (TipoHonorario.EXITO, e.exito, "adicional de êxito")):
+        if tipo in h and obj:
+            for ad in obj.adicionais:
+                _checar_parcelamento_pl(ad, pre, rotulo)
+                if not (ad.tipo_parcelamento == "customizado" and (ad.parcelamento_customizado or "").strip()):
+                    checks.append((ad.valor_total, rotulo))
     # mensalidade por faixas de preco pode ficar sem valor unico
     if TipoHonorario.MENSALIDADE in h and e.mensalidade and not e.mensalidade.faixas_preco:
         checks.append((e.mensalidade.valor, "mensalidade"))
