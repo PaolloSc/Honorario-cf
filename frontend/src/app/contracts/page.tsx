@@ -97,13 +97,7 @@ export default function ContractsPage() {
               + Ação de Consumo
             </a>
           )}
-          {/* Aditivo e distrato nascem na página do contrato; só o substabelecimento pode ser avulso. */}
-          <a
-            href="/documentos/novo?tipo=substabelecimento"
-            className="px-3 py-2.5 text-muted hover:text-primary-dark underline-offset-2 hover:underline text-sm self-center"
-          >
-            Novo substabelecimento
-          </a>
+          {/* Aditivo e distrato nascem na página do contrato; o substabelecimento sai junto com o distrato. */}
         </div>
       </div>
 
