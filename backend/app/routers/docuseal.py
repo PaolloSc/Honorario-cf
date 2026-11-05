@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,18 @@ DOCUSEAL_WEBHOOK_SECRET = os.getenv("DOCUSEAL_WEBHOOK_SECRET", "")
 class DocuSealRequest(BaseModel):
     contract_id: str
     signatarios: list[dict[str, str]]
+
+    # O front manda null em campos opcionais (ex.: phone sem WhatsApp); o pydantic
+    # recusava com "Input should be a valid string" e o envio nao saia.
+    @field_validator("signatarios", mode="before")
+    @classmethod
+    def _sem_nulos(cls, v: Any) -> Any:
+        if not isinstance(v, list):
+            return v
+        return [
+            {k: str(x) for k, x in s.items() if x is not None} if isinstance(s, dict) else s
+            for s in v
+        ]
 
 
 class DocuSealResponse(BaseModel):
