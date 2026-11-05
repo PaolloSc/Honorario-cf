@@ -21,8 +21,10 @@ assert.deepEqual(erros([{ ...pj, representantes: [rep, { ...rep, nome: "Ana", em
 // Linha de representante so com os padroes (nacionalidade/profissao) e' ignorada
 assert.deepEqual(erros([{ ...pj, representantes: [{ nome: "", nacionalidade: "Brasileira", profissao: "Empresário" }] }]), []);
 // Representante: nome e e-mail obrigatorios quando ha dados; CPF opcional mas validado
-assert.deepEqual(erros([{ ...pj, representantes: [{ ...rep, email: "" }] }]),
-  ["Contratante 1: informe o e-mail do representante Jose (ele assina o contrato)."]);
+// E-mail do representante é opcional (sem ele assina o e-mail da empresa), mas se vier tem de ser válido
+assert.deepEqual(erros([{ ...pj, representantes: [{ ...rep, email: "" }] }]), []);
+assert.deepEqual(erros([{ ...pj, representantes: [{ ...rep, email: "x" }] }]), ["Contratante 1: e-mail inválido do representante Jose."]);
+assert.deepEqual(erros([{ ...pj, email: "", representantes: [{ ...rep, email: "" }] }]), ["Contratante 1: informe um e-mail válido."]);
 assert.deepEqual(erros([{ ...pj, representantes: [{ ...rep, nome: "" }] }]), ["Contratante 1: informe o nome do representante 1."]);
 assert.deepEqual(erros([{ ...pj, representantes: [{ ...rep, cpf: "" }] }]), []);
 assert.deepEqual(erros([{ ...pj, representantes: [{ ...rep, cpf: "111.111.111-11" }] }]), ["Contratante 1: CPF inválido do representante Jose."]);
