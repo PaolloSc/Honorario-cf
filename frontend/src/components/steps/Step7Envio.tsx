@@ -529,7 +529,7 @@ export default function Step7Envio({
     }
   };
 
-  const handleSaveOnly = async () => {
+  const handleSaveOnly = async (): Promise<string | null> => {
     setIsSubmitting(true);
     setStatus("generating");
     setMessage(isEdit ? "Salvando nova versão..." : "Gerando contrato...");
@@ -567,25 +567,33 @@ export default function Step7Envio({
           ? "Nova versão salva com sucesso! Você pode enviar para assinatura ou voltar para a lista."
           : "Contrato gerado com sucesso! Você pode enviar para assinatura ou voltar para a lista."
       );
+      return resultContractId;
     } catch (error) {
       setStatus("error");
       setMessage(textoDoErro(error));
+      return null;
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSendForSignature = async () => {
-    if (!contractId) return;
-    if (!socioEscritorio) {
-      // O DocuSeal precisa do sócio que assina pelo escritório: leva o usuário até o seletor.
-      setAvisoSocio(true);
-      const el = document.getElementById("socio-escritorio");
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      el?.querySelector("input")?.focus();
-      return;
+  // O DocuSeal precisa do sócio que assina pelo escritório: sem ele, leva o usuário até o seletor.
+  const exigirSocio = (): boolean => {
+    if (socioEscritorio) {
+      setAvisoSocio(false);
+      return true;
     }
-    setAvisoSocio(false);
+    setAvisoSocio(true);
+    const el = document.getElementById("socio-escritorio");
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    el?.querySelector("input")?.focus();
+    return false;
+  };
+
+  const handleSendForSignature = async (idSalvo?: string) => {
+    const id = idSalvo ?? contractId;
+    if (!id) return;
+    if (!exigirSocio()) return;
 
     setIsSubmitting(true);
     setStatus("sending");
@@ -622,7 +630,7 @@ export default function Step7Envio({
       if (socio) signatarios.push({ email: socio.email, name: socio.name, role: "Contratado" });
 
       const result = await sendForSignature({
-        contract_id: contractId,
+        contract_id: id,
         signatarios,
       });
 
@@ -646,7 +654,7 @@ export default function Step7Envio({
 
       // Navigate to detail page after signature is sent
       if (onSaveComplete && paraWhatsApp.length === 0) {
-        setTimeout(() => onSaveComplete(contractId), 2000);
+        setTimeout(() => onSaveComplete(id), 2000);
       }
     } catch (error) {
       setStatus("error");
@@ -654,6 +662,13 @@ export default function Step7Envio({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Gera/salva e já envia para assinatura. Sem sócio escolhido, não gera nada.
+  const handleSaveAndSign = async () => {
+    if (!exigirSocio()) return;
+    const id = await handleSaveOnly();
+    if (id) await handleSendForSignature(id);
   };
 
   const handleGoToContract = () => {
@@ -997,7 +1012,7 @@ export default function Step7Envio({
         {status === "idle" && (
           <>
             <button
-              onClick={handleSaveOnly}
+              onClick={() => handleSaveOnly()}
               disabled={isSubmitting}
               className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
             >
@@ -1011,6 +1026,26 @@ export default function Step7Envio({
             >
               {isEdit ? "Salvar e Enviar por E-mail" : "Gerar e Enviar por E-mail"}
             </button>
+
+            <div>
+              <button
+                onClick={handleSaveAndSign}
+                disabled={isSubmitting}
+                aria-disabled={!socioEscritorio}
+                className={`px-4 py-2 rounded-lg transition ${
+                  !socioEscritorio
+                    ? "bg-primary/50 text-white hover:bg-primary/60"
+                    : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
+                }`}
+              >
+                {isEdit ? "Salvar e Enviar para Assinatura" : "Gerar e Enviar para Assinatura"}
+              </button>
+              {!socioEscritorio && (
+                <p className="text-xs text-warning mt-1 max-w-64">
+                  Escolha o sócio que assina pelo escritório (acima) para enviar.
+                </p>
+              )}
+            </div>
           </>
         )}
 
@@ -1026,7 +1061,7 @@ export default function Step7Envio({
           <>
             <div>
               <button
-                onClick={handleSendForSignature}
+                onClick={() => handleSendForSignature()}
                 disabled={isSubmitting}
                 aria-disabled={!socioEscritorio}
                 className={`px-4 py-2 rounded-lg transition ${
