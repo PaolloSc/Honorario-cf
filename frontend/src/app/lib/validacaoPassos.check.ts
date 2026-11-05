@@ -23,7 +23,7 @@ assert.deepEqual(h(["pro_labore"], { pro_labore: { valor_total: 0 } }), ["Escopo
 assert.deepEqual(h(["mensalidade"], { mensalidade: { valor: 0, subtipo: "advocacia_partido", dia_vencimento: "" } }), ["Escopo 1: informe o valor de mensalidade (maior que zero)."]);
 assert.deepEqual(h(["permuta"], { permuta: { objeto_permuta: " " } }), ["Escopo 1: informe o objeto da permuta."]);
 assert.deepEqual(h(["permuta"], { permuta: { objeto_permuta: "contabilidade" } }), []);
-assert.deepEqual(h(["pro_labore"], { pro_labore: { valor_total: 1000, tipo_parcelamento: "mensal" } }), ["Escopo 1: pró-labore mensal precisa do número de parcelas e do valor da parcela."]);
+assert.deepEqual(h(["pro_labore"], { pro_labore: { valor_total: 1000, tipo_parcelamento: "mensal" } }), ["Escopo 1: pró-labore mensal precisa do número de parcelas.", "Escopo 1: pró-labore mensal precisa do vencimento da 1ª parcela."]);
 
 // Etapa 4: nada obrigatório
 assert.deepEqual(validateAcessorios(dados({})), []);
