@@ -51,6 +51,9 @@ _SYSTEM_PROMPT = (
     "'sera concedido desconto', o campo nao deve comecar com 'desconto de') e sem "
     "ponto final no fim do valor (a frase ja fecha a pontuacao); a sugestao deve "
     "ser o texto que fica bem dentro daquela frase. "
+    "IGNORE dados cadastrais das partes (enderecos, nomes de pessoas e empresas, "
+    "CNPJ/CPF, CEP): nunca aponte grafia, acento ou abreviatura neles, mesmo que "
+    "aparecam dentro de um campo. "
     "Examine com atencao mesmo campos curtos de poucas palavras — nao deixe "
     "de apontar um erro so' por o campo ser curto. NAO opine sobre valores, "
     "percentuais, prazos ou o merito do conteudo. "
@@ -165,7 +168,8 @@ def campos_abertos(data: dict, aplicados: set[str] | None = None) -> list[tuple[
 
     for i, c in enumerate(data.get("contratantes") or [], 1):
         add(f"Contratante {i} - profissão", c.get("profissao"))
-        add(f"Contratante {i} - endereço", c.get("endereco"))
+        # Endereço, nomes e documentos das partes vêm da consulta de CNPJ/cadastro (sem acento,
+        # abreviado): não são texto a revisar, então não vão para a IA.
         for j, rep in enumerate(c.get("representantes") or [], 1):
             add(f"Contratante {i} - representante {j} - profissão", rep.get("profissao"))
 
