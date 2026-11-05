@@ -21,6 +21,7 @@ import {
   estadoInicial,
   montarPayload,
   validar,
+  resumoDosErros,
   type AditivoForm,
   type DistratoForm,
   type Erros,
@@ -169,13 +170,13 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
   const aplicarErroDaApi = (e: unknown) => {
     const r = errosDaApi(e);
     setErros(r.campos);
-    setGeral(r.geral || (Object.keys(r.campos).length ? "Corrija os campos destacados." : ""));
+    setGeral(r.geral || resumoDosErros(r.campos));
   };
 
   const conferir = (): Record<string, unknown> | null => {
     const e = validar(tipo, estado, cnpjValido, semOrigem);
     setErros(e);
-    setGeral(Object.keys(e).length ? "Corrija os campos destacados." : "");
+    setGeral(resumoDosErros(e));
     return Object.keys(e).length ? null : montarPayload(tipo, estado, origemId);
   };
 
