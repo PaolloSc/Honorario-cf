@@ -472,29 +472,25 @@ function PJForm({
         </p>
       )}
 
-      {loaded && (
-        <FormField label="Razão Social" required>
-          <Input
-            value={data.razao_social}
-            onChange={(e) => onUpdate({ razao_social: e.target.value })}
-            readOnly={!editavel}
-            placeholder={editavel ? "Digite a razão social" : "Preenchido automaticamente pelo CNPJ"}
-            className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
-          />
-        </FormField>
-      )}
+      <FormField label="Razão Social" required hint={loaded ? undefined : "Busque o CNPJ para preencher ou digite."}>
+        <Input
+          value={data.razao_social}
+          onChange={(e) => onUpdate({ razao_social: e.target.value })}
+          readOnly={!editavel}
+          placeholder={editavel ? "Digite a razão social" : "Preenchido automaticamente pelo CNPJ"}
+          className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
+        />
+      </FormField>
 
-      {loaded && (
-        <FormField label="Endereço" required>
-          <Input
-            value={data.endereco}
-            onChange={(e) => onUpdate({ endereco: e.target.value })}
-            readOnly={!editavel}
-            placeholder={editavel ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CNPJ"}
-            className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
-          />
-        </FormField>
-      )}
+      <FormField label="Endereço da sede" required hint={loaded ? undefined : "Busque o CNPJ para preencher ou digite."}>
+        <Input
+          value={data.endereco}
+          onChange={(e) => onUpdate({ endereco: e.target.value })}
+          readOnly={!editavel}
+          placeholder={editavel ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CNPJ"}
+          className={editavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
+        />
+      </FormField>
 
       <div className="md:col-span-2">
         <RepresentantesForm
@@ -579,7 +575,7 @@ function RepresentantesForm({
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Nome do Representante">
+            <FormField label="Nome do Representante" required>
               <Input value={rep.nome} onChange={(e) => update(i, { nome: e.target.value })} />
             </FormField>
             <FormField label="CPF do Representante">
@@ -589,7 +585,7 @@ function RepresentantesForm({
                 placeholder="000.000.000-00"
               />
             </FormField>
-            <FormField label="E-mail do Representante">
+            <FormField label="E-mail do Representante" required hint="Obrigatório: o representante assina o contrato.">
               <Input
                 type="email"
                 value={rep.email || ""}
@@ -822,8 +818,7 @@ function PFForm({
         </FormField>
       )}
 
-      {enderecoRevelado && (
-        <FormField label="Endereço completo" required>
+      <FormField label="Endereço completo" required hint={enderecoRevelado ? undefined : "Digite o endereço ou informe o CEP acima para preencher."}>
           <Input
             value={data.endereco}
             onChange={(e) => onUpdate({ endereco: e.target.value })}
@@ -833,7 +828,6 @@ function PFForm({
             required
           />
         </FormField>
-      )}
     </div>
   );
 }
