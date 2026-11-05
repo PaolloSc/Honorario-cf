@@ -81,6 +81,9 @@ for (const k of ["substabelecentes", "processos.0.numero"]) assert.ok(validar("d
 assert.equal((montarPayload("distrato", disCont, "o") as any).substabelecer_e_devolver, true);
 assert.equal((estadoInicial("distrato", "2026-10-16") as any).ressalva_exito, true);
 const disSub = { ...dis, substabelecer_e_devolver: true };
+// Prazo do substabelecimento: 1 a 90 dias (padrão 10).
+assert.equal((montarPayload("distrato", disSub, "o") as any).prazo_substabelecimento_dias, 10);
+for (const dias of ["0", "91", ""]) assert.ok(validar("distrato", { ...disSub, prazo_substabelecimento_dias: dias }).prazo_substabelecimento_dias, dias);
 for (const k of ["substabelecentes", "processos.0.numero", "substabelecidos.0.nome", "substabelecidos.0.oab"]) assert.ok(validar("distrato", disSub)[k], k);
 const disOk = {
   ...disSub,

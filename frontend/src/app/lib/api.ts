@@ -1096,6 +1096,8 @@ export interface PrefillDocumento {
   aditivos_existentes: number;
   data_contrato_origem: string | null;
   status_origem: string;
+  /** Algum escopo do contrato de origem tem honorário de êxito. */
+  origem_tem_exito?: boolean;
   aviso: string | null;
 }
 

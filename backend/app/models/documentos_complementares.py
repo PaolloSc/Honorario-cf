@@ -131,6 +131,8 @@ class DistratoRequest(_ComOrigem):
     substabelecer_e_devolver: bool = False
     # Distrato que envolve processo judicial: o substabelecimento sem reserva e' obrigatorio.
     contencioso: bool = False
+    # Prazo, em dias da indicacao do novo patrono, para substabelecer (clausula de substabelecimento).
+    prazo_substabelecimento_dias: int = Field(default=10, ge=1, le=90)
     # Dados do substabelecimento gerado junto (so com substabelecer_e_devolver). Distratos salvos
     # antes dessa opcao nao o tem e nao geram nada novo.
     substabelecimento: Optional["SubstabelecimentoDoDistrato"] = None

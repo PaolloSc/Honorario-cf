@@ -131,7 +131,7 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
         label="Ressalvar honorários de êxito (proporcionais) e de sucumbência"
         checked={estado.ressalva_exito}
         onChange={(v) => set({ ressalva_exito: v })}
-        hint="Marcado (padrão): o êxito é devido de forma proporcional ao trabalho feito até o distrato, mais a sucumbência (art. 23 da Lei 8.906/94). Desmarcado, a quitação é total."
+        hint="Já vem marcado quando o contrato de origem tem honorário de êxito. O êxito é devido na proporção dos serviços prestados até o distrato, mais a sucumbência (art. 23 da Lei 8.906/94). Desmarcado, a quitação é total."
       />
       <Checkbox
         label="Envolve processo judicial"
@@ -151,6 +151,9 @@ export function CamposDistrato({ estado, onChange, erros }: Props<DistratoForm>)
         <>
           <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Substabelecimento gerado junto</h3>
           <p className="text-xs text-muted mb-2">O cliente e a data vêm do contrato e do distrato. Informe quem assina, quem recebe os poderes e os processos: ao sair do número CNJ, o tribunal aparece e, se o processo estiver no Legal One, as partes são preenchidas.</p>
+          <FormField label="Prazo para substabelecer (dias)" required error={erros.prazo_substabelecimento_dias} hint="Contado da indicação, por escrito, do novo advogado pelo cliente.">
+            <Input inputMode="numeric" value={estado.prazo_substabelecimento_dias} onChange={(e) => set({ prazo_substabelecimento_dias: e.target.value.replace(/\D/g, "") })} error={!!erros.prazo_substabelecimento_dias} />
+          </FormField>
           <CamposPoderes estado={estado} onChange={set} erros={erros} />
         </>
       )}

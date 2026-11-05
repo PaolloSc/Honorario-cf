@@ -39,6 +39,8 @@ export interface DistratoForm extends PoderesForm {
   substabelecer_e_devolver: boolean;
   /** Envolve processo judicial: o substabelecimento sem reserva é obrigatório. */
   contencioso: boolean;
+  /** Prazo (dias da indicação do novo patrono) para substabelecer. */
+  prazo_substabelecimento_dias: string;
   /** Pagamento pendente ao escritório; sem valor, a cláusula não entra no distrato. */
   pagamento_valor: string;
   pagamento_data: string;
@@ -148,7 +150,7 @@ export function estadoInicial(tipo: TipoDocumento, hoje: string): EstadoDocument
   if (tipo === "distrato") {
     return {
       data_documento: hoje, data_contrato_origem: "", objeto_contrato_origem: "",
-      ressalva_exito: true, substabelecer_e_devolver: false, contencioso: false,
+      ressalva_exito: true, substabelecer_e_devolver: false, contencioso: false, prazo_substabelecimento_dias: "10",
       pagamento_valor: "", pagamento_data: "", pagamento_forma: "",
       substabelecentes: [], substabelecidos: [substabelecidoVazio()], endereco_substabelecidos: "",
       processos: [processoVazio()],
@@ -223,6 +225,7 @@ export function montarPayload(
       ressalva_exito: e.ressalva_exito,
       substabelecer_e_devolver: e.substabelecer_e_devolver || e.contencioso,
       contencioso: e.contencioso,
+      prazo_substabelecimento_dias: Number(e.prazo_substabelecimento_dias) || 10,
       pagamento_valor: valorEmReais(e.pagamento_valor),
       pagamento_data: valorEmReais(e.pagamento_valor) ? e.pagamento_data || null : null,
       pagamento_forma: e.pagamento_forma.trim(),
@@ -280,6 +283,7 @@ export function estadoDoFormData(tipo: TipoDocumento, fd: Record<string, any>, h
       ressalva_exito: !!fd.ressalva_exito,
       substabelecer_e_devolver: !!fd.substabelecer_e_devolver,
       contencioso: !!fd.contencioso,
+      prazo_substabelecimento_dias: String(fd.prazo_substabelecimento_dias ?? 10),
       pagamento_valor: fd.pagamento_valor ? String(fd.pagamento_valor).replace(".", ",") : "",
       pagamento_data: fd.pagamento_data ?? "",
       pagamento_forma: fd.pagamento_forma ?? "",
@@ -339,7 +343,11 @@ export function validar(tipo: TipoDocumento, estado: EstadoDocumento, cnpjOk: (c
       if (!v || v < 0.01) e.pagamento_valor = "Informe um valor de pelo menos R$ 0,01";
       else obrig("pagamento_data", d.pagamento_data, "Informe a data limite do pagamento");
     }
-    if (d.substabelecer_e_devolver || d.contencioso) validarPoderes(d);
+    if (d.substabelecer_e_devolver || d.contencioso) {
+      validarPoderes(d);
+      const dias = Number(d.prazo_substabelecimento_dias);
+      if (!Number.isInteger(dias) || dias < 1 || dias > 90) e.prazo_substabelecimento_dias = "Informe de 1 a 90 dias";
+    }
   } else {
     const s = estado as SubstabelecimentoForm;
     obrig("outorgante", s.outorgante_nome, "Informe o outorgante");

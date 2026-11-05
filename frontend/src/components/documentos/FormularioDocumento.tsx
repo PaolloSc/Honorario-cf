@@ -146,7 +146,10 @@ export default function FormularioDocumento({ tipo, origemId, editContractId, in
             };
           }
           const a = atual as AditivoForm | DistratoForm;
-          return a.data_contrato_origem ? atual : { ...a, data_contrato_origem: p.data_contrato_origem ?? "" };
+          if (a.data_contrato_origem) return atual;
+          // Distrato: a ressalva de êxito nasce marcada só se o contrato de origem tem êxito (editável).
+          const ressalva = tipo === "distrato" && p.origem_tem_exito !== undefined ? { ressalva_exito: p.origem_tem_exito } : {};
+          return { ...a, ...ressalva, data_contrato_origem: p.data_contrato_origem ?? "" };
         });
       } catch (e) {
         if (ativo) setGeral(errosDaApi(e).geral);

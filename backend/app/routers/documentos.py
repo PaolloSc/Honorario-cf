@@ -108,6 +108,8 @@ def prefill(
         "aditivos_existentes": len(_derivados(origem.contract_id, db, TIPO_ADITIVO)),
         "data_contrato_origem": _data_contrato_origem(form),
         "status_origem": origem.status,
+        # Distrato: a ressalva de exito nasce marcada so quando o contrato de origem tem honorario de exito.
+        "origem_tem_exito": any(isinstance(e, dict) and e.get("exito") for e in (form.get("escopos") or [])),
         "aviso": None if origem.status == "assinado" else "O contrato original ainda não foi assinado.",
     }
 

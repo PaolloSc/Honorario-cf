@@ -363,8 +363,11 @@ def test_distrato_quitacao_total_com_substabelecer(client):
 
 
 # Redacao aprovada pelo socio (HCF-126).
-RESSALVA = ("ressalvados os honorários de êxito, que serão devidos de forma proporcional ao trabalho realizado até a data "
-            "deste Distrato")
+RESSALVA = ("Ficam ressalvados os honorários de êxito previstos no contrato originário, devidos na proporção dos "
+            "serviços prestados até esta data, apurados se e quando implementada a condição")
+SEM_VALOR = ("As Partes reconhecem que os honorários e despesas devidos até a data deste instrumento foram "
+             "integralmente pagos, nada havendo a pagar a qualquer título.")
+SUBSTAB = "substabelecerá, sem reserva de poderes, ao(s) advogado(s) indicado(s) por escrito pela CONTRATANTE"
 @pytest.mark.parametrize("ressalva,substabelecer", [
     (True, True), (True, False), (False, False),
 ])
@@ -574,6 +577,23 @@ def test_prefill_sugere_a_data_do_contrato_do_pai(client):
     assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["data_contrato_origem"] == "2019-05-02"
 
 
+def test_prefill_diz_se_o_contrato_de_origem_tem_exito(client):
+    def com_escopos(escopos):
+        db = SessionLocal()
+        try:
+            ver = db.query(ContractVersionDB).filter_by(contract_id=ORIGEM).one()
+            form = json.loads(ver.form_data_json)
+            form["escopos"] = escopos
+            ver.form_data_json = json.dumps(form)
+            db.commit()
+        finally:
+            db.close()
+        return client.get(f"/api/documentos/prefill/{ORIGEM}").json()["origem_tem_exito"]
+
+    assert com_escopos([{"tipo": "consultivo", "exito": None}]) is False
+    assert com_escopos([{"tipo": "contencioso", "exito": {"percentual_ou_valor": "20%"}}]) is True
+
+
 def test_aditivo_prefere_a_data_informada_pelo_advogado(client):
     _data_do_contrato_na_origem("2019-05-02")
     texto = _texto(client, _id(client, "aditivo", ADITIVO))
@@ -614,7 +634,7 @@ def test_substabelecimento_com_varios_continua_no_plural(client):
 def test_distrato_com_ressalva_acrescenta_a_ressalva_a_quitacao(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True,
                                                     "substabelecer_e_devolver": False}))
-    assert "nesse sentido, " + RESSALVA in texto
+    assert "nesse sentido. " + RESSALVA in texto
     assert texto.index("irretratável quitação") < texto.index(RESSALVA)  # qualifica a quitacao
     assert "art. 23 da Lei n.º 8.906/94" in texto
     assert "plena, geral, rasa" not in texto and "substabelecerá" not in texto
@@ -657,29 +677,48 @@ def test_distrato_pagamento_com_forma_informada_e_substabelecimento_numerados(cl
 def test_distrato_sem_valor_nao_tem_clausula_de_pagamento(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, "pagamento_data": "2026-11-30"}))
     assert "pagará à CONTRATADA" not in texto and "Pix" not in texto
-    assert "2.1. As Partes declaram que os honorários contratuais foram integralmente quitados" in texto
+    assert f"2.1. {SEM_VALOR}" in texto
     assert "2.2. A CONTRATADA substabelecerá" in texto
 
 
 def test_distrato_sem_valor_declara_honorarios_quitados(client):
     texto = _texto(client, _id(client, "distrato", DISTRATO))
-    assert ("As Partes declaram que os honorários contratuais foram integralmente quitados, "
-            "não havendo valores pendentes.") in texto
-    assert "multa" not in texto and "título executivo" not in texto
+    assert SEM_VALOR in texto
+    assert "a contento" not in texto and "multa" not in texto and "título executivo" not in texto
 
 
 def test_distrato_com_valor_traz_multa_juros_correcao_e_titulo_executivo(client):
     texto = _texto(client, _id(client, "distrato", {**DISTRATO, **PAGAMENTO}))
     assert "2.2. Em caso de atraso no pagamento, incidirão multa de 10% (dez por cento), juros de 1% (um por cento) ao mês e correção monetária" in texto
     assert "título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil" in texto
-    assert "integralmente quitados" not in texto
+    assert SEM_VALOR not in texto
 
 
-def test_distrato_substabelecimento_prazo_de_dez_dias_e_recibo(client):
-    texto = _texto(client, _id(client, "distrato", DISTRATO))
-    assert "em até 10 (dez) dias contados da assinatura deste Distrato" in texto
-    assert "prazos processuais que vencerem nesse período, nos termos do art. 5º, § 3º, da Lei n.º 8.906/94" in texto
-    assert "mediante recibo" in texto
+@pytest.mark.parametrize("extra,prazo", [({}, "10 (dez)"), ({"prazo_substabelecimento_dias": 5}, "5 (cinco)")])
+def test_distrato_substabelecimento_prazo_configuravel_e_art_9_do_ced(client, extra, prazo):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **extra}))
+    assert (f"em até {prazo} dias da indicação, e restituirá os documentos e bens recebidos, com prestação de "
+            "contas, nos termos do art. 9º do Código de Ética e Disciplina da OAB.") in texto
+
+
+@pytest.mark.parametrize("dias", [0, 91, -3])
+def test_distrato_prazo_do_substabelecimento_fora_de_1_a_90_da_422(client, dias):
+    assert _gerar(client, "distrato", {**DISTRATO, "prazo_substabelecimento_dias": dias}).status_code == 422
+
+
+@pytest.mark.parametrize("com_valor", [True, False])
+@pytest.mark.parametrize("substabelecer", [True, False])
+@pytest.mark.parametrize("ressalva", [True, False])
+def test_distrato_todas_as_combinacoes_valor_substabelecimento_ressalva(client, com_valor, substabelecer, ressalva):
+    payload = {**DISTRATO, "substabelecer_e_devolver": substabelecer, "ressalva_exito": ressalva,
+               **(PAGAMENTO if com_valor else {})}
+    texto = _texto(client, _id(client, "distrato", payload))
+    assert ("pagará à CONTRATADA" in texto) is com_valor
+    assert ("título executivo extrajudicial" in texto) is com_valor
+    assert (SEM_VALOR in texto) is (not com_valor)
+    assert (SUBSTAB in texto) is substabelecer
+    assert (RESSALVA in texto) is ressalva
+    assert "a contento" not in texto
 
 
 def test_distrato_contencioso_obriga_o_substabelecimento_junto(client):

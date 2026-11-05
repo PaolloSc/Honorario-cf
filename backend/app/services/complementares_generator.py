@@ -23,7 +23,7 @@ from app.models.documentos_complementares import (
 )
 from app.services.consumidor_generator import ConsumidorGenerator
 from app.services.contract_generator import MESES_PT_BR
-from app.utils.currency import valor_com_extenso
+from app.utils.currency import numero_com_extenso, valor_com_extenso
 
 ESCRITORIO_NOME = "CARVALHO & FURTADO ADVOGADOS"
 ESCRITORIO_CNPJ = "25.463.159/0001-73"
@@ -282,22 +282,25 @@ class AditivoGenerator(ComplementarGenerator):
 
 
 # ── Clausulas do distrato que o Dr. e a revisao juridica ajustam: ficam aqui, fora da logica ──
-DISTRATO_SEM_VALOR = "As Partes declaram que os honorários contratuais foram integralmente quitados, não havendo valores pendentes."
+DISTRATO_SEM_VALOR = (
+    "As Partes reconhecem que os honorários e despesas devidos até a data deste instrumento foram "
+    "integralmente pagos, nada havendo a pagar a qualquer título."
+)
 DISTRATO_ENCARGOS = (
     "Em caso de atraso no pagamento, incidirão multa de 10% (dez por cento), juros de 1% (um por cento) ao mês "
     "e correção monetária sobre o valor devido. O presente Distrato, assinado pelas partes e por duas "
     "testemunhas, constitui título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil."
 )
+# {prazo}: "10 (dez) dias" (campo prazo_substabelecimento_dias do formulario).
 DISTRATO_SUBSTABELECIMENTO = (
-    "A CONTRATADA substabelecerá, sem reserva de poderes, os processos judiciais em favor do novo patrono, que a "
-    "CONTRATANTE se obriga a indicar em até 10 (dez) dias contados da assinatura deste Distrato. A CONTRATADA "
-    "responderá apenas pelos prazos processuais que vencerem nesse período, nos termos do art. 5º, § 3º, da "
-    "Lei n.º 8.906/94, e restituirá os documentos físicos ou digitais sob sua guarda mediante recibo."
+    "A CONTRATADA substabelecerá, sem reserva de poderes, ao(s) advogado(s) indicado(s) por escrito pela "
+    "CONTRATANTE, em até {prazo} da indicação, e restituirá os documentos e bens recebidos, com prestação de "
+    "contas, nos termos do art. 9º do Código de Ética e Disciplina da OAB."
 )
 DISTRATO_RESSALVA_EXITO = (
-    ", ressalvados os honorários de êxito, que serão devidos de forma proporcional ao trabalho realizado até a "
-    "data deste Distrato, caso venham a se tornar exigíveis nos termos do contrato original, bem como os "
-    "honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
+    ". Ficam ressalvados os honorários de êxito previstos no contrato originário, devidos na proporção dos "
+    "serviços prestados até esta data, apurados se e quando implementada a condição, bem como os honorários "
+    "de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
 )
 
 
@@ -350,7 +353,8 @@ class DistratoGenerator(ComplementarGenerator):
         else:
             subclausulas.append(DISTRATO_SEM_VALOR)
         if data.substabelecer_e_devolver:
-            subclausulas.append(DISTRATO_SUBSTABELECIMENTO)
+            prazo = numero_com_extenso(data.prazo_substabelecimento_dias, "dias")
+            subclausulas.append(DISTRATO_SUBSTABELECIMENTO.format(prazo=prazo))
         for i, texto in enumerate(subclausulas, 1):
             doc.add_paragraph(f"{k}.{i}. {texto}")
 
