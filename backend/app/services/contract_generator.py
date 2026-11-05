@@ -49,8 +49,10 @@ from app.utils.currency import (
 INCIDENCIA_EXITO_LABELS = {
     "beneficio_economico": "benefício econômico",
     "beneficio_financeiro": "benefício financeiro",
-    "beneficio_tributario": "benefício tributário",
-    "todos": "benefício econômico, financeiro e/ou tributário",
+    "beneficio_tributario": "benefício fiscal",  # chave antiga mantida p/ rascunhos
+    "beneficio_fiscal": "benefício fiscal",
+    "qualquer_valor_recebido": "qualquer valor recebido pela CONTRATANTE",
+    "todos": "benefício econômico, financeiro e/ou fiscal",
 }
 
 FORMA_PAGAMENTO_LABELS = {
@@ -1006,17 +1008,21 @@ class ContractGenerator:
 
         incidencia = (
             self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)
-            or "benefício econômico e/ou financeiro e/ou fiscal e/ou tributário"
+            or "benefício econômico e/ou financeiro e/ou fiscal"
         )
-        beneficio = (
-            f"o {incidencia}, corrigido monetariamente, aproveitável à CONTRATANTE "
-            "(Benefício), ainda que parcial"
-        )
-        base = self._texto_livre(ex.base_calculo)
-        base = f", tendo como base de cálculo {base}" if base else ""
+        if ex.incidencia == "qualquer_valor_recebido":
+            beneficio = (
+                "qualquer valor recebido pela CONTRATANTE, corrigido monetariamente "
+                "(Benefício), ainda que parcial"
+            )
+        else:
+            beneficio = (
+                f"o {incidencia}, corrigido monetariamente, aproveitável à CONTRATANTE "
+                "(Benefício), ainda que parcial"
+            )
         if ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
             num(
-                f"Os honorários de êxito incidirão sobre {beneficio}{base}, no percentual "
+                f"Os honorários de êxito incidirão sobre {beneficio}, no percentual "
                 "correspondente à faixa de valor do Benefício, conforme a tabela abaixo:", chave="incidencia"
             )
             table = doc.add_table(rows=1, cols=2)
@@ -1032,10 +1038,10 @@ class ContractGenerator:
             # variavel nao herda o percentual fixo que ficou escondido na troca de subtipo
             num(
                 f"Os honorários de êxito corresponderão a {percentual_com_extenso(ex.percentual)} "
-                f"sobre {beneficio}{base}.", chave="incidencia"
+                f"sobre {beneficio}.", chave="incidencia"
             )
         else:
-            num(f"Os honorários de êxito incidirão sobre {beneficio}{base}.", chave="incidencia")
+            num(f"Os honorários de êxito incidirão sobre {beneficio}.", chave="incidencia")
 
         forma = (ex.forma_pagamento or "").strip()
         venc = ""

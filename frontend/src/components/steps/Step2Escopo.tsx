@@ -10,8 +10,9 @@ import type {
   EscopoItem,
   TipoEscopo
 } from "@/types/contract";
+import { adicionarEscopo, removerEscopo, type Honorarios } from "@/app/lib/trocaEscopo";
 import { ESCOPO_LABELS } from "@/types/contract";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 const ESCOPO_TYPES = Object.keys(ESCOPO_LABELS) as TipoEscopo[];
 
@@ -54,13 +55,15 @@ export default function Step2Escopo({
   incluirPartesRelacionadas,
   onChangePartesRelacionadas,
 }: Step2Props) {
+  const guardado = useRef<Honorarios | null>(null);
   const toggleEscopo = useCallback(
     (tipo: TipoEscopo, enabled: boolean) => {
-      if (enabled) {
-        onChange([...escopos, emptyEscopo(tipo)]);
-      } else {
-        onChange(escopos.filter((e) => e.tipo !== tipo));
-      }
+      // Trocar de escopo não muda o honorário: o preenchimento acompanha (ver trocaEscopo.ts).
+      const r = enabled
+        ? adicionarEscopo(escopos, emptyEscopo(tipo), guardado.current)
+        : removerEscopo(escopos, tipo, guardado.current);
+      guardado.current = r.guardado;
+      onChange(r.escopos);
     },
     [escopos, onChange]
   );

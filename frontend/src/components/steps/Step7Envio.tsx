@@ -305,6 +305,7 @@ export default function Step7Envio({
   // Colaboradores do escritorio: autopreenchimento de testemunhas.
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [socioEscritorio, setSocioEscritorio] = useState("");
+  const [avisoSocio, setAvisoSocio] = useState(false);
   const isEdit = !!editContractId;
   // `data` do render atual, para os callbacks assíncronos não usarem uma cópia velha.
   const dataRef = useRef(data);
@@ -346,6 +347,8 @@ export default function Step7Envio({
         return;
       }
     }
+    // Um único sócio cadastrado: não há o que escolher.
+    if (socios.length === 1 && socios[0].email) setSocioEscritorio(socios[0].email);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colaboradores, data.participacao.responsavel_gestao, data.participacao.participantes]);
 
@@ -574,6 +577,15 @@ export default function Step7Envio({
 
   const handleSendForSignature = async () => {
     if (!contractId) return;
+    if (!socioEscritorio) {
+      // O DocuSeal precisa do sócio que assina pelo escritório: leva o usuário até o seletor.
+      setAvisoSocio(true);
+      const el = document.getElementById("socio-escritorio");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.querySelector("input")?.focus();
+      return;
+    }
+    setAvisoSocio(false);
 
     setIsSubmitting(true);
     setStatus("sending");
@@ -660,8 +672,16 @@ export default function Step7Envio({
       <SocioEscritorioSelect
         colaboradores={colaboradores}
         value={socioEscritorio}
-        onChange={setSocioEscritorio}
+        onChange={(v) => {
+          setSocioEscritorio(v);
+          if (v) setAvisoSocio(false);
+        }}
       />
+      {avisoSocio && !socioEscritorio && (
+        <p className="text-sm text-danger -mt-4">
+          Escolha o sócio que assina pelo escritório para enviar para assinatura.
+        </p>
+      )}
 
       <div className="bg-primary/[0.08] border border-primary rounded-lg p-4">
         <h3 className="font-medium text-primary-dark mb-2">Resumo do Contrato</h3>
@@ -1002,15 +1022,16 @@ export default function Step7Envio({
         )}
 
         {/* After save/email success - show signature button */}
-        {status === "sent_email" && contractId && (
+        {(status === "sent_email" || (status === "success" && !signatureSent)) && contractId && (
           <>
             <div>
               <button
                 onClick={handleSendForSignature}
-                disabled={isSubmitting || !socioEscritorio}
+                disabled={isSubmitting}
+                aria-disabled={!socioEscritorio}
                 className={`px-4 py-2 rounded-lg transition ${
                   !socioEscritorio
-                    ? "bg-border/40 text-muted cursor-not-allowed"
+                    ? "bg-primary/50 text-white hover:bg-primary/60"
                     : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
                 }`}
               >
@@ -1018,7 +1039,7 @@ export default function Step7Envio({
               </button>
               {!socioEscritorio && (
                 <p className="text-xs text-warning mt-1 max-w-64">
-                  Escolha o sócio que assina pelo escritório (acima) para habilitar o envio.
+                  Escolha o sócio que assina pelo escritório (acima) para enviar.
                 </p>
               )}
             </div>
