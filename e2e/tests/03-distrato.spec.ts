@@ -12,7 +12,19 @@ async function abrir(page: Page, sufixo: string) {
   return origem;
 }
 
+/** O substabelecimento sempre sai junto com o distrato: substabelecente, substabelecido (OAB) e processo sao obrigatorios. */
+async function preencherSubstabelecimento(page: Page) {
+  await page.locator("select").filter({ hasText: "Colaborador" }).first().selectOption({ label: "Ana Teste Socia" });
+  await page.getByRole("button", { name: "Adicionar", exact: true }).first().click();
+  const nome = page.getByLabel(/^Nome/).last();
+  await nome.fill(`${MARCA} Novo Patrono`);
+  // O cartao do substabelecido: o ancestral mais proximo da caixa de nome que tambem tem o campo de OAB.
+  await nome.locator("xpath=ancestor::div[.//input[@placeholder='00.000']][1]").getByPlaceholder("00.000").fill("55555");
+  await page.getByLabel("Número (CNJ)").fill(CNJ);
+}
+
 async function previa(page: Page) {
+  await preencherSubstabelecimento(page);
   await page.getByRole("button", { name: "Ver prévia" }).click();
   const quadro = page.frameLocator("iframe[title='Prévia do distrato']").locator("body");
   await expect(quadro).toContainText("DISTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS", { timeout: 60_000 });
@@ -22,7 +34,9 @@ async function previa(page: Page) {
 test.describe("distrato no modelo do escritorio", () => {
   test("sem valor: declaracao de quitacao integral e ressalva de exito marcada por padrao", async ({ page }) => {
     await abrir(page, "sem valor");
-    await expect(page.getByLabel(/Ressalvar honorários de êxito/)).toBeChecked();
+    // So vem marcado quando o contrato de origem tem honorario de exito; a origem do teste e' mensalidade.
+    await expect(page.getByLabel(/Ressalvar honorários de êxito/)).not.toBeChecked();
+    await page.getByLabel(/Ressalvar honorários de êxito/).check();
     const texto = await previa(page);
     await expect(texto).toContainText("honorários contratuais foram integralmente quitados");
     await expect(texto).not.toContainText("pagará ao Contratado");
@@ -63,24 +77,14 @@ test.describe("distrato no modelo do escritorio", () => {
 
   test("contencioso: o substabelecimento e' obrigatorio e sai junto com o distrato", async ({ page }) => {
     const origem = await abrir(page, "contencioso");
-    await page.getByLabel(/Envolve processo judicial/).check();
-    const subst = page.getByLabel("Substabelecer sem reserva de poderes e devolver documentos");
-    await expect(subst).toBeChecked();
-    await subst.uncheck({ force: true }).catch(() => {});
-    await expect(subst).toBeChecked(); // travado enquanto houver processo
+    // A secao "Substabelecimento gerado junto" e' sempre obrigatoria (nao ha mais caixa "envolve processo judicial").
+    await expect(page.getByText("Substabelecimento gerado junto")).toBeVisible();
 
     // Sem os dados do substabelecimento, nao passa.
     await page.getByRole("button", { name: "Ver prévia" }).click();
     await expect(page.locator("iframe[title='Prévia do distrato']")).toHaveCount(0);
 
-    // Substabelecente (cadastro), substabelecido e processo.
-    await page.locator("select").filter({ hasText: "Colaborador" }).first().selectOption({ label: "Ana Teste Socia" });
-    await page.getByRole("button", { name: "Adicionar", exact: true }).first().click();
-    const nome = page.getByLabel(/^Nome/).last();
-    await nome.fill(`${MARCA} Novo Patrono`);
-    // O cartao do substabelecido: o ancestral mais proximo da caixa de nome que tambem tem o campo de OAB.
-    await nome.locator("xpath=ancestor::div[.//input[@placeholder='00.000']][1]").getByPlaceholder("00.000").fill("55555");
-    await page.getByLabel("Número (CNJ)").fill(CNJ);
+    // Substabelecente (cadastro), substabelecido e processo (feitos dentro de previa()).
     const texto = await previa(page);
     await expect(texto).toContainText("10 (dez) dias");
     await expect(texto).toContainText("sem reserva de poderes");

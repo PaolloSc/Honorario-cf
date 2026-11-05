@@ -22,7 +22,7 @@ test.describe("contrato de honorarios: wizard ate a previa", () => {
     await expect(page.getByText(AVISO)).toBeVisible();
     await expect(page.getByText("Contratante 1: informe o nome completo.")).toBeVisible();
     await expect(page.getByText("Contratante 1: informe o CPF.")).toBeVisible();
-    await expect(page.getByText("Contratante 1: informe o estado civil.")).toBeVisible();
+    await expect(page.getByText("Contratante 1: informe o endereço completo.")).toBeVisible(); // estado civil ja vem "Solteiro(a)"
     await expect(page.getByText("Contratante 1: informe um e-mail válido.")).toBeVisible();
 
     // 1b. Contratante (PF). O endereco vem do CEP.
