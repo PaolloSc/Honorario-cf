@@ -350,38 +350,34 @@ def test_aditivo_assinado_nao_muda_status_da_origem(client):
 def test_distrato_quitacao_total_com_substabelecer(client):
     texto = _texto(client, _id(client, "distrato", DISTRATO))
 
-    assert "DISTRATO AO CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS" in texto
+    assert "DISTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS" in texto
     assert "09 de março de 2021" in texto
     assert "assessoria jurídica empresarial" in texto
-    assert "art. 472 do Código Civil" in texto
-    assert "integralmente adimplidos" in texto
-    assert "honorários de êxito futuros" in texto  # quitacao total
-    assert "substabelecer sem reserva de poderes" in texto
-    assert "2 (duas) vias" in texto and "2 (duas) testemunhas" in texto
+    assert "Por motivos supervenientes" in texto
+    assert RESSALVA not in texto  # quitacao total
+    assert "substabelecerá, sem reserva de poderes" in texto
+    assert "02 (duas) vias" in texto and "testemunhas abaixo" in texto
     assert "TESTEMUNHAS" in texto.upper()
     assert "07 de outubro de 2026" in texto
     assert "Aditivo" not in texto  # sem aditivos cadastrados, nao cita nenhum
 
 
 # Redacao aprovada pelo socio (HCF-126).
-RESSALVA = "ressalvados reembolsos e honorários vincendos, inclusive de êxito, caso exigíveis nos termos do contrato original"
-ITEM_1_2 = ("1.2. As Partes reconhecem que o objeto da prestação de serviços sob responsabilidade da CONTRATADA "
-            "foi executado a contento e que os valores devidos pela CONTRATANTE a título de honorários vencidos e "
-            "eventuais despesas foram integralmente adimplidos a tempo e modo.")
-
-
-@pytest.mark.parametrize("ressalva,substabelecer", [
-    (True, True), (True, False), (False, False),
-])
-def test_distrato_flags_sao_independentes(client, ressalva, substabelecer):
-    payload = {**DISTRATO, "ressalva_exito": ressalva, "substabelecer_e_devolver": substabelecer}
+RESSALVA = ("Ficam ressalvados os honorários de êxito previstos no contrato originário, devidos na proporção dos "
+            "serviços prestados até esta data, apurados se e quando implementada a condição")
+SEM_VALOR = ("As Partes reconhecem que os honorários e despesas devidos até a data deste instrumento foram "
+             "integralmente pagos, nada havendo a pagar a qualquer título, ressalvado o disposto na cláusula 3.")
+SUCUMBENCIA = "ressalvados os honorários de sucumbência, nos termos do art. 23 da Lei n.º 8.906/94"
+REMISSAO = "além dos aqui previstos, ressalvado o disposto na cláusula 3."
+SUBSTAB = "substabelecerá, sem reserva de poderes, ao(s) advogado(s) indicado(s) por escrito pela CONTRATANTE"
+@pytest.mark.parametrize("ressalva", [True, False])
+def test_distrato_ressalva_e_opcional_e_substabelecimento_sempre_presente(client, ressalva):
+    payload = {**DISTRATO, "ressalva_exito": ressalva}
     texto = _texto(client, _id(client, "distrato", payload))
 
     assert (RESSALVA in texto) is ressalva
-    assert ("honorários de êxito futuros" in texto) is (not ressalva)
-    assert ITEM_1_2 in texto  # 1.2 igual, com e sem ressalva
-    assert "honorários fixos" not in texto
-    assert ("substabelecer sem reserva de poderes" in texto) is substabelecer
+    assert "mútua, total, completa, irrevogável e irretratável quitação" in texto  # com e sem ressalva
+    assert "substabelecerá, sem reserva de poderes" in texto  # decisao 05/11: sempre junto
 
 
 def test_distrato_cita_so_aditivos_assinados(client):
@@ -545,9 +541,9 @@ def test_tipo_desconhecido_da_404(client):
 def test_distrato_com_pessoa_fisica_nao_fala_em_contrato_social(client):
     _semear_origem(CLIENTE_PF)
     texto = _texto(client, _id(client, "distrato", DISTRATO))
-    assert 'doravante denominado(a) simplesmente "CONTRATANTE"' in texto
+    assert "denominado(a) apenas CONTRATANTE" in texto
     assert "inscrito(a)" not in texto
-    assert texto.count("Contrato Social") == 1  # so' o do escritorio (CONTRATADA)
+    assert "Contrato Social" not in texto  # pessoa fisica nao tem; o modelo nao cita o do escritorio
 
 
 def _data_do_contrato_na_origem(iso: str):
@@ -579,6 +575,23 @@ def test_prefill_sugere_a_data_do_contrato_do_pai(client):
     assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["data_contrato_origem"] is None
     _data_do_contrato_na_origem("2019-05-02")
     assert client.get(f"/api/documentos/prefill/{ORIGEM}").json()["data_contrato_origem"] == "2019-05-02"
+
+
+def test_prefill_diz_se_o_contrato_de_origem_tem_exito(client):
+    def com_escopos(escopos):
+        db = SessionLocal()
+        try:
+            ver = db.query(ContractVersionDB).filter_by(contract_id=ORIGEM).one()
+            form = json.loads(ver.form_data_json)
+            form["escopos"] = escopos
+            ver.form_data_json = json.dumps(form)
+            db.commit()
+        finally:
+            db.close()
+        return client.get(f"/api/documentos/prefill/{ORIGEM}").json()["origem_tem_exito"]
+
+    assert com_escopos([{"tipo": "consultivo", "exito": None}]) is False
+    assert com_escopos([{"tipo": "contencioso", "exito": {"percentual_ou_valor": "20%"}}]) is True
 
 
 def test_aditivo_prefere_a_data_informada_pelo_advogado(client):
@@ -618,23 +631,145 @@ def test_substabelecimento_com_varios_continua_no_plural(client):
     assert "aos advogados Dra. Beltrana" in texto and "todos com endereço profissional" in texto
 
 
-def test_distrato_com_ressalva_nao_contradiz_a_quitacao(client):
-    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True,
-                                                    "substabelecer_e_devolver": False}))
+def test_distrato_com_ressalva_acrescenta_a_ressalva_a_quitacao(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True}))
+    assert "nesse sentido. " + RESSALVA in texto
+    assert texto.index("irretratável quitação") < texto.index(RESSALVA)  # qualifica a quitacao
+    assert "art. 23 da Lei n.º 8.906/94" in texto
     assert "plena, geral, rasa" not in texto
-    assert ("concedem-se reciprocamente quitação, em juízo ou fora dele" in texto)
-    assert "a título de honorários e reembolsos vencidos e pagos, " + RESSALVA in texto
-    assert "Prazo, Rescisão e Outros Efeitos" not in texto and "proporção conforme a fase" not in texto
-    assert texto.index("em juízo ou fora dele") < texto.index(RESSALVA)  # qualifica a quitacao
-    assert "DA QUITAÇÃO" in texto and "REVOGAÇÃO DE PODERES" not in texto
 
 
-def test_distrato_total_mantem_a_quitacao_plena_e_o_titulo_de_poderes(client):
+def test_distrato_total_usa_a_quitacao_do_modelo_sem_ressalva(client):
     texto = _texto(client, _id(client, "distrato", DISTRATO))
-    assert "plena, geral, rasa, irrestrita e irrevogável quitação, em juízo ou fora dele" in texto
-    assert "seja a título de honorários vencidos e vincendos, reembolsos, indenizações ou honorários de êxito futuros" in texto
-    assert ITEM_1_2 in texto and "honorários fixos" not in texto
-    assert "DA QUITAÇÃO E REVOGAÇÃO DE PODERES" in texto
+    assert "mútua, total, completa, irrevogável e irretratável quitação" in texto
+    assert "renunciando a qualquer direito ou pretensão nesse sentido." in texto
+    assert "resta extinto, sem qualquer ônus, penalidade" in texto
+    assert "tolerância de qualquer das partes" in texto and "incorpora todas as tratativas" in texto
+    assert "foro da comarca eleita no contrato" in texto
+
+
+def test_distrato_concorda_contratante_e_contratada_em_todo_o_texto(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **PAGAMENTO}))
+    assert "denominada apenas CONTRATADA" in texto and "denominada apenas CONTRATANTE" in texto  # PJ do ORIGEM
+    assert "Contratado" not in texto and "A Contratante" not in texto and "O Contratante" not in texto
+
+
+PAGAMENTO = {"pagamento_valor": 4000, "pagamento_data": "2026-11-30"}
+
+
+def test_distrato_com_pagamento_traz_valor_data_e_forma(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **PAGAMENTO, "substabelecer_e_devolver": False}))
+    assert ("2.1. A CONTRATANTE pagará à CONTRATADA, até o dia 30/11/2026, o valor de R$ 4.000,00 "
+            "(quatro mil reais), por meio de Pix (CNPJ 25.463.159/0001-73).") in texto
+    assert texto.index("Por motivos supervenientes") < texto.index("2.1. A CONTRATANTE pagará")
+    assert texto.index("2.1. A CONTRATANTE pagará") < texto.index("mútua, total")
+
+
+def test_distrato_pagamento_com_forma_informada_e_substabelecimento_numerados(client):
+    forma = {**PAGAMENTO, "pagamento_forma": "transferência bancária (Banco Exemplo, ag. 0001, c/c 12345-6)."}
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **forma}))
+    assert "por meio de transferência bancária (Banco Exemplo, ag. 0001, c/c 12345-6)." in texto
+    assert "Pix (CNPJ" not in texto
+    assert "2.3. A CONTRATADA substabelecerá, sem reserva de poderes" in texto
+
+
+def test_distrato_sem_valor_nao_tem_clausula_de_pagamento(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "pagamento_data": "2026-11-30"}))
+    assert "pagará à CONTRATADA" not in texto and "Pix" not in texto
+    assert f"2.1. {SEM_VALOR}" in texto
+    assert "2.2. A CONTRATADA substabelecerá" in texto
+
+
+def test_distrato_sem_valor_declara_honorarios_quitados(client):
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert SEM_VALOR in texto
+    assert "a contento" not in texto and "multa" not in texto and "título executivo" not in texto
+
+
+def test_distrato_com_valor_traz_multa_juros_correcao_e_titulo_executivo(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **PAGAMENTO}))
+    assert "2.2. Em caso de atraso no pagamento, incidirão multa de 10% (dez por cento), juros de 1% (um por cento) ao mês e correção monetária" in texto
+    assert "título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil" in texto
+    assert SEM_VALOR not in texto
+
+
+@pytest.mark.parametrize("extra,prazo", [({}, "10 (dez)"), ({"prazo_substabelecimento_dias": 5}, "5 (cinco)")])
+def test_distrato_substabelecimento_prazo_configuravel_e_art_9_do_ced(client, extra, prazo):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, **extra}))
+    assert (f"em até {prazo} dias da indicação, e restituirá os documentos e bens recebidos, com prestação de "
+            "contas, nos termos do art. 9º do Código de Ética e Disciplina da OAB.") in texto
+
+
+def test_distrato_ressalva_de_sucumbencia_em_oracao_propria_mesmo_sem_a_de_exito(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": False}))
+    assert "nesse sentido. Ficam ressalvados os honorários de sucumbência, nos termos do art. 23" in texto
+    assert "êxito previstos" not in texto and "na proporção" not in texto
+
+
+def test_distrato_sucumbencia_nao_herda_proporcao_nem_condicao_do_exito(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "ressalva_exito": True}))
+    assert "implementada a condição. Ficam, ainda, ressalvados os honorários de sucumbência" in texto
+
+
+def test_distrato_clausula_4_e_2_1_sem_valor_remetem_a_clausula_3(client):
+    texto = _texto(client, _id(client, "distrato", DISTRATO))
+    assert "3. Salvo as obrigações" in texto and "4. O Contrato objeto" in texto
+    assert "nada havendo a pagar a qualquer título, ressalvado o disposto na cláusula 3." in texto
+    assert "além dos aqui previstos, ressalvado o disposto na cláusula 3." in texto
+
+
+def test_distrato_prazo_de_um_dia_fica_no_singular(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "prazo_substabelecimento_dias": 1}))
+    assert "em até 1 (um) dia da indicação" in texto and "1 (um) dias" not in texto
+
+
+@pytest.mark.parametrize("dias", [0, 91, -3])
+def test_distrato_prazo_do_substabelecimento_fora_de_1_a_90_da_422(client, dias):
+    assert _gerar(client, "distrato", {**DISTRATO, "prazo_substabelecimento_dias": dias}).status_code == 422
+
+
+@pytest.mark.parametrize("com_valor", [True, False])
+@pytest.mark.parametrize("ressalva", [True, False])
+def test_distrato_todas_as_combinacoes_valor_e_ressalva_com_substabelecimento_sempre(client, com_valor, ressalva):
+    payload = {**DISTRATO, "ressalva_exito": ressalva, **(PAGAMENTO if com_valor else {})}
+    texto = _texto(client, _id(client, "distrato", payload))
+    assert ("pagará à CONTRATADA" in texto) is com_valor
+    assert ("título executivo extrajudicial" in texto) is com_valor
+    assert (SEM_VALOR in texto) is (not com_valor)
+    assert SUBSTAB in texto  # substabelecimento: sempre
+    assert (RESSALVA in texto) is ressalva
+    assert SUCUMBENCIA in texto  # sucumbencia: sempre, independe do checkbox do exito
+    assert REMISSAO in texto  # clausula 4 remete a 3, que sempre tem ressalva
+    assert "a contento" not in texto
+
+
+def test_distrato_contencioso_obriga_o_substabelecimento_junto(client):
+    # Mesmo com a opcao desligada, "contencioso" liga a clausula e gera o substabelecimento junto.
+    r = _gerar(client, "distrato", {**DISTRATO, "contencioso": True, "substabelecer_e_devolver": False})
+    assert r.status_code == 200 and len(r.json()["documentos_gerados_junto"]) == 1
+    assert "substabelecerá, sem reserva de poderes" in _texto(client, r.json()["contract_id"])
+
+
+def test_distrato_contencioso_sem_dados_do_substabelecimento_da_422(client):
+    sem = {k: v for k, v in DISTRATO.items() if k != "substabelecimento"}
+    assert _gerar(client, "distrato", {**sem, "contencioso": True}).status_code == 422
+
+
+def test_distrato_mesmo_pedindo_sem_substabelecimento_ele_sai_junto(client):
+    r = _gerar(client, "distrato", {**DISTRATO, "contencioso": False, "substabelecer_e_devolver": False})
+    assert r.status_code == 200 and len(r.json()["documentos_gerados_junto"]) == 1
+    assert "substabelecerá" in _texto(client, r.json()["contract_id"])
+
+
+@pytest.mark.parametrize("extra", [
+    {"pagamento_valor": 4000},  # sem data limite
+    {"pagamento_valor": 0, "pagamento_data": "2026-11-30"},
+    {"pagamento_valor": 0.001, "pagamento_data": "2026-11-30"},
+    {"pagamento_valor": -5, "pagamento_data": "2026-11-30"},
+    {"pagamento_valor": 4000, "pagamento_data": "30/11/2026"},
+])
+def test_distrato_pagamento_invalido_da_422(client, extra):
+    assert _gerar(client, "distrato", {**DISTRATO, **extra}).status_code == 422
 
 
 def test_edicao_nao_troca_o_contrato_de_origem(client):
@@ -684,7 +819,7 @@ def _total_contratos() -> int:
 
 @pytest.mark.parametrize("tipo,payload,trecho", [
     ("aditivo", ADITIVO, "ADITIVO CONTRATUAL AO CONTRATO"),
-    ("distrato", DISTRATO, "DISTRATO AO CONTRATO"),
+    ("distrato", DISTRATO, "DISTRATO DE PRESTA"),
     ("substabelecimento", SUBSTABELECIMENTO, "SUBSTABELECIMENTO SEM RESERVA DE PODERES"),
 ])
 def test_previa_devolve_html_sem_gravar(client, tipo, payload, trecho):
@@ -765,13 +900,12 @@ def test_distrato_com_a_opcao_gera_os_dois_documentos(client):
     assert "EMPRESA EXEMPLO LTDA" in texto and "07 de outubro de 2026" in texto
 
 
-def test_distrato_sem_a_opcao_gera_so_o_distrato(client):
-    payload = {**DISTRATO, "substabelecer_e_devolver": False}
-    r = _gerar(client, "distrato", payload)
+def test_distrato_gera_sempre_o_distrato_e_o_substabelecimento(client):
+    r = _gerar(client, "distrato", {**DISTRATO, "substabelecer_e_devolver": False})
     assert r.status_code == 200, r.text
-    assert r.json()["documentos_gerados_junto"] == []
+    assert len(r.json()["documentos_gerados_junto"]) == 1
     assert len(_derivados_do_origem("distrato")) == 1
-    assert _derivados_do_origem("substabelecimento") == []
+    assert len(_derivados_do_origem("substabelecimento")) == 1
 
 
 def test_distrato_com_a_opcao_sem_dados_do_substabelecimento_e_rejeitado(client):
@@ -785,3 +919,74 @@ def test_substabelecimento_do_distrato_aparece_na_lista_do_contrato(client):
     r = client.get(f"/api/contracts/{ORIGEM}/documentos")
     assert r.status_code == 200, r.text
     assert sorted(d["tipo_contrato"] for d in r.json()["documentos"]) == ["distrato", "substabelecimento"]
+
+
+# ── Documento sem contrato de origem (contrato antigo, fora do sistema) ──────────────────────
+
+PARTE_PJ = {"razao_social": "ANTIGA COMERCIAL LTDA", "cnpj": "11.222.333/0001-81", "endereco": "Rua Velha, 10, Belo Horizonte/MG",
+            "representantes": [{"nome": "José da Silva", "cpf": "111.222.333-44"}], "lixo": "descartado"}
+PARTE_PF = {"nome": "Maria Souza", "cpf": "123.456.789-09", "nacionalidade": "brasileira", "estado_civil": "casada"}
+
+
+def test_aditivo_sem_origem_usa_as_partes_informadas_e_o_numero_escolhido(client):
+    cid = _id(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": [PARTE_PJ], "numero": 3, "objeto_contrato_origem": "assessoria jurídica"})
+    texto = _texto(client, cid)
+    assert "ANTIGA COMERCIAL LTDA" in texto and "11.222.333/0001-81" in texto and "José da Silva" in texto
+    assert "Rua Velha, 10" in texto and "lixo" not in texto and "descartado" not in texto
+    assert texto.startswith("3º ADITIVO")
+
+
+def test_distrato_sem_origem_gera_com_substabelecimento_e_pode_repetir(client):
+    p = {**DISTRATO, "contrato_origem_id": None, "contratantes": [PARTE_PF]}
+    cid = _id(client, "distrato", p)
+    assert "Maria Souza" in _texto(client, cid) and "123.456.789-09" in _texto(client, cid)
+    assert _gerar(client, "distrato", p).status_code == 200  # sem origem nao ha como saber que e' repetido
+
+
+@pytest.mark.parametrize("partes", [
+    [],
+    [{"cpf": "123.456.789-09"}],                         # sem nome
+    [{"nome": "Fulano"}],                                # sem documento
+    [{"nome": "Fulano", "cpf": "123"}],                  # CPF curto
+    [{"razao_social": "X LTDA", "cnpj": "11.222.333"}],  # CNPJ curto
+])
+def test_documento_sem_origem_exige_nome_e_documento_da_parte(client, partes):
+    assert _gerar(client, "aditivo", {**ADITIVO, "contrato_origem_id": None, "contratantes": partes, "objeto_contrato_origem": "x"}).status_code == 422
+
+
+def test_com_origem_as_partes_do_cliente_continuam_descartadas(client):
+    cid = _id(client, "aditivo", {**ADITIVO, "contratantes": [PARTE_PF]})
+    assert "Maria Souza" not in _texto(client, cid)
+
+
+SEM_ORIGEM = {**ADITIVO, "contrato_origem_id": None, "contratantes": [PARTE_PF], "objeto_contrato_origem": "assessoria jurídica trabalhista"}
+
+
+def test_distrato_pj_sem_origem_usa_o_representante_legal(client):
+    texto = _texto(client, _id(client, "distrato", {**DISTRATO, "contrato_origem_id": None, "contratantes": [PARTE_PJ]}))
+    assert "neste ato representada por José da Silva, CPF 111.222.333-44" in texto
+
+
+def test_aditivo_sem_origem_pede_o_objeto_e_cita_data_por_extenso(client):
+    r = _gerar(client, "aditivo", {**SEM_ORIGEM, "objeto_contrato_origem": "  "})
+    assert r.status_code == 422 and "objeto_contrato_origem" in r.text
+    texto = _texto(client, _id(client, "aditivo", SEM_ORIGEM))
+    assert ("As partes firmaram, em 15 de janeiro de 2020, Contrato de Prestação de Serviços Advocatícios, "
+            "tendo por objeto assessoria jurídica trabalhista;") in texto
+
+
+def test_aditivo_sem_origem_cita_anteriores_so_se_informados(client):
+    p = {**SEM_ORIGEM, "numero": 3}
+    assert "Aditivo Contratual, tendo" not in _texto(client, _id(client, "aditivo", p)).split("Resolvem")[0]
+    anteriores = [{"numero": 2, "data_documento": "2022-03-10", "objeto": "reajuste"}, {"numero": 1, "data_documento": "2021-02-01"},
+                  {"numero": 3, "data_documento": "2023-01-01"}, {"numero": 9}]  # 3 e 9 nao sao anteriores ao 3
+    texto = _texto(client, _id(client, "aditivo", {**p, "aditivos_anteriores": anteriores}))
+    i1, i2 = texto.index("Em fevereiro de 2021, as partes firmaram o 1º Aditivo Contratual;"), texto.index(
+        "Em março de 2022, as partes firmaram o 2º Aditivo Contratual, tendo por objeto reajuste;")
+    assert i1 < i2 and "3º Aditivo Contratual;" not in texto and "9º Aditivo" not in texto
+
+
+def test_aditivo_com_origem_ignora_objeto_e_anteriores_do_cliente(client):
+    texto = _texto(client, _id(client, "aditivo", {**ADITIVO, "objeto_contrato_origem": "inventado",
+                                                  "aditivos_anteriores": [{"numero": 1, "data_documento": "2021-02-01"}]}))
+    assert "inventado" not in texto and "1º Aditivo Contratual;" not in texto
