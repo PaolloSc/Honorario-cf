@@ -156,6 +156,8 @@ function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): 
       };
     })(),
     email_destinatario: data.email_destinatario,
+    // Cláusulas reescritas na etapa 7: sem isto sumiam ao reabrir rascunho/contrato.
+    ajustes_texto: data.ajustes_texto,
     envio: data.envio,
   };
 }
