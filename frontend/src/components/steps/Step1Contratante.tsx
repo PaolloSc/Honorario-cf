@@ -109,13 +109,19 @@ export default function Step1Contratante({
     Record<string, { situacao: string; socios: SocioReceita[] }>
   >({});
 
+  // Lista corrente (não a do render que iniciou a consulta de CNPJ): a resposta atrasada aplica só
+  // os campos dela sobre o que já foi digitado, sem apagar e-mail etc. Atualizada também na
+  // própria chamada, para duas atualizações no mesmo tick não se sobrescreverem.
+  const atual = useRef(contratantes);
+  atual.current = contratantes;
   const updateContratante = useCallback(
     (index: number, partial: Partial<Contratante>) => {
-      const updated = [...contratantes];
+      const updated = [...atual.current];
       updated[index] = { ...updated[index], ...partial } as Contratante;
+      atual.current = updated;
       onChange(updated);
     },
-    [contratantes, onChange]
+    [onChange]
   );
 
   const addContratante = useCallback(() => {
@@ -201,7 +207,10 @@ export default function Step1Contratante({
           ...prev,
           [limparCNPJ(cnpj)]: { situacao: data.situacao_cadastral || "", socios: data.socios ?? [] },
         }));
+        // cnpj junto: updateContratante usa a lista do render em que a consulta começou, que
+        // ainda tinha o CNPJ sem o último dígito; sem isso o campo voltava a 13 dígitos.
         updateContratante(index, {
+          cnpj: limparCNPJ(cnpj),
           razao_social: data.razao_social,
           endereco: data.endereco,
         });
@@ -223,7 +232,7 @@ export default function Step1Contratante({
         setCnpjManual((prev) => new Set(prev).add(index));
         // Razão social/endereço de OUTRO CNPJ (consulta anterior) não podem sobrar no
         // contrato do novo; o que foi digitado à mão fica.
-        if (cnpjLoaded.has(index)) updateContratante(index, { razao_social: "", endereco: "" });
+        if (cnpjLoaded.has(index)) updateContratante(index, { cnpj: limparCNPJ(cnpj), razao_social: "", endereco: "" });
         setCnpjLoaded((prev) => {
           const next = new Set(prev);
           next.delete(index);
