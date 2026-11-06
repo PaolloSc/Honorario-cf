@@ -12,12 +12,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
-from app.config import BACKEND_DIR, settings
+from app.config import settings
 from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.models.documentos_complementares import ROTULO_DOCUMENTO, TIPO_DISTRATO, TIPOS_COMPLEMENTARES
-from app.services.azure_email import AzureEmailService
+from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolve_backend_path, resolver_arquivo
 from app.services.contrato_carregado import carregar_versao, tipo_da_versao
-from app.services.docuseal import DocuSealService, link_assinatura
+from app.services.docuseal import link_assinatura
+from app.services import servicos_externos
 from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_DOCUSEAL, MSG_ERRO_INTERNO
 
@@ -50,115 +51,6 @@ class DocuSealResponse(BaseModel):
     submission_id: str | None = None
     # Contratantes com link e WhatsApp: a tela abre o WhatsApp logo apos o envio.
     whatsapp: list[dict[str, str]] = []
-
-
-_docuseal_service: DocuSealService | None = None
-_email_service: AzureEmailService | None = None
-
-
-def get_docuseal_service() -> DocuSealService:
-    global _docuseal_service
-    if _docuseal_service is None:
-        _docuseal_service = DocuSealService()
-    return _docuseal_service
-
-
-def get_email_service() -> AzureEmailService:
-    global _email_service
-    if _email_service is None:
-        _email_service = AzureEmailService()
-    return _email_service
-
-
-def resolve_backend_path(value: str) -> Path:
-    path = Path(value)
-    if path.is_absolute():
-        return path
-    return BACKEND_DIR / path
-
-
-def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
-    """Resolve the contract file path, trying multiple strategies.
-
-    If the file cannot be found on disk (ephemeral filesystem like Render),
-    regenerates from form_data_json stored in the database.
-    """
-    output_dir = resolve_backend_path(settings.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Strategy 1: Get path from DB and check if file exists at that exact location
-    latest_ver = (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract_id)
-        .order_by(ContractVersionDB.version_number.desc())
-        .first()
-    )
-
-    if latest_ver and latest_ver.file_path:
-        stored = Path(latest_ver.file_path)
-
-        # Try the stored path directly
-        if stored.exists():
-            logger.info("Found contract file at stored path: %s", stored)
-            return stored
-
-        # Strategy 2: Try the filename from stored path in current output_dir
-        filename = stored.name
-        candidate = output_dir / filename
-        if candidate.exists():
-            logger.info("Found contract file at reconstructed path: %s", candidate)
-            return candidate
-
-    # Strategy 3: Convention-based path
-    fallback = output_dir / f"contrato_{contract_id}.docx"
-    if fallback.exists():
-        logger.info("Found contract file at fallback path: %s", fallback)
-        return fallback
-
-    # Strategy 4: Regenerate from form_data_json in DB (handles ephemeral filesystems)
-    if latest_ver and latest_ver.form_data_json:
-        logger.warning(
-            "Contract file not found on disk for %s. Regenerating from stored form data...",
-            contract_id,
-        )
-        try:
-            carregado = carregar_versao(latest_ver)
-            _, new_filepath = carregado.gerador.generate(carregado.request, contract_id=contract_id)
-            regenerated = Path(new_filepath)
-
-            # Update the stored path in DB so next time it's found directly
-            latest_ver.file_path = str(regenerated)
-            db.commit()
-
-            logger.info("Regenerated contract file at: %s", regenerated)
-            return regenerated
-        except FileNotFoundError as template_err:
-            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
-            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
-            try:
-                from docx import Document as _Doc
-                doc = _Doc()
-                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
-                minimal_path = output_dir / f"contrato_{contract_id}.docx"
-                doc.save(str(minimal_path))
-                latest_ver.file_path = str(minimal_path)
-                db.commit()
-                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
-                return minimal_path
-            except Exception as min_err:
-                logger.error("Failed to create minimal DOCX: %s", min_err)
-        except Exception as regen_err:
-            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
-
-    # All strategies exhausted
-    logger.error(
-        "Contract file not found for %s. Tried: stored=%s, output_dir=%s, regeneration=%s",
-        contract_id,
-        latest_ver.file_path if latest_ver else "N/A",
-        output_dir,
-        "failed" if latest_ver and latest_ver.form_data_json else "no form data",
-    )
-    raise HTTPException(status_code=404, detail="Contract file not found")
 
 
 def _patch_docx_with_signatures(
@@ -342,7 +234,7 @@ async def send_for_signature(
 ) -> DocuSealResponse:
     """Send contract for digital signature via DocuSeal."""
     try:
-        service = get_docuseal_service()
+        service = servicos_externos.get_docuseal_service()
 
         latest_ver = (
             db.query(ContractVersionDB)
@@ -426,7 +318,10 @@ async def send_for_signature(
         all_signatarios.sort(key=lambda s: s["order"])
 
         # Regenerate DOCX with signature fields matching the unique signatario roles
-        filepath = _resolve_contract_filepath(data.contract_id, db)
+        try:
+            filepath = resolver_arquivo(data.contract_id, db)
+        except ArquivoNaoEncontrado:
+            raise HTTPException(status_code=404, detail="Contract file not found")
 
         if latest_ver and latest_ver.form_data_json:
             try:
@@ -547,7 +442,7 @@ async def _send_contract_to_financeiro(
 ) -> None:
     """Send a copy of the contract to the financeiro email."""
     try:
-        email_service = get_email_service()
+        email_service = servicos_externos.get_email_service()
         client_name = contract.client_name if contract else "Cliente"
 
         result = await email_service.send_email_with_attachment(
@@ -719,7 +614,7 @@ async def _send_participacao_to_financeiro(
             '</div></div>'
         )
 
-        email_service = get_email_service()
+        email_service = servicos_externos.get_email_service()
 
         # Send with contract attachment if filepath is available
         if contract_filepath and Path(contract_filepath).exists():
@@ -964,7 +859,7 @@ async def get_docuseal_status(
         raise HTTPException(status_code=404, detail="No DocuSeal submission found for this contract")
 
     submission_id = latest_version.docuseal_submission_id
-    service = get_docuseal_service()
+    service = servicos_externos.get_docuseal_service()
     status_data = await service.get_submission_status(submission_id)
 
     return DocuSealStatusResponse(
@@ -1018,7 +913,7 @@ async def cancelar_envio_assinatura(
     if not versoes:
         raise HTTPException(status_code=409, detail="Este contrato não tem envio para assinatura registrado.")
 
-    service = get_docuseal_service()
+    service = servicos_externos.get_docuseal_service()
     arquivadas: list[str] = []
     for i, v in enumerate(versoes):
         sid = v.docuseal_submission_id
@@ -1081,7 +976,7 @@ async def sincronizar_status_assinatura(
         raise HTTPException(status_code=404, detail="Contrato não foi enviado para assinatura")
 
     status_anterior = contract.status
-    service = get_docuseal_service()
+    service = servicos_externos.get_docuseal_service()
     try:
         status_data = await service.get_submission_status(version.docuseal_submission_id)
     except Exception as e:

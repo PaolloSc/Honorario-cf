@@ -14,11 +14,12 @@ from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
-from app.config import BACKEND_DIR, settings
+from app.config import settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.routers.contract import _SIG_TAG, _contract_filename
-from app.services.azure_email import AzureEmailService
-from app.services.contrato_carregado import carregar_versao, tipo_da_versao, ultima_versao
+from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolve_backend_path, resolver_arquivo
+from app.services import servicos_externos
+from app.services.contrato_carregado import tipo_da_versao, ultima_versao
 from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_EMAIL
 
@@ -98,107 +99,6 @@ class ParticipacaoEmailRequest(BaseModel):
         return data
 
 
-_email_service: AzureEmailService | None = None
-
-
-def get_email_service() -> AzureEmailService:
-    global _email_service
-    if _email_service is None:
-        _email_service = AzureEmailService()
-    return _email_service
-
-
-def resolve_backend_path(value: str) -> Path:
-    path = Path(value)
-    if path.is_absolute():
-        return path
-    return BACKEND_DIR / path
-
-
-def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
-    """Resolve the contract file path, trying multiple strategies.
-
-    If the file cannot be found on disk (ephemeral filesystem like Render),
-    regenerates from form_data_json stored in the database.
-    """
-    output_dir = resolve_backend_path(settings.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Strategy 1: Get path from DB and check if file exists at that exact location
-    latest_ver = (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract_id)
-        .order_by(ContractVersionDB.version_number.desc())
-        .first()
-    )
-
-    if latest_ver and latest_ver.file_path:
-        stored = Path(latest_ver.file_path)
-
-        # Try the stored path directly
-        if stored.exists():
-            logger.info("Found contract file at stored path: %s", stored)
-            return stored
-
-        # Strategy 2: Try the filename from stored path in current output_dir
-        filename = stored.name
-        candidate = output_dir / filename
-        if candidate.exists():
-            logger.info("Found contract file at reconstructed path: %s", candidate)
-            return candidate
-
-    # Strategy 3: Convention-based path
-    fallback = output_dir / f"contrato_{contract_id}.docx"
-    if fallback.exists():
-        logger.info("Found contract file at fallback path: %s", fallback)
-        return fallback
-
-    # Strategy 4: Regenerate from form_data_json in DB (handles ephemeral filesystems)
-    if latest_ver and latest_ver.form_data_json:
-        logger.warning(
-            "Contract file not found on disk for %s. Regenerating from stored form data...",
-            contract_id,
-        )
-        try:
-            carregado = carregar_versao(latest_ver)
-            _, new_filepath = carregado.gerador.generate(carregado.request, contract_id=contract_id)
-            regenerated = Path(new_filepath)
-
-            # Update the stored path in DB so next time it's found directly
-            latest_ver.file_path = str(regenerated)
-            db.commit()
-
-            logger.info("Regenerated contract file at: %s", regenerated)
-            return regenerated
-        except FileNotFoundError as template_err:
-            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
-            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
-            try:
-                from docx import Document as _Doc
-                doc = _Doc()
-                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
-                minimal_path = output_dir / f"contrato_{contract_id}.docx"
-                doc.save(str(minimal_path))
-                latest_ver.file_path = str(minimal_path)
-                db.commit()
-                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
-                return minimal_path
-            except Exception as min_err:
-                logger.error("Failed to create minimal DOCX: %s", min_err)
-        except Exception as regen_err:
-            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
-
-    # All strategies exhausted
-    logger.error(
-        "Contract file not found for %s. Tried: stored=%s, output_dir=%s, regeneration=%s",
-        contract_id,
-        latest_ver.file_path if latest_ver else "N/A",
-        output_dir,
-        "failed" if latest_ver and latest_ver.form_data_json else "no form data",
-    )
-    raise HTTPException(status_code=404, detail="Contract file not found")
-
-
 def _docx_review_copy(src: Path) -> Path:
     """Cópia de conferência do DOCX para o cliente: troca as merge-tags do DocuSeal
     ({{...;type=signature;...}}) por linhas de assinatura. Não altera o arquivo
@@ -257,7 +157,10 @@ async def send_contract_email(
 ) -> EmailResponse:
     """Send contract via email using Azure Communication Services."""
     try:
-        filepath = _resolve_contract_filepath(data.contract_id, db)
+        try:
+            filepath = resolver_arquivo(data.contract_id, db)
+        except ArquivoNaoEncontrado:
+            raise HTTPException(status_code=404, detail="Contract file not found")
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
 
         review_path = _docx_review_copy(filepath)
@@ -267,7 +170,7 @@ async def send_contract_email(
             _tipo_do_contrato(data.contract_id, db),
         )
 
-        service = get_email_service()
+        service = servicos_externos.get_email_service()
         try:
             result = await service.send_email_with_attachment(
                 to_email=data.destinatario_email,
@@ -450,12 +353,12 @@ async def send_participacao_email(
                 contract_filepath = str(stored)
             else:
                 # Try convention path
-                output_dir = BACKEND_DIR / settings.output_dir
+                output_dir = resolve_backend_path(settings.output_dir)
                 candidate = output_dir / f"contrato_{data.contract_id}.docx"
                 if candidate.exists():
                     contract_filepath = str(candidate)
 
-        service = get_email_service()
+        service = servicos_externos.get_email_service()
 
         if contract_filepath:
             result = await service.send_html_email_with_attachment(

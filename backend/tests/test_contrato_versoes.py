@@ -267,7 +267,7 @@ def test_cancelar_envio_arquiva_limpa_o_id_volta_a_rascunho_e_libera_a_edicao(cl
     _marcar_enviado(cid)
     assert _put(client, cid, _form(999), version=1).status_code == 409
     falso = _DocuSealFalso()
-    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: falso)
+    monkeypatch.setattr("app.services.servicos_externos.get_docuseal_service", lambda: falso)
     r = client.post(f"/api/docuseal/{cid}/cancelar-envio")
     assert r.status_code == 200, r.text
     assert falso.arquivadas == ["777"] and _contrato(cid).status == "rascunho" and _sid(cid) == [None]
@@ -284,7 +284,7 @@ def test_cancelar_envio_arquiva_limpa_o_id_volta_a_rascunho_e_libera_a_edicao(cl
 def test_cancelar_envio_com_falha_no_docuseal_nao_muda_nada(client, monkeypatch):
     cid = _criar(client)
     _marcar_enviado(cid)
-    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: _DocuSealFalso(ok=False))
+    monkeypatch.setattr("app.services.servicos_externos.get_docuseal_service", lambda: _DocuSealFalso(ok=False))
     r = client.post(f"/api/docuseal/{cid}/cancelar-envio")
     assert r.status_code == 502 and "DocuSeal" in r.json()["detail"]
     assert _contrato(cid).status == "enviado" and _sid(cid) == ["777"]
@@ -292,7 +292,7 @@ def test_cancelar_envio_com_falha_no_docuseal_nao_muda_nada(client, monkeypatch)
 
 def test_cancelar_envio_so_vale_para_enviado_e_assinado_continua_travado(client, monkeypatch):
     cid = _criar(client)
-    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: _DocuSealFalso())
+    monkeypatch.setattr("app.services.servicos_externos.get_docuseal_service", lambda: _DocuSealFalso())
     assert client.post(f"/api/docuseal/{cid}/cancelar-envio").status_code == 409  # rascunho
     _marcar_enviado(cid)
     _travar(cid, "assinado")
@@ -418,7 +418,7 @@ def test_cancelar_envio_404_do_docuseal_conta_como_ja_arquivada(client, monkeypa
 
     monkeypatch.setattr(httpx.AsyncClient, "delete", delete)
     servico = DocuSealService()
-    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: servico)
+    monkeypatch.setattr("app.services.servicos_externos.get_docuseal_service", lambda: servico)
     cid = _criar(client)
     _marcar_enviado(cid)
     r = client.post(f"/api/docuseal/{cid}/cancelar-envio")
@@ -462,7 +462,7 @@ def test_cancelar_envio_404_do_docuseal_fica_na_auditoria(client, monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "delete", delete)
     servico = DocuSealService()
-    monkeypatch.setattr("app.routers.docuseal.get_docuseal_service", lambda: servico)
+    monkeypatch.setattr("app.services.servicos_externos.get_docuseal_service", lambda: servico)
     cid = _criar(client)
     _marcar_enviado(cid, "888")
     assert client.post(f"/api/docuseal/{cid}/cancelar-envio").status_code == 200

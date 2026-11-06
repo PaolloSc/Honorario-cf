@@ -26,7 +26,7 @@ def _enviar(client, **campos) -> dict:
 
     mock_service = MagicMock()
     mock_service.send_html_email = AsyncMock(side_effect=_capture)
-    with patch("app.routers.email.get_email_service", return_value=mock_service):
+    with patch("app.services.servicos_externos.get_email_service", return_value=mock_service):
         resp = client.post(
             "/api/email/send-participacao",
             json={"contract_id": "c1", "cliente_nome": "Cliente X", **campos},
