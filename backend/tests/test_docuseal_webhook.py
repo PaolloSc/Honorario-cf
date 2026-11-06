@@ -60,7 +60,7 @@ def test_completed_sends_ficha_once_idempotent(client):
     email = _mock_email()
 
     with patch("app.routers.docuseal.DOCUSEAL_WEBHOOK_SECRET", SECRET), \
-         patch("app.routers.docuseal.get_email_service", return_value=email):
+         patch("app.services.servicos_externos.get_email_service", return_value=email):
         body = {"event_type": "submission.completed", "data": {"id": "sub-001"}}
         headers = {"x-docuseal-secret": SECRET}
         r1 = client.post("/api/docuseal/webhook", json=body, headers=headers)
@@ -77,7 +77,7 @@ def test_declined_does_not_send_ficha(client):
     email = _mock_email()
 
     with patch("app.routers.docuseal.DOCUSEAL_WEBHOOK_SECRET", SECRET), \
-         patch("app.routers.docuseal.get_email_service", return_value=email):
+         patch("app.services.servicos_externos.get_email_service", return_value=email):
         body = {"event_type": "submission.declined", "data": {"id": "sub-002"}}
         r = client.post("/api/docuseal/webhook", json=body, headers={"x-docuseal-secret": SECRET})
 
@@ -139,8 +139,8 @@ def test_sincronizar_conclui_contrato_travado_em_enviado(client, usuario_logado,
     _seed(cid, f"sub-{cid}")
     email = _mock_email()
 
-    with patch.object(docuseal_mod, "get_docuseal_service", return_value=_mock_docuseal(status_data)), \
-         patch.object(docuseal_mod, "get_email_service", return_value=email):
+    with patch("app.services.servicos_externos.get_docuseal_service", return_value=_mock_docuseal(status_data)), \
+         patch("app.services.servicos_externos.get_email_service", return_value=email):
         r = client.post(f"/api/docuseal/{cid}/sincronizar")
 
     assert r.status_code == 200, r.text
@@ -161,8 +161,8 @@ def test_sincronizar_nao_conclui_com_assinatura_pendente(client, usuario_logado)
          "phone": "+5531999991234", "slug": "abc123"},
     ]}
 
-    with patch.object(docuseal_mod, "get_docuseal_service", return_value=_mock_docuseal(pendente)), \
-         patch.object(docuseal_mod, "get_email_service", return_value=email):
+    with patch("app.services.servicos_externos.get_docuseal_service", return_value=_mock_docuseal(pendente)), \
+         patch("app.services.servicos_externos.get_email_service", return_value=email):
         r = client.post("/api/docuseal/sync-pend/sincronizar")
 
     assert r.status_code == 200
@@ -184,8 +184,8 @@ def test_sincronizar_registra_recusa(client, usuario_logado):
     email = _mock_email()
     recusado = {"submitters": [{"role": "Contratante", "declined_at": "2026-09-14T11:00:00Z"}]}
 
-    with patch.object(docuseal_mod, "get_docuseal_service", return_value=_mock_docuseal(recusado)), \
-         patch.object(docuseal_mod, "get_email_service", return_value=email):
+    with patch("app.services.servicos_externos.get_docuseal_service", return_value=_mock_docuseal(recusado)), \
+         patch("app.services.servicos_externos.get_email_service", return_value=email):
         r = client.post("/api/docuseal/sync-rec/sincronizar")
 
     assert r.status_code == 200
@@ -198,8 +198,8 @@ def test_sincronizar_e_idempotente(client, usuario_logado):
     email = _mock_email()
     concluido = {"status": "completed", "submitters": []}
 
-    with patch.object(docuseal_mod, "get_docuseal_service", return_value=_mock_docuseal(concluido)), \
-         patch.object(docuseal_mod, "get_email_service", return_value=email):
+    with patch("app.services.servicos_externos.get_docuseal_service", return_value=_mock_docuseal(concluido)), \
+         patch("app.services.servicos_externos.get_email_service", return_value=email):
         client.post("/api/docuseal/sync-idem/sincronizar")
         r2 = client.post("/api/docuseal/sync-idem/sincronizar")
 

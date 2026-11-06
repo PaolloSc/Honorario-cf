@@ -204,7 +204,7 @@ def _enviar_capturando(client, contract_id: str, signatarios: list[dict]) -> lis
     svc = MagicMock()
     svc.create_template_from_docx = AsyncMock(return_value={"id": 1, "name": "T"})
     svc.send_for_signature = AsyncMock(side_effect=capture)
-    with patch("app.routers.docuseal.get_docuseal_service", return_value=svc), \
+    with patch("app.services.servicos_externos.get_docuseal_service", return_value=svc), \
          patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
          patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
         r = client.post("/api/docuseal/send-for-signature",

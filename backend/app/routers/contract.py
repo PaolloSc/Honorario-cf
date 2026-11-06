@@ -33,6 +33,7 @@ from app.models.contrato_consumidor import (
 )
 from app.models.documentos_complementares import ROTULO_DOCUMENTO
 from app.services import contract_reviewer
+from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolver_arquivo
 from app.services.contrato_carregado import (
     TIPO_HONORARIOS,
     carregar_versao,
@@ -985,7 +986,8 @@ def preview_contract(
     if user.role != "admin" and contract.created_by != user.email:
         raise HTTPException(403, "Sem permissao")
 
-    from app.routers.docuseal import _resolve_contract_filepath
-
-    filepath = _resolve_contract_filepath(contract_id, db)
+    try:
+        filepath = resolver_arquivo(contract_id, db)
+    except ArquivoNaoEncontrado:
+        raise HTTPException(404, "Contract file not found")
     return HTMLResponse(_docx_to_html(Path(filepath)))

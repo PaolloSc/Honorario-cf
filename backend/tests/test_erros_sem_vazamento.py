@@ -116,7 +116,7 @@ def test_email_com_erro_do_azure_sai_sanitizado(client, monkeypatch, modo):
                 raise RuntimeError(f"Failed to acquire Azure token: {SEGREDO}")
             return {"success": False, "error": f"401 - {SEGREDO}"}
 
-    monkeypatch.setattr("app.routers.email.get_email_service", lambda: Servico())
+    monkeypatch.setattr("app.services.servicos_externos.get_email_service", lambda: Servico())
     cid = _contrato_para_email(client)
     r = client.post("/api/email/send", json={"contract_id": cid, "destinatario_email": "a@a.com", "destinatario_nome": "A"})
     _sem_vazamento(r.text)
