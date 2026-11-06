@@ -1,6 +1,6 @@
 // Verificação de comboBoxBusca.ts: node src/components/ui/comboBoxBusca.check.ts
 import assert from "node:assert/strict";
-import { filtrarOpcoes, opcaoParaConfirmar } from "./comboBoxBusca.ts";
+import { filtrarOpcoes, opcaoParaConfirmar, valorAoSair } from "./comboBoxBusca.ts";
 
 const socios = [
   { value: "g@x", label: "Gabriel Siqueira Eliazar de Carvalho" },
@@ -19,3 +19,12 @@ assert.equal(opcaoParaConfirmar(socios, "gab"), undefined); // duas bateriam: n�
 assert.equal(opcaoParaConfirmar(socios, "xyz"), undefined);
 assert.equal(opcaoParaConfirmar(socios, "  "), undefined);
 console.log("comboBoxBusca.ts ok");
+
+// Ao sair do campo (issue #195): esvaziar de propósito limpa o valor; só focar e sair não mexe em nada.
+assert.equal(valorAoSair(socios, "", "g@x", true), ""); // digitou e apagou tudo
+assert.equal(valorAoSair(socios, "   ", "g@x", true), "");
+assert.equal(valorAoSair(socios, "", "g@x", false), undefined); // só focou e saiu
+assert.equal(valorAoSair(socios, "", "", true), undefined); // já estava vazio
+assert.equal(valorAoSair(socios, "mon", "g@x", true), "m@x"); // confirma a opção inequívoca
+assert.equal(valorAoSair(socios, "mon", "m@x", true), undefined); // já é ela
+assert.equal(valorAoSair(socios, "gabriel", "g@x", true), undefined); // ambíguo: não decide

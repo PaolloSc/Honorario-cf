@@ -78,7 +78,11 @@ function fichaInterna(dados: unknown): Participacao {
           natureza: p.natureza ?? "",
           percentual: p.valor_percentual,
         }));
+  // Campos que o wizard não conhece (o backend pode estar à frente) passam adiante; só o formato
+  // antigo, já convertido em participantes/valor_outro, sai.
+  const { para_quem: _pq, natureza: _nat, percentual_ou_valor: _pov, ...desconhecidos } = p;
   return {
+    ...desconhecidos,
     tem_participacao: p.tem_participacao ?? false,
     valor_tipo: valorTipo,
     valor_percentual: p.valor_percentual ?? "",
@@ -109,6 +113,7 @@ export function normalizarFormData(data: Partial<ContratoFormData> | null | unde
   if (!data) return { ...DADOS_INICIAIS };
 
   return {
+    ...data, // campos de topo que o wizard não conhece sobrevivem
     // Formato futuro (versão maior que a conhecida) não é rebaixado em silêncio.
     versao_formato: Math.max(data.versao_formato ?? 0, VERSAO_FORMATO),
     contratantes: data.contratantes?.length ? data.contratantes : DADOS_INICIAIS.contratantes,
@@ -119,6 +124,7 @@ export function normalizarFormData(data: Partial<ContratoFormData> | null | unde
         : e
     ),
     acessorios: {
+      ...data.acessorios,
       tem_reembolso: data.acessorios?.tem_reembolso ?? true,
       reembolso_limitado: data.acessorios?.reembolso_limitado ?? false,
       descricao_limitacao_reembolso: data.acessorios?.descricao_limitacao_reembolso,

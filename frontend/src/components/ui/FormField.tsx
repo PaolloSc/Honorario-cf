@@ -1,6 +1,6 @@
 "use client";
 
-import { filtrarOpcoes, opcaoParaConfirmar } from "@/components/ui/comboBoxBusca";
+import { filtrarOpcoes, opcaoParaConfirmar, valorAoSair } from "@/components/ui/comboBoxBusca";
 import { ReactNode, createContext, useContext, useId, useMemo, useRef, useState } from "react";
 
 // O FormField passa o id do campo para o controle dentro dele: o <label> fica associado (for/id)
@@ -194,6 +194,7 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const digitou = useRef(false);
   const campoId = useCampoId();
 
   const selected = options.find((o) => o.value === value);
@@ -208,19 +209,22 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
         type="text"
         value={editing ? query : selected?.label ?? (livre ? value : "")}
         onChange={(e) => {
+          digitou.current = true;
           setQuery(e.target.value);
           if (livre) onChange(e.target.value);
         }}
         onFocus={() => {
           setEditing(true);
+          digitou.current = false;
           setQuery(livre ? value : "");
         }}
         onBlur={() => {
           // Digitou o nome e saiu sem clicar na lista (ex.: foi direto ao botão Enviar):
-          // confirma a opção inequívoca em vez de deixar o campo vazio.
+          // confirma a opção inequívoca em vez de deixar o campo vazio. Apagou tudo de propósito:
+          // limpa o valor (senão o campo voltava a mostrar o anterior).
           if (!livre && editing) {
-            const op = opcaoParaConfirmar(options, query);
-            if (op && op.value !== value) onChange(op.value);
+            const novo = valorAoSair(options, query, value, digitou.current);
+            if (novo !== undefined) onChange(novo);
           }
           blurTimeout.current = setTimeout(() => setEditing(false), 150);
         }}

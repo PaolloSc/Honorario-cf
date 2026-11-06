@@ -139,6 +139,22 @@ assert.equal(JSON.stringify(normalizarFormData(JSON.parse(JSON.stringify(v1)))),
 // versão de um formato futuro não é rebaixada em silêncio
 assert.equal(normalizarFormData({ ...etapas1a4, versao_formato: VERSAO_FORMATO + 1 } as never).versao_formato, VERSAO_FORMATO + 1);
 
+// ── campo novo = um lugar: o que o wizard não conhece (backend à frente do front) sobrevive ao abrir ──
+const comExtras = normalizarFormData({
+  ...etapas1a4,
+  campo_novo_topo: { a: 1 },
+  acessorios: { ...etapas1a4.acessorios, campo_novo_acessorio: "x" },
+  participacao: { tem_participacao: false, contato_financeiro_cliente: "Fulano", campo_novo_ficha: 7, para_quem: ["Carla"], natureza: "n", percentual_ou_valor: "5%" },
+} as never) as unknown as Record<string, any>;
+assert.deepEqual(comExtras.campo_novo_topo, { a: 1 });
+assert.equal(comExtras.acessorios.campo_novo_acessorio, "x");
+assert.equal(comExtras.participacao.contato_financeiro_cliente, "Fulano");
+assert.equal(comExtras.participacao.campo_novo_ficha, 7);
+// as chaves do formato antigo, já convertidas, não ficam ao lado das novas
+for (const k of ["para_quem", "natureza", "percentual_ou_valor"]) assert.equal(k in comExtras.participacao, false, k);
+assert.equal(comExtras.participacao.participantes[0].nome, "Carla");
+assert.equal(JSON.stringify(normalizarFormData(comExtras as never)), JSON.stringify(comExtras)); // idempotente
+
 // ── ficha interna ──
 assert.equal(temFichaParaFinanceiro(undefined), false);
 assert.equal(temFichaParaFinanceiro({ tem_participacao: false } as never), false);
