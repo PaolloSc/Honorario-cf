@@ -24,3 +24,13 @@ export function opcaoParaConfirmar(opcoes: OpcaoCombo[], digitado: string): Opca
   const achadas = filtrarOpcoes(opcoes, digitado);
   return achadas.length === 1 ? achadas[0] : undefined;
 }
+
+/**
+ * O que o ComboBox (sem texto livre) grava ao perder o foco; undefined = não mexe.
+ * `digitou`: a pessoa mexeu no texto desde que focou (só focar e sair não esvazia o campo).
+ */
+export function valorAoSair(opcoes: OpcaoCombo[], digitado: string, valor: string, digitou: boolean): string | undefined {
+  if (digitou && !norm(digitado)) return valor ? "" : undefined;
+  const op = opcaoParaConfirmar(opcoes, digitado);
+  return op && op.value !== valor ? op.value : undefined;
+}
