@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { chaveDaRevisao, situacaoDaRevisao } from "@/app/lib/revisao";
 import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
@@ -24,6 +25,12 @@ interface Step7EnvioProps {
   // sair do Step 7 e voltar reseta o histórico de "Aplicar correção" pra vazio,
   // mesmo com o texto já corrigido continuando lá.
   correcoesAplicadas: Array<{ trecho: string; sugestao: string }>;
+  // Ultima revisao por IA + previa (guardada no wizard, que nao desmonta): sem alteracao nos dados,
+  // voltar a etapa 7 reaproveita em vez de gastar IA de novo.
+  revisaoSalva: RevisaoSalva | null;
+  onRevisaoChange: (r: RevisaoSalva) => void;
+  // Rascunho retomado direto na 6/7: a revisao da sessao anterior nao vale mais.
+  avisoRevisao?: string;
   onCorrecoesAplicadasChange: (updater: (prev: Array<{ trecho: string; sugestao: string }>) => Array<{ trecho: string; sugestao: string }>) => void;
 }
 
@@ -214,6 +221,15 @@ function applyFix(data: ContratoFormData, trecho: string, sugestao: string): Con
   return null;
 }
 
+export interface RevisaoSalva {
+  chave: string;
+  enabled: boolean;
+  findings: Array<{ trecho: string; problema: string; sugestao: string }>;
+  previewHtml: string | null;
+  itens: ItemClausula[];
+  descartados: AjusteDescartado[];
+}
+
 export default function Step7Envio({
   data,
   editContractId,
@@ -223,6 +239,9 @@ export default function Step7Envio({
   onContractGenerated,
   correcoesAplicadas,
   onCorrecoesAplicadasChange,
+  revisaoSalva,
+  onRevisaoChange,
+  avisoRevisao,
 }: Step7EnvioProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -286,6 +305,9 @@ export default function Step7Envio({
   const [salvandoAjuste, setSalvandoAjuste] = useState(false);
 
   const reviewStarted = useRef(false);
+  const revisadoChave = useRef("");
+  const revisaoEnabled = useRef(true);
+  const [avisoDesatualizada, setAvisoDesatualizada] = useState("");
   // Contrato novo já criado nesta tela: se o e-mail falhar, tentar de novo reaproveita o
   // mesmo contrato (com os mesmos dados) em vez de gerar outro e outra participação.
   const criadoAgora = useRef<{ id: string; dados: string } | null>(null);
@@ -297,9 +319,26 @@ export default function Step7Envio({
     // requisição real à DeepSeek.
     if (reviewStarted.current) return;
     reviewStarted.current = true;
+    const situacao = situacaoDaRevisao(revisaoSalva, data);
+    if (situacao === "em_dia" && revisaoSalva) {
+      setReviewPreviewHtml(revisaoSalva.previewHtml);
+      aplicarPrevia(revisaoSalva.itens, revisaoSalva.descartados);
+      setReviewFindings(revisaoSalva.findings);
+      setReviewStatus(revisaoSalva.enabled ? "done" : "idle");
+      revisadoChave.current = revisaoSalva.chave;
+      revisaoEnabled.current = revisaoSalva.enabled;
+      return;
+    }
+    if (situacao === "desatualizada") {
+      setAvisoDesatualizada("Os dados do contrato mudaram depois da última revisão: ela estava desatualizada e foi refeita agora.");
+    } else if (avisoRevisao) {
+      setAvisoDesatualizada(avisoRevisao);
+    }
+    revisadoChave.current = chaveDaRevisao(data);
     setReviewStatus("checking");
     reviewContract(data)
       .then((r) => {
+        revisaoEnabled.current = r.enabled;
         if (r.preview_html) setReviewPreviewHtml(r.preview_html);
         aplicarPrevia(r.itens, r.ajustes_descartados);
         if (!r.enabled) {
@@ -310,12 +349,27 @@ export default function Step7Envio({
         setReviewStatus("done");
       })
       .catch((e) => {
-        // regra do contrato (422): diz qual campo corrigir em vez do aviso genérico
+        // regra do contrato (422): diz qual campo corrigir em vez do aviso generico
         setReviewErro(ehErro422(e) ? textoDoErro(e) : "");
         setReviewStatus("error");
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Guarda a revisao feita no wizard para a proxima chegada a etapa 7 (so quando concluida).
+  useEffect(() => {
+    if (reviewStatus === "checking" || reviewStatus === "error" || !revisadoChave.current) return;
+    if (reviewStatus === "idle" && !reviewPreviewHtml && itens.length === 0) return;
+    onRevisaoChange({
+      chave: revisadoChave.current,
+      enabled: revisaoEnabled.current,
+      findings: reviewFindings,
+      previewHtml: reviewPreviewHtml,
+      itens,
+      descartados,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewStatus, reviewFindings, reviewPreviewHtml, itens, descartados]);
 
   // Guarda as cláusulas da prévia e os ajustes cuja cláusula deixou de existir (o texto fica
   // no painel para copiar; só some quando a pessoa descarta).
@@ -342,6 +396,7 @@ export default function Step7Envio({
     const updated = { ...data, ajustes_texto: ajustes };
     onDataChange(updated);
     dataRef.current = updated;
+    revisadoChave.current = chaveDaRevisao(updated);
     setSalvandoAjuste(true);
     try {
       const r = await previewTexto(updated);
@@ -362,6 +417,7 @@ export default function Step7Envio({
     if (!updated || !onDataChange) return;
 
     onDataChange(updated);
+    revisadoChave.current = chaveDaRevisao(updated);
     setApplyingIndex(index);
     // Marca como corrigido imediatamente — o campo já foi alterado nesse ponto,
     // então a confirmação (check) aparece na hora, antes mesmo da revisão nova voltar.
@@ -741,6 +797,10 @@ export default function Step7Envio({
         </div>
       </div>
 
+      {avisoDesatualizada && (
+        <div className="bg-warning/[0.1] border border-warning rounded-lg p-4 text-sm text-foreground">{avisoDesatualizada}</div>
+      )}
+
       {reviewStatus === "checking" && (
         <div className="bg-card border border-border rounded-lg p-4 text-sm text-muted">
           Verificando português e padrão do contrato com IA...
@@ -945,7 +1005,7 @@ export default function Step7Envio({
           <>
             <button
               onClick={() => handleSaveOnly()}
-              disabled={isSubmitting}
+              disabled={isSubmitting || reviewStatus === "checking"}
               className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
             >
               {isEdit ? "Salvar Nova Versão" : "Apenas Gerar Contrato"}
@@ -953,7 +1013,7 @@ export default function Step7Envio({
 
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || reviewStatus === "checking"}
               className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition"
             >
               {isEdit ? "Salvar e Enviar por E-mail" : "Gerar e Enviar por E-mail"}
@@ -962,7 +1022,7 @@ export default function Step7Envio({
             <div>
               <button
                 onClick={handleSaveAndSign}
-                disabled={isSubmitting}
+                disabled={isSubmitting || reviewStatus === "checking"}
                 aria-disabled={!socioEscritorio}
                 className={`px-4 py-2 rounded-lg transition ${
                   !socioEscritorio

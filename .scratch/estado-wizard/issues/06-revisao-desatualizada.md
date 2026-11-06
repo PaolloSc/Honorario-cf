@@ -4,7 +4,9 @@
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** done
+
+**Entregue:** `revisao.ts` (chave dos dados sem o Envio; nenhuma/em_dia/desatualizada) com teste; a etapa 7 reaproveita a revisão em dia (sem IA), avisa e refaz a desatualizada, avisa ao retomar na 6/7 e bloqueia gerar/enviar enquanto revisa. A revisão fica no wizard (sessão), não no rascunho (ADR 0001).
 
 - [ ] Dado alterado depois da revisão → aviso e revisão refeita
 - [ ] Sem alteração, nada é refeito (não gasta IA)
