@@ -16,6 +16,7 @@ from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.models.documentos_complementares import ROTULO_DOCUMENTO, TIPO_DISTRATO, TIPOS_COMPLEMENTARES
 from app.services.azure_email import AzureEmailService
+from app.services.contrato_carregado import carregar_versao, tipo_da_versao
 from app.services.docuseal import DocuSealService, link_assinatura
 from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_DOCUSEAL, MSG_ERRO_INTERNO
@@ -76,18 +77,6 @@ def resolve_backend_path(value: str) -> Path:
     return BACKEND_DIR / path
 
 
-def _tipo_da_versao(form_data_json: str | None) -> str:
-    """Honorarios e o padrao: contratos antigos nao gravavam tipo_contrato."""
-    from app.services.contract_dispatch import TIPO_HONORARIOS, tipo_contrato
-
-    if not form_data_json:
-        return TIPO_HONORARIOS
-    try:
-        return tipo_contrato(json.loads(form_data_json))
-    except (ValueError, TypeError):
-        return TIPO_HONORARIOS
-
-
 def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
     """Resolve the contract file path, trying multiple strategies.
 
@@ -133,12 +122,8 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
             contract_id,
         )
         try:
-            import json as _json
-            from app.services.contract_dispatch import parse_form_data
-
-            form_data = _json.loads(latest_ver.form_data_json)
-            contrato_data, gen = parse_form_data(form_data)
-            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            carregado = carregar_versao(latest_ver)
+            _, new_filepath = carregado.gerador.generate(carregado.request, contract_id=contract_id)
             regenerated = Path(new_filepath)
 
             # Update the stored path in DB so next time it's found directly
@@ -369,7 +354,7 @@ async def send_for_signature(
         from app.models.documentos_complementares import TIPO_SUBSTABELECIMENTO
         from app.services.consumidor_generator import CONTRATADA_NOME
 
-        tipo = _tipo_da_versao(latest_ver.form_data_json if latest_ver else None)
+        tipo = tipo_da_versao(latest_ver.form_data_json if latest_ver else None)
         eh_consumidor = tipo == TIPO_CONSUMIDOR_AEREO
         eh_substabelecimento = tipo == TIPO_SUBSTABELECIMENTO
 
@@ -445,13 +430,9 @@ async def send_for_signature(
 
         if latest_ver and latest_ver.form_data_json:
             try:
-                import json as _json
-                from app.services.contract_dispatch import parse_form_data
-
-                form_data = _json.loads(latest_ver.form_data_json)
-                contrato_data, gen = parse_form_data(form_data)
-                _, new_filepath = gen.generate(
-                    contrato_data,
+                carregado = carregar_versao(latest_ver)
+                _, new_filepath = carregado.gerador.generate(
+                    carregado.request,
                     contract_id=data.contract_id,
                     signatario_roles=all_signatarios,
                 )

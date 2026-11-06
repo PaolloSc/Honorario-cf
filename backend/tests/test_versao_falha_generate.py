@@ -1,6 +1,6 @@
 """Se o gerador falha na edicao/reversao, a copia _vN da versao atual nao fica orfa e nada vai ao banco."""
 from app.database import ContractVersionDB, SessionLocal
-from app.services.contract_dispatch import get_generator
+from app.services.contrato_carregado import get_generator
 from tests.test_documentos_complementares import DISTRATO, _gerar, auth_e_origem  # noqa: F401  (fixture autouse)
 from tests.test_substabelecimento_regerar import _docx_no_disco, _form, _versao
 

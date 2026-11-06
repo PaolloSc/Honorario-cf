@@ -5,7 +5,7 @@ import json
 import pytest
 
 from app.database import ContractDB, ContractVersionDB, SessionLocal
-from app.services.contract_dispatch import get_generator
+from app.services.contrato_carregado import get_generator
 from tests.test_documentos_complementares import (  # noqa: F401  (auth_e_origem e' fixture autouse)
     DISTRATO,
     ORIGEM,

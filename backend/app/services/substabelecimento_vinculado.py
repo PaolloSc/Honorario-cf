@@ -25,7 +25,7 @@ from app.models.documentos_complementares import (
     nome_contratante,
     nome_exibicao,
 )
-from app.services.contract_dispatch import get_generator
+from app.services.contrato_carregado import get_generator
 
 MOTIVO_TRAVADO = "o substabelecimento existente já foi enviado para assinatura ou assinado e não pode ser alterado"
 

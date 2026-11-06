@@ -33,7 +33,7 @@ from app.models.documentos_complementares import (
 )
 from app.routers.contract import _docx_to_html
 from app.routers.contracts import _check_access
-from app.services.contract_dispatch import get_generator
+from app.services.contrato_carregado import get_generator
 from app.utils.erros import MSG_ERRO_INTERNO
 from app.services.substabelecimento_vinculado import (
     MOTIVO_TRAVADO,
