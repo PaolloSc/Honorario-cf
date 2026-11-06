@@ -4,7 +4,9 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
+
+**Entregue:** `rascunho.ts` (retomar/apagar com `Armazem`, testado com adapter em memória), `rascunhoArmazem.ts` (adapter real), retomada na etapa exata até a 7, e as regras de apagar (descartar, gerar, rascunho antigo, PUT em voo) numa função só. Pendente no 06: marcar Revisão/Prévia desatualizadas ao reabrir na 6/7.
 
 - [ ] Reabrir volta na etapa em que parou, inclusive a 7
 - [ ] Testes com adapter em memória (sem API)

@@ -1,8 +1,10 @@
 "use client";
 
-import { deleteDraft, listDrafts, type DraftSummary } from "@/app/lib/api";
+import { listDrafts, type DraftSummary } from "@/app/lib/api";
+import { apagarRascunho } from "@/app/lib/rascunho";
+import { armazemReal } from "@/app/lib/rascunhoArmazem";
 import { formatarData, formatarDataHora } from "@/app/lib/datas";
-import { listarLocais, removerLocal, useDonoRascunho, VALIDADE_MS } from "@/app/lib/rascunhoLocal";
+import { listarLocais, useDonoRascunho, VALIDADE_MS } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { useCallback, useEffect, useState } from "react";
 
@@ -59,8 +61,7 @@ export default function RascunhosPendentes({ titulo = "Rascunhos em andamento" }
 
   const descartar = async (item: Item) => {
     if (!window.confirm(`Descartar o rascunho${item.client_name ? ` de ${item.client_name}` : ""}? Não dá para desfazer.`)) return;
-    removerLocal(item.draft_id);
-    await deleteDraft(item.draft_id).catch(() => undefined);
+    await apagarRascunho(item.draft_id, armazemReal(dono));
     setItens((prev) => prev.filter((i) => i.draft_id !== item.draft_id));
   };
 
