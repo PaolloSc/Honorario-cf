@@ -6,7 +6,7 @@ import Step3Honorarios from "@/components/steps/Step3Honorarios";
 import Step4Acessorios from "@/components/steps/Step4Acessorios";
 import Step5Participacao from "@/components/steps/Step5Participacao";
 import Step6Revisao from "@/components/steps/Step6Revisao";
-import Step7Envio from "@/components/steps/Step7Envio";
+import Step7Envio, { type RevisaoSalva } from "@/components/steps/Step7Envio";
 import StepIndicator from "@/components/ui/StepIndicator";
 import type {
   Acessorios,
@@ -145,6 +145,8 @@ export default function ContractWizard({
         setDraftId(id);
         setFormData(normalizarFormData(r.dados as Partial<ContratoFormData>));
         setCurrentStep(r.passo); // volta na etapa exata, até a 7
+        // a revisão por IA e a prévia não vão no rascunho: ao reabrir na 6/7 elas são refeitas
+        if (r.passo >= 6) setAvisoRevisao("Rascunho retomado: a revisão por IA da sessão anterior não vale mais e foi refeita com os dados atuais.");
         retomarAutosave(r.versaoServidor);
         setAvisoRetomada(
           editContractId
@@ -232,6 +234,8 @@ export default function ContractWizard({
   // Histórico do que já foi corrigido na revisão por IA (Step 7). Fica aqui, e não
   // dentro do Step7Envio, porque esse componente desmonta ao trocar de passo — sem
   // isso, sair e voltar pro Step 7 resetava o histórico pra vazio.
+  const [revisaoSalva, setRevisaoSalva] = useState<RevisaoSalva | null>(null);
+  const [avisoRevisao, setAvisoRevisao] = useState("");
   const [correcoesAplicadas, setCorrecoesAplicadas] = useState<Array<{ trecho: string; sugestao: string }>>([]);
 
   const updateEscopos = useCallback((escopos: EscopoItem[]) => {
@@ -402,6 +406,9 @@ export default function ContractWizard({
             onContractGenerated={() => void autosave.descartar()}
             correcoesAplicadas={correcoesAplicadas}
             onCorrecoesAplicadasChange={setCorrecoesAplicadas}
+            revisaoSalva={revisaoSalva}
+            onRevisaoChange={setRevisaoSalva}
+            avisoRevisao={avisoRevisao}
           />
         )}
       </div>
