@@ -4,7 +4,9 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
+
+**Entregue:** `VERSAO_FORMATO = 2` e `versao_formato` nos Dados do contrato; `normalizarFormData` (pura, idempotente) é a conversão única que o ticket 04 reutiliza; sem número = formato 1. Backend: `ContratoRequest.versao_formato` (antes o /generate descartava o campo via model_dump), com teste.
 
 - [ ] Snapshot novo traz o número de versão
 - [ ] Formatos sem número abrem como a versão anterior

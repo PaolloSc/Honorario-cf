@@ -405,6 +405,9 @@ class ContratoRequest(LimiteTamanhos):
     # Escolhas da etapa 7 (e-mails de envio, testemunhas, socio que assina): so
     # guardadas no form_data para a tela reabrir com elas; o gerador nao usa.
     envio: Optional[dict[str, Any]] = None
+    # Versao do formato dos Dados do contrato (ver GLOSSARY.md e docs/adr/0002). A tela
+    # grava e converte ao abrir; o backend so a guarda. Ausente = formato anterior ao 2.
+    versao_formato: Optional[int] = None
 
     @model_validator(mode="after")
     def _conferir(self, info: ValidationInfo) -> "ContratoRequest":

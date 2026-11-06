@@ -12,6 +12,7 @@ import {
   socioDoEnvio,
   sugerirSocio,
   temFichaParaFinanceiro,
+  VERSAO_FORMATO,
 } from "./estadoWizard.ts";
 
 const pf = (nome: string, email = "") => ({ tipo: "PF", nome, email }) as never;
@@ -117,6 +118,26 @@ assert.deepEqual(reaberto.contratantes, etapas1a4.contratantes);
 assert.deepEqual(reaberto.acessorios, etapas1a4.acessorios);
 assert.deepEqual(reaberto.escopos, etapas1a4.escopos);
 assert.equal(reaberto.incluir_partes_relacionadas, true);
+
+// ── formato versionado: todo snapshot traz a versão; sem número = formato anterior, convertido ao abrir ──
+assert.equal(DADOS_INICIAIS.versao_formato, VERSAO_FORMATO);
+assert.equal(normalizarFormData(null).versao_formato, VERSAO_FORMATO);
+assert.equal(normalizarFormData({ ...etapas1a4, versao_formato: undefined } as never).versao_formato, VERSAO_FORMATO);
+// formato 1 (sem número): vigência no pró-labore e participação em para_quem viram o formato atual
+const v1 = normalizarFormData({
+  ...etapas1a4,
+  acessorios: { tem_reembolso: true, reembolso_limitado: false, tem_penalidade_inadimplemento: true },
+  escopos: [{ tipo: "x", honorarios: [], pro_labore: { valor_total: 1, data_inicio: "2026-02-01", duracao_meses: 6 } }],
+  participacao: { tem_participacao: true, para_quem: ["Carla Sócia"], natureza: "indicacao" },
+} as never);
+assert.equal(v1.versao_formato, VERSAO_FORMATO);
+assert.equal(v1.acessorios.vigencia_inicio, "2026-02-01");
+assert.equal(v1.participacao.participantes?.[0].nome, "Carla Sócia");
+// idempotente: converter o já convertido não muda nada
+assert.deepEqual(normalizarFormData(v1), v1);
+assert.equal(JSON.stringify(normalizarFormData(JSON.parse(JSON.stringify(v1)))), JSON.stringify(v1));
+// versão de um formato futuro não é rebaixada em silêncio
+assert.equal(normalizarFormData({ ...etapas1a4, versao_formato: VERSAO_FORMATO + 1 } as never).versao_formato, VERSAO_FORMATO + 1);
 
 // ── ficha interna ──
 assert.equal(temFichaParaFinanceiro(undefined), false);
