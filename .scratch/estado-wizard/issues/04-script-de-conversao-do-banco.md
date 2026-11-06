@@ -4,7 +4,9 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent (execução em produção: só com ok do responsável)
+**Status:** script pronto e dry-run feito em branch Neon descartável; EXECUÇÃO EM PRODUÇÃO pendente de backup + ok final do responsável
+
+**Entregue:** `backend/scripts/converter_formato.py` (dry-run por padrão; `--apply` recusa sem `--backup` e `--ok`), `frontend/scripts/converter-formato.ts` (+ `.check.ts`) que reusa `normalizarFormData`. Trava: versão só é convertida se o DOCX regerado não mudar. Dry-run de 05/11/2026 na branch criada de produção: ver PR.
 
 - [ ] Dry-run lista, por contrato/rascunho, o que mudaria, sem gravar
 - [ ] Rodar duas vezes dá o mesmo resultado (idempotente)
