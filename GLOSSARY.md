@@ -66,3 +66,7 @@ Como o contrato ficará no Word/PDF, calculada a partir dos **Dados do contrato*
 **Contrato carregado**:
 Uma **Versão do contrato** salva já decodificada: tipo (honorários, consumidor aéreo, aditivo, distrato, substabelecimento), request validado, gerador e cliente. Vive em `backend/app/services/contrato_carregado.py`; download, e-mail, assinatura e reversão de versão usam só ele para remontar um contrato. Modo **brando** regera contratos antigos sem recusar; modo **estrito** (edição) aplica as regras do contrato novo.
 _Avoid_: dispatch, parse do form_data
+
+**Assinatura (envio)**:
+Enviar a última **Versão do contrato** para assinatura no DocuSeal. É o caso de uso `enviar(db, contract_id, signatarios, user_email)` em `backend/app/services/assinatura.py`: sócio que assina pelo escritório, testemunha fixa, papéis únicos, ordem de assinatura, reenvio (arquiva a submissão anterior) e auditoria. A rota só traduz HTTP (`EnvioInvalido` → 400, `ArquivoNaoEncontrado` → 404). O DocuSeal entra pelo parâmetro `docuseal`, que é o seam dos testes.
+_Avoid_: send_for_signature (nome da rota), submissão (é do DocuSeal)
