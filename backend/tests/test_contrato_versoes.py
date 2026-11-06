@@ -472,3 +472,19 @@ def test_cancelar_envio_404_do_docuseal_fica_na_auditoria(client, monkeypatch):
         assert "404" in log.detail and "888" in log.detail
     finally:
         db.close()
+
+
+def test_versao_do_formato_dos_dados_e_preservada_ao_criar_e_ao_editar(client):
+    """O wizard grava a versao do formato dos Dados do contrato; criar (model_dump) e editar (cru) nao a descartam."""
+    form = {**_form(), "versao_formato": 2}
+    r = client.post("/api/contract/generate", json=form)
+    assert r.status_code == 200, r.text
+    cid = r.json()["contract_id"]
+    assert client.get(f"/api/contracts/{cid}/form-data").json()["form_data"]["versao_formato"] == 2
+
+    assert _put(client, cid, {**_form(valor=200), "versao_formato": 2}).status_code == 200
+    assert client.get(f"/api/contracts/{cid}/form-data").json()["form_data"]["versao_formato"] == 2
+
+    # sem o campo (dados antigos) continua valendo: nada a rejeitar nem a inventar
+    cid2 = _criar(client)
+    assert client.get(f"/api/contracts/{cid2}/form-data").json()["form_data"].get("versao_formato") is None

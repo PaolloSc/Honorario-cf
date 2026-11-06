@@ -310,6 +310,8 @@ export interface Participacao {
 }
  
 export interface ContratoFormData {
+  // Versão do formato (estadoWizard.ts). Ausente = formato 1, anterior ao número.
+  versao_formato?: number;
   contratantes: Contratante[];
   incluir_partes_relacionadas: boolean;
   escopos: EscopoItem[];
