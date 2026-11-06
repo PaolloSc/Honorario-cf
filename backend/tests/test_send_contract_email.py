@@ -17,7 +17,7 @@ from app.config import settings
 from app.database import ContractDB, ContractVersionDB, SessionLocal, utcnow
 from app.main import app
 from app.models.contract import ContratoRequest
-from app.routers.email import get_email_service
+from app.services.servicos_externos import get_email_service
 from app.services.contract_generator import ContractGenerator
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -61,7 +61,7 @@ def _send(client, contract_id: str) -> dict:
 
     mock_service = MagicMock()
     mock_service.send_email_with_attachment = AsyncMock(side_effect=_capture)
-    with patch("app.routers.email.get_email_service", return_value=mock_service):
+    with patch("app.services.servicos_externos.get_email_service", return_value=mock_service):
         resp = client.post("/api/email/send", json={
             "contract_id": contract_id,
             "destinatario_email": "cli@ex.com",
@@ -111,3 +111,20 @@ def test_download_usa_nome_do_cliente(client):
     cd = resp.headers["content-disposition"]
     assert "Fulano de Tal" in cd or "Fulano%20de%20Tal" in cd
     assert contract_id not in cd
+
+
+def test_contrato_sem_arquivo_nem_dados_responde_404(client):
+    """Arquivo nao achado vira 404 (e nao 500): o servico levanta erro de dominio, a rota traduz."""
+    contract_id = str(uuid.uuid4())
+    db = SessionLocal()
+    db.add(ContractDB(
+        contract_id=contract_id, status="rascunho", client_name="X", client_email="x@ex.com",
+        current_version=1, created_by="lawyer@test.com", created_at=utcnow(), updated_at=utcnow()))
+    db.add(ContractVersionDB(
+        contract_id=contract_id, version_number=1, form_data_json="", file_path="/nao/existe.docx",
+        created_at=utcnow()))
+    db.commit()
+    db.close()
+    resp = client.post("/api/email/send", json={
+        "contract_id": contract_id, "destinatario_email": "x@ex.com", "destinatario_nome": "X"})
+    assert resp.status_code == 404

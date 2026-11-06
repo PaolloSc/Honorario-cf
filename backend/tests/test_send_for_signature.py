@@ -1,7 +1,7 @@
 """Comprehensive tests for the send-for-signature flow.
 
 Tests cover:
-1. Unit tests for _resolve_contract_filepath (path resolution strategies)
+1. Unit tests for resolver_arquivo (path resolution strategies)
 2. Integration tests for POST /api/docuseal/send-for-signature endpoint
 """
 import json
@@ -17,7 +17,7 @@ from app.auth import CurrentUser, get_current_user
 from app.config import BACKEND_DIR, settings
 from app.database import ColaboradorDB, ContractDB, ContractVersionDB, SessionLocal, utcnow
 from app.main import app
-from app.routers.docuseal import _resolve_contract_filepath
+from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolver_arquivo
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ def _fake_user():
 
 def _get_output_dir() -> Path:
     """Return the resolved output directory for contracts."""
-    from app.routers.docuseal import resolve_backend_path
+    from app.services.arquivo_contrato import resolve_backend_path
     return resolve_backend_path(settings.output_dir)
 
 
@@ -83,11 +83,11 @@ def _create_contract_in_db(
     return contract, version
 
 
-# ── 1. Unit tests for _resolve_contract_filepath ──────────────────────────
+# ── 1. Unit tests for resolver_arquivo ──────────────────────────
 
 
 class TestResolveContractFilepath:
-    """Unit tests for the _resolve_contract_filepath function."""
+    """Unit tests for the resolver_arquivo function."""
 
     def test_resolve_finds_file_at_stored_path(self):
         """Strategy 1: file exists at the exact stored path in DB."""
@@ -103,7 +103,7 @@ class TestResolveContractFilepath:
             contract_id = "resolve-stored-001"
             _create_contract_in_db(db, contract_id, file_path=str(temp_file))
 
-            result = _resolve_contract_filepath(contract_id, db)
+            result = resolver_arquivo(contract_id, db)
             assert result == temp_file
         finally:
             db.close()
@@ -128,7 +128,7 @@ class TestResolveContractFilepath:
             contract_id = "resolve-reconstructed-001"
             _create_contract_in_db(db, contract_id, file_path=stored_path)
 
-            result = _resolve_contract_filepath(contract_id, db)
+            result = resolver_arquivo(contract_id, db)
             assert result == real_file
         finally:
             db.close()
@@ -149,7 +149,7 @@ class TestResolveContractFilepath:
             # Create contract version with file_path=None
             _create_contract_in_db(db, contract_id, file_path=None)
 
-            result = _resolve_contract_filepath(contract_id, db)
+            result = resolver_arquivo(contract_id, db)
             assert result == fallback_file
         finally:
             db.close()
@@ -157,7 +157,7 @@ class TestResolveContractFilepath:
                 fallback_file.unlink()
 
     def test_resolve_raises_404_when_no_file_anywhere(self):
-        """All strategies fail: raises HTTPException 404."""
+        """All strategies fail: raises ArquivoNaoEncontrado."""
         db = SessionLocal()
         try:
             contract_id = "resolve-notfound-001"
@@ -167,11 +167,8 @@ class TestResolveContractFilepath:
                 file_path="/nonexistent/path/contrato_xyz.docx",
             )
 
-            with pytest.raises(HTTPException) as exc_info:
-                _resolve_contract_filepath(contract_id, db)
-
-            assert exc_info.value.status_code == 404
-            assert "Contract file not found" in exc_info.value.detail
+            with pytest.raises(ArquivoNaoEncontrado):
+                resolver_arquivo(contract_id, db)
         finally:
             db.close()
 
@@ -201,7 +198,7 @@ class TestResolveContractFilepath:
             fallback_file = output_dir / f"contrato_{contract_id}.docx"
             fallback_file.write_bytes(b"fake content")
 
-            result = _resolve_contract_filepath(contract_id, db)
+            result = resolver_arquivo(contract_id, db)
             assert result == fallback_file
         finally:
             db.close()
@@ -226,10 +223,8 @@ class TestResolveContractFilepath:
             db.add(contract)
             db.commit()
 
-            with pytest.raises(HTTPException) as exc_info:
-                _resolve_contract_filepath(contract_id, db)
-
-            assert exc_info.value.status_code == 404
+            with pytest.raises(ArquivoNaoEncontrado):
+                resolver_arquivo(contract_id, db)
         finally:
             db.close()
 
@@ -278,7 +273,7 @@ class TestResolveContractFilepath:
             mock_gen_instance.generate.side_effect = _mock_generate
 
             with patch("app.services.contract_generator.ContractGenerator", return_value=mock_gen_instance):
-                result = _resolve_contract_filepath(contract_id, db)
+                result = resolver_arquivo(contract_id, db)
 
             assert result == regen_file
             assert result.exists()
@@ -306,10 +301,9 @@ class TestResolveContractFilepath:
 
             with patch.object(settings, "output_dir", str(temp_dir)):
                 # Should create the directory, then fail with 404 (no file)
-                with pytest.raises(HTTPException) as exc_info:
-                    _resolve_contract_filepath(contract_id, db)
+                with pytest.raises(ArquivoNaoEncontrado):
+                    resolver_arquivo(contract_id, db)
 
-                assert exc_info.value.status_code == 404
                 # But the directory was created
                 assert temp_dir.exists()
         finally:
@@ -366,7 +360,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -408,7 +402,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -446,7 +440,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -497,7 +491,7 @@ class TestSendForSignatureEndpoint:
         regen_path = str(temp_file)
         mock_generator.generate.return_value = ("Test Contract", regen_path)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock), \
              patch("app.services.contract_generator.ContractGenerator", return_value=mock_generator):
@@ -576,7 +570,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -632,7 +626,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -691,7 +685,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -764,7 +758,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -811,7 +805,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock) as m_copy, \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock) as m_ficha:
             response = client.post(
@@ -859,7 +853,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -925,7 +919,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -979,7 +973,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -1050,7 +1044,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service), \
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
              patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
              patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
             response = client.post(
@@ -1116,7 +1110,7 @@ class TestAssinaturaPeloEscritorio:
         mock_service = MagicMock()
         mock_service.create_template_from_docx = AsyncMock(return_value={"id": 1})
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={"contract_id": self.contract_id, "signatarios": signatarios},
@@ -1140,7 +1134,7 @@ class TestAssinaturaPeloEscritorio:
         mock_service = MagicMock()
         mock_service.create_template_from_docx = AsyncMock(return_value={"id": 1})
         mock_service.send_for_signature = AsyncMock(side_effect=send)
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={"contract_id": self.contract_id, "signatarios": [{**self.CLIENTE, "phone": "(31) 99999-1234"}, SOCIO]},
@@ -1175,7 +1169,7 @@ class TestAssinaturaPeloEscritorio:
         mock_service.create_template_from_docx = AsyncMock(return_value={"id": 1})
         mock_service.send_for_signature = AsyncMock(side_effect=send)
         mock_service.archive_submission = AsyncMock(return_value=True)
-        with patch("app.routers.docuseal.get_docuseal_service", return_value=mock_service):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             r = client.post("/api/docuseal/send-for-signature",
                             json={"contract_id": self.contract_id, "signatarios": [self.CLIENTE, SOCIO]})
 

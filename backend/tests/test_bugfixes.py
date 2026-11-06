@@ -133,7 +133,7 @@ class TestEmailFilePathResolution:
             db.close()
 
             # Mock the email service to avoid actual sending
-            with patch("app.routers.email.get_email_service") as mock_svc:
+            with patch("app.services.servicos_externos.get_email_service") as mock_svc:
                 mock_service = MagicMock()
                 mock_service.send_email_with_attachment = AsyncMock(return_value={"success": True})
                 mock_svc.return_value = mock_service
