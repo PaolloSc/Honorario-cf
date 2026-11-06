@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Contratante, ContratantePF, ContratantePJ, ContratoFormData, EscopoItem, Participacao } from "@/types/contract";
+import type { Contratante, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
+import { alterarEnvio, destinatarios as destinatariosDe, montarFicha, nomeDoContratante, socioDoEnvio, temFichaParaFinanceiro } from "@/app/lib/estadoWizard";
 import { ehErro422, textoDoErro } from "@/app/lib/erro422";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
 import AjustarTexto from "@/components/steps/AjustarTexto";
@@ -24,64 +25,6 @@ interface Step7EnvioProps {
   // mesmo com o texto já corrigido continuando lá.
   correcoesAplicadas: Array<{ trecho: string; sugestao: string }>;
   onCorrecoesAplicadasChange: (updater: (prev: Array<{ trecho: string; sugestao: string }>) => Array<{ trecho: string; sugestao: string }>) => void;
-}
-
-// Os campos de participação só entram no payload quando o toggle está ligado: o
-// wizard preserva o que foi digitado antes de desligá-lo, e mandá-los assim faria o
-// financeiro receber uma participação que o contrato não tem.
-function buildFichaPayload(contractId: string, data: ContratoFormData) {
-  const p = data.participacao;
-  return {
-    contract_id: contractId,
-    cliente_nome: getContratanteNome(data.contratantes[0]),
-    objeto_contrato: buildObjetoContrato(data.escopos),
-    categoria_cliente: p.categoria_cliente,
-    etiquetas: p.etiquetas ?? [],
-    listas_transmissao: p.listas_transmissao ?? [],
-    // Contato financeiro do cliente e responsável pela gestão do contrato
-    // independem de haver participação.
-    contato_financeiro_nome: p.contato_financeiro_nome,
-    contato_financeiro_email: p.contato_financeiro_email,
-    contato_financeiro_telefone: p.contato_financeiro_telefone,
-    responsavel_gestao: p.responsavel_gestao,
-    ...(p.tem_participacao
-      ? {
-          valor_tipo: p.valor_tipo,
-          valor_percentual: p.valor_percentual,
-          valor_monetario: p.valor_monetario,
-          valor_outro: p.valor_outro,
-          participantes: p.participantes ?? [],
-          responsavel_captacao: p.responsavel_captacao,
-          base_tipo: p.base_tipo,
-          base_escopo_index: p.base_escopo_index,
-          base_honorario: p.base_honorario,
-          base_label: p.base_label,
-        }
-      : {}),
-  };
-}
-
-// A ficha vai ao financeiro quando há participação, cadastro do Legal One,
-// contato financeiro ou responsável pela gestão preenchidos — contratos sem
-// participação também precisam ser lançados, e esses campos agora independem
-// da participação.
-function temFichaParaFinanceiro(p?: Participacao): p is Participacao {
-  if (!p) return false;
-  return Boolean(
-    p.tem_participacao ||
-      p.categoria_cliente ||
-      p.etiquetas?.length ||
-      p.listas_transmissao?.length ||
-      p.contato_financeiro_nome ||
-      p.contato_financeiro_email ||
-      p.contato_financeiro_telefone ||
-      p.responsavel_gestao
-  );
-}
-
-function getContratanteNome(c: Contratante): string {
-  if (c.tipo === "PF") return (c as ContratantePF).nome;
-  return (c as ContratantePJ).razao_social;
 }
 
 function buildObjetoContrato(escopos: EscopoItem[]): string {
@@ -288,16 +231,6 @@ export default function Step7Envio({
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
   const [participacaoWarning, setParticipacaoWarning] = useState("");
   const [emailWarning, setEmailWarning] = useState("");
-  // Escolhas de envio voltam do rascunho/contrato salvo (data.envio); dados antigos não têm.
-  const envioSalvo = data.envio;
-  const [recipients, setRecipients] = useState<Array<{ email: string; nome: string }>>(() => {
-    const salvos = envioSalvo?.recipients;
-    const mesmos = salvos?.length === data.contratantes.length;
-    return data.contratantes.map((c, i) => ({
-      email: (mesmos ? salvos![i]?.email : undefined) ?? c.email ?? "",
-      nome: getContratanteNome(c),
-    }));
-  });
   const [signatureSent, setSignatureSent] = useState(false);
   // Contratantes que podem receber o link também pelo WhatsApp, logo após o envio.
   const [whatsappEnvio, setWhatsappEnvio] = useState<
@@ -305,41 +238,28 @@ export default function Step7Envio({
   >([]);
   // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
   const [roster, setRoster] = useState<Testemunha[]>([]);
-  const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>(() => envioSalvo?.testemunhaIds ?? []);
-  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>(
-    () => envioSalvo?.testemunhasExtras ?? []
-  );
   const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
   const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   // Colaboradores do escritorio: autopreenchimento de testemunhas.
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
-  const [socioEscritorio, setSocioEscritorio] = useState(() => envioSalvo?.socioEscritorio ?? "");
   const [avisoSocio, setAvisoSocio] = useState(false);
   const isEdit = !!editContractId;
   // `data` do render atual, para os callbacks assíncronos não usarem uma cópia velha.
   const dataRef = useRef(data);
   dataRef.current = data;
 
-  // Leva as escolhas de envio para o estado do wizard (autosave do rascunho e
-  // form_data do contrato). Sem envio salvo, só grava depois que a pessoa mexe:
-  // abrir a etapa não deve, sozinho, marcar o formulário como alterado.
-  const envioTocado = useRef(false);
-  const tocarEnvio = () => {
-    envioTocado.current = true;
-  };
-  useEffect(() => {
+  // Envio: a fonte é UM só lugar, os Dados do contrato (app/lib/estadoWizard). Aqui só se lê;
+  // gravar é por ação da pessoa (abrir a etapa ou sugerir sócio não marca o contrato como alterado).
+  const recipients = destinatariosDe(data);
+  const selectedTestemunhaIds = data.envio?.testemunhaIds ?? [];
+  const extraTestemunhas = data.envio?.testemunhasExtras ?? [];
+  const socioEscritorio = socioDoEnvio(data, colaboradores);
+  const gravarEnvio = (patch: NonNullable<ContratoFormData["envio"]>) => {
     if (!onDataChange) return;
-    if (!envioTocado.current && !dataRef.current.envio) return;
-    const envio = {
-      recipients,
-      testemunhaIds: selectedTestemunhaIds,
-      testemunhasExtras: extraTestemunhas,
-      socioEscritorio,
-    };
-    if (JSON.stringify(envio) === JSON.stringify(dataRef.current.envio)) return;
-    onDataChange({ ...dataRef.current, envio });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipients, selectedTestemunhaIds, extraTestemunhas, socioEscritorio]);
+    const novo = alterarEnvio(dataRef.current, patch);
+    dataRef.current = novo;
+    onDataChange(novo);
+  };
   // Prévia de como o contrato fica no Word/PDF (mesmo preview da tela do contrato).
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   // Prévia gerada junto da revisão (antes de existir contractId — cobre a criação).
@@ -359,28 +279,6 @@ export default function Step7Envio({
       .then((r) => setColaboradores(r.colaboradores))
       .catch(() => setColaboradores([]));
   }, []);
-
-  // Sugestão de quem assina pelo escritório: o responsável pela gestão, se for
-  // sócio; senão o primeiro sócio entre os que recebem participação (regra do PR #74).
-  useEffect(() => {
-    if (socioEscritorio || colaboradores.length === 0) return;
-    const socios = colaboradores.filter((c) => c.role === "socio");
-    const porNome = new Map(socios.map((s) => [s.name, s]));
-    const candidatos = [
-      data.participacao.responsavel_gestao,
-      ...(data.participacao.participantes ?? []).map((p) => p.nome),
-    ];
-    for (const nome of candidatos) {
-      const socio = porNome.get((nome ?? "").trim());
-      if (socio) {
-        setSocioEscritorio(socio.email);
-        return;
-      }
-    }
-    // Um único sócio cadastrado: não há o que escolher.
-    if (socios.length === 1 && socios[0].email) setSocioEscritorio(socios[0].email);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colaboradores, data.participacao.responsavel_gestao, data.participacao.participantes]);
 
   // Cláusulas ajustáveis (painel "Ajustar texto") e ajustes que deixaram de existir.
   const [itens, setItens] = useState<ItemClausula[]>([]);
@@ -489,8 +387,7 @@ export default function Step7Envio({
   }, [contractId, status]);
 
   const updateRecipient = (index: number, email: string) => {
-    tocarEnvio();
-    setRecipients((prev) => prev.map((r, i) => (i === index ? { ...r, email } : r)));
+    gravarEnvio({ recipients: recipients.map((r, i) => (i === index ? { ...r, email } : r)) });
   };
 
   const handleSubmit = async () => {
@@ -539,7 +436,7 @@ export default function Step7Envio({
       // Send participação sheet to financeiro if applicable
       if (temFichaParaFinanceiro(data.participacao)) {
         try {
-          await sendParticipacao(buildFichaPayload(resultContractId, data));
+          await sendParticipacao(montarFicha(resultContractId, data, buildObjetoContrato(data.escopos)));
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
           setParticipacaoWarning(`Ficha de participação não enviada ao financeiro. ${detail}`);
@@ -585,7 +482,7 @@ export default function Step7Envio({
       // Send participação sheet to financeiro if applicable
       if (temFichaParaFinanceiro(data.participacao)) {
         try {
-          await sendParticipacao(buildFichaPayload(resultContractId, data));
+          await sendParticipacao(montarFicha(resultContractId, data, buildObjetoContrato(data.escopos)));
         } catch (err) {
           const detail = err instanceof Error ? err.message : "";
           setParticipacaoWarning(`Ficha de participação não enviada ao financeiro. ${detail}`);
@@ -639,11 +536,11 @@ export default function Step7Envio({
         const reps = c.tipo === "PJ" ? (c as ContratantePJ).representantes ?? [] : [];
         const assinantes = reps.filter((r) => r.nome && r.email);
         if (assinantes.length === 0) {
-          return [{ email: c.email, name: getContratanteNome(c), role: "Contratante", phone: c.whatsapp }];
+          return [{ email: c.email, name: nomeDoContratante(c), role: "Contratante", phone: c.whatsapp }];
         }
         return assinantes.map((r) => ({
           email: r.email!,
-          name: `${r.nome} (${getContratanteNome(c)})`,
+          name: `${r.nome} (${nomeDoContratante(c)})`,
           role: "Contratante",
           phone: r.whatsapp,
         }));
@@ -719,8 +616,7 @@ export default function Step7Envio({
         colaboradores={colaboradores}
         value={socioEscritorio}
         onChange={(v) => {
-          tocarEnvio();
-          setSocioEscritorio(v);
+          gravarEnvio({ socioEscritorio: v });
           if (v) setAvisoSocio(false);
         }}
       />
@@ -779,8 +675,7 @@ export default function Step7Envio({
                   <span className="flex-1">{t.nome} ({t.email})</span>
                   <button
                     onClick={() => {
-                      tocarEnvio();
-                      setSelectedTestemunhaIds((prev) => prev.filter((id) => id !== t.id));
+                      gravarEnvio({ testemunhaIds: selectedTestemunhaIds.filter((id) => id !== t.id) });
                     }}
                     className="text-danger hover:opacity-80 text-xs font-medium"
                   >
@@ -793,8 +688,7 @@ export default function Step7Envio({
                 <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
                 <button
                   onClick={() => {
-                    tocarEnvio();
-                    setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i));
+                    gravarEnvio({ testemunhasExtras: extraTestemunhas.filter((_, idx) => idx !== i) });
                   }}
                   className="text-danger hover:opacity-80 text-xs font-medium"
                 >
@@ -830,12 +724,11 @@ export default function Step7Envio({
               const nome = newTestemunhaNome.trim();
               const email = newTestemunhaEmail.trim();
               if (!nome || !email) return;
-              tocarEnvio();
               const match = roster.find((t) => t.nome.trim().toLowerCase() === nome.toLowerCase());
               if (match) {
-                setSelectedTestemunhaIds((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));
+                gravarEnvio({ testemunhaIds: selectedTestemunhaIds.includes(match.id) ? selectedTestemunhaIds : [...selectedTestemunhaIds, match.id] });
               } else {
-                setExtraTestemunhas((prev) => [...prev, { email, name: nome }]);
+                gravarEnvio({ testemunhasExtras: [...extraTestemunhas, { email, name: nome }] });
               }
               setNewTestemunhaNome("");
               setNewTestemunhaEmail("");

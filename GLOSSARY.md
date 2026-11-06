@@ -1,0 +1,64 @@
+# Honorários C&F
+
+Sistema que monta, revisa e envia para assinatura os contratos de honorários do escritório, a partir de um passo a passo (wizard) preenchido pelo advogado.
+
+## Language
+
+**Contrato**:
+Documento de honorários de um cliente, com uma ou mais **Versões**. Só existe depois de gerado.
+_Avoid_: Proposta, minuta
+
+**Versão do contrato**:
+Cada vez que o contrato é gerado ou salvo de novo na edição; guarda os dados exatos daquele momento.
+_Avoid_: Revisão (reservado para a revisão por IA), histórico
+
+**Dados do contrato**:
+Tudo que o advogado informa e que o contrato (ou o envio dele) precisa para ser gerado, enviado ou retomado. É o que vai ao **Rascunho** e à **Versão**.
+_Avoid_: Formulário, form_data (termo técnico)
+
+**Dados de tela**:
+O que só ajuda a preencher e se perde ao sair: busca digitada, resultado de consulta de CNPJ/CEP, listas carregadas. Nunca vai ao **Rascunho**.
+_Avoid_: Estado local
+
+**Estado do wizard**:
+O conjunto único de **Dados do contrato** que todas as **Etapas** leem e alteram. Há uma só fonte; as etapas não guardam cópia própria.
+_Avoid_: formData, estado das etapas
+
+## Passo a passo (wizard)
+
+**Etapa**:
+Uma das sete telas do wizard: Contratante, Escopo, Honorários, Acessórios, Ficha interna, Revisão, Envio.
+_Avoid_: Passo, step
+
+**Ficha interna**:
+Etapa 5. Dados para o financeiro e para a participação (quem recebe parte dos honorários), não vão ao texto do contrato.
+_Avoid_: Ficha de participação (é o registro criado a partir dela)
+
+**Envio**:
+Escolhas da etapa 7: e-mails dos contratantes, testemunhas e sócio que assina pelo escritório. Fazem parte dos **Dados do contrato**.
+_Avoid_: Dados de envio
+
+**Sócio que assina**:
+Sócio do escritório que assina como Contratado. Se o advogado não escolher, o sistema sugere um.
+_Avoid_: Assinante, signatário do escritório
+
+## Rascunho e revisão
+
+**Rascunho**:
+Cópia automática dos **Dados do contrato** de um contrato em preenchimento ou em edição, guardada para retomar depois. Some quando o contrato é gerado.
+_Avoid_: Contrato em rascunho (é o status de um contrato ainda não enviado)
+
+**Retomar**:
+Reabrir um **Rascunho** na etapa exata em que o advogado parou, inclusive a 7.
+_Avoid_: Restaurar
+
+**Revisão por IA**:
+Conferência automática de português e padrão do texto gerado, feita na etapa 7.
+_Avoid_: Revisão (sozinha)
+
+**Revisão desatualizada**:
+Estado da **Revisão por IA** e da **Prévia** quando os **Dados do contrato** mudaram depois da última revisão; precisam ser refeitas antes de gerar.
+_Avoid_: Revisão antiga
+
+**Prévia**:
+Como o contrato ficará no Word/PDF, calculada a partir dos **Dados do contrato** atuais.
