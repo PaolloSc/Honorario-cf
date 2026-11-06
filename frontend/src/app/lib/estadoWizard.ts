@@ -11,7 +11,14 @@ import type {
 // Estado do wizard: os Dados do contrato têm UMA fonte (ver GLOSSARY.md e docs/adr/0001).
 // As etapas leem daqui e escrevem aqui; este módulo é puro (sem React, sem rede) e é o seam dos testes.
 
+/**
+ * Versão do formato dos Dados do contrato (docs/adr/0002). Ausente = formato 1 (anterior ao
+ * número). Ao mudar o formato: some 1, converta em normalizarFormData e cubra no .check.ts.
+ */
+export const VERSAO_FORMATO = 2;
+
 export const DADOS_INICIAIS: ContratoFormData = {
+  versao_formato: VERSAO_FORMATO,
   contratantes: [
     {
       tipo: "PF",
@@ -94,11 +101,16 @@ function fichaInterna(dados: unknown): Participacao {
   };
 }
 
-/** Abre Dados do contrato de qualquer formato conhecido (rascunho, contrato salvo, modelo). */
+/**
+ * Abre Dados do contrato de qualquer formato conhecido (rascunho, contrato salvo, modelo) e devolve
+ * o formato atual. Pura e idempotente: é a mesma conversão que o script do banco vai usar.
+ */
 export function normalizarFormData(data: Partial<ContratoFormData> | null | undefined): ContratoFormData {
   if (!data) return { ...DADOS_INICIAIS };
 
   return {
+    // Formato futuro (versão maior que a conhecida) não é rebaixado em silêncio.
+    versao_formato: Math.max(data.versao_formato ?? 0, VERSAO_FORMATO),
     contratantes: data.contratantes?.length ? data.contratantes : DADOS_INICIAIS.contratantes,
     incluir_partes_relacionadas: data.incluir_partes_relacionadas ?? false,
     escopos: (data.escopos ?? []).map((e) =>
