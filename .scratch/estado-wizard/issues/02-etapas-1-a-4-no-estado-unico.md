@@ -4,7 +4,9 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
+
+**Auditoria (resultado):** nas etapas 1 a 4 todo Dado do contrato já é escrito pelas props; o estado local restante é Dado de tela: consulta de CNPJ/CEP, busca de cliente, aviso de origem, `pendentes`/`previa` do Step3, `guardado` (desfazer) do Step2, lista de cláusulas com linhas vazias do Step4 (só o texto vai ao contrato) e CEP/número/complemento do Step1, remontados do endereço salvo. Entregue: `endereco.ts` (montar/desmontar, com teste de ida e volta) e teste de ida e volta dos dados das etapas 1 a 4 pelo Estado do wizard.
 
 - [ ] Nenhum Dado do contrato só em estado local nas etapas 1 a 4
 - [ ] Reabrir rascunho preserva os dados dessas etapas
