@@ -26,6 +26,7 @@ import { prepararModelo, type ModoModelo } from "@/app/lib/modeloContrato";
 import { dataDaApi } from "@/app/lib/datas";
 import { lerLocal, useDonoRascunho } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
+import { DADOS_INICIAIS, normalizarFormData } from "@/app/lib/estadoWizard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  
 const STEPS = [
@@ -38,32 +39,7 @@ const STEPS = [
   { id: 7, title: "Envio" },
 ];
  
-const INITIAL_DATA: ContratoFormData = {
-  contratantes: [
-    {
-      tipo: "PF",
-      nome: "",
-      nacionalidade: "Brasileiro(a)",
-      cpf: "",
-      profissao: "",
-      estado_civil: "Solteiro(a)",
-      endereco: "",
-      email: "",
-    },
-  ],
-  incluir_partes_relacionadas: false,
-  escopos: [],
-  acessorios: {
-    tem_reembolso: true,
-    reembolso_limitado: false,
-    tem_penalidade_inadimplemento: true,
-  },
-  participacao: {
-    tem_participacao: false,
-  },
-};
-
-const INITIAL_JSON = JSON.stringify(INITIAL_DATA);
+const INITIAL_JSON = JSON.stringify(DADOS_INICIAIS);
 
 function novoIdRascunho(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -77,89 +53,6 @@ function idRascunhoEdicao(contractId: string): string {
 
 function horaBrasilia(d: Date): string {
   return d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
-}
-
-// A vigência morava no pró-labore; contratos antigos a trazem de lá. A migração
-// é só aqui (ao abrir no wizard): no backend ela ressuscitaria a vigência que o
-// advogado apagou, e o .docx de um contrato antigo regenerado ganharia cláusula.
-function vigencia(data: Partial<ContratoFormData>): Pick<Acessorios, "vigencia_inicio" | "vigencia_fim" | "vigencia_meses"> {
-  const ac = data.acessorios;
-  if (ac?.vigencia_inicio) {
-    return { vigencia_inicio: ac.vigencia_inicio, vigencia_fim: ac.vigencia_fim, vigencia_meses: ac.vigencia_meses };
-  }
-  const pl = data.escopos?.find((e) => e.pro_labore?.data_inicio)?.pro_labore;
-  return { vigencia_inicio: pl?.data_inicio, vigencia_fim: pl?.data_fim, vigencia_meses: pl?.duracao_meses };
-}
-
-function normalizeFormData(data: Partial<ContratoFormData> | null | undefined): ContratoFormData {
-  if (!data) return { ...INITIAL_DATA };
-
-  return {
-    contratantes: data.contratantes?.length ? data.contratantes : INITIAL_DATA.contratantes,
-    incluir_partes_relacionadas: data.incluir_partes_relacionadas ?? false,
-    escopos: (data.escopos ?? []).map((e) =>
-      e.pro_labore?.data_inicio || e.pro_labore?.data_fim || e.pro_labore?.duracao_meses
-        ? { ...e, pro_labore: { ...e.pro_labore, data_inicio: undefined, data_fim: undefined, duracao_meses: undefined } }
-        : e
-    ),
-    acessorios: {
-      tem_reembolso: data.acessorios?.tem_reembolso ?? true,
-      reembolso_limitado: data.acessorios?.reembolso_limitado ?? false,
-      descricao_limitacao_reembolso: data.acessorios?.descricao_limitacao_reembolso,
-      tem_penalidade_inadimplemento: data.acessorios?.tem_penalidade_inadimplemento ?? true,
-      valor_diligencia: data.acessorios?.valor_diligencia,
-      valor_km: data.acessorios?.valor_km,
-      criterio_extincao_exito: data.acessorios?.criterio_extincao_exito,
-      clausulas_adicionais: data.acessorios?.clausulas_adicionais,
-      ...vigencia(data),
-    },
-    participacao: (() => {
-      const p = (data.participacao ?? {}) as any;
-      // Aceita lista, string legada ou ausência — contratos antigos gravaram string.
-      const lista = (v: unknown): string[] =>
-        Array.isArray(v) ? v : typeof v === "string" && v.trim() ? [v] : [];
-      let valorTipo = p.valor_tipo;
-      let valorOutro = p.valor_outro ?? "";
-      if (!valorTipo && p.percentual_ou_valor) {
-        valorTipo = "outro";
-        valorOutro = p.percentual_ou_valor;
-      }
-      // Contratos antigos gravaram para_quem (lista de nomes) + uma natureza única —
-      // migra para participantes (cada advogado com natureza/percentual próprios).
-      const participantes = Array.isArray(p.participantes) && p.participantes.length
-        ? p.participantes
-        : lista(p.para_quem).map((nome) => ({
-            nome,
-            natureza: p.natureza ?? "",
-            percentual: p.valor_percentual,
-          }));
-      return {
-        tem_participacao: p.tem_participacao ?? false,
-        valor_tipo: valorTipo,
-        valor_percentual: p.valor_percentual ?? "",
-        valor_monetario: p.valor_monetario,
-        valor_outro: valorOutro,
-        participantes,
-        responsavel_captacao: p.responsavel_captacao ?? "",
-        responsavel_gestao: p.responsavel_gestao ?? "",
-        contato_financeiro_nome: p.contato_financeiro_nome ?? "",
-        contato_financeiro_email: p.contato_financeiro_email ?? "",
-        contato_financeiro_telefone: p.contato_financeiro_telefone ?? "",
-        categoria_cliente: p.categoria_cliente ?? "",
-        etiquetas: lista(p.etiquetas),
-        listas_transmissao: lista(p.listas_transmissao),
-        // Sem estes a base da participação sumia ao reabrir o contrato para edição.
-        base_tipo: p.base_tipo,
-        base_escopo_index: p.base_escopo_index,
-        base_honorario: p.base_honorario,
-        base_label: p.base_label ?? "",
-      };
-    })(),
-    email_destinatario: data.email_destinatario,
-    // Cláusulas reescritas na etapa 7: sem isto sumiam ao reabrir rascunho/contrato.
-    ajustes_texto: data.ajustes_texto,
-    envio: data.envio,
-  };
 }
 
 function validateStep(step: number, data: ContratoFormData): string[] {
@@ -205,7 +98,7 @@ export default function ContractWizard({
   onSaveComplete,
 }: ContractWizardProps = {}) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<ContratoFormData>(normalizeFormData(initialData));
+  const [formData, setFormData] = useState<ContratoFormData>(normalizarFormData(initialData));
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const currentStepErrors = validateStep(currentStep, formData);
   const canGoNext = currentStepErrors.length === 0;
@@ -215,7 +108,7 @@ export default function ContractWizard({
   const dono = useDonoRascunho();
   const [draftId, setDraftId] = useState(() => (editContractId ? idRascunhoEdicao(editContractId) : novoIdRascunho()));
   // Na edição o formulário já nasce cheio: só há o que salvar depois de mudar algo.
-  const [jsonInicial] = useState(() => (editContractId ? JSON.stringify(normalizeFormData(initialData)) : INITIAL_JSON));
+  const [jsonInicial] = useState(() => (editContractId ? JSON.stringify(normalizarFormData(initialData)) : INITIAL_JSON));
   const [restaurando, setRestaurando] = useState(false);
   const [avisoRetomada, setAvisoRetomada] = useState("");
   const retomadaFeita = useRef(false);
@@ -246,7 +139,7 @@ export default function ContractWizard({
     // versaoServidor = updated_at do servidor, base da concorrência otimista do autosave
     const aplicar = (dados: Record<string, unknown>, passo: number, versaoServidor: string | null) => {
       setDraftId(id);
-      setFormData(normalizeFormData(dados as Partial<ContratoFormData>));
+      setFormData(normalizarFormData(dados as Partial<ContratoFormData>));
       setCurrentStep(Math.min(Math.max(passo, 1), 5)); // 6/7 dependem de revisar de novo
       retomarAutosave(versaoServidor);
       setAvisoRetomada(
@@ -298,7 +191,7 @@ export default function ContractWizard({
         const { form_data } = await getContractFormData(modeloId);
         const contratantes = form_data.contratantes as Array<{ nome?: string }> | undefined;
         const origem = contratantes?.map((c) => c.nome?.trim()).filter(Boolean).join(", ") || "contrato anterior";
-        setFormData(normalizeFormData(prepararModelo(form_data, modo) as Partial<ContratoFormData>));
+        setFormData(normalizarFormData(prepararModelo(form_data, modo) as Partial<ContratoFormData>));
         setAvisoRetomada(`Copiado de ${origem}, confira valores e datas.`);
         // recarregar a página não deve criar outro rascunho a partir do mesmo modelo
         window.history.replaceState(null, "", window.location.pathname);
@@ -316,7 +209,7 @@ export default function ContractWizard({
       : "Descartar este rascunho e começar do zero? Não dá para desfazer.";
     if (!window.confirm(pergunta)) return;
     await autosave.descartar();
-    setFormData(normalizeFormData(editContractId ? initialData : null));
+    setFormData(normalizarFormData(editContractId ? initialData : null));
     setCurrentStep(1);
     setDraftId(editContractId ? idRascunhoEdicao(editContractId) : novoIdRascunho());
     setAvisoRetomada("");
