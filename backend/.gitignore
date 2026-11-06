@@ -4,3 +4,4 @@
 honorarios.db*
 *.db-wal
 *.db-shm
+.dryrun_docx/
