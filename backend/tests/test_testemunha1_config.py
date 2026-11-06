@@ -49,7 +49,7 @@ def test_env_example_documenta_o_mesmo_nome():
 import pytest  # noqa: E402
 
 from app.database import ColaboradorDB, SessionLocal, utcnow  # noqa: E402
-from app.routers.docuseal import _nome_testemunha1  # noqa: E402
+from app.services.assinatura import _nome_testemunha1  # noqa: E402
 
 
 @pytest.fixture

@@ -360,9 +360,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -402,9 +400,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -440,9 +436,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -492,8 +486,6 @@ class TestSendForSignatureEndpoint:
         mock_generator.generate.return_value = ("Test Contract", regen_path)
 
         with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock), \
              patch("app.services.contract_generator.ContractGenerator", return_value=mock_generator):
             response = client.post(
                 "/api/docuseal/send-for-signature",
@@ -570,9 +562,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -626,9 +616,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -685,9 +673,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -758,9 +744,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -853,9 +837,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -919,9 +901,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -973,9 +953,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service = self._mock_docuseal_success()
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -1044,9 +1022,7 @@ class TestSendForSignatureEndpoint:
 
         mock_service.send_for_signature = AsyncMock(side_effect=capture_send)
 
-        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+        with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service):
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
