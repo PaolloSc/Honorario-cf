@@ -20,7 +20,7 @@ import { validateEscopos, validateAcessorios, validateParticipacao } from "@/app
 import { validateHonorarios } from "@/app/lib/validacaoHonorarios";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
 import { getContractFormData } from "@/app/lib/api";
-import { retomarRascunho } from "@/app/lib/rascunho";
+import { primeiraEtapaInvalidaAntes, retomarRascunho } from "@/app/lib/rascunho";
 import { armazemReal } from "@/app/lib/rascunhoArmazem";
 import { cnpjValido } from "@/app/lib/cnpj";
 import { validarContratantes } from "@/app/lib/validarContratantes";
@@ -78,16 +78,10 @@ function firstInvalidStepBefore(step: number, data: ContratoFormData): {
   step: number;
   errors: string[];
 } | null {
-  for (let candidate = 1; candidate < step; candidate += 1) {
-    const errors = validateStep(candidate, data);
-    if (errors.length > 0) {
-      return { step: candidate, errors };
-    }
-  }
-
-  return null;
+  const r = primeiraEtapaInvalidaAntes(step, data, validateStep);
+  return r && { step: r.etapa, errors: r.erros };
 }
- 
+
 interface ContractWizardProps {
   initialData?: ContratoFormData;
   editContractId?: string;
