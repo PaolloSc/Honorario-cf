@@ -1,6 +1,8 @@
 "use client";
 
-import { ConflitoError, deleteDraft, saveDraft } from "@/app/lib/api";
+import { ConflitoError, saveDraft } from "@/app/lib/api";
+import { apagarRascunho } from "@/app/lib/rascunho";
+import { armazemReal } from "@/app/lib/rascunhoArmazem";
 import { gravarLocal, removerLocal } from "@/app/lib/rascunhoLocal";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -51,7 +53,7 @@ export function useRascunhoAutosave({ ativo, draftId, formData, step, temConteud
       versao.current = r.updated_at;
       if (parado.current) {
         // descartado com o PUT em voo: o PUT recriou o que o DELETE acabara de apagar
-        await deleteDraft(id).catch(() => undefined);
+        await apagarRascunho(id, armazemReal(ultimo.current.dono));
         return;
       }
       // só confirma se nada mudou durante o envio
@@ -118,10 +120,9 @@ export function useRascunhoAutosave({ ativo, draftId, formData, step, temConteud
     pendente.current = false;
     versao.current = null;
     const id = ultimo.current.draftId;
-    removerLocal(id);
     setEstado("ocioso");
     setSalvoEm(null);
-    await deleteDraft(id).catch(() => undefined);
+    await apagarRascunho(id, armazemReal(ultimo.current.dono));
   }, []);
 
   /** Volta a salvar — chamado ao começar/retomar outro rascunho, com a versão do servidor. */

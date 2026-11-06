@@ -19,7 +19,9 @@ import RascunhosPendentes from "@/components/RascunhosPendentes";
 import { validateEscopos, validateAcessorios, validateParticipacao } from "@/app/lib/validacaoPassos";
 import { validateHonorarios } from "@/app/lib/validacaoHonorarios";
 import { useRascunhoAutosave } from "@/components/useRascunhoAutosave";
-import { getContractFormData, getDraft } from "@/app/lib/api";
+import { getContractFormData } from "@/app/lib/api";
+import { retomarRascunho } from "@/app/lib/rascunho";
+import { armazemReal } from "@/app/lib/rascunhoArmazem";
 import { cnpjValido } from "@/app/lib/cnpj";
 import { validarContratantes } from "@/app/lib/validarContratantes";
 import { prepararModelo, type ModoModelo } from "@/app/lib/modeloContrato";
@@ -136,38 +138,24 @@ export default function ContractWizard({
     if (authStatus !== "authenticated") return; // espera a sessão para chamar a API
     retomadaFeita.current = true;
 
-    // versaoServidor = updated_at do servidor, base da concorrência otimista do autosave
-    const aplicar = (dados: Record<string, unknown>, passo: number, versaoServidor: string | null) => {
-      setDraftId(id);
-      setFormData(normalizarFormData(dados as Partial<ContratoFormData>));
-      setCurrentStep(Math.min(Math.max(passo, 1), 5)); // 6/7 dependem de revisar de novo
-      retomarAutosave(versaoServidor);
-      setAvisoRetomada(
-        editContractId
-          ? "Havia alterações desta edição que não viraram versão — foram retomadas. Confira, ou descarte para voltar ao contrato salvo."
-          : "Rascunho retomado — confira os dados e continue de onde parou.",
-      );
-    };
-
     (async () => {
-      // só a cópia de quem está logado: a de outra pessoa nunca é aplicada, nem
-      // quando o servidor responde 404 (rascunho alheio)
-      const local = lerLocal(id, dono);
-      try {
-        const servidor = await getDraft(id);
-        // cópia local mais nova = o último salvamento no servidor falhou
-        if (local && dataDaApi(local.updated_at) > dataDaApi(servidor.updated_at)) {
-          aplicar(local.form_data, local.current_step, servidor.updated_at);
-        } else {
-          aplicar(servidor.form_data, servidor.current_step, servidor.updated_at);
-        }
-      } catch {
-        if (local) aplicar(local.form_data, local.current_step, null);
+      // só a cópia de quem está logado: a de outra pessoa nunca é aplicada (armazemReal)
+      const r = await retomarRascunho(id, armazemReal(dono));
+      if (r) {
+        setDraftId(id);
+        setFormData(normalizarFormData(r.dados as Partial<ContratoFormData>));
+        setCurrentStep(r.passo); // volta na etapa exata, até a 7
+        retomarAutosave(r.versaoServidor);
+        setAvisoRetomada(
+          editContractId
+            ? "Havia alterações desta edição que não viraram versão — foram retomadas. Confira, ou descarte para voltar ao contrato salvo."
+            : "Rascunho retomado — confira os dados e continue de onde parou.",
+        );
+      } else if (!editContractId) {
         // edição sem rascunho é o caso normal: nada a avisar
-        else if (!editContractId) setAvisoRetomada("Rascunho não encontrado — pode já ter virado contrato ou ter sido descartado.");
-      } finally {
-        setRestaurando(false);
+        setAvisoRetomada("Rascunho não encontrado — pode já ter virado contrato ou ter sido descartado.");
       }
+      setRestaurando(false);
     })();
   }, [authStatus, dono, editContractId, retomarAutosave]);
 
