@@ -17,16 +17,12 @@ import type {
   TipoPessoa,
 } from "@/types/contract";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { desmontarEndereco, formatCEP, montarEndereco, type ViaCep } from "@/app/lib/endereco";
 
 function toTitleCase(str: string): string {
   return str
     .toLowerCase()
     .replace(/(^|\s)\S/g, (char) => char.toUpperCase());
-}
-
-function formatCEP(digits: string): string {
-  if (digits.length > 5) return digits.replace(/^(\d{5})(\d)/, "$1-$2");
-  return digits;
 }
 
 // (31) 9999-9999 e (31) 99999-9999 — o 9º digito muda a posicao do hifen.
@@ -663,22 +659,6 @@ function RepresentantesForm({
   );
 }
 
-// Desmonta o endereco montado por buildEndereco para reidratar CEP/numero/complemento na edicao.
-// Formato: "<logradouro>[, n. X][, <comp>], <bairro>, <cidade>/<UF>, CEP 00000-000"
-function parseEndereco(endereco: string | undefined) {
-  const vazio = { cep: "", numero: "", complemento: "" };
-  const partes = (endereco || "").split(", ");
-  const ultima = partes[partes.length - 1] || "";
-  if (partes.length < 4 || !ultima.startsWith("CEP ")) return vazio;
-
-  const meio = partes.slice(1, -3); // entre logradouro e bairro: numero e/ou complemento
-  return {
-    cep: formatCEP(ultima.replace(/\D/g, "").slice(0, 8)),
-    numero: (meio.find((p) => p.startsWith("n. ")) || "").replace("n. ", ""),
-    complemento: meio.filter((p) => !p.startsWith("n. ")).join(", "),
-  };
-}
-
 function PFForm({
   data,
   onUpdate,
@@ -686,21 +666,16 @@ function PFForm({
   data: ContratantePF;
   onUpdate: (partial: Partial<ContratantePF>) => void;
 }) {
-  const inicial = parseEndereco(data.endereco);
+  const inicial = desmontarEndereco(data.endereco);
   const [cep, setCep] = useState(inicial.cep);
   const [numero, setNumero] = useState(inicial.numero);
   const [complemento, setComplemento] = useState(inicial.complemento);
-  const [cepData, setCepData] = useState<{ logradouro: string; bairro: string; localidade: string; uf: string } | null>(null);
+  const [cepData, setCepData] = useState<ViaCep | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
 
   const buildEndereco = (cData: typeof cepData, num: string, comp: string, cepValue: string = cep) => {
-    if (!cData) return;
-    const numPart = num ? `, n. ${num}` : "";
-    const compPart = comp ? `, ${comp}` : "";
-    const cepFormatado = cepValue.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
-    const endereco = `${cData.logradouro}${numPart}${compPart}, ${cData.bairro}, ${cData.localidade}/${cData.uf}, CEP ${cepFormatado}`;
-    onUpdate({ endereco });
+    if (cData) onUpdate({ endereco: montarEndereco(cData, num, comp, cepValue) });
   };
 
   const handleCEPLookup = async (value: string) => {

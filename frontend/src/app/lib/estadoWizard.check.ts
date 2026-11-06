@@ -89,6 +89,35 @@ const vig = normalizarFormData({
 assert.equal(vig.acessorios.vigencia_inicio, "2026-01-01");
 assert.equal(vig.escopos[0].pro_labore?.data_inicio, undefined);
 
+// ── etapas 1 a 4: reabrir o rascunho devolve exatamente o que foi digitado ──
+const etapas1a4 = {
+  contratantes: [
+    { tipo: "PF", nome: "Ana", nacionalidade: "Brasileiro(a)", cpf: "1", profissao: "x", estado_civil: "Solteiro(a)", email: "a@x.com",
+      endereco: "Av. Afonso Pena, n. 100, sala 2, Centro, Belo Horizonte/MG, CEP 30130-009" },
+    { tipo: "PJ", razao_social: "Beta Ltda", cnpj: "2", email: "b@x.com", endereco: "Rua Livre 5" },
+  ],
+  incluir_partes_relacionadas: true,
+  escopos: [{ tipo: "consultivo", honorarios: { fixo: { valor_total: 100 } }, pro_labore: { valor_total: 5 } }],
+  acessorios: {
+    tem_reembolso: false,
+    reembolso_limitado: true,
+    descricao_limitacao_reembolso: "até R$ 100",
+    tem_penalidade_inadimplemento: false,
+    valor_diligencia: 50,
+    valor_km: 2,
+    criterio_extincao_exito: "trânsito em julgado",
+    clausulas_adicionais: "Primeira\nSegunda",
+    vigencia_inicio: "2026-01-01",
+    vigencia_fim: "2026-12-31",
+    vigencia_meses: 12,
+  },
+};
+const reaberto = normalizarFormData(JSON.parse(JSON.stringify(normalizarFormData(etapas1a4 as never))));
+assert.deepEqual(reaberto.contratantes, etapas1a4.contratantes);
+assert.deepEqual(reaberto.acessorios, etapas1a4.acessorios);
+assert.deepEqual(reaberto.escopos, etapas1a4.escopos);
+assert.equal(reaberto.incluir_partes_relacionadas, true);
+
 // ── ficha interna ──
 assert.equal(temFichaParaFinanceiro(undefined), false);
 assert.equal(temFichaParaFinanceiro({ tem_participacao: false } as never), false);
