@@ -18,6 +18,7 @@ from app.config import BACKEND_DIR, settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.routers.contract import _SIG_TAG, _contract_filename
 from app.services.azure_email import AzureEmailService
+from app.services.contrato_carregado import carregar_versao, tipo_da_versao, ultima_versao
 from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_EMAIL
 
@@ -159,12 +160,8 @@ def _resolve_contract_filepath(contract_id: str, db: Session) -> Path:
             contract_id,
         )
         try:
-            import json as _json
-            from app.services.contract_dispatch import parse_form_data
-
-            form_data = _json.loads(latest_ver.form_data_json)
-            contrato_data, gen = parse_form_data(form_data)
-            _, new_filepath = gen.generate(contrato_data, contract_id=contract_id)
+            carregado = carregar_versao(latest_ver)
+            _, new_filepath = carregado.gerador.generate(carregado.request, contract_id=contract_id)
             regenerated = Path(new_filepath)
 
             # Update the stored path in DB so next time it's found directly
@@ -248,22 +245,8 @@ def _docx_review_copy(src: Path) -> Path:
 
 def _tipo_do_contrato(contract_id: str, db: Session) -> str:
     """Define o rotulo do anexo: honorarios ou prestacao de servicos."""
-    import json as _json
-
-    from app.services.contract_dispatch import TIPO_HONORARIOS, tipo_contrato
-
-    ver = (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract_id)
-        .order_by(ContractVersionDB.version_number.desc())
-        .first()
-    )
-    if not ver or not ver.form_data_json:
-        return TIPO_HONORARIOS
-    try:
-        return tipo_contrato(_json.loads(ver.form_data_json))
-    except (ValueError, TypeError):
-        return TIPO_HONORARIOS
+    ver = ultima_versao(db, contract_id)
+    return tipo_da_versao(ver.form_data_json if ver else None)
 
 
 @router.post("/send", response_model=EmailResponse)

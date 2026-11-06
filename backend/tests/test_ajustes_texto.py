@@ -204,7 +204,7 @@ def test_ajuste_sobrevive_ao_json_salvo_e_regeracao():
     """DOCX regerado a partir do form_data salvo (assinatura/e-mail) mantem o ajuste."""
     import json
 
-    from app.services.contract_dispatch import parse_form_data
+    from app.services.contrato_carregado import parse_form_data
 
     form = json.loads(json.dumps(_req(ajustes_texto={"escopo.nao_incluidos_escopo": {"texto": "Ajuste salvo.", "padrao": _padrao("escopo.nao_incluidos_escopo")}})))
     contrato, gen = parse_form_data(form)

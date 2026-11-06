@@ -24,11 +24,9 @@ from app.database import (
 from app.models.documentos_complementares import (
     REQUESTS as REQUESTS_COMPLEMENTARES,
     TIPO_DISTRATO,
-    email_contato,
-    nome_exibicao,
 )
 from app.models.contract import ContratoRequest
-from app.services.contract_dispatch import parse_form_data
+from app.services.contrato_carregado import carregar_versao, cliente_do_form_data, parse_form_data
 from app.services.substabelecimento_vinculado import sincronizar_do_distrato
 from app.utils.erros import MSG_ERRO_INTERNO
 
@@ -192,21 +190,6 @@ def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_dat
     ):
         for k, v in do_contrato.items():
             setattr(ficha, k, v)
-
-
-def _extract_client_info(data: dict) -> tuple[str, str]:
-    tipo = data.get("tipo_contrato")
-    if tipo in REQUESTS_COMPLEMENTARES:
-        # Aditivo/distrato guardam os contratantes; o substabelecimento, o outorgante.
-        parsed = REQUESTS_COMPLEMENTARES[tipo](**data)
-        return (nome_exibicao(parsed), email_contato(parsed))
-    contratantes = data.get("contratantes", [])
-    if not contratantes:
-        return ("", "")
-    first = contratantes[0]
-    name = first.get("nome") or first.get("razao_social") or ""
-    email = first.get("email", "")
-    return (name, email)
 
 
 def _log_action(
@@ -466,7 +449,7 @@ def update_contract(
     new_version = contract.current_version + 1
     filepath = _arquivo_da_versao(filepath, contract_id, new_version)
     arquivos_novos.append(filepath)
-    client_name, client_email = _extract_client_info(body.form_data)
+    client_name, client_email = cliente_do_form_data(body.form_data)
 
     version_entry = ContractVersionDB(
         contract_id=contract_id,
@@ -583,8 +566,8 @@ def rollback_contract(
 
     # Regenerate the DOCX from stored form data
     try:
-        form_data = json.loads(target_ver.form_data_json)
-        contrato_data, gen = parse_form_data(form_data)
+        carregado = carregar_versao(target_ver)
+        form_data, contrato_data, gen = carregado.form_data, carregado.request, carregado.gerador
     except Exception as e:
         raise HTTPException(422, f"Dados da versao {version} invalidos: {e}")
 
@@ -600,7 +583,7 @@ def rollback_contract(
     # Create a new version based on the old data
     new_version = contract.current_version + 1
     filepath = _arquivo_da_versao(filepath, contract_id, new_version)
-    client_name, client_email = _extract_client_info(form_data)
+    client_name, client_email = cliente_do_form_data(form_data)
 
     version_entry = ContractVersionDB(
         contract_id=contract_id,
