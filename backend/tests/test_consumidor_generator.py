@@ -281,7 +281,7 @@ def test_regeneracao_a_partir_do_json_salvo(tmp_path):
     Em FS efemero (serverless) esse e' o caminho normal, nao um caso de borda.
     """
     from app.services.consumidor_generator import ConsumidorGenerator as _CG
-    from app.services.contract_dispatch import parse_form_data
+    from app.services.contrato_carregado import parse_form_data
 
     salvo = ContratoConsumidorRequest(**DOIS).model_dump(mode="json")
     request, gen = parse_form_data(salvo)
@@ -314,7 +314,7 @@ def test_assinatura_docuseal_mantem_monica_como_contratada(tmp_path):
 
 def test_contrato_de_honorarios_nao_muda(tmp_path):
     """O tipo antigo continua roteando para o gerador original."""
-    from app.services.contract_dispatch import parse_form_data
+    from app.services.contrato_carregado import parse_form_data
     from app.services.contract_generator import ContractGenerator
 
     _, gen = parse_form_data({"contratantes": [], "escopos": [], "acessorios": {}, "participacao": {}})

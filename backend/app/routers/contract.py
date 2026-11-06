@@ -33,9 +33,12 @@ from app.models.contrato_consumidor import (
 )
 from app.models.documentos_complementares import ROTULO_DOCUMENTO
 from app.services import contract_reviewer
-from app.services.contract_dispatch import TIPO_HONORARIOS
-from app.services.contract_dispatch import get_generator as get_consumidor_gen
-from app.services.contract_dispatch import parse_form_data
+from app.services.contrato_carregado import (
+    TIPO_HONORARIOS,
+    carregar_versao,
+    cliente_do_form_data,
+)
+from app.services.contrato_carregado import get_generator as get_consumidor_gen
 from app.services.contract_generator import ContractGenerator
 from app.utils.participacao import valor_participacao, valor_participante
 from app.utils.erros import MSG_ERRO_INTERNO
@@ -211,23 +214,8 @@ def campos_rascunho_participacao(data: ContratoRequest, user_email: str, user_na
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/contract", tags=["Contract"])
 
-_generator: ContractGenerator | None = None
-
-
 def get_generator() -> ContractGenerator:
-    global _generator
-    if _generator is None:
-        _generator = ContractGenerator()
-    return _generator
-
-
-def _extract_client_info(data: ContratoRequest) -> tuple[str, str]:
-    if not data.contratantes:
-        return ("", "")
-    first = data.contratantes[0]
-    name = getattr(first, "nome", None) or getattr(first, "razao_social", "")
-    email = getattr(first, "email", "")
-    return (name, email)
+    return get_consumidor_gen(TIPO_HONORARIOS)
 
 
 @router.post("/generate", response_model=ContratoResponse)
@@ -240,8 +228,8 @@ def generate_contract(
         gen = get_generator()
         contract_id, filepath = gen.generate(data)
 
-        client_name, client_email = _extract_client_info(data)
         form_dict = data.model_dump(mode="json")
+        client_name, client_email = cliente_do_form_data(form_dict)
 
         contract = ContractDB(
             contract_id=contract_id,
@@ -507,10 +495,10 @@ def download_contract(
             contract_id,
         )
         try:
-            form_data = json.loads(ver.form_data_json)
             # Cada tipo de contrato tem seu gerador — em FS efemero (serverless)
             # este e' o caminho normal de download, nao um caso de borda.
-            contrato_data, gen_tipo = parse_form_data(form_data)
+            carregado = carregar_versao(ver)
+            contrato_data, gen_tipo = carregado.request, carregado.gerador
             _, new_filepath = gen_tipo.generate(contrato_data, contract_id=contract_id)
             # O gerador grava sempre no nome generico (o da versao mais nova): move para o nome
             # da versao pedida, senao a proxima consulta devolveria o texto errado.

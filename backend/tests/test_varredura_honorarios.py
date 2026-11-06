@@ -116,7 +116,7 @@ def _salvar(client):
 
 
 def test_put_recusa_valor_zerado_e_o_modo_brando_continua_para_regerar(client):
-    from app.services.contract_dispatch import parse_form_data
+    from app.services.contrato_carregado import parse_form_data
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         azure_id="x", email="l@test.com", name="L", role="user")
     try:
