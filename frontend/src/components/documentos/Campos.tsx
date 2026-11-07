@@ -27,6 +27,7 @@ import {
 } from "@/app/lib/documentos";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 import FormField, { Checkbox, Input, Select, TextArea } from "@/components/ui/FormField";
+import { buscarCep as consultarCep, formatCEP } from "@/app/lib/endereco";
 
 interface Props<T> {
   estado: T;
@@ -284,7 +285,6 @@ function CampoOab({ valor, onChange, erro }: { valor: Oab; onChange: (o: Oab) =>
   );
 }
 
-const formatarCEP = (d: string) => (d.length > 5 ? d.replace(/^(\d{5})(\d)/, "$1-$2") : d);
 
 export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & { onChange: (parcial: Partial<PoderesForm>) => void }) {
   const set = (parcial: Partial<PoderesForm>) => onChange(parcial);
@@ -391,19 +391,19 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
   const [bairroCidade, setBairroCidade] = useState("");
   const buscarCep = async (valor: string) => {
     const digitos = valor.replace(/\D/g, "").slice(0, 8);
-    setCep(formatarCEP(digitos));
+    setCep(formatCEP(digitos));
     setMsgCep("");
     if (digitos.length !== 8) return;
     try {
-      const r = await (await fetch(`https://viacep.com.br/ws/${digitos}/json/`)).json();
-      if (r.erro) {
+      const r = await consultarCep(digitos);
+      if (!r) {
         setMsgCep("CEP não encontrado. Digite o endereço no campo abaixo.");
         return;
       }
       const resto = [r.bairro, r.localidade && r.uf ? `${r.localidade}/${r.uf}` : ""].filter(Boolean).join(", ");
-      setLogradouro(r.logradouro || "");
+      setLogradouro(r.logradouro);
       setBairroCidade(resto);
-      set({ endereco_substabelecidos: montarEndereco(r.logradouro || "", numeroEnd, formatarCEP(digitos), resto) });
+      set({ endereco_substabelecidos: montarEndereco(r.logradouro, numeroEnd, formatCEP(digitos), resto) });
     } catch {
       setMsgCep("Não foi possível buscar o CEP. Digite o endereço no campo abaixo.");
     }

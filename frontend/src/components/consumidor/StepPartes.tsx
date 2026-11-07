@@ -12,6 +12,7 @@ import {
   type ContratanteConsumidorPJ,
 } from "@/types/consumidor";
 import { useRef, useState } from "react";
+import { buscarCep, formatCEP } from "@/app/lib/endereco";
 
 function formatCPF(value: string): string {
   return value
@@ -23,10 +24,6 @@ function formatCPF(value: string): string {
 }
 
 
-function formatCEP(value: string): string {
-  const d = value.replace(/\D/g, "").slice(0, 8);
-  return d.length > 5 ? d.replace(/^(\d{5})(\d)/, "$1-$2") : d;
-}
 
 // (31) 9999-9999 e (31) 99999-9999 — o 9º digito muda a posicao do hifen.
 function formatTelefone(value: string): string {
@@ -120,18 +117,17 @@ export default function StepPartes({ contratantes, onChange }: Props) {
     setBuscando(i);
     setErroCep((prev) => ({ ...prev, [i]: "" }));
     try {
-      const res = await fetch(`https://viacep.com.br/ws/${digitos}/json/`);
-      const data = await res.json();
-      if (data.erro) {
+      const data = await buscarCep(digitos);
+      if (!data) {
         falhouCEP(i, "CEP não encontrado. Preencha o endereço abaixo.");
         return;
       }
       update(i, {
         cep,
-        logradouro: data.logradouro || "",
-        bairro: data.bairro || "",
-        cidade: data.localidade || "",
-        uf: data.uf || "",
+        logradouro: data.logradouro,
+        bairro: data.bairro,
+        cidade: data.localidade,
+        uf: data.uf,
       });
       // CEP unico de cidade pequena vem sem rua/bairro — os campos ficam editaveis.
       setPrecisaRua((prev) => ({ ...prev, [i]: !data.logradouro }));
