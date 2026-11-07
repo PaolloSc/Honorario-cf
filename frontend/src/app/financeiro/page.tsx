@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatPercentual } from "@/lib/format";
 import { useSession } from "next-auth/react";
+import { ConfirmDialog } from "@/components/emissao/ui";
 import {
   Participacao,
   RegrasParticipacao,
@@ -294,6 +295,7 @@ function PendentesLista({
   onRefresh: () => void;
 }) {
   const [editing, setEditing] = useState<ContratoPendente | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
 
   if (loading) return <div className="text-muted p-6">Carregando...</div>;
   if (!pendentes.length)
@@ -345,12 +347,13 @@ function PendentesLista({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigator.clipboard.writeText(c.contract_id);
-                  alert(`ID copiado: ${c.contract_id}\nUse na aba "Nova Participação".`);
+                  void navigator.clipboard.writeText(c.contract_id);
+                  setCopiado(c.contract_id);
                 }}
                 className="px-3 py-1.5 text-xs border border-border rounded hover:bg-background"
+                title='Copia o ID para colar na aba "Nova Participação"'
               >
-                Copiar ID
+                {copiado === c.contract_id ? "ID copiado ✓" : "Copiar ID"}
               </a>
             )}
           </div>
@@ -656,6 +659,10 @@ function DetalheParticipacao({
 }) {
   const [resumo, setResumo] = useState<ResumoParticipacao | null>(null);
   const [showPag, setShowPag] = useState(false);
+  const [encerrando, setEncerrando] = useState(false);
+  const [dataEnc, setDataEnc] = useState("");
+  const [erroEnc, setErroEnc] = useState("");
+  const [salvandoEnc, setSalvandoEnc] = useState(false);
 
   const reload = useCallback(async () => {
     const r = await getResumoParticipacao(participacao.id);
@@ -781,20 +788,52 @@ function DetalheParticipacao({
 
       {participacao.vinculo_ativo && (
         <button
-          onClick={async () => {
-            const data = prompt("Data de encerramento do vínculo (YYYY-MM-DD):");
-            if (!data) return;
-            try {
-              await encerrarVinculo(participacao.id, data);
-              onRefresh();
-            } catch (e) {
-              alert(e instanceof Error ? e.message : "Erro");
-            }
+          onClick={() => {
+            setErroEnc("");
+            setDataEnc(new Date().toISOString().slice(0, 10));
+            setEncerrando(true);
           }}
           className="text-xs text-danger hover:underline"
         >
-          Encerrar vínculo
+          Encerrar vínculo…
         </button>
+      )}
+
+      {encerrando && (
+        <ConfirmDialog
+          titulo="Encerrar vínculo?"
+          verbo="Encerrar vínculo"
+          ocupado={salvandoEnc}
+          erro={erroEnc}
+          onCancelar={() => setEncerrando(false)}
+          onConfirmar={async () => {
+            if (!dataEnc) {
+              setErroEnc("Informe a data de encerramento.");
+              return;
+            }
+            setSalvandoEnc(true);
+            try {
+              await encerrarVinculo(participacao.id, dataEnc);
+              setEncerrando(false);
+              onRefresh();
+            } catch (e) {
+              setErroEnc(e instanceof Error ? e.message : "Erro ao encerrar o vínculo.");
+            } finally {
+              setSalvandoEnc(false);
+            }
+          }}
+          texto={
+            <label className="block">
+              <span className="block mb-1">Data de encerramento</span>
+              <input
+                type="date"
+                value={dataEnc}
+                onChange={(e) => setDataEnc(e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded bg-card text-foreground"
+              />
+            </label>
+          }
+        />
       )}
     </div>
   );
@@ -1452,7 +1491,7 @@ function Simulador() {
         type="submit"
         className="px-4 py-2 bg-primary-dark text-white rounded-lg font-medium hover:bg-primary-dark/90"
       >
-        Calcular
+        Simular (não grava)
       </button>
 
       {result && (

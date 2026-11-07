@@ -22,6 +22,8 @@ export function AbaFaturas() {
   const [emitindo, setEmitindo] = useState<{ fatura: Fatura; chave: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erroEmitir, setErroEmitir] = useState("");
+  // Fatura aguardando confirmação de exclusão.
+  const [excluindo, setExcluindo] = useState<Fatura | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -120,8 +122,8 @@ export function AbaFaturas() {
                     <td className="p-3"><StatusBadge status={f.status} /></td>
                     <td className="p-3 text-right space-x-3 whitespace-nowrap">
                       {a.aprovar && <button onClick={() => agir(() => emissaoApi.aprovarFatura(f.id), "Fatura aprovada.")} className="text-primary hover:underline">Aprovar</button>}
-                      {a.emitir && <button onClick={() => { setErroEmitir(""); setEmitindo({ fatura: f, chave: crypto.randomUUID() }); }} className="font-medium text-primary-dark hover:underline">Emitir nota</button>}
-                      {a.excluir && <button onClick={() => agir(() => emissaoApi.excluirFatura(f.id), "Fatura excluída.")} className="text-danger hover:underline">Excluir</button>}
+                      {a.emitir && <button onClick={() => { setErroEmitir(""); setEmitindo({ fatura: f, chave: crypto.randomUUID() }); }} className="font-medium text-primary-dark hover:underline">Emitir nota fiscal</button>}
+                      {a.excluir && <button onClick={() => setExcluindo(f)} className="text-danger hover:underline">Excluir…</button>}
                       {f.status === "emitindo" && <span className="text-xs text-muted">acompanhe em Notas emitidas</span>}
                     </td>
                   </tr>
@@ -130,6 +132,20 @@ export function AbaFaturas() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {excluindo && (
+        <ConfirmDialog
+          titulo="Excluir fatura?"
+          verbo="Excluir"
+          onCancelar={() => setExcluindo(null)}
+          onConfirmar={() => {
+            const f = excluindo;
+            setExcluindo(null);
+            void agir(() => emissaoApi.excluirFatura(f.id), "Fatura excluída.");
+          }}
+          texto={<>A fatura de <strong>{rotuloCompetencia(excluindo.competencia)}</strong> ({brl(excluindo.valor_bruto)}) será apagada. Isto não pode ser desfeito.</>}
+        />
       )}
 
       {emitindo && (
