@@ -19,6 +19,10 @@ export function exigirToken() {
 /** Entra pelo link de convidado (sessao de admin do ambiente de teste). */
 export async function entrar(page: Page) {
   exigirToken();
+  // O tour guiado abre sozinho na 1a visita e cobriria os botoes dos testes.
+  await page.addInitScript(() => {
+    try { localStorage.setItem("tutorial-desligado", "1"); } catch { /* sem storage */ }
+  });
   for (let tentativa = 0; tentativa < 3; tentativa++) { // corrida do cookie de CSRF na 1a visita (#902647c)
     await page.goto(`/convite/${TOKEN}`);
     try {

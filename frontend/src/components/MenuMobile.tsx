@@ -38,6 +38,7 @@ export default function MenuMobile() {
           <Link href="/" className={link}>Honorários</Link>
           <NavConsumidor className={link} />
           <Link href="/contracts" className={link}>Contratos</Link>
+          <Link href="/ajuda" className={link}>Como usar</Link>
         </nav>
       )}
     </div>

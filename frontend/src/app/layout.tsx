@@ -8,6 +8,7 @@ import MenuMobile from "@/components/MenuMobile";
 import NavConsumidor from "@/components/NavConsumidor";
 import Providers from "@/components/Providers";
 import ThemeToggle from "@/components/ThemeToggle";
+import Tutorial from "@/components/Tutorial";
 import UserMenu from "@/components/UserMenu";
 import { auth } from "@/auth";
 import "./globals.css";
@@ -73,6 +74,9 @@ export default async function RootLayout({
                     <Link href="/contracts" className="text-brand-verde-claro/80 hover:text-white transition">
                       Contratos
                     </Link>
+                    <Link href="/ajuda" className="text-brand-verde-claro/80 hover:text-white transition">
+                      Como usar
+                    </Link>
                   </nav>
                 )}
                 {isAuthenticated && <MenuMobile />}
@@ -84,6 +88,7 @@ export default async function RootLayout({
 
           <main className="flex-1">{children}</main>
           <AvisoVersaoDesatualizada />
+          {isAuthenticated && <Tutorial />}
 
           <footer className="bg-header-bg text-brand-verde-claro/90 mt-12">
             <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
