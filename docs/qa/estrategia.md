@@ -15,7 +15,7 @@ Playwright Test (`e2e/`), Chrome instalado no sistema (`channel: "chrome"`, nada
 ## Regras de segurança dos testes
 1. Só homolog ou localhost; `fixtures.ts` aborta em qualquer outro host.
 2. Todo dado criado leva `[TESTE-QA-DELETAR]` no nome; a limpeza apaga só o que tem a marca.
-3. Nunca clicar em "Gerar e Enviar", "Enviar para Assinatura" nem "Revisar com IA". "Apenas Gerar Contrato" também fica de fora: tenta mandar a ficha ao financeiro por e-mail.
+3. Nunca clicar em "Enviar para assinatura digital", "Enviar cópia para conferência" nem "Revisar com IA". "Só salvar o contrato (não envia nada)" também fica de fora: tenta mandar a ficha ao financeiro por e-mail.
 4. Token e senhas só por variável de ambiente.
 
 ## Critérios

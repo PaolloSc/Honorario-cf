@@ -10,6 +10,7 @@ import { ehErro422, textoDoErro } from "@/app/lib/erro422";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
 import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
+import { ConfirmDialog } from "@/components/emissao/ui";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
 import { ComboBox } from "@/components/ui/FormField";
 
@@ -262,6 +263,10 @@ export default function Step7Envio({
   // Colaboradores do escritorio: autopreenchimento de testemunhas.
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [avisoSocio, setAvisoSocio] = useState(false);
+  // Ação externa pedida, à espera da confirmação (janela com os destinatários).
+  const [confirmar, setConfirmar] = useState<null | "assinatura" | "email">(null);
+  // Qual botão disparou o que está em andamento: muda o texto do "carregando".
+  const [acao, setAcao] = useState<"assinatura" | "email" | "salvar">("salvar");
   const isEdit = !!editContractId;
   // `data` do render atual, para os callbacks assíncronos não usarem uma cópia velha.
   const dataRef = useRef(data);
@@ -574,16 +579,8 @@ export default function Step7Envio({
     return false;
   };
 
-  const handleSendForSignature = async (idSalvo?: string) => {
-    const id = idSalvo ?? contractId;
-    if (!id) return;
-    if (!exigirSocio()) return;
-
-    setIsSubmitting(true);
-    setStatus("sending");
-    setMessage("Enviando para assinatura digital...");
-
-    try {
+  // Quem recebe o link do DocuSeal. Também listado na confirmação antes do envio.
+  const montarSignatarios = () => {
       // PJ com mais de um representante legal: cada administrador assina
       // (ha empresas cuja assinatura so vale com dois administradores).
       // phone = WhatsApp: vai ao DocuSeal e volta na lista "Falta assinar" do contrato.
@@ -612,7 +609,20 @@ export default function Step7Envio({
 
       const socio = colaboradores.find((c) => c.email === socioEscritorio);
       if (socio) signatarios.push({ email: socio.email, name: socio.name, role: "Contratado" });
+      return signatarios;
+  };
 
+  const handleSendForSignature = async (idSalvo?: string) => {
+    const id = idSalvo ?? contractId;
+    if (!id) return;
+    if (!exigirSocio()) return;
+
+    setIsSubmitting(true);
+    setStatus("sending");
+    setMessage("Enviando para assinatura digital...");
+
+    try {
+      const signatarios = montarSignatarios();
       const result = await sendForSignature({
         contract_id: id,
         signatarios,
@@ -624,7 +634,8 @@ export default function Step7Envio({
 
       setSignatureSent(true);
       setStatus("success");
-      setMessage("Documento enviado para assinatura digital com sucesso!");
+      const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      setMessage(`Enviado para assinatura às ${hora}. Cada signatário recebe o link do DocuSeal por e-mail.`);
 
       // Com WhatsApp cadastrado, abre a conversa do contratante com a mensagem
       // pronta — só falta apertar enviar. Se o navegador bloquear a janela, os
@@ -654,6 +665,25 @@ export default function Step7Envio({
     const id = await handleSaveOnly();
     if (id) await handleSendForSignature(id);
   };
+
+  // Botões: as ações que saem do sistema (DocuSeal, e-mail) passam por uma confirmação.
+  const pedirAssinatura = () => {
+    if (exigirSocio()) setConfirmar("assinatura");
+  };
+  const confirmarEnvio = () => {
+    const pedido = confirmar;
+    setConfirmar(null);
+    if (pedido === "email") {
+      setAcao("email");
+      void handleSubmit();
+    } else {
+      setAcao("assinatura");
+      // Ainda não gerado (ou edição sem salvar): gera/salva e já envia.
+      void (status === "idle" ? handleSaveAndSign() : handleSendForSignature());
+    }
+  };
+  const semEmail = recipients.every((r) => !r.email.trim());
+  const aguardandoRevisao = reviewStatus === "checking";
 
   const handleGoToContract = () => {
     if (!contractId) return;
@@ -1000,73 +1030,106 @@ export default function Step7Envio({
       )}
 
       <div className="flex gap-4 flex-wrap items-start">
-        {/* Initial actions - before save */}
+        {/* Antes de gerar: uma ação principal (assinatura), uma secundária (cópia
+            para conferência) e salvar sem enviar nada. */}
         {status === "idle" && (
           <>
-            <button
-              onClick={() => handleSaveOnly()}
-              disabled={isSubmitting || reviewStatus === "checking"}
-              className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
-            >
-              {isEdit ? "Salvar Nova Versão" : "Apenas Gerar Contrato"}
-            </button>
-
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || reviewStatus === "checking"}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition"
-            >
-              {isEdit ? "Salvar e Enviar por E-mail" : "Gerar e Enviar por E-mail"}
-            </button>
-
             <div>
               <button
-                onClick={handleSaveAndSign}
-                disabled={isSubmitting || reviewStatus === "checking"}
+                onClick={pedirAssinatura}
+                disabled={isSubmitting || aguardandoRevisao}
                 aria-disabled={!socioEscritorio}
-                className={`px-4 py-2 rounded-lg transition ${
+                className={`px-4 py-2 rounded-lg font-medium transition ${
                   !socioEscritorio
                     ? "bg-primary/50 text-white hover:bg-primary/60"
                     : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
                 }`}
               >
-                {isEdit ? "Salvar e Enviar para Assinatura" : "Gerar e Enviar para Assinatura"}
+                Enviar para assinatura digital
               </button>
+              <p className="text-xs text-muted mt-1 max-w-64">
+                Cada signatário recebe o link do DocuSeal. Depois disso o contrato fica bloqueado para edição.
+              </p>
               {!socioEscritorio && (
                 <p className="text-xs text-warning mt-1 max-w-64">
-                  Escolha o sócio que assina pelo escritório (acima) para enviar.
+                  Falta escolher quem assina pelo escritório.{" "}
+                  <button type="button" onClick={exigirSocio} className="underline">
+                    Ir para o campo
+                  </button>
                 </p>
               )}
             </div>
+
+            <div>
+              <button
+                onClick={() => setConfirmar("email")}
+                disabled={isSubmitting || aguardandoRevisao || semEmail}
+                className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition"
+              >
+                Enviar cópia para conferência
+              </button>
+              <p className="text-xs text-muted mt-1 max-w-64">
+                {semEmail
+                  ? "Informe acima o e-mail de pelo menos um contratante."
+                  : "O cliente recebe o Word por e-mail para revisar. Não é assinatura."}
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setAcao("salvar");
+                void handleSaveOnly();
+              }}
+              disabled={isSubmitting || aguardandoRevisao}
+              className="px-2 py-2 text-sm text-primary underline disabled:opacity-50 self-start"
+            >
+              {isEdit ? "Só salvar a nova versão (não envia nada)" : "Só salvar o contrato (não envia nada)"}
+            </button>
+            {temFichaParaFinanceiro(data.participacao) && (
+              <p className="w-full text-xs text-muted">
+                Em qualquer opção, a ficha de participação vai para o financeiro.
+              </p>
+            )}
+
+            {aguardandoRevisao && (
+              <p className="w-full text-xs text-muted">Aguarde a revisão da IA terminar para gerar o contrato.</p>
+            )}
           </>
         )}
 
-        {/* Loading state */}
+        {/* Carregando: diz em que passo está. */}
         {(status === "generating" || status === "sending") && !signatureSent && (
-          <button disabled className="px-4 py-2 bg-border/40 text-muted rounded-lg cursor-not-allowed">
-            {status === "generating" ? "Salvando..." : "Enviando..."}
+          <button disabled aria-live="polite" className="px-4 py-2 bg-border/40 text-muted rounded-lg cursor-not-allowed">
+            {status === "generating"
+              ? `${isEdit ? "Salvando nova versão" : "Gerando contrato"}…${acao === "salvar" ? "" : " (1 de 2)"}`
+              : acao === "email"
+              ? "Enviando e-mail… (2 de 2)"
+              : "Enviando ao DocuSeal…"}
           </button>
         )}
 
-        {/* After save/email success - show signature button */}
+        {/* Gerado (com ou sem cópia por e-mail): a assinatura continua sendo a ação principal. */}
         {(status === "sent_email" || (status === "success" && !signatureSent)) && contractId && (
           <>
             <div>
               <button
-                onClick={() => handleSendForSignature()}
-                disabled={isSubmitting}
+                onClick={pedirAssinatura}
+                disabled={isSubmitting || aguardandoRevisao}
                 aria-disabled={!socioEscritorio}
-                className={`px-4 py-2 rounded-lg transition ${
+                className={`px-4 py-2 rounded-lg font-medium transition ${
                   !socioEscritorio
                     ? "bg-primary/50 text-white hover:bg-primary/60"
                     : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
                 }`}
               >
-                Enviar para Assinatura Digital
+                Enviar para assinatura digital
               </button>
               {!socioEscritorio && (
                 <p className="text-xs text-warning mt-1 max-w-64">
-                  Escolha o sócio que assina pelo escritório (acima) para enviar.
+                  Falta escolher quem assina pelo escritório.{" "}
+                  <button type="button" onClick={exigirSocio} className="underline">
+                    Ir para o campo
+                  </button>
                 </p>
               )}
             </div>
@@ -1075,7 +1138,7 @@ export default function Step7Envio({
               onClick={handleGoToContract}
               className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background transition self-start"
             >
-              Ir para o Contrato
+              Abrir o contrato
             </button>
           </>
         )}
@@ -1101,7 +1164,7 @@ export default function Step7Envio({
             onClick={handleGoToContract}
             className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition"
           >
-            Ver Contrato
+            Abrir o contrato
           </button>
         )}
 
@@ -1111,10 +1174,63 @@ export default function Step7Envio({
             onClick={() => { setStatus("idle"); setMessage(""); }}
             className="px-4 py-2 border border-border text-foreground rounded-lg hover:bg-background transition"
           >
-            Tentar Novamente
+            Tentar novamente
           </button>
         )}
       </div>
+
+      {confirmar === "assinatura" && (
+        <ConfirmDialog
+          titulo="Enviar para assinatura digital?"
+          verbo="Enviar agora"
+          onCancelar={() => setConfirmar(null)}
+          onConfirmar={confirmarEnvio}
+          texto={
+            <>
+              <p className="mb-2">Vão receber o link do DocuSeal para assinar:</p>
+              <ul className="list-disc pl-5 mb-2 space-y-0.5">
+                {montarSignatarios().map((p, i) => (
+                  <li key={i}>
+                    {p.name}{" "}
+                    <span className="text-muted">
+                      ({p.email || "sem e-mail"}) · {p.role === "Contratado" ? "pelo escritório" : p.role.toLowerCase()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-muted">
+                A testemunha do financeiro entra automaticamente. Depois do envio, o contrato só pode ser editado
+                se você cancelar o envio na página do contrato.
+              </p>
+            </>
+          }
+        />
+      )}
+      {confirmar === "email" && (
+        <ConfirmDialog
+          titulo="Enviar cópia para conferência?"
+          verbo="Enviar cópia"
+          onCancelar={() => setConfirmar(null)}
+          onConfirmar={confirmarEnvio}
+          texto={
+            <>
+              <p className="mb-2">O contrato (Word) vai por e-mail, para revisão, a:</p>
+              <ul className="list-disc pl-5 mb-2 space-y-0.5">
+                {recipients
+                  .filter((r) => r.email.trim())
+                  .map((r, i) => (
+                    <li key={i}>
+                      {r.nome} <span className="text-muted">({r.email.trim()})</span>
+                    </li>
+                  ))}
+              </ul>
+              <p className="text-muted">
+                Você recebe em cópia. Não é assinatura: para assinar, use “Enviar para assinatura digital”.
+              </p>
+            </>
+          }
+        />
+      )}
     </div>
   );
 }
