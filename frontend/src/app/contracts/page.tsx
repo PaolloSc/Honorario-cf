@@ -100,21 +100,18 @@ export default function ContractsPage() {
             {podeConsumidor && (
               <ItemNovo href="/consumidor" titulo="Ação de consumo" dica="Contrato de consumidor (ex.: aéreo)." />
             )}
-            {/* Aditivo e distrato nascem na página do contrato; para contrato antigo fora do sistema, estes atalhos.
-                O substabelecimento sai junto com o distrato. */}
-            <ItemNovo
-              href="/documentos/novo?tipo=aditivo"
-              titulo="Aditivo de contrato antigo"
-              dica="Para contrato feito fora do sistema. Contrato daqui: use a página dele."
-            />
-            <ItemNovo
-              href="/documentos/novo?tipo=distrato"
-              titulo="Distrato de contrato antigo"
-              dica="Encerra contrato feito fora do sistema; gera o substabelecimento junto."
-            />
           </div>
         </details>
       </div>
+
+      {/* Aditivo e distrato nascem na página do contrato. Só para contrato antigo, feito fora
+          do sistema, estes atalhos discretos (o substabelecimento sai junto com o distrato). */}
+      <p className="-mt-3 mb-6 text-xs text-muted">
+        Aditivo ou distrato de contrato antigo (fora do sistema):{" "}
+        <a href="/documentos/novo?tipo=aditivo" className="text-primary hover:underline">aditivo</a>
+        {" · "}
+        <a href="/documentos/novo?tipo=distrato" className="text-primary hover:underline">distrato</a>
+      </p>
 
       <RascunhosPendentes />
 
