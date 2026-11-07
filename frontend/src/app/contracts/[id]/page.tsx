@@ -33,6 +33,48 @@ import { TipoBadge } from "@/components/documentos/Selos";
 import NovoDocumentoMenu from "@/components/documentos/NovoDocumentoMenu";
 import DocumentosDerivados from "@/components/documentos/DocumentosDerivados";
 
+const botaoPrincipal =
+  "px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark disabled:opacity-50 transition";
+const botaoSecundario =
+  "inline-block px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background disabled:opacity-50 transition";
+const CONFIRMA_ASSINADO_FORA =
+  "Registrar que o contrato foi assinado FORA do sistema (ex.: assinado em papel)? Fica registrado na auditoria quem marcou e quando. O contrato não poderá mais ser editado.";
+
+// Item do menu "Mais ações": título diz o resultado, a dica diz o efeito.
+function ItemMenu({
+  titulo, dica, onClick, href, disabled, perigo,
+}: {
+  titulo: string;
+  dica: string;
+  onClick?: () => void;
+  href?: string;
+  disabled?: boolean;
+  perigo?: boolean;
+}) {
+  const classe = `block w-full text-left rounded-md px-3 py-2 hover:bg-background disabled:opacity-50 ${perigo ? "text-danger" : "text-foreground"}`;
+  const corpo = (
+    <>
+      <span className="block text-sm font-medium">{titulo}</span>
+      <span className="block text-xs text-muted">{dica}</span>
+    </>
+  );
+  return href ? (
+    <a href={href} className={classe}>{corpo}</a>
+  ) : (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.currentTarget.closest("details")?.removeAttribute("open"); // fecha o menu
+        onClick?.();
+      }}
+      disabled={disabled}
+      className={classe}
+    >
+      {corpo}
+    </button>
+  );
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rascunho: { label: "Rascunho", color: "bg-border/35 text-muted" },
   enviado: { label: "Enviado p/ Assinatura", color: "bg-warning/[0.16] text-warning" },
@@ -332,7 +374,7 @@ export default function ContractDetailPage() {
       return;
     }
 
-    if (!window.confirm(`Reenviar contrato por e-mail para ${recipientName} (${recipientEmail})?`)) return;
+    if (!window.confirm(`Enviar cópia para conferência a ${recipientName} (${recipientEmail})? Vai o Word por e-mail; não é assinatura.`)) return;
 
     setSendingEmail(true);
     setNotification(null);
@@ -436,114 +478,112 @@ export default function ContractDetailPage() {
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-3 mb-8">
-        {contract.status === "enviado" || contract.status === "assinado" ? (
-          <span className="px-4 py-2.5 border border-border rounded-lg text-sm text-muted max-w-md">
-            {contract.status === "assinado"
-              ? "Contrato assinado: não pode ser editado. Para mudar algo, crie um aditivo."
-              : "Contrato enviado para assinatura: para editar, use \"Cancelar envio para assinatura\"."}
-          </span>
-        ) : (
-          <a
-            href={`/contracts/${contractId}/edit`}
-            className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition"
-          >
-            Editar Contrato
+      {/* Ações: uma principal por status; o resto fica em "Mais ações". */}
+      <div className="flex flex-wrap items-start gap-3 mb-8">
+        {contract.status === "rascunho" && canSendForSignature && (
+          <div>
+            <button
+              onClick={() => setShowSignaturePanel(!showSignaturePanel)}
+              disabled={sendingSignature}
+              className={botaoPrincipal}
+            >
+              {sendingSignature ? "Enviando ao DocuSeal…" : "Enviar para assinatura digital"}
+            </button>
+            <p className="text-xs text-muted mt-1 max-w-64">
+              Abre a escolha de testemunhas e de quem assina pelo escritório; nada sai antes de confirmar.
+            </p>
+          </div>
+        )}
+        {contract.status === "enviado" && (
+          <div>
+            <button onClick={handleSincronizar} disabled={sincronizando} className={botaoPrincipal}>
+              {sincronizando ? "Consultando o DocuSeal…" : "Ver quem já assinou"}
+            </button>
+            <p className="text-xs text-muted mt-1 max-w-64">Consulta o DocuSeal e atualiza o status.</p>
+          </div>
+        )}
+        {(contract.status === "rascunho" || contract.status === "cancelado") && (
+          <a href={`/contracts/${contractId}/edit`} className={botaoSecundario}>
+            Editar
           </a>
         )}
-        {/* Só honorários: o wizard da home não abre contrato de consumidor. */}
-        {ehHonorarios && (
-          <>
-            <a
-              href={`/?modelo=${contractId}&modo=cliente`}
-              title="Novo contrato com os mesmos contratantes; escopos e honorários em branco"
-              className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition"
-            >
-              Usar como modelo: mesmo cliente
-            </a>
-            <a
-              href={`/?modelo=${contractId}&modo=escopo`}
-              title="Novo contrato com os mesmos escopos e honorários; contratantes em branco"
-              className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition"
-            >
-              Usar como modelo: mesmo escopo
-            </a>
-          </>
-        )}
-        <button
-          onClick={handlePreview}
-          disabled={loadingPreview}
-          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loadingPreview ? "Carregando..." : showPreview ? "Ocultar Visualização" : "Visualizar"}
+        <button onClick={handlePreview} disabled={loadingPreview} className={botaoSecundario}>
+          {loadingPreview ? "Carregando…" : showPreview ? "Ocultar visualização" : "Visualizar"}
         </button>
         <button
           onClick={handleDownload}
           disabled={downloading}
-          className="px-5 py-2.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-background transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className={contract.status === "assinado" ? botaoPrincipal : botaoSecundario}
         >
-          {downloading ? "Baixando..." : "Baixar DOCX"}
+          {downloading ? "Baixando…" : "Baixar Word"}
         </button>
-        {!ehSubstabelecimento && (
-        <button
-          onClick={handleResendEmail}
-          disabled={sendingEmail}
-          className="px-5 py-2.5 border border-warning/40 text-warning rounded-lg text-sm font-medium hover:bg-warning/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {sendingEmail ? "Enviando..." : "Reenviar por E-mail"}
-        </button>
-        )}
-        {canSendForSignature && (
-          <button
-            onClick={() => setShowSignaturePanel(!showSignaturePanel)}
-            disabled={sendingSignature}
-            className="px-5 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {sendingSignature ? "Enviando..." : "Enviar para Assinatura"}
-          </button>
-        )}
-        {contract.status === "rascunho" && (
-          <button
-            onClick={() => handleStatusChange("assinado", "Marcar como assinado FORA do sistema (ex.: assinado em papel)? Fica registrado na auditoria quem marcou e quando. O contrato não poderá mais ser editado.")}
-            title="Para contrato assinado em papel ou fora do DocuSeal"
-            className="px-5 py-2.5 border border-primary/40 text-primary-dark rounded-lg text-sm font-medium hover:bg-primary/10 transition"
-          >
-            Marcar como assinado (fora do sistema)
-          </button>
-        )}
-        {contract.status === "rascunho" && (
-          <button
-            onClick={() => handleStatusChange("cancelado")}
-            className="px-5 py-2.5 border border-danger/40 text-danger rounded-lg text-sm font-medium hover:bg-danger/10 transition"
-          >
-            Cancelar
-          </button>
-        )}
-        {contract.status === "enviado" && (
-          <>
-            <button
-              onClick={handleSincronizar}
-              title="Consulta o DocuSeal para ver quem já assinou e atualiza o status do contrato"
-              disabled={sincronizando}
-              className="px-5 py-2.5 border border-accent/40 text-accent rounded-lg text-sm font-medium hover:bg-accent/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {sincronizando ? "Consultando..." : "Atualizar status das assinaturas"}
-            </button>
-            <button
-              onClick={handleCancelarEnvio}
-              title="Arquiva a assinatura no DocuSeal e volta o contrato a rascunho para corrigir e enviar de novo"
-              className="px-5 py-2.5 border border-danger/40 text-danger rounded-lg text-sm font-medium hover:bg-danger/10 transition"
-            >
-              Cancelar envio para assinatura
-            </button>
-            <button
-              onClick={() => handleStatusChange("assinado")}
-              className="px-5 py-2.5 border border-primary/40 text-primary-dark rounded-lg text-sm font-medium hover:bg-primary/10 transition"
-            >
-              Marcar como Assinado
-            </button>
-          </>
+
+        <details className="relative">
+          <summary className={`${botaoSecundario} list-none cursor-pointer select-none`}>Mais ações ▾</summary>
+          <div className="absolute z-20 mt-1 w-80 max-w-[90vw] rounded-lg border border-border bg-card p-1 shadow-lg">
+            {!ehSubstabelecimento && (
+              <ItemMenu
+                titulo={sendingEmail ? "Enviando…" : "Enviar cópia para conferência"}
+                dica="O cliente recebe o Word por e-mail. Não é assinatura."
+                onClick={handleResendEmail}
+                disabled={sendingEmail}
+              />
+            )}
+            {contract.status === "enviado" && (
+              <>
+                <ItemMenu
+                  titulo="Enviar de novo para assinatura"
+                  dica="Escolhe testemunhas e sócio e manda um novo envio ao DocuSeal."
+                  onClick={() => setShowSignaturePanel(true)}
+                  disabled={sendingSignature}
+                />
+                <ItemMenu
+                  titulo="Cancelar o envio e voltar a editar"
+                  dica="O link enviado deixa de valer e o contrato volta a rascunho."
+                  onClick={handleCancelarEnvio}
+                />
+              </>
+            )}
+            {ehHonorarios && (
+              <>
+                <ItemMenu
+                  titulo="Novo contrato com este cliente"
+                  dica="Copia os contratantes; escopos e honorários em branco."
+                  href={`/?modelo=${contractId}&modo=cliente`}
+                />
+                <ItemMenu
+                  titulo="Novo contrato com este escopo"
+                  dica="Copia escopos e honorários; contratantes em branco."
+                  href={`/?modelo=${contractId}&modo=escopo`}
+                />
+              </>
+            )}
+            {(contract.status === "rascunho" || contract.status === "enviado") && (
+              <ItemMenu
+                titulo="Registrar assinatura feita fora do sistema"
+                dica="Para contrato assinado em papel. Fica na auditoria; o contrato não pode mais ser editado."
+                onClick={() => handleStatusChange("assinado", CONFIRMA_ASSINADO_FORA)}
+              />
+            )}
+            {contract.status === "rascunho" && (
+              <ItemMenu
+                titulo="Cancelar este contrato"
+                dica="O contrato fica como cancelado; nada é apagado."
+                perigo
+                onClick={() =>
+                  handleStatusChange("cancelado", "Cancelar este contrato? Ele fica com o status cancelado; nada é apagado.")
+                }
+              />
+            )}
+          </div>
+        </details>
+
+        {(contract.status === "enviado" || contract.status === "assinado") && (
+          <p className="w-full text-xs text-muted">
+            {contract.status === "assinado"
+              ? "Contrato assinado: não pode ser editado. Para mudar algo, crie um aditivo (abaixo)."
+              : "Enviado para assinatura: para editar, use Mais ações › Cancelar o envio e voltar a editar."}
+          </p>
         )}
       </div>
 
@@ -582,7 +622,7 @@ export default function ContractDetailPage() {
       {showSignaturePanel && canSendForSignature && (
         <div className="mb-8 p-5 bg-card border border-border rounded-xl">
           <h3 className="text-sm font-semibold text-foreground mb-3">
-            Enviar para Assinatura Digital
+            Enviar para assinatura digital
           </h3>
           <p className="text-xs text-muted mb-3">
             {ehSubstabelecimento
@@ -690,11 +730,11 @@ export default function ContractDetailPage() {
                     : "bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
                 }`}
               >
-                {sendingSignature ? "Enviando..." : "Confirmar e Enviar"}
+                {sendingSignature ? "Enviando ao DocuSeal…" : "Enviar agora para assinatura"}
               </button>
               {exigeSocio && !socioEscritorio && (
                 <p className="text-xs text-warning mt-1 max-w-64">
-                  Escolha o sócio que assina pelo escritório (acima) para habilitar o envio.
+                  Falta escolher quem assina pelo escritório (acima).
                 </p>
               )}
             </div>
@@ -702,7 +742,7 @@ export default function ContractDetailPage() {
               onClick={() => setShowSignaturePanel(false)}
               className="px-5 py-2 border border-border text-foreground rounded-lg text-sm hover:bg-background transition self-start"
             >
-              Cancelar
+              Fechar sem enviar
             </button>
           </div>
         </div>
