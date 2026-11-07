@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -15,6 +14,7 @@ from app.database import get_db
 from app.models.nfse import IngestRequest, SyncJobOut
 from app.services.crypto import CryptoBox, EncryptedBlob, InvalidCipherError
 from app.services.nfse_sync import JobLockError, ingest_payload
+from app.utils.documento import normalizar_doc
 
 
 router = APIRouter(prefix="/api/nfse", tags=["nfse-internal"])
@@ -31,17 +31,13 @@ def _require_worker(authorization: str = Header(default="")):
     return True
 
 
-def _digits(s: str) -> str:
-    return re.sub(r"\D", "", s or "")
-
-
 @router.get("/credenciais/{cnpj}")
 def fetch_credencial(
     cnpj: str,
     _: bool = Depends(_require_worker),
     db: Session = Depends(get_db),
 ):
-    cnpj = _digits(cnpj)
+    cnpj = normalizar_doc(cnpj)
     row = db.execute(
         text("""SELECT login_enc, nonce_login, senha_enc, nonce_senha, ativo
                 FROM credencial_pbh WHERE cnpj_prestador=:c"""),
@@ -68,7 +64,7 @@ def ingest(
     _: bool = Depends(_require_worker),
     db: Session = Depends(get_db),
 ):
-    cnpj = _digits(body.cnpj_prestador)
+    cnpj = normalizar_doc(body.cnpj_prestador)
     try:
         xmls = [base64.b64decode(item) for item in body.xmls_b64]
     except binascii.Error as e:
@@ -120,7 +116,7 @@ def ultimo_nsu(
     """Ultimo NSU do ADN ja ingerido com sucesso (0 = comecar do inicio)."""
     nsu = db.execute(
         text("SELECT MAX(ultimo_nsu) FROM sync_jobs WHERE cnpj_prestador=:c AND status='ok'"),
-        {"c": _digits(cnpj)},
+        {"c": normalizar_doc(cnpj)},
     ).scalar()
     return {"ultimo_nsu": nsu or 0}
 
@@ -134,7 +130,7 @@ def report_status(
     db: Session = Depends(get_db),
 ):
     """Worker reporta falhas pre-ingest (login, captcha, layout)."""
-    cnpj = _digits(cnpj_prestador)
+    cnpj = normalizar_doc(cnpj_prestador)
     now = datetime.now(timezone.utc)
     db.execute(
         text("""

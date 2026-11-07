@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
@@ -13,6 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.nfse import CredencialPbhCreate, CredencialPbhOut
 from app.services.crypto import CryptoBox
+from app.utils.documento import normalizar_doc
 
 
 router = APIRouter(prefix="/api/admin/credencial-pbh", tags=["admin-nfse"])
@@ -31,10 +31,6 @@ def _ensure_enabled() -> None:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "NFSE_KEK nao configurada")
 
 
-def _digits(s: str) -> str:
-    return re.sub(r"\D", "", s or "")
-
-
 @router.post("", response_model=CredencialPbhOut, status_code=201)
 def upsert_credencial(
     body: CredencialPbhCreate,
@@ -42,7 +38,7 @@ def upsert_credencial(
     user=Depends(_require_admin),
 ):
     _ensure_enabled()
-    cnpj = _digits(body.cnpj_prestador)
+    cnpj = normalizar_doc(body.cnpj_prestador)
     if len(cnpj) != 14:
         raise HTTPException(400, "CNPJ invalido")
 
@@ -145,7 +141,7 @@ def desativar(
     user=Depends(_require_admin),
 ):
     _ensure_enabled()
-    cnpj = _digits(cnpj)
+    cnpj = normalizar_doc(cnpj)
     now = datetime.now(timezone.utc)
     user_email = user.get("email") if isinstance(user, dict) else getattr(user, "email", "admin")
     db.execute(
