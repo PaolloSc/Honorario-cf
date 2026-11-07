@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth import CurrentUser, get_current_user, require_financeiro
+from app.auth import CurrentUser, require_financeiro, require_leitura_financeiro
 from app.config import settings
 from app.database import get_db
 from app.models.emissao_db import EmissorConfigDB, NfseEmitidaDB, NfseEmitidaEventoDB
@@ -166,11 +166,8 @@ async def enviar_certificado(
 emitidas_router = APIRouter(prefix="/api/nfse-emitidas", tags=["nfse-emitidas"])
 
 
-def _leitura(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-    """Financeiro e admin escrevem; o leitor so le (a escrita dele ja e barrada em get_current_user)."""
-    if user.role not in ("financeiro", "admin", "leitor"):
-        raise HTTPException(403, "Acesso restrito ao setor financeiro")
-    return user
+# Financeiro e admin escrevem; o leitor so le (a escrita dele ja e barrada em get_current_user).
+_leitura = require_leitura_financeiro
 
 
 class NfseEmitidaOut(BaseModel):

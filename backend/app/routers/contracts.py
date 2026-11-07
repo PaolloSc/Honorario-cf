@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
+from app.acesso import Capacidade, pode, pode_acessar_contrato
 from app.auth import CurrentUser, get_current_user
 from app.database import (
     AuditLogDB,
@@ -212,9 +213,7 @@ def _log_action(
 
 
 def _check_access(contract: ContractDB, user: CurrentUser):
-    if user.role == "admin":
-        return
-    if contract.created_by != user.email:
+    if not pode_acessar_contrato(user, contract):
         raise HTTPException(403, "Sem permissao para acessar este contrato")
 
 
@@ -232,7 +231,7 @@ def list_contracts(
     query = db.query(ContractDB)
 
     # Advogado ve apenas seus contratos; admin ve todos
-    if user.role != "admin":
+    if not pode(user, Capacidade.VER_CONTRATOS_DE_TODOS):
         query = query.filter(ContractDB.created_by == user.email)
 
     if status:
@@ -350,7 +349,7 @@ def list_documentos(
     _check_access(contract, user)
 
     query = db.query(ContractDB).filter(ContractDB.contrato_origem_id == contract_id)
-    if user.role != "admin":  # mesma regra da lista de contratos
+    if not pode(user, Capacidade.VER_CONTRATOS_DE_TODOS):  # mesma regra da lista de contratos
         query = query.filter(ContractDB.created_by == user.email)
     return {
         "documentos": [
