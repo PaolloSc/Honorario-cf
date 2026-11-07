@@ -87,7 +87,7 @@ def parse_nfse_xml(xml: bytes) -> "NFSeData":
 
     discriminacao = _txt(inf, "a:Servico/a:Discriminacao")
 
-    cnpj_prest = _digits(_txt(inf, "a:PrestadorServico/a:IdentificacaoPrestador/a:Cnpj"))
+    cnpj_prest = normalizar_doc(_txt(inf, "a:PrestadorServico/a:IdentificacaoPrestador/a:Cnpj"))
     if len(cnpj_prest) != 14:
         raise NFSeParseError(f"CNPJ prestador invalido: {cnpj_prest!r}")
 
@@ -155,7 +155,7 @@ def _n(elem: Element | None, path: str) -> str | None:
 
 
 def _doc(elem: Element | None, path: str) -> str:
-    return _digits(_n(elem, f"{path}/CNPJ") or _n(elem, f"{path}/CPF"))
+    return normalizar_doc(_n(elem, f"{path}/CNPJ") or _n(elem, f"{path}/CPF"))
 
 
 def _parse_nfse_nacional(root: Element, xml: bytes, cnpj_consultado: str) -> "NFSeData":
@@ -250,7 +250,7 @@ def parse_documento(xml: bytes, cnpj_consultado: str) -> "NFSeData | Cancelament
         raise NFSeParseError(f"XML invalido: {e}") from e
 
     if root.tag == f"{_NS_NAC}NFSe":
-        return _parse_nfse_nacional(root, xml, _digits(cnpj_consultado))
+        return _parse_nfse_nacional(root, xml, normalizar_doc(cnpj_consultado))
     if root.tag == f"{_NS_NAC}evento":
         return _parse_evento_nacional(root, xml)
     return parse_nfse_xml(xml)

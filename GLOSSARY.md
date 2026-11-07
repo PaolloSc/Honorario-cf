@@ -70,3 +70,7 @@ _Avoid_: dispatch, parse do form_data
 **Assinatura (envio)**:
 Enviar a última **Versão do contrato** para assinatura no DocuSeal. É o caso de uso `enviar(db, contract_id, signatarios, user_email)` em `backend/app/services/assinatura.py`: sócio que assina pelo escritório, testemunha fixa, papéis únicos, ordem de assinatura, reenvio (arquiva a submissão anterior) e auditoria. A rota só traduz HTTP (`EnvioInvalido` → 400, `ArquivoNaoEncontrado` → 404). O DocuSeal entra pelo parâmetro `docuseal`, que é o seam dos testes.
 _Avoid_: send_for_signature (nome da rota), submissão (é do DocuSeal)
+
+**Documento (CPF/CNPJ)**:
+O número de CPF ou CNPJ de uma parte, sempre comparado e guardado na forma normalizada de `backend/app/utils/documento.py` (`normalizar_doc`): sem pontuação, maiúsculo, **com** as letras do CNPJ alfanumérico. Todo módulo (contrato, distrato, substabelecimento, NFS-e, faturamento) usa essa função; não existe outra forma de "tirar a pontuação".
+_Avoid_: so_digitos, limpar CNPJ (apaga letras)

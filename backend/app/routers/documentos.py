@@ -34,6 +34,7 @@ from app.models.documentos_complementares import (
 from app.routers.contract import _docx_to_html
 from app.routers.contracts import _check_access
 from app.services.contrato_carregado import get_generator
+from app.utils.documento import normalizar_doc
 from app.utils.erros import MSG_ERRO_INTERNO
 from app.services.substabelecimento_vinculado import (
     MOTIVO_TRAVADO,
@@ -42,7 +43,6 @@ from app.services.substabelecimento_vinculado import (
     form_data_atual,
     gravar_novo,
     nova_versao,
-    so_digitos,
     substabelecimento_do_distrato,
     substabelecimentos_do_outorgante,
     travado,
@@ -134,10 +134,10 @@ def _validar_distrato_origem(data: SubstabelecimentoRequest, user: CurrentUser, 
     if data.contrato_origem_id and data.contrato_origem_id != distrato.contrato_origem_id:
         raise _erro_campo("distrato_origem_id", "O distrato é de outro contrato")
     docs = {
-        so_digitos(c.get("cnpj") or c.get("cpf"))
+        normalizar_doc(c.get("cnpj") or c.get("cpf"))
         for c in (form_data_atual(distrato, db).get("contratantes") or [])
     }
-    doc_outorgante = so_digitos(data.outorgante.cnpj or data.outorgante.cpf)
+    doc_outorgante = normalizar_doc(data.outorgante.cnpj or data.outorgante.cpf)
     if doc_outorgante and doc_outorgante not in docs:
         raise _erro_campo("distrato_origem_id", "O distrato é de outro cliente")
 
@@ -163,7 +163,7 @@ def _partes_informadas(data) -> list[dict]:
             raise _erro_campo(f"contratantes.{i}.nome", "Informe o nome da parte")
         if p.get("cnpj"):
             p.pop("cpf", None)
-        doc = so_digitos(p.get("cnpj") or p.get("cpf"))
+        doc = normalizar_doc(p.get("cnpj") or p.get("cpf"))
         if len(doc) != (14 if p.get("cnpj") else 11):
             raise _erro_campo(f"contratantes.{i}.documento", "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)")
         partes.append(p)
@@ -277,7 +277,7 @@ def substabelecimento_existente(
     db: Session = Depends(get_db),
 ) -> dict:
     """O cliente (CPF/CNPJ) ja tem substabelecimento? Orienta 'acrescentar o processo' ou 'criar novo'."""
-    for c in substabelecimentos_do_outorgante(db, so_digitos(documento)):
+    for c in substabelecimentos_do_outorgante(db, normalizar_doc(documento)):
         try:
             _check_access(c, user)
         except HTTPException:
@@ -317,7 +317,7 @@ def gerar_documento(
             raise HTTPException(404, "Substabelecimento a acrescentar não encontrado")
         _check_access(alvo, user)
         doc_alvo = documento_do_outorgante(form_data_atual(alvo, db))
-        if not doc_alvo or doc_alvo != so_digitos(data.outorgante.cnpj or data.outorgante.cpf):
+        if not doc_alvo or doc_alvo != normalizar_doc(data.outorgante.cnpj or data.outorgante.cpf):
             raise HTTPException(422, "O substabelecimento a acrescentar é de outro outorgante")
         if travado(alvo, db):
             aviso = f"Foi criado um novo substabelecimento porque {MOTIVO_TRAVADO}."
