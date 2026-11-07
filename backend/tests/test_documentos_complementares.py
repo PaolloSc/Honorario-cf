@@ -205,8 +205,7 @@ def _enviar_capturando(client, contract_id: str, signatarios: list[dict]) -> lis
     svc.create_template_from_docx = AsyncMock(return_value={"id": 1, "name": "T"})
     svc.send_for_signature = AsyncMock(side_effect=capture)
     with patch("app.services.servicos_externos.get_docuseal_service", return_value=svc), \
-         patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock), \
-         patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+         patch("app.services.email_financeiro.enviar_ficha_assinada", new_callable=AsyncMock):
         r = client.post("/api/docuseal/send-for-signature",
                         json={"contract_id": contract_id, "signatarios": signatarios})
     assert r.status_code == 200, r.text
@@ -214,8 +213,8 @@ def _enviar_capturando(client, contract_id: str, signatarios: list[dict]) -> lis
 
 
 def _webhook_concluido(client):
-    with patch("app.routers.docuseal.DOCUSEAL_WEBHOOK_SECRET", SECRET), \
-         patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock):
+    with patch("app.config.settings.docuseal_webhook_secret", SECRET), \
+         patch("app.services.email_financeiro.enviar_ficha_assinada", new_callable=AsyncMock):
         r = client.post("/api/docuseal/webhook",
                         json={"event_type": "submission.completed", "data": {"id": "999"}},
                         headers={"x-docuseal-secret": SECRET})

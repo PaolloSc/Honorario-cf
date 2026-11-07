@@ -59,7 +59,7 @@ def test_completed_sends_ficha_once_idempotent(client):
     _seed("wh-001", "sub-001")
     email = _mock_email()
 
-    with patch("app.routers.docuseal.DOCUSEAL_WEBHOOK_SECRET", SECRET), \
+    with patch("app.config.settings.docuseal_webhook_secret", SECRET), \
          patch("app.services.servicos_externos.get_email_service", return_value=email):
         body = {"event_type": "submission.completed", "data": {"id": "sub-001"}}
         headers = {"x-docuseal-secret": SECRET}
@@ -76,7 +76,7 @@ def test_declined_does_not_send_ficha(client):
     _seed("wh-002", "sub-002")
     email = _mock_email()
 
-    with patch("app.routers.docuseal.DOCUSEAL_WEBHOOK_SECRET", SECRET), \
+    with patch("app.config.settings.docuseal_webhook_secret", SECRET), \
          patch("app.services.servicos_externos.get_email_service", return_value=email):
         body = {"event_type": "submission.declined", "data": {"id": "sub-002"}}
         r = client.post("/api/docuseal/webhook", json=body, headers={"x-docuseal-secret": SECRET})

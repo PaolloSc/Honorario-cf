@@ -19,10 +19,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, utcnow
+from app.database import ColaboradorDB, ContractDB, ContractVersionDB, utcnow
 from app.models.documentos_complementares import ROTULO_DOCUMENTO
 from app.services import servicos_externos
 from app.services.arquivo_contrato import resolve_backend_path, resolver_arquivo
+from app.services.ciclo_contrato import registrar_auditoria
 from app.services.contrato_carregado import carregar_versao, tipo_da_versao
 
 logger = logging.getLogger(__name__)
@@ -339,14 +340,7 @@ async def enviar(
             contract.updated_at = utcnow()
             if latest_ver:
                 latest_ver.docuseal_submission_id = str(submission_id) if submission_id else None
-            db.add(AuditLogDB(
-                contract_id=contract_id,
-                action="envio_assinatura",
-                detail=f"Enviado para assinatura via DocuSeal (submission {submission_id})",
-                version_number=contract.current_version,
-                user_email=user_email,
-                created_at=utcnow(),
-            ))
+            registrar_auditoria(db, contract_id, "envio_assinatura", f"Enviado para assinatura via DocuSeal (submission {submission_id})", contract.current_version, user_email)
             db.commit()
 
         # Nada e' enviado ao financeiro neste momento. A ficha de participacao

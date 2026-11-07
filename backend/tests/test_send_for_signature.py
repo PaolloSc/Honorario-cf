@@ -790,8 +790,7 @@ class TestSendForSignatureEndpoint:
         mock_service = self._mock_docuseal_success()
 
         with patch("app.services.servicos_externos.get_docuseal_service", return_value=mock_service), \
-             patch("app.routers.docuseal._send_contract_to_financeiro", new_callable=AsyncMock) as m_copy, \
-             patch("app.routers.docuseal._send_participacao_to_financeiro", new_callable=AsyncMock) as m_ficha:
+             patch("app.services.email_financeiro.enviar_ficha_assinada", new_callable=AsyncMock) as m_ficha:
             response = client.post(
                 "/api/docuseal/send-for-signature",
                 json={
@@ -803,7 +802,6 @@ class TestSendForSignatureEndpoint:
             )
 
         assert response.status_code == 200
-        m_copy.assert_not_called()
         m_ficha.assert_not_called()
 
         if temp_file.exists():
