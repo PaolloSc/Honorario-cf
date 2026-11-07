@@ -100,5 +100,5 @@ _Avoid_: erro cru, HTTP error
 ## Endereço
 
 **Busca de CEP**:
-O único ponto do front que consulta o ViaCEP: `buscarCep` em `frontend/src/app/lib/endereco.ts`. Devolve rua, bairro, cidade e UF (campo ausente vira ""), `null` quando o CEP não existe e lança em falha de rede. Contratante (etapa 1), partes do contrato de consumo e endereço dos substabelecidos usam a mesma função; cada tela mantém a sua mensagem e o que faz com o resultado. O CEP é formatado por `formatCEP`, também de `endereco.ts`.
+O único ponto do front que consulta o ViaCEP: `buscarCep` em `frontend/src/app/lib/endereco.ts`. Devolve rua, bairro, cidade e UF (campo ausente vira ""), `null` quando o CEP não existe e lança em falha de rede. Contratante (etapa 1), partes do contrato de consumo e endereço dos substabelecidos usam a mesma função; cada tela mantém a sua mensagem e o que faz com o resultado. O CEP é formatado por `formatCEP`, também de `endereco.ts`. O endereço só entra pelo CEP: rua, bairro, cidade e UF ficam travados e o usuário digita só CEP, número e complemento. Única exceção: CEP não encontrado ou ViaCEP fora mostra "Preencher o endereço à mão", que libera a digitação. Endereço salvo de contrato antigo aparece travado, com "Trocar endereço (informar CEP)". PJ continua preenchida pela Receita.
 _Avoid_: fetch direto para viacep.com.br numa tela, formatador de CEP local

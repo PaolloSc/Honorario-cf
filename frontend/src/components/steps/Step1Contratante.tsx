@@ -673,6 +673,8 @@ function PFForm({
   const [cepData, setCepData] = useState<ViaCep | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
+  // Endereço só entra pelo CEP; digitação livre só depois de o CEP falhar e o usuário pedir.
+  const [manual, setManual] = useState(false);
 
   const buildEndereco = (cData: typeof cepData, num: string, comp: string, cepValue: string = cep) => {
     if (cData) onUpdate({ endereco: montarEndereco(cData, num, comp, cepValue) });
@@ -689,14 +691,15 @@ function PFForm({
       const cData = await buscarCep(digits);
       if (!cData) {
         setCepData(null);
-        setCepError("CEP não encontrado. Digite o endereço completo abaixo.");
+        setCepError("CEP não encontrado.");
         return;
       }
+      setManual(false);
       setCepData(cData);
       buildEndereco(cData, numero, complemento, formatCEP(digits));
     } catch {
       setCepData(null);
-      setCepError("Erro ao buscar CEP. Digite o endereço completo abaixo.");
+      setCepError("Não foi possível buscar o CEP.");
     } finally {
       setLoadingCEP(false);
     }
@@ -712,10 +715,16 @@ function PFForm({
     buildEndereco(cepData, numero, value);
   };
 
-  // CEP que falhou (não achado, ViaCEP fora) libera a digitação do endereço inteiro.
-  const enderecoRevelado = cepData != null || cepError != null || (data.endereco?.trim().length ?? 0) > 0;
-  // Montado do CEP nesta sessão: trava, senão número/complemento sobrescreveriam a digitação.
-  const enderecoEditavel = cepData == null;
+  const temEndereco = (data.endereco?.trim().length ?? 0) > 0;
+  // Contrato antigo: endereço salvo sem consulta nesta sessão. Fica travado; trocar = informar o CEP.
+  const enderecoSalvo = cepData == null && !manual && temEndereco;
+  const trocarEndereco = () => {
+    setCep("");
+    setNumero("");
+    setComplemento("");
+    setCepError(null);
+    onUpdate({ endereco: "" });
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -794,7 +803,16 @@ function PFForm({
           />
           {loadingCEP && <span className="text-sm text-muted self-center">Buscando...</span>}
         </div>
-        {cepError && <p className="text-xs text-danger mt-1">{cepError}</p>}
+        {cepError && (
+          <p className="text-xs text-danger mt-1">
+            {cepError}{" "}
+            {!manual && (
+              <button type="button" className="font-medium text-primary hover:underline" onClick={() => setManual(true)}>
+                Preencher o endereço à mão
+              </button>
+            )}
+          </p>
+        )}
       </FormField>
 
       {cepData && (
@@ -817,15 +835,21 @@ function PFForm({
         </FormField>
       )}
 
-      <FormField label="Endereço completo" required hint={enderecoRevelado ? undefined : "Digite o endereço ou informe o CEP acima para preencher."}>
+      <FormField label="Endereço completo" required hint={manual || temEndereco ? undefined : "Informe o CEP acima para preencher."}>
           <Input
             value={data.endereco}
             onChange={(e) => onUpdate({ endereco: e.target.value })}
-            readOnly={!enderecoEditavel}
-            placeholder={enderecoEditavel ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CEP"}
-            className={enderecoEditavel ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
+            readOnly={!manual}
+            tabIndex={manual ? undefined : -1}
+            placeholder={manual ? "Rua, n. 0, bairro, cidade/UF, CEP 00000-000" : "Preenchido automaticamente pelo CEP"}
+            className={manual ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
             required
           />
+          {enderecoSalvo && (
+            <button type="button" className="text-xs font-medium text-primary hover:underline mt-1" onClick={trocarEndereco}>
+              Trocar endereço (informar CEP)
+            </button>
+          )}
         </FormField>
     </div>
   );
