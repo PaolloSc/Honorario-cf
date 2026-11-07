@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -34,10 +33,9 @@ from app.models.contrato_consumidor import (
 )
 from app.models.documentos_complementares import ROTULO_DOCUMENTO
 from app.services import contract_reviewer
-from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolver_arquivo
+from app.services.arquivo_contrato import ArquivoNaoEncontrado, VersaoNaoEncontrada, resolver_arquivo
 from app.services.contrato_carregado import (
     TIPO_HONORARIOS,
-    carregar_versao,
     cliente_do_form_data,
 )
 from app.services.contrato_carregado import get_generator as get_consumidor_gen
@@ -452,90 +450,11 @@ def download_contract(
     if not pode_acessar_contrato(user, contract):
         raise HTTPException(403, "Sem permissao")
 
-    # Find the file path from DB (specific version or latest)
-    query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
-    if version:
-        ver = query.filter(ContractVersionDB.version_number == version).first()
-        if ver is None:
-            raise HTTPException(404, f"Versao {version} nao encontrada")
-    else:
-        ver = query.order_by(ContractVersionDB.version_number.desc()).first()
-
-    gen = get_generator()
-    output_dir = Path(gen.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    filepath: Path | None = None
-
-    generico = output_dir / f"contrato_{contract_id}.docx"
-    # Contratos antigos: varias versoes apontam para o mesmo arquivo generico, que so tem o
-    # texto da mais nova. Para as outras, o arquivo nao serve: regenera da form_data.
-    generico_de_outra_versao = bool(
-        ver and ver.file_path and Path(ver.file_path).name == generico.name
-        and ver.version_number != contract.current_version
-    )
-    if ver and ver.file_path and not generico_de_outra_versao:
-        stored = Path(ver.file_path)
-        if stored.exists():
-            filepath = stored
-        else:
-            candidate = output_dir / stored.name
-            if candidate.exists():
-                filepath = candidate
-
-    # O arquivo generico e' sempre o da versao mais nova: so serve para ela.
-    pedida_e_a_atual = ver is None or ver.version_number == contract.current_version
-    if filepath is None and pedida_e_a_atual:
-        fallback = generico
-        if fallback.exists():
-            filepath = fallback
-
-    # Strategy 4: Regenerate from form_data_json (handles ephemeral filesystems)
-    if filepath is None and ver and ver.form_data_json:
-        logger.warning(
-            "Contract file not on disk for %s. Regenerating from stored form data...",
-            contract_id,
-        )
-        try:
-            # Cada tipo de contrato tem seu gerador — em FS efemero (serverless)
-            # este e' o caminho normal de download, nao um caso de borda.
-            carregado = carregar_versao(ver)
-            contrato_data, gen_tipo = carregado.request, carregado.gerador
-            _, new_filepath = gen_tipo.generate(contrato_data, contract_id=contract_id)
-            # O gerador grava sempre no nome generico (o da versao mais nova): move para o nome
-            # da versao pedida, senao a proxima consulta devolveria o texto errado.
-            destino = Path(new_filepath).with_name(f"contrato_{contract_id}_v{ver.version_number}.docx")
-            shutil.move(new_filepath, destino)
-            filepath = destino
-            # Update stored path
-            ver.file_path = str(filepath)
-            db.commit()
-            logger.info("Regenerated contract file at: %s", filepath)
-        except FileNotFoundError as template_err:
-            # Template not found (ephemeral FS) - create a minimal placeholder DOCX
-            logger.warning("Template not found, creating minimal DOCX: %s", template_err)
-            try:
-                from docx import Document as _Doc
-                doc = _Doc()
-                doc.add_paragraph("Contrato em processamento - documento sera regenerado.")
-                minimal_path = output_dir / f"contrato_{contract_id}.docx"
-                doc.save(str(minimal_path))
-                ver.file_path = str(minimal_path)
-                db.commit()
-                filepath = minimal_path
-                logger.info("Created minimal placeholder DOCX at: %s", minimal_path)
-            except Exception as min_err:
-                logger.error("Failed to create minimal DOCX: %s", min_err)
-        except Exception as regen_err:
-            logger.error("Failed to regenerate contract %s: %s", contract_id, regen_err)
-
-    if filepath is None or not filepath.exists():
-        logger.error(
-            "Contract file not found for %s. Tried: stored=%s, output_dir=%s",
-            contract_id,
-            ver.file_path if ver else "N/A",
-            output_dir,
-        )
+    try:
+        filepath = resolver_arquivo(contract_id, db, version, provisorio=True)
+    except VersaoNaoEncontrada:
+        raise HTTPException(404, f"Versao {version} nao encontrada")
+    except ArquivoNaoEncontrado:
         raise HTTPException(status_code=404, detail="Arquivo nao encontrado")
 
     return FileResponse(

@@ -224,7 +224,13 @@ class ContractGenerator:
         self.output_dir = self._resolve_backend_path(settings.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate(self, data: ContratoRequest, contract_id: str | None = None, signatario_roles: list[dict] | None = None) -> tuple[str, str]:
+    def generate(
+        self,
+        data: ContratoRequest,
+        contract_id: str | None = None,
+        signatario_roles: list[dict] | None = None,
+        nome_arquivo: str | None = None,
+    ) -> tuple[str, str]:
         """Generate a contract document from form data.
 
         Returns (contract_id, file_path).
@@ -233,7 +239,8 @@ class ContractGenerator:
             contract_id = str(uuid.uuid4())
         doc = self._build_document(data, signatario_roles=signatario_roles)
  
-        filename = f"contrato_{contract_id}.docx"
+        # nome_arquivo evita gravar por cima do arquivo generico (o da versao mais nova)
+        filename = nome_arquivo or f"contrato_{contract_id}.docx"
         filepath = self.output_dir / filename
         doc.save(str(filepath))
  

@@ -17,7 +17,7 @@ from app.auth import CurrentUser, get_current_user
 from app.config import settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
 from app.routers.contract import _SIG_TAG, _contract_filename
-from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolve_backend_path, resolver_arquivo
+from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolver_arquivo
 from app.services import servicos_externos
 from app.services.contrato_carregado import tipo_da_versao, ultima_versao
 from app.utils.participacao import linhas_participacao
@@ -339,24 +339,11 @@ async def send_participacao_email(
             '</div></div>'
         )
 
-        # Look up contract file for attachment
-        contract_filepath = None
-        latest_ver = (
-            db.query(ContractVersionDB)
-            .filter(ContractVersionDB.contract_id == data.contract_id)
-            .order_by(ContractVersionDB.version_number.desc())
-            .first()
-        )
-        if latest_ver and latest_ver.file_path:
-            stored = Path(latest_ver.file_path)
-            if stored.exists():
-                contract_filepath = str(stored)
-            else:
-                # Try convention path
-                output_dir = resolve_backend_path(settings.output_dir)
-                candidate = output_dir / f"contrato_{data.contract_id}.docx"
-                if candidate.exists():
-                    contract_filepath = str(candidate)
+        # Arquivo do contrato (refeito do banco se o disco o perdeu); sem ele, vai sem anexo
+        try:
+            contract_filepath = str(resolver_arquivo(data.contract_id, db))
+        except ArquivoNaoEncontrado:
+            contract_filepath = None
 
         service = servicos_externos.get_email_service()
 
