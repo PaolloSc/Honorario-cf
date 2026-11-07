@@ -54,7 +54,7 @@ export const TOURS: Tour[] = [
       {
         titulo: "Novo contrato",
         texto:
-          "Escolha o tipo: honorários, ação de consumo, ou aditivo/distrato de contrato feito fora do sistema. Para contrato daqui, o aditivo e o distrato ficam na página do contrato.",
+          "Escolha o tipo de contrato: honorários ou ação de consumo. Aditivo e distrato nascem na página do contrato; só para contrato antigo, feito fora do sistema, use o link discreto logo abaixo.",
         alvo: botao("Novo contrato"),
       },
       {
