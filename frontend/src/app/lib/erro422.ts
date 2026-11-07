@@ -24,3 +24,27 @@ export function textoDoErro(erro: unknown): string {
 export function ehErro422(erro: unknown): boolean {
   return erro instanceof Error && /^API error 422: /.test(erro.message) && textoDoErro(erro) !== erro.message;
 }
+
+/** 422 por campo: { "escopos.0.pro_labore.numero_parcelas": "Escopo 1: ..." }. O caminho é o
+ *  loc do backend sem "body" (e sem "form_data", na edição de contrato salvo). Erro sem campo
+ *  (loc só com "body") fica de fora: a tela mostra esse pelo textoDoErro. */
+export function errosPorCampo(erro: unknown): Record<string, string> {
+  const m = erro instanceof Error ? /^API error 422: ([\s\S]*)$/.exec(erro.message) : null;
+  const campos: Record<string, string> = {};
+  if (!m) return campos;
+  try {
+    const detail = JSON.parse(m[1])?.detail;
+    if (!Array.isArray(detail)) return campos;
+    for (const d of detail) {
+      if (!Array.isArray(d?.loc) || typeof d?.msg !== "string") continue;
+      const loc = d.loc.slice(d.loc[0] === "body" ? 1 : 0);
+      if (loc[0] === "form_data") loc.shift();
+      if (!loc.length) continue;
+      const chave = loc.join(".");
+      campos[chave] ??= d.msg.replace(/^Value error,\s*/, "");
+    }
+  } catch {
+    // corpo não JSON: nenhum campo
+  }
+  return campos;
+}
