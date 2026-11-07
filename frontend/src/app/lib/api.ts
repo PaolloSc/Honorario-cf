@@ -1,235 +1,22 @@
 import { limparCNPJ } from "./cnpj";
 import type { Contratante, TipoPessoa } from "@/types/contract";
+import { chamarApi, chamarApiJson, detalheDoErro, ErroApi, ConflitoError } from "./http";
 
-function resolveApiBase(): string {
-  // 1. Vercel environment variable takes priority
-  const envBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-  if (envBase) return envBase;
+// O transporte (base de URL, token, formato de erro) mora em ./http; reexportado para quem já importa daqui.
+export {
+  API_BASE,
+  ConflitoError,
+  ErroApi,
+  SessaoExpiradaError,
+  fetchAutenticado,
+  garantirTokenValido,
+  getAuthHeaders,
+  setAccessToken,
+} from "./http";
 
-  // 2. In browser (production), use same domain — Railway typically runs on same domain via proxy
-  if (typeof window !== "undefined") {
-    const protocol = window.location.protocol;
-    const host = window.location.hostname;
-    // Dev local: backend separado em :8000
-    if (host === "localhost" || host === "127.0.0.1") {
-      return `${protocol}//${host}:8000`;
-    }
-    // Vercel serverless functions are at /api on the same domain
-    return `${protocol}//${host}`;
-  }
-
-  // 3. Development fallback
-  return "http://127.0.0.1:8000";
-}
-
-const API_BASE = resolveApiBase();
-
-let _accessToken: string | null = null;
-let _expiresAt: number | null = null; // epoch em segundos, lido do proprio JWT
-
-/** `exp` do JWT sem validar assinatura — so' para saber quando renovar. */
-function expDoJwt(jwtToken: string): number | null {
-  const payload = jwtToken.split(".")[1];
-  if (!payload) return null;
-  try {
-    // base64url vem sem padding, e o id_token traz `name` acentuado: sem repor
-    // o "=" e sem decodificar UTF-8, o parse falha e a renovacao proativa some.
-    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    const exp = JSON.parse(new TextDecoder().decode(bytes))?.exp;
-    return typeof exp === "number" ? exp : null;
-  } catch {
-    return null;
-  }
-}
-
-export function setAccessToken(token: string | null) {
-  _accessToken = token;
-  _expiresAt = token ? expDoJwt(token) : null;
-}
-
-/** Token ausente ou a menos de 60s de vencer (margem pro tempo de rede). */
-function tokenVencido(): boolean {
-  if (!_accessToken) return true;
-  if (_expiresAt === null) return false; // sem exp legivel: deixa o backend julgar
-  return Date.now() >= _expiresAt * 1000 - 60_000;
-}
-
-/**
- * Puxa a sessao do next-auth, o que dispara o callback `jwt` no servidor e
- * renova o id_token junto ao Azure. O `refetchInterval` do SessionProvider so'
- * roda com a aba viva e em foco — depois de uma reuniao, de o notebook dormir ou
- * de a aba ficar horas no fundo, o token em memoria ja' venceu e a API responde
- * 401 "Token expirado". Aqui a renovacao acontece na hora da chamada.
- */
-async function renovarToken(): Promise<void> {
-  if (typeof window === "undefined") return;
-  try {
-    const { getSession } = await import("next-auth/react");
-    const session = await getSession();
-    setAccessToken(session?.accessToken || null);
-  } catch (e) {
-    console.error("[AUTH] Falha ao renovar a sessao:", e);
-  }
-}
-
-/**
- * 401 que sobreviveu a uma renovacao. Nem todo 401 e' expiracao — o backend
- * tambem recusa por audience errada, issuer divergente ou token sem e-mail.
- * Chamar tudo de "sessao expirada" mandava o usuario relogar a toa; o motivo
- * real vai junto para o erro dizer a verdade.
- */
-export class SessaoExpiradaError extends Error {
-  readonly motivo: string;
-
-  constructor(motivo?: string) {
-    const expirou = !motivo || /expirado/i.test(motivo);
-    super(
-      expirou
-        ? "Sua sessão expirou. Faça login novamente para continuar."
-        : `A API recusou o acesso: ${motivo}`,
-    );
-    this.name = "SessaoExpiradaError";
-    this.motivo = motivo ?? "";
-  }
-}
-
-/** 409: outra aba/computador gravou antes (ex.: rascunho com `known_updated_at` velho). */
-export class ConflitoError extends Error {
-  constructor(mensagem: string) {
-    super(mensagem);
-    this.name = "ConflitoError";
-  }
-}
-
-/** `detail` do FastAPI, quando houver; senao o corpo cru. */
-async function motivoDaResposta(res: Response): Promise<string> {
-  try {
-    const texto = await res.clone().text();
-    try {
-      const json = JSON.parse(texto);
-      const detail = json?.detail;
-      if (typeof detail === "string") return detail;
-    } catch {
-      // corpo nao e' JSON — devolve como veio
-    }
-    return texto.slice(0, 200);
-  } catch {
-    return "";
-  }
-}
-
-function modoDev(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    process.env.NEXT_PUBLIC_DEV_MODE === "true" &&
-    !!localStorage.getItem("dev_user_email")
-  );
-}
-
-export function getAuthHeaders(): Record<string, string> {
-  const h: Record<string, string> = {};
-  if (_accessToken) h["Authorization"] = `Bearer ${_accessToken}`;
-  Object.assign(h, getDevHeaders());
-  return h;
-}
-
-/** Renova o id_token se ele ja' venceu, antes de qualquer chamada a API. */
-export async function garantirTokenValido(): Promise<void> {
-  if (!modoDev() && tokenVencido()) {
-    await renovarToken();
-  }
-}
-
-/**
- * fetch autenticado com token sempre valido: renova antes de mandar se ja' venceu
- * e, se mesmo assim voltar 401, renova e tenta uma unica vez mais. Recebe a URL ja'
- * montada para cada cliente (api/nfse/finance) manter sua propria base.
- */
-export async function fetchAutenticado(
-  url: string,
-  init?: RequestInit,
-): Promise<Response> {
-  await garantirTokenValido();
-
-  const montarHeaders = (): Record<string, string> => ({
-    ...((init?.headers as Record<string, string>) || {}),
-    ...getAuthHeaders(),
-  });
-
-  let res = await fetch(url, { ...init, headers: montarHeaders() });
-
-  if (res.status === 401 && !modoDev()) {
-    // O token pode ter vencido entre a montagem e a chegada do request, ou o
-    // relogio do cliente estar adiantado. Renova uma vez e repete.
-    const anterior = _accessToken;
-    await renovarToken();
-    if (!_accessToken) throw new SessaoExpiradaError(await motivoDaResposta(res));
-    if (_accessToken !== anterior) {
-      res = await fetch(url, { ...init, headers: montarHeaders() });
-    }
-    if (res.status === 401) throw new SessaoExpiradaError(await motivoDaResposta(res));
-  }
-
-  return res;
-}
-
-function getDevHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  if (process.env.NEXT_PUBLIC_DEV_MODE !== "true") return {};
-  const email = localStorage.getItem("dev_user_email");
-  const role = localStorage.getItem("dev_user_role");
-  const name = localStorage.getItem("dev_user_name");
-  if (!email) return {};
-  const h: Record<string, string> = { "X-Dev-User-Email": email };
-  if (role) h["X-Dev-User-Role"] = role;
-  if (name) h["X-Dev-User-Name"] = name;
-  return h;
-}
-
-async function request<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
-  let res: Response;
-
-  // Renova antes de armar o timeout: a ida ate' o /api/auth/session nao pode
-  // consumir os 8s reservados para a chamada da API.
-  await garantirTokenValido();
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((options?.headers as Record<string, string>) || {}),
-  };
-
-  try {
-    res = await fetchAutenticado(`${API_BASE}${path}`, {
-      ...options,
-      signal: options?.signal || controller.signal,
-      headers,
-    });
-  } catch (err) {
-    if (err instanceof SessaoExpiradaError) throw err;
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error(`Tempo esgotado ao conectar na API (${API_BASE}).`);
-    }
-    const detail = err instanceof Error ? err.message : "erro desconhecido";
-    throw new Error(`Falha ao conectar na API (${API_BASE}): ${detail}`);
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  if (!res.ok) {
-    const body = await res.text();
-    if (res.status === 409) throw new ConflitoError(`API error ${res.status}: ${body}`);
-    throw new Error(`API error ${res.status}: ${body}`);
-  }
-
-  return res.json();
+/** Chamada JSON padrão do wizard: 8s de limite, salvo quando quem chama passa o próprio signal. */
+function request<T>(path: string, options?: RequestInit): Promise<T> {
+  return chamarApiJson<T>(path, { ...options, timeoutMs: 8000 });
 }
 
 export interface ItemClausula {
@@ -317,15 +104,11 @@ export async function podeUsarConsumidor() {
 
 // Previa do contrato de consumidor antes de gravar: nada e' persistido.
 export async function previewContratoConsumidor(data: unknown, signal?: AbortSignal) {
-  const res = await fetchAutenticado(`${API_BASE}/api/contract/preview-consumidor`, {
+  const res = await chamarApi("/api/contract/preview-consumidor", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
     signal,
   });
-  if (!res.ok) {
-    throw new Error(`Erro ao gerar prévia: ${res.status}`);
-  }
   return res.text();
 }
 
@@ -333,40 +116,26 @@ export async function previewContratoConsumidor(data: unknown, signal?: AbortSig
 // Com revisar=true a IA corrige o português (lento): o html volta com o digitado
 // riscado e a sugestão em verde.
 export async function previewHonorarios(data: unknown, signal?: AbortSignal, revisar = false) {
-  const res = await fetchAutenticado(`${API_BASE}/api/contract/preview-honorarios`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...(data as object), revisar }),
-    signal,
-  });
-  if (!res.ok) {
-    throw new Error(`Erro ao gerar prévia: ${res.status}`);
-  }
-  return (await res.json()) as {
+  return chamarApiJson<{
     html: string;
     findings: Array<{ trecho: string; problema: string; sugestao: string }>;
     // Condição vaga/ambígua: só leitura, sem sugestão.
     avisos: Array<{ trecho: string; problema: string }>;
     erro?: string | null;
-  };
+  }>("/api/contract/preview-honorarios", {
+    method: "POST",
+    body: JSON.stringify({ ...(data as object), revisar }),
+    signal,
+  });
 }
 
 export async function downloadContract(contractId: string) {
-  const res = await fetchAutenticado(
-    `${API_BASE}/api/contract/${contractId}/download`
-  );
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Erro ao baixar contrato: ${res.status} - ${body}`);
-  }
+  const res = await chamarApi(`/api/contract/${contractId}/download`);
   return res.blob();
 }
 
 export async function previewContract(contractId: string) {
-  const res = await fetchAutenticado(`${API_BASE}/api/contract/${contractId}/preview`);
-  if (!res.ok) {
-    throw new Error(`Erro ao carregar visualização: ${res.status}`);
-  }
+  const res = await chamarApi(`/api/contract/${contractId}/preview`);
   return res.text();
 }
 
@@ -442,17 +211,12 @@ export interface ProcessoPlanilha {
 }
 
 async function chamarProcessos<T>(path: string, init?: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
   try {
-    const res = await fetchAutenticado(`${API_BASE}${path}`, { ...init, signal: controller.signal });
-    if (!res.ok) {
-      const corpo = await res.json().catch(() => null);
-      throw new Error(typeof corpo?.detail === "string" ? corpo.detail : "Não foi possível concluir a consulta.");
-    }
-    return res.json();
-  } finally {
-    clearTimeout(timeoutId);
+    return await chamarApiJson<T>(path, { ...init, timeoutMs: 20000 });
+  } catch (e) {
+    // A tela de processos mostra só o `detail` do backend (ou um texto fixo).
+    if (e instanceof ErroApi) throw new Error(detalheDoErro(e) ?? "Não foi possível concluir a consulta.");
+    throw e;
   }
 }
 
@@ -764,7 +528,7 @@ export async function updateContract(contractId: string, formData: Record<string
     if (!(e instanceof ConflitoError)) throw e;
     let detail: { codigo?: string; motivo?: string; sugestao?: string; versao_atual?: number } = {};
     try {
-      detail = JSON.parse(e.message.slice(e.message.indexOf("{"))).detail ?? {};
+      detail = JSON.parse(e.corpo).detail ?? {};
     } catch {
       /* mensagem sem JSON: cai no texto padrão */
     }
@@ -1119,15 +883,13 @@ export async function listDocumentos(contractId: string) {
   return request<{ documentos: DocumentoDerivado[] }>(`/api/contracts/${contractId}/documentos`);
 }
 
-// Previa: nada e' gravado. Erro volta como "API error NNN: corpo" (o corpo traz os 422 por campo).
+// Previa: nada e' gravado. Erro volta como ErroApi ("API error NNN: corpo"; o corpo traz os 422 por campo).
 export async function previewDocumento(tipo: string, payload: unknown, signal?: AbortSignal) {
-  const res = await fetchAutenticado(`${API_BASE}/api/documentos/${tipo}/preview`, {
+  const res = await chamarApi(`/api/documentos/${tipo}/preview`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     signal,
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
   return res.text();
 }
 

@@ -14,9 +14,9 @@ assert.equal(digitos("30.130-001"), "30130001");
 assert.equal(digitos("1.1301.90.00"), "113019000");
 
 // erro da API: 409 com detail em texto, 422 com lista, texto puro
-assert.equal(mensagemDeErro(new Error('409 {"detail":"Aprove a fatura antes."}')), "Aprove a fatura antes.");
+assert.equal(mensagemDeErro(new Error('API error 409: {"detail":"Aprove a fatura antes."}')), "Aprove a fatura antes.");
 assert.equal(
-  mensagemDeErro(new Error('422 {"detail":[{"loc":["body","c_trib_nac"],"msg":"String should match pattern","type":"x"}]}')),
+  mensagemDeErro(new Error('API error 422: {"detail":[{"loc":["body","c_trib_nac"],"msg":"String should match pattern","type":"x"}]}')),
   "c_trib_nac: String should match pattern",
 );
 assert.equal(mensagemDeErro(new Error("Falha ao conectar")), "Falha ao conectar");
@@ -24,8 +24,8 @@ assert.equal(mensagemDeErro(new Error("Falha ao conectar")), "Falha ao conectar"
 // só erro sem resposta da API é "de rede" (aí repetir com a mesma chave é seguro)
 assert.equal(ehErroDeRede(new TypeError("Failed to fetch")), true);
 assert.equal(ehErroDeRede(new Error("Falha ao conectar na API (x): boom")), true);
-assert.equal(ehErroDeRede(new Error('409 {"detail":"Aprove a fatura antes."}')), false);
-assert.equal(ehErroDeRede(new Error("502 Bad Gateway")), false);
+assert.equal(ehErroDeRede(new Error('API error 409: {"detail":"Aprove a fatura antes."}')), false);
+assert.equal(ehErroDeRede(new Error("API error 502: Bad Gateway")), false);
 
 // resultado da emissão: autorizada, rejeitada e sem resposta (nunca sugere reenviar)
 assert.deepEqual(resultadoDaEmissao({ status: "autorizada", numero_nfse: "752", erro_codigo: null, erro_mensagem: null }),

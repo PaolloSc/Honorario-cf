@@ -78,3 +78,13 @@ _Avoid_: so_digitos, limpar CNPJ (apaga letras)
 **Capacidade**:
 O que um papel (admin, advogado, financeiro, leitor) pode fazer: administrar, operar o financeiro, ler o financeiro, ver contratos de todos. A tabela papel → capacidades vive em `backend/app/acesso.py`; as rotas pedem a capacidade (`exigir(...)` / `pode(...)`) e nunca comparam o texto do papel.
 _Avoid_: checar `user.role == "admin"` na rota
+
+## Rede e erros
+
+**Cliente HTTP**:
+O único caminho do front para falar com a API: `frontend/src/app/lib/http.ts`. Uma base de URL (`API_BASE`), token renovado na hora da chamada, limite de tempo opcional por chamada (`timeoutMs`). `api.ts`, `emissao-api.ts`, `finance-api.ts`, `nfse-api.ts` e as páginas só chamam `chamarApi`/`chamarApiJson`; nenhuma tela faz `fetch` direto para a API.
+_Avoid_: request, _fetch, pedir (eram os quatro clientes antigos)
+
+**Erro da API**:
+Resposta da API com status de erro. No front é sempre `ErroApi` (`status` + `corpo` cru), com a mensagem no formato `API error NNN: corpo`; o 409 é `ConflitoError`, o 401 sem sessão é `SessaoExpiradaError`. Falha de rede ou tempo esgotado não é Erro da API (não houve resposta).
+_Avoid_: erro cru, HTTP error

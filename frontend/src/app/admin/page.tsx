@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { chamarApi, chamarApiJson, ErroApi } from "@/app/lib/http";
 
 interface User {
   id: number;
@@ -27,12 +28,6 @@ const CADASTROS = [
   },
 ];
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-  (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}`
-    : "http://127.0.0.1:8000");
-
 export default function AdminPage() {
   const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
@@ -46,19 +41,15 @@ export default function AdminPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 403) {
+      const data = await chamarApiJson<{ users: User[] }>("/api/users");
+      setUsers(data.users);
+    } catch (e) {
+      if (e instanceof ErroApi && e.status === 403) {
         setAccessDenied(true);
         setError("Acesso restrito a administradores.");
         return;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setUsers(data.users);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar usuários");
+      setError(e instanceof ErroApi ? `HTTP ${e.status}` : e instanceof Error ? e.message : "Erro ao carregar usuários");
     } finally {
       setLoading(false);
     }
@@ -70,15 +61,10 @@ export default function AdminPage() {
 
   const setRole = async (userId: number, newRole: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/users/${userId}/role`, {
+      await chamarApi(`/api/users/${userId}/role`, {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ role: newRole }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchUsers();
     } catch {
       alert("Erro ao alterar permissao");

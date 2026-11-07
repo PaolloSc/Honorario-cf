@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { fetchAutenticado, SessaoExpiradaError } from "@/app/lib/api";
+import { chamarApiJson, ErroApi, SessaoExpiradaError } from "@/app/lib/http";
 import { AbaEmissor } from "@/components/emissao/AbaEmissor";
 import { AbaFaturas } from "@/components/emissao/AbaFaturas";
 import { AbaNotas } from "@/components/emissao/AbaNotas";
@@ -30,19 +30,11 @@ export default function EmissaoPage() {
 
   useEffect(() => {
     if (!token && !(devMode && hasDevSession)) return;
-    const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-      (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}` : "");
-    fetchAutenticado(`${apiBase}/api/users/me`)
-      .then((r) => {
-        if (r.status === 401) {
-          window.location.href = "/financeiro/login";
-          return null;
-        }
-        return r.json();
-      })
-      .then((u) => u && setRole(u.role))
+    chamarApiJson<{ role: string }>("/api/users/me")
+      .then((u) => setRole(u.role))
       .catch((e) => {
-        if (e instanceof SessaoExpiradaError) window.location.href = "/financeiro/login";
+        // 401 sem renovacao possivel (SessaoExpiradaError) ou 401 no modo dev (ErroApi).
+        if (e instanceof SessaoExpiradaError || (e instanceof ErroApi && e.status === 401)) window.location.href = "/financeiro/login";
         else setErro("Falha ao verificar perfil");
       });
   }, [token, devMode, hasDevSession]);

@@ -11,7 +11,7 @@ import {
   atualizarStatusPagamento,
   createParticipacao,
   encerrarVinculo,
-  fetchAutenticado,
+  ErroApi,
   SessaoExpiradaError,
   getRegrasParticipacao,
   getResumoParticipacao,
@@ -22,6 +22,7 @@ import {
   type ContratoPendente,
   type PagamentoStatus,
 } from "@/app/lib/api";
+import { chamarApiJson } from "@/app/lib/http";
 import { HealthBanner } from "@/components/nfse/HealthBanner";
 import { NotasFiscaisLista } from "@/components/nfse/NotasFiscaisLista";
 import { SyncButton } from "@/components/nfse/SyncButton";
@@ -103,25 +104,16 @@ export default function FinanceiroPage() {
   // 1) Verifica perfil
   useEffect(() => {
     if (!token && !(devMode && hasDevSession)) return;
-    const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
-      (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}` : "");
-    // fetchAutenticado renova o token vencido antes de desistir: so' manda para o
+    // O cliente renova o token vencido antes de desistir: so' manda para o
     // login quando a sessao realmente acabou, e nao a cada id_token de 1h vencido.
-    fetchAutenticado(`${apiBase}/api/users/me`)
-      .then((r) => {
-        if (r.status === 401) {
-          window.location.href = "/financeiro/login";
-          return null;
-        }
-        return r.json();
-      })
+    chamarApiJson<{ role: string }>("/api/users/me")
       .then((u) => {
-        if (!u) return;
         setRole(u.role);
         if (u.role !== "financeiro" && u.role !== "admin") setAccessDenied(true);
       })
       .catch((e) => {
-        if (e instanceof SessaoExpiradaError) {
+        // 401 sem renovacao possivel (SessaoExpiradaError) ou 401 no modo dev (ErroApi).
+        if (e instanceof SessaoExpiradaError || (e instanceof ErroApi && e.status === 401)) {
           window.location.href = "/financeiro/login";
           return;
         }
