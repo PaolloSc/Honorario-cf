@@ -145,7 +145,11 @@ async def docuseal_webhook(
     x_docuseal_secret: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Receive webhook events from DocuSeal (submission.completed / submission.declined)."""
+    """Receive webhook events from DocuSeal.
+
+    submission.completed: data.id e' a submissao. A recusa chega como form.declined (o DocuSeal nao
+    tem submission.declined): ali data.id e' o do SIGNATARIO e a submissao vem em data.submission.id.
+    """
     # Validate webhook secret
     segredo = settings.docuseal_webhook_secret
     if not segredo or not hmac.compare_digest(x_docuseal_secret or "", segredo):
@@ -153,11 +157,14 @@ async def docuseal_webhook(
 
     event_type = payload.event_type
     data = payload.data
-    submission_id = str(data.get("id", data.get("submission_id", "")))
+    if event_type == "form.declined":
+        submission_id = str((data.get("submission") or {}).get("id", ""))
+    else:
+        submission_id = str(data.get("id", data.get("submission_id", "")))
 
     logger.info("DocuSeal webhook received: event=%s submission_id=%s", event_type, submission_id)
 
-    if event_type not in ("submission.completed", "submission.declined"):
+    if event_type not in ("submission.completed", "form.declined"):
         return {"status": "ignored", "event_type": event_type}
 
     new_status = "assinado" if event_type == "submission.completed" else "recusado"
