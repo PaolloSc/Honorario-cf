@@ -87,12 +87,6 @@ _Avoid_: so_digitos, limpar CNPJ (apaga letras)
 O que um papel (admin, advogado, financeiro, leitor) pode fazer: administrar, operar o financeiro, ler o financeiro, ver contratos de todos. A tabela papel → capacidades vive em `backend/app/acesso.py`; as rotas pedem a capacidade (`exigir(...)` / `pode(...)`) e nunca comparam o texto do papel.
 _Avoid_: checar `user.role == "admin"` na rota
 
-## Endereço
-
-**Busca de CEP**:
-O único ponto do front que consulta o ViaCEP: `buscarCep` em `frontend/src/app/lib/endereco.ts`. Devolve rua, bairro, cidade e UF (campo ausente vira ""), `null` quando o CEP não existe e lança em falha de rede. Contratante (etapa 1), partes do contrato de consumo e endereço dos substabelecidos usam a mesma função; cada tela mantém a sua mensagem e o que faz com o resultado. O CEP é formatado por `formatCEP`, também de `endereco.ts`.
-_Avoid_: fetch direto para viacep.com.br numa tela, formatador de CEP local
-
 ## Rede e erros
 
 **Cliente HTTP**:
@@ -102,3 +96,9 @@ _Avoid_: request, _fetch, pedir (eram os quatro clientes antigos)
 **Erro da API**:
 Resposta da API com status de erro. No front é sempre `ErroApi` (`status` + `corpo` cru), com a mensagem no formato `API error NNN: corpo`; o 409 é `ConflitoError`, o 401 sem sessão é `SessaoExpiradaError`. Falha de rede ou tempo esgotado não é Erro da API (não houve resposta).
 _Avoid_: erro cru, HTTP error
+
+## Endereço
+
+**Busca de CEP**:
+O único ponto do front que consulta o ViaCEP: `buscarCep` em `frontend/src/app/lib/endereco.ts`. Devolve rua, bairro, cidade e UF (campo ausente vira ""), `null` quando o CEP não existe e lança em falha de rede. Contratante (etapa 1), partes do contrato de consumo e endereço dos substabelecidos usam a mesma função; cada tela mantém a sua mensagem e o que faz com o resultado. O CEP é formatado por `formatCEP`, também de `endereco.ts`.
+_Avoid_: fetch direto para viacep.com.br numa tela, formatador de CEP local
