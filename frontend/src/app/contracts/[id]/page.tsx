@@ -567,11 +567,11 @@ export default function ContractDetailPage() {
             )}
             {contract.status === "rascunho" && (
               <ItemMenu
-                titulo="Cancelar este contrato"
-                dica="O contrato fica como cancelado; nada é apagado."
+                titulo="Descartar rascunho (cliente desistiu)"
+                dica="O contrato fica com status cancelado; nada é apagado."
                 perigo
                 onClick={() =>
-                  handleStatusChange("cancelado", "Cancelar este contrato? Ele fica com o status cancelado; nada é apagado.")
+                  handleStatusChange("cancelado", "Descartar este rascunho (cliente desistiu)? O contrato fica com status cancelado; nada é apagado.")
                 }
               />
             )}
