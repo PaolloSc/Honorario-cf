@@ -34,6 +34,15 @@ function StatusBadge({ status }: { status: string }) {
 
 const formatDate = formatarDataHora;
 
+function ItemNovo({ href, titulo, dica }: { href: string; titulo: string; dica: string }) {
+  return (
+    <a href={href} className="block rounded-md px-3 py-2 hover:bg-background">
+      <span className="block text-sm font-medium text-foreground">{titulo}</span>
+      <span className="block text-xs text-muted">{dica}</span>
+    </a>
+  );
+}
+
 export default function ContractsPage() {
   const sessionStatus = useAuthStatus();
   const podeConsumidor = useAcessoConsumidor();
@@ -81,38 +90,28 @@ export default function ContractsPage() {
             {data ? `${data.total} contrato${data.total !== 1 ? "s" : ""}` : "Carregando..."}
           </p>
         </div>
-        {/* Dois tipos de contrato: o botao precisa dizer qual. */}
-        <div className="flex flex-wrap gap-2">
-          <a
-            href="/"
-            className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition text-sm"
-          >
-            + Honorários
-          </a>
-          {podeConsumidor && (
-            <a
-              href="/consumidor"
-              className="px-5 py-2.5 border border-primary text-primary rounded-lg font-medium hover:bg-primary/5 transition text-sm"
-            >
-              + Ação de Consumo
-            </a>
-          )}
-          {/* Aditivo e distrato nascem na página do contrato; para contrato antigo fora do sistema, estes atalhos.
-              O substabelecimento sai junto com o distrato. */}
-          <a
-            href="/documentos/novo?tipo=aditivo"
-            className="px-5 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-background transition text-sm"
-          >
-            Aditivo de contrato antigo
-          </a>
-          <a
-            href="/documentos/novo?tipo=distrato"
-            className="px-5 py-2.5 border border-border text-foreground rounded-lg font-medium hover:bg-background transition text-sm"
-          >
-            Distrato de contrato antigo
-          </a>
-        </div>
+        {/* Uma ação principal: "Novo contrato", com cada tipo explicado no menu. */}
+        <details className="relative">
+          <summary className="list-none cursor-pointer select-none px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-dark transition text-sm">
+            Novo contrato ▾
+          </summary>
+          <div className="absolute right-0 z-20 mt-1 w-80 max-w-[90vw] rounded-lg border border-border bg-card p-1 shadow-lg">
+            <ItemNovo href="/" titulo="Contrato de honorários" dica="Assistente completo: partes, escopo, honorários e envio." />
+            {podeConsumidor && (
+              <ItemNovo href="/consumidor" titulo="Ação de consumo" dica="Contrato de consumidor (ex.: aéreo)." />
+            )}
+          </div>
+        </details>
       </div>
+
+      {/* Aditivo e distrato nascem na página do contrato. Só para contrato antigo, feito fora
+          do sistema, estes atalhos discretos (o substabelecimento sai junto com o distrato). */}
+      <p className="-mt-3 mb-6 text-xs text-muted">
+        Aditivo ou distrato de contrato antigo (fora do sistema):{" "}
+        <a href="/documentos/novo?tipo=aditivo" className="text-primary hover:underline">aditivo</a>
+        {" · "}
+        <a href="/documentos/novo?tipo=distrato" className="text-primary hover:underline">distrato</a>
+      </p>
 
       <RascunhosPendentes />
 
@@ -187,7 +186,9 @@ export default function ContractsPage() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           {derivado && <span aria-hidden className="text-muted">↳</span>}
-                          <p className="font-medium text-foreground">{c.client_name || "—"}</p>
+                          <a href={`/contracts/${c.contract_id}`} className="font-medium text-foreground hover:underline">
+                            {c.client_name || "—"}
+                          </a>
                           <TipoBadge tipo={c.tipo_contrato} />
                         </div>
                         <p className="text-xs text-muted">{c.client_email || c.contract_id.slice(0, 8)}</p>
@@ -213,14 +214,17 @@ export default function ContractsPage() {
                           href={`/contracts/${c.contract_id}`}
                           className="px-3 py-1.5 text-xs font-medium text-primary border border-primary/30 rounded-md hover:bg-primary/5 transition"
                         >
-                          Ver
+                          Abrir
                         </a>
-                        <a
-                          href={`/contracts/${c.contract_id}/edit`}
-                          className="px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 rounded-md hover:bg-accent/5 transition"
-                        >
-                          Editar
-                        </a>
+                        {/* Enviado/assinado não se edita (a página do contrato explica o porquê). */}
+                        {c.status !== "enviado" && c.status !== "assinado" && (
+                          <a
+                            href={`/contracts/${c.contract_id}/edit`}
+                            className="px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 rounded-md hover:bg-accent/5 transition"
+                          >
+                            Editar
+                          </a>
+                        )}
                       </div>
                     </td>
                   </tr>
