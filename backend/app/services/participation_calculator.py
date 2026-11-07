@@ -25,7 +25,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Optional
+
+from app.services.pagamento_calculator import dinheiro
 
 DATA_VIGENCIA = date(2024, 8, 1)
 DATA_CORTE_RETROATIVA = date(2024, 7, 31)
@@ -108,7 +111,7 @@ def validar_participacao(
 
 @dataclass
 class ResultadoCalculo:
-    valor_participacao: float
+    valor_participacao: Decimal
     dentro_limite_temporal: bool
     vinculo_ativo: bool
     motivo_zerado: Optional[str] = None
@@ -116,7 +119,7 @@ class ResultadoCalculo:
 
 def calcular_valor_participacao(
     *,
-    valor_liquido_recebido: float,
+    valor_liquido_recebido,
     percentual_captacao: float,
     percentual_performance: float,
     tipo_honorario: str,
@@ -134,16 +137,16 @@ def calcular_valor_participacao(
     - Se data_recebimento < 2024-08-01 → zero (não retroativo).
     """
     if not eh_contratual:
-        return ResultadoCalculo(0.0, False, vinculo_ativo, "Honorário não-contratual (sucumbencial)")
+        return ResultadoCalculo(Decimal(0), False, vinculo_ativo, "Honorário não-contratual (sucumbencial)")
 
     if data_recebimento <= DATA_CORTE_RETROATIVA:
-        return ResultadoCalculo(0.0, False, vinculo_ativo, "Recebimento anterior à vigência (31/07/2024)")
+        return ResultadoCalculo(Decimal(0), False, vinculo_ativo, "Recebimento anterior à vigência (31/07/2024)")
 
     if not vinculo_ativo:
-        return ResultadoCalculo(0.0, True, False, "Vínculo encerrado")
+        return ResultadoCalculo(Decimal(0), True, False, "Vínculo encerrado")
 
     if data_fim_vinculo and data_recebimento > data_fim_vinculo:
-        return ResultadoCalculo(0.0, True, False, "Recebimento após término do vínculo")
+        return ResultadoCalculo(Decimal(0), True, False, "Recebimento após término do vínculo")
 
     limite_anos = LIMITES_TEMPORAIS_ANOS.get(tipo_honorario)
     dentro_limite = True
@@ -166,8 +169,8 @@ def calcular_valor_participacao(
                 f"Limite temporal de {limite_anos} ano(s) ultrapassado para tipo '{tipo_honorario}'",
             )
 
-    percentual_total = (percentual_captacao or 0.0) + (percentual_performance or 0.0)
-    valor = round(valor_liquido_recebido * percentual_total / 100.0, 2)
+    percentual_total = Decimal(str(percentual_captacao or 0)) + Decimal(str(percentual_performance or 0))
+    valor = dinheiro(Decimal(str(valor_liquido_recebido)) * percentual_total / 100)
     return ResultadoCalculo(valor, dentro_limite, True, None)
 
 

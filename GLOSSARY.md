@@ -28,6 +28,10 @@ _Avoid_: formData, estado das etapas
 O que a API devolve quando algo falha: texto fixo, escrito para o usuário, sem o texto da exceção (que pode trazer CPF, nome, SQL ou resposta crua de terceiros). O detalhe técnico vai só para o log. Mensagens prontas em `backend/app/utils/erros.py`; o 500 não tratado vira `MSG_ERRO_INTERNO` em `main.py`.
 _Avoid_: str(e) na resposta, detail com a exceção
 
+**Pagamento de participação**:
+Um recebimento de honorário e a participação que ele gera para o beneficiário. Nasce sempre em `pagamento_participacao.registrar`, seja digitado pelo financeiro ou vindo de uma NFS-e recebida: mesmas regras (imposto pelo tax code, limite temporal por tipo, fim do vínculo, corte de 31/07/2024). Só o rateio 50/50 de honorário não discriminado existe apenas no registro manual. Dinheiro em Decimal.
+_Avoid_: Lançamento, repasse
+
 ## Passo a passo (wizard)
 
 **Etapa**:

@@ -1,7 +1,9 @@
 """Cria registro em participacao_pagamentos para uma NFSe vinculada.
 
 Idempotente: se NFSe.pagamento_id ja existe, retorna sem criar duplicata.
-Calcula valor_participacao = valor_liquido * percentual_total / 100.
+O calculo e' o mesmo do registro manual (pagamento_participacao.registrar): a NFS-e
+entra como recebimento discriminado, com valor_bruto = valor dos servicos e o tax code
+padrao. Se o banco nao tem o tax code padrao, a aliquota sai da propria nota.
 """
 from __future__ import annotations
 
@@ -11,6 +13,9 @@ from decimal import Decimal
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from app.database import ParticipacaoDB
+from app.services.pagamento_participacao import Recebimento, registrar, tax_code_padrao
 
 
 @dataclass
@@ -23,65 +28,52 @@ class PagamentoResult:
 def gerar_pagamento_para_nfse(db: Session, nfse_id: int) -> PagamentoResult:
     row = db.execute(
         text("""
-            SELECT id, participacao_id, pagamento_id, valor_liquido, data_emissao, status_matching
+            SELECT id, participacao_id, pagamento_id, valor_servicos, valor_liquido,
+                   data_emissao, numero
             FROM nfse_recebidas WHERE id = :i
         """),
         {"i": nfse_id},
     ).fetchone()
     if row is None:
         raise ValueError(f"NFSe {nfse_id} nao encontrada")
-    _, participacao_id, pagamento_id, valor_liquido, data_emissao, _status = row
+    _, participacao_id, pagamento_id, valor_servicos, valor_liquido, data_emissao, numero = row
 
     if pagamento_id:
         return PagamentoResult(nfse_id=nfse_id, pagamento_id=pagamento_id, motivo="ja_vinculada")
     if not participacao_id:
         return PagamentoResult(nfse_id=nfse_id, pagamento_id=None, motivo="sem_participacao")
 
-    part = db.execute(
-        text("""
-            SELECT percentual_captacao, percentual_performance, vinculo_ativo
-            FROM participacoes WHERE id = :i
-        """),
-        {"i": participacao_id},
-    ).fetchone()
-    if part is None:
+    p = db.get(ParticipacaoDB, participacao_id)
+    if p is None:
         return PagamentoResult(nfse_id=nfse_id, pagamento_id=None, motivo="participacao_inexistente")
-    pct_cap, pct_perf, ativo = part
-    if not ativo:
-        return PagamentoResult(nfse_id=nfse_id, pagamento_id=None, motivo="vinculo_inativo")
 
-    pct_total = Decimal(str(pct_cap or 0)) + Decimal(str(pct_perf or 0))
-    valor_part = (Decimal(str(valor_liquido)) * pct_total / Decimal("100")).quantize(Decimal("0.01"))
+    bruto = Decimal(str(valor_servicos))
+    tc = tax_code_padrao(db)
+    aliquota = None
+    if tc is None:  # banco sem o tax code padrao: usa a retencao da propria nota
+        aliquota = (bruto - Decimal(str(valor_liquido))) / bruto if bruto else Decimal(0)
 
-    now = datetime.now(timezone.utc)
-    db.execute(
-        text("""
-            INSERT INTO participacao_pagamentos (
-                participacao_id, data_recebimento, valor_liquido_recebido,
-                valor_participacao, dentro_limite_temporal, observacoes,
-                registrado_por, status, parcela_num, parcela_total, created_at
-            ) VALUES (
-                :pid, :dt, :vl, :vp, TRUE, 'NFS-e auto', 'sistema',
-                'aguardando_pagamento', 1, 1, :now
-            )
-        """),
-        {
-            "pid": participacao_id,
-            "dt": data_emissao,
-            "vl": float(valor_liquido),
-            "vp": float(valor_part),
-            "now": now,
-        },
+    if isinstance(data_emissao, str):
+        data_emissao = datetime.fromisoformat(data_emissao).date()
+    elif isinstance(data_emissao, datetime):
+        data_emissao = data_emissao.date()
+
+    pag = registrar(
+        db,
+        p,
+        Recebimento(
+            data_recebimento=data_emissao,
+            valor_bruto=bruto,
+            nf_referencia=str(numero) if numero else None,
+            observacoes="NFS-e auto",
+        ),
+        registrado_por="sistema",
+        tax_code=tc,
+        aliquota_total=aliquota,
     )
-    new_id = (
-        db.execute(text("SELECT last_insert_rowid()")).scalar()
-        if db.bind.dialect.name == "sqlite"
-        else db.execute(text("SELECT lastval()")).scalar()
-    )
-
     db.execute(
         text("UPDATE nfse_recebidas SET pagamento_id = :p, atualizado_em = :now WHERE id = :i"),
-        {"p": new_id, "now": now, "i": nfse_id},
+        {"p": pag.id, "now": datetime.now(timezone.utc), "i": nfse_id},
     )
     db.commit()
-    return PagamentoResult(nfse_id=nfse_id, pagamento_id=new_id)
+    return PagamentoResult(nfse_id=nfse_id, pagamento_id=pag.id)
