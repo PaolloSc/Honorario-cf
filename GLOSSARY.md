@@ -70,3 +70,7 @@ _Avoid_: dispatch, parse do form_data
 **Assinatura (envio)**:
 Enviar a última **Versão do contrato** para assinatura no DocuSeal. É o caso de uso `enviar(db, contract_id, signatarios, user_email)` em `backend/app/services/assinatura.py`: sócio que assina pelo escritório, testemunha fixa, papéis únicos, ordem de assinatura, reenvio (arquiva a submissão anterior) e auditoria. A rota só traduz HTTP (`EnvioInvalido` → 400, `ArquivoNaoEncontrado` → 404). O DocuSeal entra pelo parâmetro `docuseal`, que é o seam dos testes.
 _Avoid_: send_for_signature (nome da rota), submissão (é do DocuSeal)
+
+**Capacidade**:
+O que um papel (admin, advogado, financeiro, leitor) pode fazer: administrar, operar o financeiro, ler o financeiro, ver contratos de todos. A tabela papel → capacidades vive em `backend/app/acesso.py`; as rotas pedem a capacidade (`exigir(...)` / `pode(...)`) e nunca comparam o texto do papel.
+_Avoid_: checar `user.role == "admin"` na rota

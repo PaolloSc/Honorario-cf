@@ -5,11 +5,11 @@ import re
 from datetime import date as _date, datetime, datetime as _dt, timedelta as _td, timezone, timezone as _tz
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import require_financeiro
 from app.config import settings
 from app.database import SessionLocal, get_db
 from app.models.nfse import NFSeOut, SyncJobOut, VincularRequest
@@ -45,13 +45,6 @@ def nfse_health() -> dict:
     }
 
 
-def _require_financeiro(user=Depends(get_current_user)):
-    role = user.get("role") if isinstance(user, dict) else getattr(user, "role", None)
-    if role not in ("financeiro", "admin"):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acesso restrito ao financeiro")
-    return user
-
-
 def _nfse_out(row) -> NFSeOut:
     return NFSeOut.model_validate(dict(row._mapping))
 
@@ -63,7 +56,7 @@ def listar_nfse(
     status: Optional[str] = None,
     direcao: Optional[str] = Query(None, pattern=r"^(emitida|recebida)$"),
     db: Session = Depends(get_db),
-    user=Depends(_require_financeiro),
+    user=Depends(require_financeiro),
 ):
     if not settings.nfse_enabled:
         raise HTTPException(404, "NFS-e desabilitado")
@@ -95,7 +88,7 @@ def vincular_manual(
     nfse_id: int,
     body: VincularRequest,
     db: Session = Depends(get_db),
-    user=Depends(_require_financeiro),
+    user=Depends(require_financeiro),
 ):
     if not settings.nfse_enabled:
         raise HTTPException(404, "NFS-e desabilitado")
@@ -157,7 +150,7 @@ def vincular_manual(
 def sync_manual(
     cnpj_prestador: str,
     db: Session = Depends(get_db),
-    user=Depends(_require_financeiro),
+    user=Depends(require_financeiro),
 ):
     """Registra intencao de sync manual; execucao remota fica fora deste sprint."""
     if not settings.nfse_enabled:

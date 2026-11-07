@@ -10,6 +10,7 @@ import jwt
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.acesso import PAPEIS_DEV, Capacidade, Papel, pode
 from app.config import settings
 from app.database import UserDB, get_db, utcnow
 
@@ -23,7 +24,7 @@ class CurrentUser:
     azure_id: str
     email: str
     name: str
-    role: str  # "advogado" | "admin" | "financeiro" | "leitor"
+    role: str  # ver app.acesso.Papel
 
 
 CONVITE_AZURE_ID = "convite::link"
@@ -36,7 +37,7 @@ def _enforce_readonly(request: Request, user: CurrentUser) -> CurrentUser:
     # ponytail: 'leitor' = somente leitura. Bloqueia toda escrita num ponto unico
     # (todas as rotas autenticadas passam por get_current_user), em vez de blindar
     # rota a rota e arriscar esquecer uma.
-    if user.role == "leitor" and request.method in _WRITE_METHODS:
+    if user.role == Papel.LEITOR and request.method in _WRITE_METHODS:
         raise HTTPException(403, "Conta somente leitura: ação de escrita não permitida")
     return user
 
@@ -171,7 +172,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
         if dev_email:
             dev_role = request.headers.get("X-Dev-User-Role", "advogado")
             dev_name = request.headers.get("X-Dev-User-Name", dev_email.split("@")[0])
-            if dev_role not in ("admin", "advogado", "financeiro"):
+            if dev_role not in PAPEIS_DEV:
                 raise HTTPException(422, "X-Dev-User-Role inválida")
             azure_id = f"dev::{dev_email}"
             user = _get_or_create_user(db, azure_id, dev_email, dev_name)
@@ -220,13 +221,24 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
     ))
 
 
-def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-    if user.role != "admin":
-        raise HTTPException(403, "Acesso restrito a administradores")
-    return user
+_NEGADO = {
+    Capacidade.ADMINISTRAR: "Acesso restrito a administradores",
+    Capacidade.OPERAR_FINANCEIRO: "Acesso restrito ao setor financeiro",
+    Capacidade.LER_FINANCEIRO: "Acesso restrito ao setor financeiro",
+}
 
 
-def require_financeiro(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-    if user.role not in ("financeiro", "admin"):
-        raise HTTPException(403, "Acesso restrito ao setor financeiro")
-    return user
+def exigir(capacidade: Capacidade):
+    """Dependencia FastAPI: 403 para quem nao tem a capacidade (ver app.acesso)."""
+
+    def _dep(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if not pode(user, capacidade):
+            raise HTTPException(403, _NEGADO.get(capacidade, "Sem permissão"))
+        return user
+
+    return _dep
+
+
+require_admin = exigir(Capacidade.ADMINISTRAR)
+require_financeiro = exigir(Capacidade.OPERAR_FINANCEIRO)
+require_leitura_financeiro = exigir(Capacidade.LER_FINANCEIRO)
