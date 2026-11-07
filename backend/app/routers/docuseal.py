@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +22,7 @@ from app.utils.erros import MSG_ERRO_DOCUSEAL, MSG_ERRO_INTERNO
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/docuseal", tags=["DocuSeal"])
 
-DOCUSEAL_WEBHOOK_SECRET = os.getenv("DOCUSEAL_WEBHOOK_SECRET", "")
+DOCUSEAL_WEBHOOK_SECRET = settings.docuseal_webhook_secret
 
 
 class DocuSealRequest(BaseModel):

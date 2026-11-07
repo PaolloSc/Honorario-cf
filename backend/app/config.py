@@ -1,5 +1,4 @@
 import logging
-import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
@@ -43,21 +42,34 @@ class Settings(BaseSettings):
 
     # Quem pode usar o contrato de Acao de Consumo (aerea). Lista de e-mails
     # separados por virgula; admin sempre pode. Vazio = so' admin.
-    consumidor_emails: str = os.getenv("CONSUMIDOR_EMAILS", "")
+    consumidor_emails: str = ""
 
-    financeiro_email: str = os.getenv("FINANCEIRO_EMAIL", "financeiro@carvalhofurtadoadv.com.br,gabriel@carvalhofurtadoadv.com.br")
-
-    cf_signer_email: str = os.getenv("CF_SIGNER_EMAIL", "contrato@carvalhofurtadoadv.com.br")
-
+    # Dados do escritorio: sem valor padrao no codigo (nada de dado pessoal aqui).
+    # Em producao sao obrigatorios (ver ESSENCIAIS_PRODUCAO).
+    financeiro_email: str = ""        # lista separada por virgula
+    cf_signer_email: str = ""
     # Testemunha 1 fixa (financeiro) injetada em toda submissao p/ assinatura.
     # Email unico (financeiro_email pode ser lista, nao serve p/ submitter DocuSeal).
-    testemunha1_nome: str = os.getenv("TESTEMUNHA1_NOME", "Lilian Silveira Correa")
-    testemunha1_email: str = os.getenv("TESTEMUNHA1_EMAIL", "financeiro@carvalhofurtadoadv.com.br")
+    # O nome vem do cadastro de colaboradores; este e' so' a reserva.
+    testemunha1_nome: str = ""
+    testemunha1_email: str = ""
+    bank_account_info: str = ""       # conta/Pix que aparece na clausula de pagamento
 
-    bank_account_info: str = os.getenv(
-        "BANK_ACCOUNT_INFO",
-        "Banco Inter, agência 0001, conta corrente 17841983-4, ou chave Pix (CNPJ) 25463159000173",
-    )
+    # Segredo do aviso (webhook) do DocuSeal. Sem ele todo aviso da' 403.
+    docuseal_webhook_secret: str = ""
+
+    # Banco: vazio = SQLite local (honorarios.db), so' para desenvolvimento.
+    database_url: str = ""
+
+    # Legal One (so' leitura). Sem credenciais, a busca de partes fica desligada.
+    legalone_api_client_id: str = ""
+    legalone_api_client_secret: str = ""
+    legalone_api_token_url: str = "https://api.thomsonreuters.com/legalone/oauth?grant_type=client_credentials"
+    legalone_api_base: str = "https://api.thomsonreuters.com/legalone/v1/api/rest"
+
+    # A Vercel define VERCEL_ENV=production no deploy de producao (e no homolog,
+    # que tambem roda como producao). E' o que liga a checagem estrita.
+    vercel_env: str = ""
 
     template_path: str = "templates/timbrado_peticao_1.dotx"
     output_dir: str = "generated_contracts"
@@ -83,24 +95,45 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": str(ENV_FILE), "env_file_encoding": "utf-8"}
 
-    def validate_critical(self) -> None:
-        missing = []
-        if not self.azure_tenant_id:
-            missing.append("AZURE_TENANT_ID")
-        if not self.azure_client_id:
-            missing.append("AZURE_CLIENT_ID")
-        if not self.azure_client_secret:
-            missing.append("AZURE_CLIENT_SECRET")
+    def faltando(self) -> list[str]:
+        """Nomes das variaveis essenciais sem valor."""
+        missing = [nome for nome, campo in ESSENCIAIS if not getattr(self, campo)]
+        if self.vercel_env == "production":
+            missing += [nome for nome, campo in ESSENCIAIS_PRODUCAO if not getattr(self, campo)]
         if self.nfse_enabled:
-            if not self.nfse_kek:
-                missing.append("NFSE_KEK")
-            if not self.nfse_worker_token:
-                missing.append("NFSE_WORKER_TOKEN")
-        if missing:
-            _config_logger.warning(
-                "Variáveis de configuração críticas não definidas: %s",
-                ", ".join(missing),
-            )
+            missing += [n for n, c in (("NFSE_KEK", "nfse_kek"), ("NFSE_WORKER_TOKEN", "nfse_worker_token"))
+                        if not getattr(self, c)]
+        return missing
+
+    def validate_critical(self) -> None:
+        """Em producao, nao sobe sem o essencial; fora dela, so' avisa."""
+        missing = self.faltando()
+        if not missing:
+            return
+        if self.vercel_env == "production":
+            raise RuntimeError("Configuração essencial ausente em produção: " + ", ".join(missing))
+        _config_logger.warning(
+            "Variáveis de configuração críticas não definidas: %s",
+            ", ".join(missing),
+        )
+
+
+ESSENCIAIS = (
+    ("AZURE_TENANT_ID", "azure_tenant_id"),
+    ("AZURE_CLIENT_ID", "azure_client_id"),
+    ("AZURE_CLIENT_SECRET", "azure_client_secret"),
+)
+# So' cobradas em producao: em dev/teste o SQLite e o DocuSeal desligado bastam.
+ESSENCIAIS_PRODUCAO = (
+    ("DATABASE_URL", "database_url"),
+    ("DOCUSEAL_API_KEY", "docuseal_api_key"),
+    ("DOCUSEAL_WEBHOOK_SECRET", "docuseal_webhook_secret"),
+    ("FINANCEIRO_EMAIL", "financeiro_email"),
+    ("CF_SIGNER_EMAIL", "cf_signer_email"),
+    ("TESTEMUNHA1_NOME", "testemunha1_nome"),
+    ("TESTEMUNHA1_EMAIL", "testemunha1_email"),
+    ("BANK_ACCOUNT_INFO", "bank_account_info"),
+)
 
 
 settings = Settings()

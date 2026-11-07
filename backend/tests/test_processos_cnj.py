@@ -53,8 +53,8 @@ def test_processo_do_substabelecimento_aceita_numero_sem_mascara(client):
 # --- Legal One: so leitura, silencioso sem credencial -------------------------------------------
 
 def test_sem_credencial_nao_consulta_nada(monkeypatch):
-    monkeypatch.delenv("LEGALONE_API_CLIENT_ID", raising=False)
-    monkeypatch.delenv("LEGALONE_API_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_id", "")
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_secret", "")
     chamadas = []
     monkeypatch.setattr(legalone_leitura.httpx, "get", lambda *a, **k: chamadas.append(1))
     monkeypatch.setattr(legalone_leitura.httpx, "post", lambda *a, **k: chamadas.append(1))
@@ -63,8 +63,8 @@ def test_sem_credencial_nao_consulta_nada(monkeypatch):
 
 
 def test_numero_nao_mascarado_nao_entra_no_filtro(monkeypatch):
-    monkeypatch.setenv("LEGALONE_API_CLIENT_ID", "x")
-    monkeypatch.setenv("LEGALONE_API_CLIENT_SECRET", "y")
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_id", "x")
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_secret", "y")
     assert legalone_leitura.partes_do_processo("1' or '1'='1") is None
 
 
@@ -80,8 +80,8 @@ class _Resp:
 
 
 def _fake_legalone(monkeypatch, participantes):
-    monkeypatch.setenv("LEGALONE_API_CLIENT_ID", "x")
-    monkeypatch.setenv("LEGALONE_API_CLIENT_SECRET", "y")
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_id", "x")
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_secret", "y")
     monkeypatch.setattr(legalone_leitura, "_token", "t")
     monkeypatch.setattr(legalone_leitura, "_token_expira", 9e12)
     pedidos = []
@@ -259,8 +259,8 @@ def test_planilha_segue_quando_o_legalone_falha_ou_nao_conhece(client, monkeypat
 
 
 def test_planilha_sem_credencial_nao_consulta(client, monkeypatch):
-    monkeypatch.delenv("LEGALONE_API_CLIENT_ID", raising=False)
-    monkeypatch.delenv("LEGALONE_API_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_id", "")
+    monkeypatch.setattr(legalone_leitura.settings, "legalone_api_client_secret", "")
     chamadas = []
     monkeypatch.setattr(legalone_leitura, "partes_do_processo", lambda n: chamadas.append(n))
     assert _enviar(client, "p.xlsx", _xlsx([["Número"], [PROC_A["numero"]]])).status_code == 200

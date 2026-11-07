@@ -4,17 +4,18 @@ Nunca grava nada no Legal One. Sem credenciais, ou com qualquer falha, devolve N
 quem chama segue com as partes digitadas.
 """
 import logging
-import os
 import re
 import time
 from typing import Optional
 
 import httpx
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
-TOKEN_URL = os.getenv("LEGALONE_API_TOKEN_URL", "https://api.thomsonreuters.com/legalone/oauth?grant_type=client_credentials")
-BASE_URL = os.getenv("LEGALONE_API_BASE", "https://api.thomsonreuters.com/legalone/v1/api/rest")
+TOKEN_URL = settings.legalone_api_token_url
+BASE_URL = settings.legalone_api_base
 TIMEOUT = 8  # a tela espera por isso: melhor sem preenchimento do que travada
 
 _token: Optional[str] = None
@@ -23,7 +24,7 @@ _CNJ = re.compile(r"^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$")
 
 
 def _credenciais() -> Optional[tuple[str, str]]:
-    cid, sec = os.getenv("LEGALONE_API_CLIENT_ID"), os.getenv("LEGALONE_API_CLIENT_SECRET")
+    cid, sec = settings.legalone_api_client_id, settings.legalone_api_client_secret
     return (cid, sec) if cid and sec else None
 
 
