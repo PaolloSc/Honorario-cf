@@ -1,6 +1,4 @@
-import { fetchAutenticado } from "./api";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
+import { chamarApiJson } from "./http";
 
 export interface TaxCode {
   id: number;
@@ -59,16 +57,8 @@ export const LABEL_TIPO_DOC: Record<TipoDocumento, string> = {
   recibo: "Recibo",
 };
 
-async function _fetch<T>(path: string, init?: RequestInit): Promise<T> {
-  // fetchAutenticado renova o id_token vencido e repete o request uma vez em
-  // caso de 401 — sem isso a tela quebrava com "401 Token expirado".
-  const r = await fetchAutenticado(`${API_BASE}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-  return r.json();
-}
+// Cliente único (./http): renova o token, base de URL única, erro como ErroApi.
+const _fetch = chamarApiJson;
 
 export const taxCodeApi = {
   listar: (incluirInativos = false) =>

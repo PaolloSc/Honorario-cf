@@ -1,7 +1,5 @@
-import { fetchAutenticado } from "./api";
+import { chamarApi, chamarApiJson } from "./http";
 import type { StatusFatura } from "./emissao";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
 
 export interface EmissorOut {
   configurado: boolean;
@@ -138,16 +136,11 @@ export interface EventoNota {
   criado_em: string | null;
 }
 
-async function pedir<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetchAutenticado(`${API_BASE}${path}`, init);
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-  return r.status === 204 ? (undefined as T) : r.json();
-}
+// Sem limite de tempo: emitir/consultar falam com a SEFIN, que pode demorar.
+const pedir = chamarApiJson;
 
-const JSON_HEADERS = { "Content-Type": "application/json" };
 const enviar = (method: string, body: unknown): RequestInit => ({
   method,
-  headers: JSON_HEADERS,
   body: JSON.stringify(body),
 });
 
@@ -190,8 +183,7 @@ export const emissaoApi = {
   nota: (id: number) => pedir<NotaEmitida & { eventos: EventoNota[] }>(`/api/nfse-emitidas/${id}`),
   consultarNota: (id: number) => pedir<NotaEmitida>(`/api/nfse-emitidas/${id}/consultar`, { method: "POST" }),
   baixarXml: async (n: NotaEmitida) => {
-    const r = await fetchAutenticado(`${API_BASE}/api/nfse-emitidas/${n.id}/xml`);
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    const r = await chamarApi(`/api/nfse-emitidas/${n.id}/xml`);
     const url = URL.createObjectURL(await r.blob());
     const a = document.createElement("a");
     a.href = url;

@@ -55,7 +55,7 @@ export function digitos(v: string): string {
   return v.replace(/\D/g, "");
 }
 
-/** Mensagem legível de um erro da API ("409 {"detail":"..."}" ou 422 com lista). */
+/** Mensagem legível de um erro da API ("API error 409: {"detail":"..."}" ou 422 com lista). */
 export function mensagemDeErro(e: unknown): string {
   const bruto = e instanceof Error ? e.message : String(e);
   const json = /\{[\s\S]*\}$/.exec(bruto);
@@ -72,11 +72,11 @@ export function mensagemDeErro(e: unknown): string {
   return bruto;
 }
 
-/** Erro de rede (sem resposta da API): as respostas da API chegam como "NNN corpo". Só neste caso
- *  repetir a mesma tentativa (mesma Idempotency-Key) é o caminho certo. */
+/** Erro de rede (sem resposta da API): as respostas da API chegam como ErroApi ("API error NNN: corpo").
+ *  Só neste caso repetir a mesma tentativa (mesma Idempotency-Key) é o caminho certo. */
 export function ehErroDeRede(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e);
-  return !/^\d{3}\b/.test(msg);
+  return !/^API error \d{3}: /.test(msg);
 }
 
 /** Texto do resultado de uma emissão, para o aviso depois do botão Emitir. */
