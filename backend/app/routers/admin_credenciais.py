@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import require_admin
 from app.config import settings
 from app.database import get_db
 from app.models.nfse import CredencialPbhCreate, CredencialPbhOut
@@ -16,12 +16,6 @@ from app.utils.documento import normalizar_doc
 
 
 router = APIRouter(prefix="/api/admin/credencial-pbh", tags=["admin-nfse"])
-
-
-def _require_admin(user=Depends(get_current_user)):
-    if (user.get("role") if isinstance(user, dict) else getattr(user, "role", None)) != "admin":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Apenas admin")
-    return user
 
 
 def _ensure_enabled() -> None:
@@ -35,7 +29,7 @@ def _ensure_enabled() -> None:
 def upsert_credencial(
     body: CredencialPbhCreate,
     db: Session = Depends(get_db),
-    user=Depends(_require_admin),
+    user=Depends(require_admin),
 ):
     _ensure_enabled()
     cnpj = normalizar_doc(body.cnpj_prestador)
@@ -114,7 +108,7 @@ def upsert_credencial(
 
 
 @router.get("", response_model=list[CredencialPbhOut])
-def listar(db: Session = Depends(get_db), user=Depends(_require_admin)):
+def listar(db: Session = Depends(get_db), user=Depends(require_admin)):
     _ensure_enabled()
     rows = db.execute(
         text("""SELECT id, cnpj_prestador, ativo, criado_em, criado_por, motivo_inativacao
@@ -138,7 +132,7 @@ def desativar(
     cnpj: str,
     motivo: str = "",
     db: Session = Depends(get_db),
-    user=Depends(_require_admin),
+    user=Depends(require_admin),
 ):
     _ensure_enabled()
     cnpj = normalizar_doc(cnpj)

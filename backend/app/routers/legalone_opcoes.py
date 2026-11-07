@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
+from app.acesso import Capacidade, pode
 from app.auth import CurrentUser, get_current_user, require_admin
 from app.database import LEGALONE_TIPOS_VALIDOS, LegalOneOpcaoDB, get_db, utcnow
 
@@ -76,7 +77,7 @@ def list_opcoes(
     Ver as inativas é assunto de admin — é o que a tela de manutenção usa, e o 403
     daqui é o que faz aquela tela mostrar "Acesso Restrito" a quem não é admin.
     """
-    if incluir_inativos and user.role != "admin":
+    if incluir_inativos and not pode(user, Capacidade.ADMINISTRAR):
         raise HTTPException(403, "Apenas administradores veem opcoes inativas")
     q = db.query(LegalOneOpcaoDB)
     if not incluir_inativos:

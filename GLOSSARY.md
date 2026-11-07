@@ -74,3 +74,7 @@ _Avoid_: send_for_signature (nome da rota), submissão (é do DocuSeal)
 **Documento (CPF/CNPJ)**:
 O número de CPF ou CNPJ de uma parte, sempre comparado e guardado na forma normalizada de `backend/app/utils/documento.py` (`normalizar_doc`): sem pontuação, maiúsculo, **com** as letras do CNPJ alfanumérico. Todo módulo (contrato, distrato, substabelecimento, NFS-e, faturamento) usa essa função; não existe outra forma de "tirar a pontuação".
 _Avoid_: so_digitos, limpar CNPJ (apaga letras)
+
+**Capacidade**:
+O que um papel (admin, advogado, financeiro, leitor) pode fazer: administrar, operar o financeiro, ler o financeiro, ver contratos de todos. A tabela papel → capacidades vive em `backend/app/acesso.py`; as rotas pedem a capacidade (`exigir(...)` / `pode(...)`) e nunca comparam o texto do papel.
+_Avoid_: checar `user.role == "admin"` na rota
