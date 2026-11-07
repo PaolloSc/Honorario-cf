@@ -93,6 +93,10 @@ _Avoid_: checar `user.role == "admin"` na rota
 O único caminho do front para falar com a API: `frontend/src/app/lib/http.ts`. Uma base de URL (`API_BASE`), token renovado na hora da chamada, limite de tempo opcional por chamada (`timeoutMs`). `api.ts`, `emissao-api.ts`, `finance-api.ts`, `nfse-api.ts` e as páginas só chamam `chamarApi`/`chamarApiJson`; nenhuma tela faz `fetch` direto para a API.
 _Avoid_: request, _fetch, pedir (eram os quatro clientes antigos)
 
+**Erro por campo**:
+422 de uma regra do contrato que diz qual campo falhou: o `loc` vem com o caminho do campo (ex.: `body.escopos.0.pro_labore.numero_parcelas`) e o `type` é `regra_contrato`. No backend sai de `_falha(loc, msg)` em `backend/app/models/contract.py` (hoje: regras de parcelamento do pró-labore e dos adicionais); no front, `errosPorCampo` em `frontend/src/app/lib/erro422.ts` devolve `{caminho: mensagem}`. Regra sem campo continua com `loc` só `body` e aparece pelo `textoDoErro`.
+_Avoid_: ValueError sem campo para regra de um campo só, procurar o campo pelo texto da mensagem
+
 **Erro da API**:
 Resposta da API com status de erro. No front é sempre `ErroApi` (`status` + `corpo` cru), com a mensagem no formato `API error NNN: corpo`; o 409 é `ConflitoError`, o 401 sem sessão é `SessaoExpiradaError`. Falha de rede ou tempo esgotado não é Erro da API (não houve resposta).
 _Avoid_: erro cru, HTTP error

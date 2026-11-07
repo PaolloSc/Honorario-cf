@@ -5,7 +5,8 @@ from datetime import date
 from enum import Enum
 from typing import Any, Literal, Optional
  
-from pydantic import BaseModel, Field, ValidationInfo, model_validator
+from pydantic import BaseModel, Field, ValidationError, ValidationInfo, model_validator
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from app.models.limites import LimiteTamanhos
 from app.utils.documento import normalizar_doc
@@ -461,7 +462,15 @@ def _conferir_participacao(p: "Participacao") -> None:
 
 
 
-def _checar_parcelamento_pl(pl, pre: str, rotulo: str) -> None:
+def _falha(loc: tuple, msg: str):
+    """Regra violada num campo: o 422 sai com o caminho do campo em loc (a tela marca o campo).
+    ValueError sozinho iria para a raiz do request, sem dizer qual campo."""
+    raise ValidationError.from_exception_data(
+        "ContratoRequest", [InitErrorDetails(type=PydanticCustomError("regra_contrato", msg), loc=loc, input=None)]
+    )
+
+
+def _checar_parcelamento_pl(pl, pre: str, rotulo: str, loc: tuple) -> None:
     if pl.tipo_parcelamento != "mensal":
         return
     n = pl.numero_parcelas or 0
@@ -469,14 +478,19 @@ def _checar_parcelamento_pl(pl, pre: str, rotulo: str) -> None:
         try:
             date.fromisoformat(pl.data_primeira_parcela[:10])
         except ValueError:
-            raise ValueError(pre + f"{rotulo}: data da primeira parcela inválida.")
-        if n < 1 or not pl.valor_total or pl.valor_total <= 0:
-            raise ValueError(pre + f"{rotulo} parcelado precisa do valor total e do número de parcelas.")
+            _falha((*loc, "data_primeira_parcela"), pre + f"{rotulo}: data da primeira parcela inválida.")
+        if n < 1:
+            _falha((*loc, "numero_parcelas"), pre + f"{rotulo} parcelado precisa do valor total e do número de parcelas.")
+        if not pl.valor_total or pl.valor_total <= 0:
+            _falha((*loc, "valor_total"), pre + f"{rotulo} parcelado precisa do valor total e do número de parcelas.")
         return
-    if not (n > 0 and pl.valor_parcela and pl.valor_parcela > 0):
-        raise ValueError(pre + f"{rotulo} mensal precisa do número de parcelas e do valor da parcela.")
+    if n <= 0:
+        _falha((*loc, "numero_parcelas"), pre + f"{rotulo} mensal precisa do número de parcelas e do valor da parcela.")
+    if not (pl.valor_parcela and pl.valor_parcela > 0):
+        _falha((*loc, "valor_parcela"), pre + f"{rotulo} mensal precisa do número de parcelas e do valor da parcela.")
     if pl.valor_total > 0 and abs(n * pl.valor_parcela - pl.valor_total) > 0.01 * n:
-        raise ValueError(pre + f"{rotulo}: número de parcelas × valor da parcela não bate com o valor total.")
+        _falha((*loc, "valor_parcela"), pre + f"{rotulo}: número de parcelas × valor da parcela não bate com o valor total.")
+
 
 def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
     h = e.honorarios
@@ -514,17 +528,17 @@ def _conferir_honorarios(i: int, e: "EscopoItem") -> None:
         checks.append((e.hora_trabalhada.valor_hora, "hora trabalhada"))
     pl = e.pro_labore
     if TipoHonorario.PRO_LABORE in h and pl:
-        _checar_parcelamento_pl(pl, pre, "pró-labore")
+        _checar_parcelamento_pl(pl, pre, "pró-labore", ("escopos", i - 1, "pro_labore"))
         # parcelamento descrito em texto pode ficar sem total
         if not (pl.tipo_parcelamento == "customizado" and (pl.parcelamento_customizado or "").strip()):
             checks.append((pl.valor_total, "pró-labore"))
-    for tipo, obj, rotulo in ((TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada, "adicional de hora trabalhada"),
-                              (TipoHonorario.PRO_LABORE, pl, "pró-labore adicional"),
-                              (TipoHonorario.MENSALIDADE, e.mensalidade, "adicional de mensalidade"),
-                              (TipoHonorario.EXITO, e.exito, "adicional de êxito")):
+    for tipo, obj, campo, rotulo in ((TipoHonorario.HORA_TRABALHADA, e.hora_trabalhada, "hora_trabalhada", "adicional de hora trabalhada"),
+                                     (TipoHonorario.PRO_LABORE, pl, "pro_labore", "pró-labore adicional"),
+                                     (TipoHonorario.MENSALIDADE, e.mensalidade, "mensalidade", "adicional de mensalidade"),
+                                     (TipoHonorario.EXITO, e.exito, "exito", "adicional de êxito")):
         if tipo in h and obj:
-            for ad in obj.adicionais:
-                _checar_parcelamento_pl(ad, pre, rotulo)
+            for k, ad in enumerate(obj.adicionais):
+                _checar_parcelamento_pl(ad, pre, rotulo, ("escopos", i - 1, campo, "adicionais", k))
                 if not (ad.tipo_parcelamento == "customizado" and (ad.parcelamento_customizado or "").strip()):
                     checks.append((ad.valor_total, rotulo))
     # mensalidade por faixas de preco pode ficar sem valor unico
