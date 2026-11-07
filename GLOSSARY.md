@@ -24,6 +24,10 @@ _Avoid_: Estado local
 O conjunto único de **Dados do contrato** que todas as **Etapas** leem e alteram. Há uma só fonte; as etapas não guardam cópia própria.
 _Avoid_: formData, estado das etapas
 
+**Mensagem de erro segura**:
+O que a API devolve quando algo falha: texto fixo, escrito para o usuário, sem o texto da exceção (que pode trazer CPF, nome, SQL ou resposta crua de terceiros). O detalhe técnico vai só para o log. Mensagens prontas em `backend/app/utils/erros.py`; o 500 não tratado vira `MSG_ERRO_INTERNO` em `main.py`.
+_Avoid_: str(e) na resposta, detail com a exceção
+
 ## Passo a passo (wizard)
 
 **Etapa**:

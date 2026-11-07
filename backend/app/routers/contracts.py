@@ -420,8 +420,10 @@ def update_contract(
         raise RequestValidationError([
             {**err, "loc": ("body", "form_data", *err["loc"])} for err in e.errors(include_context=False, include_url=False)
         ])
-    except Exception as e:
-        raise HTTPException(422, f"Dados invalidos: {e}")
+    except Exception:
+        # O texto da excecao pode trazer os dados digitados (CPF, nome): so' no log.
+        logger.exception("Dados invalidos na edicao de %s", contract_id)
+        raise HTTPException(422, "Dados invalidos.")
 
     congelada = _congelar_versao_atual(db, contract)
     try:
@@ -567,8 +569,10 @@ def rollback_contract(
     try:
         carregado = carregar_versao(target_ver)
         form_data, contrato_data, gen = carregado.form_data, carregado.request, carregado.gerador
-    except Exception as e:
-        raise HTTPException(422, f"Dados da versao {version} invalidos: {e}")
+    except Exception:
+        # str(ValidationError) traz input_value= (dados do cliente): so' no log.
+        logger.exception("Dados da versao %s de %s invalidos", version, contract_id)
+        raise HTTPException(422, f"Dados da versao {version} invalidos.")
 
     congelada = _congelar_versao_atual(db, contract)
     try:

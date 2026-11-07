@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -15,6 +16,8 @@ from app.models.nfse import IngestRequest, SyncJobOut
 from app.services.crypto import CryptoBox, EncryptedBlob, InvalidCipherError
 from app.services.nfse_sync import JobLockError, ingest_payload
 from app.utils.documento import normalizar_doc
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/nfse", tags=["nfse-internal"])
@@ -54,7 +57,8 @@ def fetch_credencial(
         login = box.decrypt(EncryptedBlob(nonce=nonce_login, ciphertext=login_enc))
         senha = box.decrypt(EncryptedBlob(nonce=nonce_senha, ciphertext=senha_enc))
     except InvalidCipherError as e:
-        raise HTTPException(500, f"falha decrypt: {e}") from e
+        logger.error("Falha ao decifrar a credencial de %s: %s", cnpj, e)
+        raise HTTPException(500, "falha decrypt") from e
     return {"login": login, "senha": senha}
 
 
