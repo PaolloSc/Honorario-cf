@@ -17,7 +17,7 @@ import type {
   TipoPessoa,
 } from "@/types/contract";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { desmontarEndereco, formatCEP, montarEndereco, type ViaCep } from "@/app/lib/endereco";
+import { buscarCep, desmontarEndereco, formatCEP, montarEndereco, type ViaCep } from "@/app/lib/endereco";
 
 function toTitleCase(str: string): string {
   return str
@@ -686,14 +686,12 @@ function PFForm({
     setLoadingCEP(true);
     setCepError(null);
     try {
-      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      const result = await res.json();
-      if (result.erro) {
+      const cData = await buscarCep(digits);
+      if (!cData) {
         setCepData(null);
         setCepError("CEP não encontrado. Digite o endereço completo abaixo.");
         return;
       }
-      const cData = { logradouro: result.logradouro, bairro: result.bairro, localidade: result.localidade, uf: result.uf };
       setCepData(cData);
       buildEndereco(cData, numero, complemento, formatCEP(digits));
     } catch {

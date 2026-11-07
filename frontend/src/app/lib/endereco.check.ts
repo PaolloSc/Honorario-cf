@@ -20,3 +20,27 @@ assert.deepEqual(desmontarEndereco("Rua X, 10, Bairro"), { cep: "", numero: "", 
 assert.deepEqual(desmontarEndereco(undefined), { cep: "", numero: "", complemento: "" });
 
 console.log("endereco.ts ok");
+
+// buscarCep: único ponto que fala com o ViaCEP (fetch simulado, sem rede)
+{
+  const { buscarCep } = await import("./endereco.ts");
+  const urls: string[] = [];
+  const responder = (status: number, corpo: unknown) => {
+    globalThis.fetch = (async (url: string) => {
+      urls.push(url);
+      return { ok: status === 200, status, json: async () => corpo };
+    }) as never;
+  };
+  responder(200, { logradouro: "Rua A", bairro: "Centro", localidade: "Cidade Exemplo", uf: "MG" });
+  assert.deepEqual(await buscarCep("30130-009"), { logradouro: "Rua A", bairro: "Centro", localidade: "Cidade Exemplo", uf: "MG" });
+  assert.equal(urls.at(-1), "https://viacep.com.br/ws/30130009/json/");
+  responder(200, { localidade: "Cidade Pequena", uf: "MG" }); // CEP único: sem rua nem bairro
+  assert.deepEqual(await buscarCep("39999999"), { logradouro: "", bairro: "", localidade: "Cidade Pequena", uf: "MG" });
+  responder(200, { erro: true });
+  assert.equal(await buscarCep("00000000"), null);
+  const antes = urls.length;
+  assert.equal(await buscarCep("301"), null); // incompleto: nem consulta
+  assert.equal(urls.length, antes);
+  responder(500, {});
+  await assert.rejects(buscarCep("30130009"));
+}
