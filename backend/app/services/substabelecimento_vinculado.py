@@ -26,18 +26,15 @@ from app.models.documentos_complementares import (
     nome_exibicao,
 )
 from app.services.contrato_carregado import get_generator
+from app.utils.documento import normalizar_doc
 
 MOTIVO_TRAVADO = "o substabelecimento existente já foi enviado para assinatura ou assinado e não pode ser alterado"
 
 
-def so_digitos(valor: str | None) -> str:
-    return re.sub(r"\D", "", valor or "")
-
-
 def documento_do_outorgante(form: dict) -> str:
-    """CPF/CNPJ (so digitos) do outorgante de um substabelecimento salvo; '' se nao informado."""
+    """CPF/CNPJ normalizado (letras do CNPJ alfanumerico ficam) do outorgante de um substabelecimento salvo; '' se nao informado."""
     o = form.get("outorgante") or {}
-    return so_digitos(o.get("cnpj") or o.get("cpf"))
+    return normalizar_doc(o.get("cnpj") or o.get("cpf"))
 
 
 def form_data_atual(contract: ContractDB, db: Session) -> dict:
