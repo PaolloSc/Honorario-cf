@@ -72,8 +72,8 @@ test.describe("contrato de honorarios: wizard ate a previa", () => {
     await expect(previa.locator("body")).toContainText("CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS", { timeout: 60_000 });
     await expect(previa.locator("body")).toContainText(/\[TESTE-QA-DELETAR\] MARIA WIZARD/i);
     await expect(previa.locator("body")).toContainText("R$ 2.500,00");
-    // Para aqui de proposito: "Apenas Gerar" tambem tenta mandar a ficha de participacao ao financeiro por e-mail.
-    await expect(page.getByRole("button", { name: "Apenas Gerar Contrato" })).toBeEnabled();
+    // Para aqui de proposito: "So salvar" tambem tenta mandar a ficha de participacao ao financeiro por e-mail.
+    await expect(page.getByRole("button", { name: "Só salvar o contrato (não envia nada)" })).toBeEnabled();
   });
 
   test("PJ: CNPJ consulta sozinho com 14 digitos; e-mail da empresa obrigatorio; e-mail do representante opcional", async ({ page }) => {
