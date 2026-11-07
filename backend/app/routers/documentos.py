@@ -8,8 +8,6 @@ os endpoints dos contratos. Aqui ficam so' a geracao e o pre-preenchimento.
 from __future__ import annotations
 
 import logging
-import tempfile
-from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -31,10 +29,10 @@ from app.models.documentos_complementares import (
     DistratoRequest,
     SubstabelecimentoRequest,
 )
-from app.routers.contract import _docx_to_html
 from app.routers.contracts import _check_access
 from app.services.ciclo_contrato import Arquivos, confirmar, travado
 from app.services.contrato_carregado import get_generator
+from app.services.previa_contrato import html_do_documento
 from app.utils.documento import normalizar_doc
 from app.utils.erros import MSG_ERRO_INTERNO
 from app.services.substabelecimento_vinculado import (
@@ -231,14 +229,7 @@ def previa_documento(
 ) -> HTMLResponse:
     """Previa do documento antes de gravar: nada vai para o banco."""
     data, _, _ = _montar(tipo, corpo, user, db)
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-    tmp_path = Path(tmp.name)
-    tmp.close()
-    try:
-        get_generator(tipo)._build_document(data).save(str(tmp_path))
-        return HTMLResponse(_docx_to_html(tmp_path))
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    return HTMLResponse(html_do_documento(get_generator(tipo)._build_document(data)))
 
 
 def _processos_novos(existente: ContractDB, data: SubstabelecimentoRequest, db: Session) -> tuple[SubstabelecimentoRequest, int]:

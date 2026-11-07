@@ -129,3 +129,12 @@ def test_erro_do_docuseal_nao_devolve_o_corpo_da_resposta_ao_usuario():
         svc.base_url, svc.api_key = "http://x", "k"
         r = asyncio.run(svc.send_for_signature(template_id=1, signatarios=[], send_email=False))
     assert r["success"] is False and "SEGREDO" not in r["message"] and "422" in r["message"]
+
+
+def test_nome_do_anexo_sanitiza_e_cai_no_generico():
+    from app.services.arquivo_contrato import nome_do_anexo
+
+    assert nome_do_anexo('Fulano/ "X"', "abc").startswith("Contrato Honorários — Fulano")
+    assert "/" not in nome_do_anexo("A/B", "abc") and '"' not in nome_do_anexo('A"B', "abc")
+    assert nome_do_anexo(None, "abc") == "contrato_honorarios_abc.docx"
+    assert nome_do_anexo("", "abc", "consumidor_aereo") == "contrato_servicos_abc.docx"

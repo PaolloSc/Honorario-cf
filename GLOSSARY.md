@@ -43,6 +43,10 @@ _Avoid_: caminho do arquivo genérico, placeholder
 **Contrato travado**:
 Enviado para assinatura ou assinado agora. Não se grava por cima; só o estado atual conta (cancelar o envio destrava).
 
+**Prévia**:
+O contrato (ou documento) em HTML, montado em memória a partir do DOCX do gerador, com o que a pessoa digitou marcado. Mora em `services/previa_contrato`; nunca grava arquivo nem vai ao banco. As rotas só autorizam e devolvem.
+_Avoid_: preview no router, arquivo temporário
+
 ## Passo a passo (wizard)
 
 **Etapa**:

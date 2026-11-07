@@ -129,7 +129,7 @@ def test_previa_honorarios_endpoint(client):
 
 
 def test_marcar_digitados_mostra_ia_ao_lado_do_digitado():
-    from app.routers.contract import _marcar_digitados
+    from app.services.previa_contrato import _marcar_digitados
 
     out = _marcar_digitados(
         "<p>condicionada ao seguinte: pagamento ate o vencimeto.</p>",
