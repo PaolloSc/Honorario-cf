@@ -214,6 +214,9 @@ export function ComboBox({ value, onChange, options, placeholder, error, clearab
           if (livre) onChange(e.target.value);
         }}
         onFocus={() => {
+          // Saiu e voltou em menos de 150 ms (ex.: foco por código): o "fim da edição"
+          // agendado no blur desligaria a digitação com o campo já focado.
+          if (blurTimeout.current) clearTimeout(blurTimeout.current);
           setEditing(true);
           digitou.current = false;
           setQuery(livre ? value : "");
