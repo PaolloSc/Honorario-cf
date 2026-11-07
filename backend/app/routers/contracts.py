@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.acesso import Capacidade, pode, pode_acessar_contrato
 from app.auth import CurrentUser, get_current_user
 from app.database import (
-    AuditLogDB,
     ContractDB,
     ContractVersionDB,
     ParticipacaoDB,
@@ -26,7 +23,14 @@ from app.models.documentos_complementares import (
     REQUESTS as REQUESTS_COMPLEMENTARES,
     TIPO_DISTRATO,
 )
-from app.models.contract import ContratoRequest
+from app.services.ciclo_contrato import (
+    Arquivos,
+    confirmar,
+    gravar_versao,
+    preparar_versao,
+    registrar_auditoria,
+    travado,
+)
 from app.services.contrato_carregado import carregar_versao, cliente_do_form_data, parse_form_data
 from app.services.substabelecimento_vinculado import sincronizar_do_distrato
 from app.utils.erros import MSG_ERRO_INTERNO
@@ -103,16 +107,8 @@ class UpdateContractRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────
 
-def _travado(contract: ContractDB, db: Session) -> bool:
-    """Enviado para assinatura ou assinado AGORA: nao se grava por cima.
-
-    So o estado atual conta: 'Cancelar envio' arquiva a submissao e volta a rascunho.
-    """
-    return contract.status in ("enviado", "assinado")
-
-
 def _exigir_editavel(contract: ContractDB, db: Session) -> None:
-    if not _travado(contract, db):
+    if not travado(contract):
         return
     assinado = contract.status == "assinado"
     raise HTTPException(409, {
@@ -132,43 +128,6 @@ def _exigir_versao_atual(contract: ContractDB, versao: int | None) -> None:
             "motivo": f"Este contrato foi alterado por outra pessoa ou aba (você abriu a versão {versao}; a atual é a {contract.current_version}).",
             "versao_atual": contract.current_version,
         })
-
-
-def _arquivo_da_versao(filepath: str | Path, contract_id: str, versao: int) -> str:
-    """Copia o DOCX para um nome proprio da versao (o gerador reaproveita sempre o mesmo nome)."""
-    origem = Path(filepath)
-    destino = origem.with_name(f"contrato_{contract_id}_v{versao}.docx")
-    if origem != destino:
-        shutil.copyfile(origem, destino)
-    return str(destino)
-
-
-def _congelar_versao_atual(db: Session, contract: ContractDB) -> tuple[Path, Path] | None:
-    """Antes de gerar a proxima versao, prende o DOCX da atual a um nome proprio.
-    Devolve (original, copia) se criou a copia, para a edicao poder desfazer se falhar."""
-    ver = (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract.contract_id, ContractVersionDB.version_number == contract.current_version)
-        .first()
-    )
-    if ver and ver.file_path and Path(ver.file_path).exists():
-        original = Path(ver.file_path)
-        ver.file_path = _arquivo_da_versao(original, contract.contract_id, ver.version_number)
-        if Path(ver.file_path) != original:
-            return original, Path(ver.file_path)
-    return None
-
-
-def _desfazer_arquivos(congelada: tuple[Path, Path] | None, novos: list[str]) -> None:
-    """Edicao que nao chegou ao banco: apaga o que ela criou e devolve ao arquivo original o conteudo da
-    versao anterior (o gerador o sobrescreve no lugar)."""
-    for f in novos:
-        Path(f).unlink(missing_ok=True)
-    if congelada:
-        original, copia = congelada
-        if copia.exists():
-            shutil.copyfile(copia, original)
-            copia.unlink(missing_ok=True)
 
 
 def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_data: dict, contrato_data, user: CurrentUser) -> None:
@@ -191,25 +150,6 @@ def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_dat
     ):
         for k, v in do_contrato.items():
             setattr(ficha, k, v)
-
-
-def _log_action(
-    db: Session,
-    contract_id: str,
-    action: str,
-    detail: str = "",
-    version: int | None = None,
-    user_email: str = "",
-):
-    entry = AuditLogDB(
-        contract_id=contract_id,
-        action=action,
-        detail=detail,
-        version_number=version,
-        user_email=user_email,
-        created_at=utcnow(),
-    )
-    db.add(entry)
 
 
 def _check_access(contract: ContractDB, user: CurrentUser):
@@ -425,58 +365,38 @@ def update_contract(
         logger.exception("Dados invalidos na edicao de %s", contract_id)
         raise HTTPException(422, "Dados invalidos.")
 
-    congelada = _congelar_versao_atual(db, contract)
+    arquivos = Arquivos()
     try:
-        _, filepath = gen.generate(contrato_data, contract_id=contract_id)
+        prep = preparar_versao(db, contract, gen, contrato_data, arquivos)
     except Exception as e:
-        db.rollback()  # a copia congelada ainda nao foi para o banco; o file_path alterado em memoria nao pode ir
-        _desfazer_arquivos(congelada, [])
         logger.error("Falha ao gerar a edicao de %s: %s", contract_id, e)
         raise HTTPException(500, MSG_ERRO_INTERNO)
 
     # Distrato que gerou um substabelecimento: mudar os dados aqui regera aquele documento.
     regerados: list[str] = []
     criados: list[str] = []
-    arquivos_novos: list[str] = []
     if contract.tipo_contrato == TIPO_DISTRATO:
         try:
-            regerados, criados, arquivos_novos = sincronizar_do_distrato(db, contract, body.form_data, user.email)
+            regerados, criados = sincronizar_do_distrato(db, contract, body.form_data, user.email, arquivos)
         except Exception as e:
             db.rollback()
-            _desfazer_arquivos(congelada, arquivos_novos)
+            arquivos.desfazer()
             logger.error("Falha ao atualizar o substabelecimento do distrato %s: %s", contract_id, e)
             raise HTTPException(500, MSG_ERRO_INTERNO)
 
-    new_version = contract.current_version + 1
-    filepath = _arquivo_da_versao(filepath, contract_id, new_version)
-    arquivos_novos.append(filepath)
+    new_version = prep.numero
     client_name, client_email = cliente_do_form_data(body.form_data)
-
-    version_entry = ContractVersionDB(
-        contract_id=contract_id,
-        version_number=new_version,
+    gravar_versao(
+        db, contract, prep,
         form_data_json=json.dumps(body.form_data, ensure_ascii=False),
-        file_path=str(filepath),
-        created_by=user.email,
-        created_at=utcnow(),
+        client_name=client_name, client_email=client_email, user_email=user.email,
+        acao="edicao", detalhe=f"Nova versao {new_version} gerada por {user.name}",
     )
-    db.add(version_entry)
-
-    contract.current_version = new_version
-    contract.client_name = client_name
-    contract.client_email = client_email
-    contract.status = "rascunho"
-    contract.updated_by = user.email
-    contract.updated_at = utcnow()
     _atualizar_documentos_do_cliente(db, contract, body.form_data, contrato_data, user)
 
-    _log_action(db, contract_id, "edicao", f"Nova versao {new_version} gerada por {user.name}", new_version, user.email)
-
     try:
-        db.commit()
+        confirmar(db, arquivos)  # nada de .docx sem registro
     except Exception as e:
-        db.rollback()
-        _desfazer_arquivos(congelada, arquivos_novos)  # nada de .docx sem registro
         logger.error("Falha ao gravar a edicao de %s: %s", contract_id, e)
         raise HTTPException(500, MSG_ERRO_INTERNO)
 
@@ -531,7 +451,7 @@ def update_contract_status(
     detalhe = f"{old_status} -> {status}"
     if fora_do_sistema:  # assinado em papel ou fora do DocuSeal: fica registrado quem marcou e quando
         detalhe += f" (assinado fora do sistema, marcado por {user.email})"
-    _log_action(db, contract_id, "mudanca_status", detalhe, user_email=user.email)
+    registrar_auditoria(db, contract_id, "mudanca_status", detalhe, user_email=user.email)
 
     db.commit()
     return {"success": True, "status": status}
@@ -574,45 +494,29 @@ def rollback_contract(
         logger.exception("Dados da versao %s de %s invalidos", version, contract_id)
         raise HTTPException(422, f"Dados da versao {version} invalidos.")
 
-    congelada = _congelar_versao_atual(db, contract)
+    arquivos = Arquivos()
     try:
-        _, filepath = gen.generate(contrato_data, contract_id=contract_id)
+        prep = preparar_versao(db, contract, gen, contrato_data, arquivos)
     except Exception as e:
-        db.rollback()
-        _desfazer_arquivos(congelada, [])
         logger.error("Falha ao gerar a reversao de %s: %s", contract_id, e)
         raise HTTPException(500, MSG_ERRO_INTERNO)
 
-    # Create a new version based on the old data
-    new_version = contract.current_version + 1
-    filepath = _arquivo_da_versao(filepath, contract_id, new_version)
+    new_version = prep.numero
     client_name, client_email = cliente_do_form_data(form_data)
-
-    version_entry = ContractVersionDB(
-        contract_id=contract_id,
-        version_number=new_version,
+    gravar_versao(
+        db, contract, prep,
         form_data_json=target_ver.form_data_json,
-        file_path=str(filepath),
-        created_by=user.email,
-        created_at=utcnow(),
+        client_name=client_name, client_email=client_email, user_email=user.email,
+        acao="rollback",
+        detalhe=f"Revertido para versao {version} (nova versao {new_version}) por {user.email}",
     )
-    db.add(version_entry)
-
-    contract.current_version = new_version
-    contract.client_name = client_name
-    contract.client_email = client_email
-    contract.status = "rascunho"
-    contract.updated_by = user.email
-    contract.updated_at = utcnow()
     _atualizar_documentos_do_cliente(db, contract, form_data, contrato_data, user)
 
-    _log_action(
-        db, contract_id, "rollback",
-        f"Revertido para versao {version} (nova versao {new_version}) por {user.email}",
-        new_version, user.email,
-    )
-
-    db.commit()
+    try:
+        confirmar(db, arquivos)
+    except Exception as e:
+        logger.error("Falha ao gravar a reversao de %s: %s", contract_id, e)
+        raise HTTPException(500, MSG_ERRO_INTERNO)
 
     return {
         "success": True,

@@ -114,3 +114,18 @@ def test_versao_inexistente_continua_404(client, advogado):
 
 def cid_morto() -> str:
     return str(uuid.uuid4())
+
+
+def test_erro_do_docuseal_nao_devolve_o_corpo_da_resposta_ao_usuario():
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.docuseal import DocuSealService
+
+    resposta = MagicMock(status_code=422, text="SEGREDO-DO-CORPO-DA-RESPOSTA")
+    svc = DocuSealService.__new__(DocuSealService)
+    with patch("httpx.AsyncClient") as cli:
+        cli.return_value.__aenter__.return_value.post = AsyncMock(return_value=resposta)
+        svc.base_url, svc.api_key = "http://x", "k"
+        r = asyncio.run(svc.send_for_signature(template_id=1, signatarios=[], send_email=False))
+    assert r["success"] is False and "SEGREDO" not in r["message"] and "422" in r["message"]

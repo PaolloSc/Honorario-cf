@@ -32,6 +32,17 @@ _Avoid_: str(e) na resposta, detail com a exceção
 Um recebimento de honorário e a participação que ele gera para o beneficiário. Nasce sempre em `pagamento_participacao.registrar`, seja digitado pelo financeiro ou vindo de uma NFS-e recebida: mesmas regras (imposto pelo tax code, limite temporal por tipo, fim do vínculo, corte de 31/07/2024). Só o rateio 50/50 de honorário não discriminado existe apenas no registro manual. Dinheiro em Decimal.
 _Avoid_: Lançamento, repasse
 
+**Ciclo do contrato**:
+Criar um contrato, gravar uma nova versão (edição ou reversão) e registrar a auditoria, sempre por `services/ciclo_contrato`. As rotas só decidem permissão e traduzem erros. Nada de .docx sem registro: se o banco não grava, o arquivo criado sai e o da versão anterior volta como estava.
+_Avoid_: montar `ContractVersionDB` ou `AuditLogDB` na rota
+
+**Arquivo da versão**:
+O DOCX de uma versão, `contrato_<id>_v<N>.docx`. O nome sem versão é só o da mais nova. Quem precisa do arquivo (download, assinatura, e-mail) pede a `arquivo_contrato.resolver_arquivo` com a versão; se o disco o perdeu, é refeito do banco no nome da própria versão, sem tocar nos outros. O aviso "em processamento" vale só para o download e nunca é gravado como arquivo da versão.
+_Avoid_: caminho do arquivo genérico, placeholder
+
+**Contrato travado**:
+Enviado para assinatura ou assinado agora. Não se grava por cima; só o estado atual conta (cancelar o envio destrava).
+
 ## Passo a passo (wizard)
 
 **Etapa**:

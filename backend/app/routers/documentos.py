@@ -33,6 +33,7 @@ from app.models.documentos_complementares import (
 )
 from app.routers.contract import _docx_to_html
 from app.routers.contracts import _check_access
+from app.services.ciclo_contrato import Arquivos, confirmar, travado
 from app.services.contrato_carregado import get_generator
 from app.utils.documento import normalizar_doc
 from app.utils.erros import MSG_ERRO_INTERNO
@@ -45,7 +46,6 @@ from app.services.substabelecimento_vinculado import (
     nova_versao,
     substabelecimento_do_distrato,
     substabelecimentos_do_outorgante,
-    travado,
 )
 
 logger = logging.getLogger(__name__)
@@ -282,7 +282,7 @@ def substabelecimento_existente(
             _check_access(c, user)
         except HTTPException:
             continue
-        lock = travado(c, db)
+        lock = travado(c)
         form = form_data_atual(c, db)
         return {
             "existe": True,
@@ -319,7 +319,7 @@ def gerar_documento(
         doc_alvo = documento_do_outorgante(form_data_atual(alvo, db))
         if not doc_alvo or doc_alvo != normalizar_doc(data.outorgante.cnpj or data.outorgante.cpf):
             raise HTTPException(422, "O substabelecimento a acrescentar é de outro outorgante")
-        if travado(alvo, db):
+        if travado(alvo):
             aviso = f"Foi criado um novo substabelecimento porque {MOTIVO_TRAVADO}."
         else:
             atual = SubstabelecimentoRequest(**form_data_atual(alvo, db))
@@ -336,11 +336,13 @@ def gerar_documento(
                     "contract_id": alvo.contract_id, "download_url": f"/api/contract/{alvo.contract_id}/download",
                     "aviso": None, "documentos_gerados_junto": [], "acrescentado": True, "processos_novos": 0,
                 }
+            arquivos = Arquivos()
             try:
-                nova_versao(db, alvo, combinado, user.email, f"{novos} processo(s) acrescentado(s)")
-                db.commit()
+                nova_versao(db, alvo, combinado, user.email, f"{novos} processo(s) acrescentado(s)", arquivos)
+                confirmar(db, arquivos)
             except Exception as e:
                 db.rollback()
+                arquivos.desfazer()
                 logger.error("Falha ao acrescentar processo: %s", e)
                 raise HTTPException(500, MSG_ERRO_INTERNO)
             return {
@@ -350,23 +352,20 @@ def gerar_documento(
             }
 
     # Todos os DOCX nascem juntos com os registros: se algo falhar, nenhum arquivo fica solto.
-    arquivos: list[str] = []
+    arquivos = Arquivos()
     try:
-        contract_id, arquivo = gravar_novo(db, tipo, data, origem, user.email)
-        arquivos.append(arquivo)
+        contract_id, _ = gravar_novo(db, tipo, data, origem, user.email, arquivos)
         extras = []
         if isinstance(data, DistratoRequest) and data.substabelecer_e_devolver and data.substabelecimento:
             sub = substabelecimento_do_distrato(data, contract_id)
-            cid, arquivo = gravar_novo(db, TIPO_SUBSTABELECIMENTO, sub, origem, user.email)
-            arquivos.append(arquivo)
+            cid, _ = gravar_novo(db, TIPO_SUBSTABELECIMENTO, sub, origem, user.email, arquivos)
             extras.append(cid)
-        db.commit()
+        confirmar(db, arquivos)
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        for f in arquivos:
-            Path(f).unlink(missing_ok=True)
+        arquivos.desfazer()
         logger.error("Falha ao gerar %s: %s", tipo, e)
         raise HTTPException(500, MSG_ERRO_INTERNO)
 
