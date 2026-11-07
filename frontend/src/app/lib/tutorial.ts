@@ -76,7 +76,7 @@ export const TOURS: Tour[] = [
       {
         titulo: "Status",
         texto:
-          "Rascunho: pode editar e enviar. Enviado: aguardando assinaturas no DocuSeal; para editar, cancele o envio. Assinado: não muda mais; para alterar, faça um aditivo.",
+          "Rascunho: pode editar e enviar. Enviado: aguardando assinaturas no DocuSeal; para editar, use “Cancelar o envio e voltar a editar”. Assinado: não muda mais; para alterar, faça um aditivo.",
       },
       {
         titulo: "Ação principal",
@@ -87,7 +87,7 @@ export const TOURS: Tour[] = [
       {
         titulo: "Mais ações",
         texto:
-          "Cópia para conferência por e-mail, novo contrato a partir deste, cancelar o envio, registrar assinatura feita em papel e cancelar o contrato. Cada item diz o que faz.",
+          "Cópia para conferência por e-mail, novo contrato a partir deste, cancelar o envio, registrar assinatura feita em papel e descartar o rascunho quando o cliente desiste. Cada item diz o que faz.",
         alvo: botao("Mais ações"),
       },
       {
