@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.acesso import PAPEIS
 from app.auth import CurrentUser, get_current_user, require_admin
 from app.models.oab import OabItem, oabs_de_json
 from app.database import (
@@ -119,7 +120,7 @@ def update_user_role(
     admin: CurrentUser = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    if body.role not in ("admin", "advogado", "financeiro", "leitor"):
+    if body.role not in PAPEIS:
         raise HTTPException(422, "Role invalida. Validos: admin, advogado, financeiro, leitor")
 
     user = db.query(UserDB).filter(UserDB.id == user_id).first()
