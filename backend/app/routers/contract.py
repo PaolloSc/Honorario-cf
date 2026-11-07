@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.acesso import Capacidade, pode, pode_acessar_contrato
 from app.auth import CurrentUser, get_current_user
 from app.config import settings
 from app.database import (
@@ -55,7 +56,7 @@ def _emails_consumidor() -> set[str]:
 
 def pode_usar_consumidor(user: CurrentUser) -> bool:
     """Contrato de consumo e' restrito a equipe indicada pelo escritorio."""
-    return user.role == "admin" or user.email.lower() in _emails_consumidor()
+    return pode(user, Capacidade.ADMINISTRAR) or user.email.lower() in _emails_consumidor()
 
 
 def exigir_acesso_consumidor(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
@@ -448,7 +449,7 @@ def download_contract(
     contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
-    if user.role != "admin" and contract.created_by != user.email:
+    if not pode_acessar_contrato(user, contract):
         raise HTTPException(403, "Sem permissao")
 
     # Find the file path from DB (specific version or latest)
@@ -983,7 +984,7 @@ def preview_contract(
     contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
-    if user.role != "admin" and contract.created_by != user.email:
+    if not pode_acessar_contrato(user, contract):
         raise HTTPException(403, "Sem permissao")
 
     try:
