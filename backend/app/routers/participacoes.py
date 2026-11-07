@@ -24,7 +24,7 @@ from app.services.financeiro_enums import (
     TIPOS_COBRANCA,
     TIPOS_DOCUMENTO,
 )
-from app.services.pagamento_calculator import calcular_componentes_pagamento
+from app.services.pagamento_participacao import Recebimento, registrar
 from app.services.participation_calculator import (
     DATA_VIGENCIA,
     LIMITES_TEMPORAIS_ANOS,
@@ -487,59 +487,26 @@ def registrar_pagamento(
         if not tc:
             raise HTTPException(500, "PADRAO_1545 ausente — rodar migration 0005")
 
-    comp = calcular_componentes_pagamento(
-        valor_bruto=body.valor_bruto,
-        aliquota_total=float(tc.aliquota_total),
-        percentual_captacao=p.percentual_captacao,
-        percentual_performance=p.percentual_performance,
-        discriminado=body.discriminado,
-        valor_contratual_informado=body.valor_contratual if body.discriminado else None,
-    )
-
-    resultado = calcular_valor_participacao(
-        valor_liquido_recebido=comp["valor_contratual"],
-        percentual_captacao=p.percentual_captacao,
-        percentual_performance=p.percentual_performance,
-        tipo_honorario=p.tipo_honorario,
-        data_inicio_participacao=p.data_inicio,
-        data_recebimento=body.data_recebimento,
-        vinculo_ativo=p.vinculo_ativo,
-        data_fim_vinculo=p.data_fim_vinculo,
-        eh_contratual=True,
-    )
-
-    valor_participacao_final = (
-        comp["valor_participacao"]
-        if resultado.dentro_limite_temporal and p.vinculo_ativo
-        else 0.0
-    )
-
-    obs = (body.observacoes or "")
-    if resultado.motivo_zerado:
-        obs = (obs + f" | {resultado.motivo_zerado}").strip(" |")
-    obs = obs or None
-
-    pag = ParticipacaoPagamentoDB(
-        participacao_id=p.id,
-        data_recebimento=body.data_recebimento,
-        valor_bruto=body.valor_bruto,
-        imposto_total=comp["imposto_total"],
-        valor_liquido_recebido=comp["valor_contratual"],
-        valor_participacao=valor_participacao_final,
-        dentro_limite_temporal=resultado.dentro_limite_temporal,
-        observacoes=obs,
-        status=body.status,
-        parcela_num=body.parcela_num,
-        parcela_total=body.parcela_total,
-        nf_referencia=body.nf_referencia,
-        tax_code_id=tc.id,
-        tipo_cobranca=body.tipo_cobranca or p.tipo_honorario,
-        natureza_pagamento=body.natureza_pagamento,
-        tipo_documento=body.tipo_documento,
+    pag = registrar(
+        db,
+        p,
+        Recebimento(
+            data_recebimento=body.data_recebimento,
+            valor_bruto=body.valor_bruto,
+            discriminado=body.discriminado,
+            valor_contratual=body.valor_contratual,
+            status=body.status,
+            parcela_num=body.parcela_num,
+            parcela_total=body.parcela_total,
+            nf_referencia=body.nf_referencia,
+            tipo_cobranca=body.tipo_cobranca,
+            natureza_pagamento=body.natureza_pagamento,
+            tipo_documento=body.tipo_documento,
+            observacoes=body.observacoes,
+        ),
         registrado_por=user.email,
-        created_at=utcnow(),
+        tax_code=tc,
     )
-    db.add(pag)
     db.commit()
     db.refresh(pag)
     return _pagamento_response(pag, tc)
