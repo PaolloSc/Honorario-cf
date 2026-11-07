@@ -11,13 +11,16 @@ generico, e o DOCX provisorio ("em processamento") nunca e' gravado como arquivo
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.config import BACKEND_DIR, settings
 from app.database import ContractDB, ContractVersionDB
-from app.services.contrato_carregado import carregar_versao
+from app.models.contrato_consumidor import TIPO_CONSUMIDOR_AEREO
+from app.models.documentos_complementares import ROTULO_DOCUMENTO
+from app.services.contrato_carregado import TIPO_HONORARIOS, carregar_versao
 
 logger = logging.getLogger(__name__)
 
@@ -117,3 +120,26 @@ def resolver_arquivo(
 
     logger.error("Arquivo do contrato %s nao encontrado (guardado=%s)", contract_id, ver.file_path if ver else "N/A")
     raise ArquivoNaoEncontrado(contract_id)
+
+
+_FILENAME_BAD = re.compile(r'[\r\n\t/\\:*?"<>|]+')
+
+
+def _parte_do_nome(name: str) -> str:
+    """Sanitiza um trecho vindo do usuário para uso em nome de arquivo/anexo."""
+    cleaned = " ".join(_FILENAME_BAD.sub(" ", name).split())
+    return cleaned[:120].strip()
+
+
+def nome_do_anexo(
+    client_name: str | None, contract_id: str, tipo: str = TIPO_HONORARIOS
+) -> str:
+    """Nome do anexo: o cliente precisa reconhecer o contrato pelo arquivo."""
+    consumidor = tipo == TIPO_CONSUMIDOR_AEREO
+    rotulo = ROTULO_DOCUMENTO.get(
+        tipo, "Contrato de Prestação de Serviços" if consumidor else "Contrato Honorários"
+    )
+    generico = f"contrato_{'servicos' if consumidor else 'honorarios'}_{contract_id}.docx"
+
+    nome = _parte_do_nome(client_name) if client_name else ""
+    return f"{rotulo} — {nome}.docx" if nome else generico

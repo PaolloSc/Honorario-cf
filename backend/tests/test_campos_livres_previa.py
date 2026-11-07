@@ -62,7 +62,7 @@ def test_mesmo_texto_em_dois_honorarios_destaca_os_dois(client, monkeypatch):
 
 
 def test_trecho_da_ia_com_inicial_maiuscula_casa_com_texto_em_minuscula():
-    from app.routers.contract import _marcar_digitados
+    from app.services.previa_contrato import _marcar_digitados
 
     out = _marcar_digitados(
         "<p>nos seguintes termos: até R$ 500 de abatimento.</p>",
@@ -94,7 +94,7 @@ def test_faixas_vao_para_a_ia():
 
 
 def test_fronteira_de_palavra_sim_nao_marca_assim():
-    from app.routers.contract import _achar_no_html
+    from app.services.previa_contrato import _achar_no_html
 
     assert _achar_no_html("<p>Assim fica combinado.</p>", "sim") is None
     assert _achar_no_html("<p>Assim ou sim, tanto faz.</p>", "sim") == "sim"
@@ -102,7 +102,7 @@ def test_fronteira_de_palavra_sim_nao_marca_assim():
 
 
 def test_texto_curto_ou_percentual_so_marca_se_unico():
-    from app.routers.contract import _achar_no_html
+    from app.services.previa_contrato import _achar_no_html
 
     duas = "<p>Desconto de 10% na parcela 1.</p><p>Multa de 10% ao ano.</p>"
     assert _achar_no_html(duas, "10%") is None
@@ -113,13 +113,13 @@ def test_texto_curto_ou_percentual_so_marca_se_unico():
 
 
 def test_nao_casa_dentro_de_tag():
-    from app.routers.contract import _achar_no_html
+    from app.services.previa_contrato import _achar_no_html
 
     assert _achar_no_html('<p style="background">texto</p>', "background") is None
 
 
 def test_destaques_sobrepostos_marcam_so_o_mais_longo():
-    from app.routers.contract import _marcar_digitados
+    from app.services.previa_contrato import _marcar_digitados
 
     out = _marcar_digitados(
         "<p>nos termos: pagamento em dia sempre.</p>",
@@ -131,7 +131,7 @@ def test_destaques_sobrepostos_marcam_so_o_mais_longo():
 
 
 def test_destaque_so_dentro_do_trecho_do_campo():
-    from app.routers.contract import _marcar_digitados
+    from app.services.previa_contrato import _marcar_digitados
 
     html = "<p>Cláusula A: pagamento em dia sempre.</p><p>Cláusula B: pagamento em dia sempre.</p>"
     b = html.index("<p>Cláusula B")
@@ -141,7 +141,7 @@ def test_destaque_so_dentro_do_trecho_do_campo():
 
 
 def test_trecho_vazio_nao_marca_nada():
-    from app.routers.contract import _marcar_digitados
+    from app.services.previa_contrato import _marcar_digitados
 
     assert "<mark" not in _marcar_digitados("<p>pagamento em dia</p>", [("pagamento em dia", [])], [])
 
@@ -162,7 +162,7 @@ def test_campo_so_e_marcado_no_bloco_gerado_por_ele(client, monkeypatch):
 
 
 def test_marcar_usa_fronteira_de_palavra():
-    from app.routers.contract import _marcar_digitados
+    from app.services.previa_contrato import _marcar_digitados
 
     out = _marcar_digitados("<p>Assim ficou, e sim, combinado.</p>", ["sim"], [])
     assert out.count("<mark") == 1 and ">sim</mark>" in out and "As<mark" not in out
@@ -187,7 +187,7 @@ def test_a_definir_nao_vai_a_ia():
 
 
 def test_achar_sem_destaque_aceita_texto_curto_repetido():
-    from app.routers.contract import _achar_no_html
+    from app.services.previa_contrato import _achar_no_html
 
     duas = "<p>Desconto de 10% na parcela 1.</p><p>Multa de 10% ao ano.</p>"
     assert _achar_no_html(duas, "10%") is None
@@ -195,7 +195,7 @@ def test_achar_sem_destaque_aceita_texto_curto_repetido():
 
 
 def test_falha_de_localizacao_tira_so_o_destaque(client, monkeypatch):
-    from app.routers import contract as c
+    from app.services import previa_contrato as c
 
     monkeypatch.setattr(c, "_trechos_do_campo", lambda *a, **k: None)
     e = _escopo("pro_labore")

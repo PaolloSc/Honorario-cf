@@ -48,7 +48,7 @@ def _preview_paras(req: dict) -> list[str]:
     """Parágrafos como o usuário os lê: com a numeração que o Word gera sozinho."""
     from pathlib import Path
 
-    from app.routers.contract import _docx_to_html
+    from app.services.previa_contrato import docx_para_html as _docx_to_html
 
     _, path = ContractGenerator().generate(ContratoRequest(**req), contract_id="FIDELIDADE_PREV")
     html = _docx_to_html(Path(path))
@@ -384,7 +384,7 @@ def test_preview_nao_vaza_tags_de_assinatura():
     """Feedback: as merge-tags do DocuSeal nao devem aparecer no preview HTML."""
     from pathlib import Path
 
-    from app.routers.contract import _docx_to_html
+    from app.services.previa_contrato import docx_para_html as _docx_to_html
 
     data = ContratoRequest(**_base_req())
     _, path = ContractGenerator().generate(data, contract_id="FIDELIDADE_PREVIEW")
@@ -422,7 +422,7 @@ def test_qualificacao_sem_virgula_dupla_com_campo_vazio():
 def test_preview_titulo_de_tabela_como_th_centralizado():
     from pathlib import Path
 
-    from app.routers.contract import _docx_to_html
+    from app.services.previa_contrato import docx_para_html as _docx_to_html
 
     data = ContratoRequest(**_base_req())
     _, path = ContractGenerator().generate(data, contract_id="FIDELIDADE_TH")
@@ -480,7 +480,7 @@ def test_preview_nao_junta_rotulo_com_a_linha_de_assinatura():
     """Na celula, cada paragrafo e' uma linha: o rotulo nao pode colar nos underscores."""
     from pathlib import Path
 
-    from app.routers.contract import _docx_to_html
+    from app.services.previa_contrato import docx_para_html as _docx_to_html
 
     data = ContratoRequest(**_base_req())
     _, path = ContractGenerator().generate(
