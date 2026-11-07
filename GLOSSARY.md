@@ -47,6 +47,14 @@ Enviado para assinatura ou assinado agora. Não se grava por cima; só o estado 
 O contrato (ou documento) em HTML, montado em memória a partir do DOCX do gerador, com o que a pessoa digitou marcado. Mora em `services/previa_contrato`; nunca grava arquivo nem vai ao banco. As rotas só autorizam e devolvem.
 _Avoid_: preview no router, arquivo temporário
 
+**Resultado da assinatura**:
+O que muda no contrato quando o DocuSeal conclui, recusa ou o envio é cancelado (status, auditoria, reflexo no contrato de origem de aditivo/distrato, ficha ao financeiro). Mora em `services/resultado_assinatura`; webhook, sincronização e cancelamento só autorizam e chamam. Idempotente: cada efeito acontece uma vez, mesmo com os caminhos juntos.
+_Avoid_: lógica de webhook no router
+
+**Ficha ao financeiro**:
+E-mail interno com o objeto do contrato e a participação. Texto e tabela são montados em `services/email_financeiro` (tudo escapado), tanto no envio manual quanto no automático quando todos assinam. O automático reserva o envio antes de mandar, então sai uma vez só.
+_Avoid_: ficha montada no router
+
 ## Passo a passo (wizard)
 
 **Etapa**:

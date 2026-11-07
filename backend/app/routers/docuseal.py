@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import hmac
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -11,19 +11,15 @@ from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
 from app.config import settings
-from app.database import AuditLogDB, ColaboradorDB, ContractDB, ContractVersionDB, get_db, utcnow
-from app.models.documentos_complementares import ROTULO_DOCUMENTO, TIPO_DISTRATO, TIPOS_COMPLEMENTARES
+from app.database import ColaboradorDB, ContractDB, ContractVersionDB, get_db
 from app.services.arquivo_contrato import ArquivoNaoEncontrado
 from app.services.docuseal import link_assinatura
-from app.services import assinatura, servicos_externos
+from app.services import assinatura, resultado_assinatura, servicos_externos
 from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_DOCUSEAL, MSG_ERRO_INTERNO
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/docuseal", tags=["DocuSeal"])
-
-DOCUSEAL_WEBHOOK_SECRET = settings.docuseal_webhook_secret
-
 
 class DocuSealRequest(BaseModel):
     contract_id: str
@@ -113,245 +109,7 @@ async def send_for_signature(
     )
 
 
-async def _send_contract_to_financeiro(
-    contract_id: str,
-    filepath: str,
-    contract: ContractDB | None,
-    db: Session,
-    user: CurrentUser,
-) -> None:
-    """Send a copy of the contract to the financeiro email."""
-    try:
-        email_service = servicos_externos.get_email_service()
-        client_name = contract.client_name if contract else "Cliente"
-
-        result = await email_service.send_email_with_attachment(
-            to_email=settings.financeiro_email,
-            to_name="Financeiro C&F",
-            subject=f"Cópia Contrato de Honorários — {client_name}",
-            attachment_path=filepath,
-            attachment_name=f"contrato_honorarios_{contract_id}.docx",
-        )
-
-        if result.get("success"):
-            logger.info("Contract copy sent to financeiro for contract %s", contract_id)
-            if contract:
-                db.add(AuditLogDB(
-                    contract_id=contract_id,
-                    action="envio_copia_financeiro",
-                    detail=f"Cópia do contrato enviada para {settings.financeiro_email}",
-                    version_number=contract.current_version,
-                    user_email=user.email,
-                    created_at=utcnow(),
-                ))
-                db.commit()
-        else:
-            logger.warning("Failed to send contract copy to financeiro: %s", result.get("error"))
-    except Exception as e:
-        logger.error("Error sending contract copy to financeiro: %s", e)
-
-
-async def _send_participacao_to_financeiro(
-    contract_id: str,
-    contract: ContractDB | None,
-    latest_ver: ContractVersionDB | None,
-    db: Session,
-    user_email: str,
-    contract_filepath: str | None = None,
-    momento_label: str = "Assinatura concluída por todas as partes",
-    subject_prefix: str = "Ficha de Participação (Assinado)",
-    audit_action: str = "envio_participacao_final",
-) -> None:
-    """Send participação sheet to financeiro based on stored form data.
-
-    Disparada quando TODAS as partes assinaram (webhook submission.completed).
-    `user_email` identifica quem originou o contrato (sem CurrentUser no webhook).
-    """
-    try:
-        if not latest_ver or not latest_ver.form_data_json:
-            return
-
-        form_data = json.loads(latest_ver.form_data_json)
-        participacao = form_data.get("participacao", {})
-
-        if not participacao.get("tem_participacao"):
-            return
-
-        client_name = contract.client_name if contract else "Cliente"
-
-        # Extract "Objeto do Contrato" from escopos - mirror ALL fields the lawyer filled
-        ESCOPO_LABELS = {
-            "consultoria_contencioso_geral": "Consultoria e contencioso nas areas de atuacao do C&F",
-            "contencioso_representacao": "Contencioso para representacao e atuacao em autos",
-            "contencioso_memoriais": "Contencioso para Memoriais e sustentacao oral",
-            "contencioso_tutela_urgencia": "Contencioso para tutela de urgencia",
-            "consultoria_lgpd": "Consultoria LGPD",
-            "consultoria_compliance_trabalhista": "Compliance Trabalhista",
-            "consultoria_planejamento_tributario": "Planejamento tributario",
-            "consultoria_diagnostico_fiscal": "Diagnostico fiscal",
-            "consultoria_planejamento_patrimonial": "Planejamento patrimonial",
-            "consultoria_estruturacao_societaria": "Estruturacao societaria",
-            "consultoria_contratual": "Analise contratual",
-            "consultoria_elaboracao_documentos": "Elaboracao de documentos",
-            "consultoria_opiniao_legal": "Opiniao legal / Parecer",
-            "outro": "",
-        }
-
-        escopos = form_data.get("escopos", [])
-        escopo_descriptions = []
-        for escopo in escopos:
-            parts = []
-            tipo = escopo.get("tipo_escopo") or escopo.get("tipo", "")
-            label = ESCOPO_LABELS.get(tipo, "")
-
-            # Main label (skip for "outro" since descricao_custom will cover it)
-            if label and tipo != "outro":
-                parts.append(label)
-
-            # Custom description
-            desc = escopo.get("escopo_personalizado") or escopo.get("descricao_custom", "")
-            if desc:
-                parts.append(desc)
-
-            # Process number
-            numero_autos = escopo.get("numero_autos", "")
-            if numero_autos:
-                parts.append(f"Processo: {numero_autos}")
-
-            # Demands
-            demandas = escopo.get("demandas", "")
-            if demandas:
-                parts.append(f"Demandas: {demandas}")
-
-            # People/assets
-            pessoas = escopo.get("pessoas_patrimonios", "")
-            if pessoas:
-                parts.append(f"Pessoas/Patrimonios: {pessoas}")
-
-            # Restructuring type
-            reestruturacao = escopo.get("tipo_reestruturacao", "")
-            if reestruturacao:
-                parts.append(f"Reestruturacao: {reestruturacao}")
-
-            # Documents
-            documentos = escopo.get("documentos", "")
-            if documentos:
-                parts.append(f"Documentos: {documentos}")
-
-            # Legal opinion topic
-            consulta = escopo.get("consulta", "")
-            if consulta:
-                parts.append(f"Consulta: {consulta}")
-
-            # Memorial activities
-            subtipo = escopo.get("subtipo_memoriais", {})
-            if subtipo:
-                atividades = []
-                if subtipo.get("elaboracao_memoriais"):
-                    atividades.append("Elaboracao de Memoriais")
-                if subtipo.get("despacho_memoriais"):
-                    atividades.append("Despacho de Memoriais")
-                if subtipo.get("sustentacao_oral_relator"):
-                    atividades.append("Sustentacao oral c/ Relator")
-                if subtipo.get("sustentacao_oral_todos_julgadores"):
-                    atividades.append("Sustentacao oral c/ todos os julgadores")
-                if atividades:
-                    parts.append(f"Atividades: {', '.join(atividades)}")
-
-            if parts:
-                escopo_descriptions.append(" | ".join(parts))
-
-        objeto_contrato = "\n".join(escopo_descriptions) if escopo_descriptions else "Nao especificado"
-
-        rows = []
-        # Objeto do contrato is the FIRST field (as requested by financeiro)
-        # Replace newlines with <br> for HTML rendering
-        rows.append(("Objeto do Contrato", objeto_contrato.replace("\n", "<br>")))
-        rows.extend(linhas_participacao(participacao))
-
-        if not rows:
-            return
-
-        table_rows = "".join(
-            f'<tr><td style="padding:8px;border:1px solid #D7D1CA;font-weight:600;">{k}</td>'
-            f'<td style="padding:8px;border:1px solid #D7D1CA;">{v}</td></tr>'
-            for k, v in rows
-        )
-
-        html = (
-            '<div style="font-family: Segoe UI, Tahoma, sans-serif; max-width: 600px;">'
-            '<div style="background-color: #1A3C34; padding: 20px 28px; border-radius: 8px 8px 0 0;">'
-            '<span style="color: #FFFFFF; font-size: 16px; font-weight: 500;">Ficha de Participação — Uso Interno</span>'
-            '</div>'
-            '<div style="padding: 24px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
-            f'<p><strong>Cliente:</strong> {client_name}</p>'
-            f'<p><strong>Contrato:</strong> {contract_id}</p>'
-            f'<p><strong>Registrado por:</strong> {user_email}</p>'
-            f'<p><strong>Momento:</strong> {momento_label}</p>'
-            '<table style="width:100%;border-collapse:collapse;margin-top:16px;">'
-            f'{table_rows}'
-            '</table>'
-            '</div></div>'
-        )
-
-        email_service = servicos_externos.get_email_service()
-
-        # Send with contract attachment if filepath is available
-        if contract_filepath and Path(contract_filepath).exists():
-            result = await email_service.send_html_email_with_attachment(
-                to_email=settings.financeiro_email,
-                to_name="Financeiro C&F",
-                subject=f"{subject_prefix} — {client_name}",
-                html_content=html,
-                attachment_path=contract_filepath,
-                attachment_name=f"contrato_honorarios_{contract_id}.docx",
-            )
-        else:
-            result = await email_service.send_html_email(
-                to_email=settings.financeiro_email,
-                to_name="Financeiro C&F",
-                subject=f"{subject_prefix} — {client_name}",
-                html_content=html,
-            )
-
-        if result.get("success"):
-            logger.info("Participacao sheet sent to financeiro for contract %s", contract_id)
-            if contract:
-                db.add(AuditLogDB(
-                    contract_id=contract_id,
-                    action=audit_action,
-                    detail=f"Ficha de participação enviada para {settings.financeiro_email}",
-                    version_number=contract.current_version,
-                    user_email=user_email,
-                    created_at=utcnow(),
-                ))
-                db.commit()
-        else:
-            logger.warning("Failed to send participacao to financeiro: %s", result.get("error"))
-    except Exception as e:
-        logger.error("Error sending participacao to financeiro: %s", e)
-
-
 # ── Webhook (no auth — called externally by DocuSeal) ───────────
-
-
-def _conclusao_docuseal(status_data: dict[str, Any]) -> str | None:
-    """Traduz o estado de uma submissao do DocuSeal para o nosso status.
-
-    Devolve "assinado", "recusado" ou None (ainda em andamento). O DocuSeal
-    mudou o formato entre versoes — ora resume em `status`, ora so' marca
-    `completed_at` em cada signatario — entao olhamos os tres sinais.
-    """
-    submitters = status_data.get("submitters") or []
-    resumo = str(status_data.get("status") or "").lower()
-
-    if resumo == "declined" or any(s.get("declined_at") for s in submitters):
-        return "recusado"
-    if resumo == "completed" or status_data.get("completed_at"):
-        return "assinado"
-    if submitters and all(s.get("completed_at") for s in submitters):
-        return "assinado"
-    return None
 
 
 def _assinante_para_tela(s: dict[str, Any]) -> dict[str, str]:
@@ -376,91 +134,6 @@ def _pendentes_docuseal(status_data: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
-def _refletir_na_origem(contract: ContractDB, db: Session) -> None:
-    """Aditivo assinado so' deixa auditoria no contrato de origem; distrato assinado o encerra.
-
-    Idempotente: o DocuSeal reentrega webhook e a sincronizacao roda a cada abertura da pagina.
-    """
-    if not contract.contrato_origem_id:
-        return
-    origem = db.query(ContractDB).filter(ContractDB.contract_id == contract.contrato_origem_id).first()
-    if origem is None:
-        return
-    rotulo = ROTULO_DOCUMENTO[contract.tipo_contrato]
-    acao = f"{contract.tipo_contrato}_assinado"
-    ja_registrado = (
-        db.query(AuditLogDB.id)
-        .filter(AuditLogDB.contract_id == origem.contract_id, AuditLogDB.action == acao,
-                AuditLogDB.detail.like(f"%{contract.contract_id}%"))
-        .first()
-    )
-    if not ja_registrado:
-        db.add(AuditLogDB(
-            contract_id=origem.contract_id, action=acao, created_at=utcnow(),
-            detail=f"{rotulo} assinado ({contract.contract_id})",
-        ))
-    if contract.tipo_contrato == TIPO_DISTRATO and origem.status != "encerrado":
-        origem.status = "encerrado"
-        origem.updated_at = utcnow()
-        db.add(AuditLogDB(
-            contract_id=origem.contract_id, action="encerramento", created_at=utcnow(),
-            detail=f"Contrato encerrado por distrato assinado ({contract.contract_id})",
-        ))
-    db.commit()
-
-
-async def _aplicar_conclusao(
-    contract: ContractDB,
-    version: ContractVersionDB,
-    novo_status: str,
-    acao: str,
-    detalhe: str,
-    db: Session,
-) -> None:
-    """Grava o status final e, se assinado, manda a ficha ao financeiro.
-
-    Idempotente dos dois lados: o DocuSeal reentrega webhook, e a sincronizacao
-    pode rodar a cada abertura da pagina do contrato.
-    """
-    if contract.status != novo_status:
-        contract.status = novo_status
-        contract.updated_at = utcnow()
-        db.add(AuditLogDB(
-            contract_id=contract.contract_id,
-            action=acao,
-            detail=detalhe,
-            version_number=version.version_number,
-            created_at=utcnow(),
-        ))
-        db.commit()
-        logger.info("Contract %s updated to status '%s' (%s)", contract.contract_id, novo_status, acao)
-
-    if novo_status != "assinado":
-        return
-
-    if contract.tipo_contrato in TIPOS_COMPLEMENTARES:
-        # Documento complementar nao gera ficha de participacao; so' reflete no contrato de origem.
-        _refletir_na_origem(contract, db)
-        return
-
-    ja_enviada = (
-        db.query(AuditLogDB)
-        .filter(
-            AuditLogDB.contract_id == contract.contract_id,
-            AuditLogDB.action == "envio_participacao_final",
-        )
-        .first()
-    )
-    if not ja_enviada:
-        await _send_participacao_to_financeiro(
-            contract.contract_id,
-            contract,
-            version,
-            db,
-            user_email=contract.created_by or "sistema",
-        )
-
-
 class DocuSealWebhookPayload(BaseModel):
     event_type: str
     data: dict[str, Any] = {}
@@ -474,7 +147,8 @@ async def docuseal_webhook(
 ):
     """Receive webhook events from DocuSeal (submission.completed / submission.declined)."""
     # Validate webhook secret
-    if not DOCUSEAL_WEBHOOK_SECRET or x_docuseal_secret != DOCUSEAL_WEBHOOK_SECRET:
+    segredo = settings.docuseal_webhook_secret
+    if not segredo or not hmac.compare_digest(x_docuseal_secret or "", segredo):
         raise HTTPException(status_code=403, detail="Invalid webhook secret")
 
     event_type = payload.event_type
@@ -500,7 +174,7 @@ async def docuseal_webhook(
 
     contract = db.query(ContractDB).filter(ContractDB.contract_id == version.contract_id).first()
     if contract:
-        await _aplicar_conclusao(
+        await resultado_assinatura.aplicar_conclusao(
             contract,
             version,
             new_status,
@@ -581,49 +255,12 @@ async def cancelar_envio_assinatura(
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato não encontrado")
     _check_access(contract, user)
-    if contract.status != "enviado":
-        raise HTTPException(status_code=409, detail="Só dá para cancelar o envio de um contrato que está aguardando assinaturas.")
-
-    versoes = (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract_id, ContractVersionDB.docuseal_submission_id.isnot(None))
-        .order_by(ContractVersionDB.version_number.desc())
-        .all()
-    )
-    if not versoes:
-        raise HTTPException(status_code=409, detail="Este contrato não tem envio para assinatura registrado.")
-
-    service = servicos_externos.get_docuseal_service()
-    arquivadas: list[str] = []
-    for i, v in enumerate(versoes):
-        sid = v.docuseal_submission_id
-        try:
-            ok = await service.archive_submission(sid)
-        except Exception as e:
-            logger.warning("Falha ao arquivar a submissao %s: %s", sid, e)
-            ok = False
-        if ok:
-            arquivadas.append(sid)
-        elif i == 0:  # a do envio atual precisa ser cancelada; as antigas ja' foram arquivadas no reenvio
-            raise HTTPException(
-                status_code=502,
-                detail="O DocuSeal não confirmou o cancelamento do envio. Nada foi alterado; tente de novo em instantes.",
-            )
-
-    ids = ", ".join(v.docuseal_submission_id for v in versoes)
-    nao_encontradas = [s for s in getattr(service, "nao_encontradas", []) if s in {v.docuseal_submission_id for v in versoes}]
-    nota_404 = f" O DocuSeal respondeu 404 para a submissão {', '.join(nao_encontradas)} (já apagada lá)." if nao_encontradas else ""
-    for v in versoes:
-        v.docuseal_submission_id = None
-    contract.status = "rascunho"
-    contract.updated_by = user.email
-    contract.updated_at = utcnow()
-    db.add(AuditLogDB(
-        contract_id=contract_id, action="cancelamento_envio",
-        detail=f"Envio para assinatura cancelado (submissão DocuSeal {ids}); contrato voltou a rascunho.{nota_404}",
-        version_number=contract.current_version, user_email=user.email, created_at=utcnow(),
-    ))
-    db.commit()
+    try:
+        await resultado_assinatura.cancelar_envio(db, contract, user.email)
+    except resultado_assinatura.EnvioNaoCancelavel as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except resultado_assinatura.DocuSealNaoConfirmou as e:
+        raise HTTPException(status_code=502, detail=str(e))
     return {"success": True, "status": contract.status}
 
 
@@ -636,7 +273,7 @@ async def sincronizar_status_assinatura(
     """Le a submissao no DocuSeal e conclui o contrato se todos ja' assinaram.
 
     O webhook e' o caminho normal, mas ele depende de configuracao externa
-    (DOCUSEAL_WEBHOOK_SECRET e o webhook cadastrado no DocuSeal) e de a chamada
+    (docuseal_webhook_secret e o webhook cadastrado no DocuSeal) e de a chamada
     chegar. Quando falta qualquer uma das duas pontas, o contrato ficava preso em
     "enviado" para sempre, mesmo com todas as assinaturas colhidas — e so' dava
     para destravar mudando o status na mao. Aqui o proprio sistema pergunta ao
@@ -663,7 +300,7 @@ async def sincronizar_status_assinatura(
         logger.warning("Falha ao consultar submissao %s: %s", version.docuseal_submission_id, e)
         raise HTTPException(status_code=502, detail=MSG_ERRO_DOCUSEAL)
 
-    conclusao = _conclusao_docuseal(status_data)
+    conclusao = resultado_assinatura.conclusao_docuseal(status_data)
     if not conclusao:
         pendentes = _pendentes_docuseal(status_data)
         nomes = ", ".join(f"{p['name']} ({p['role']})" for p in pendentes if p["name"])
@@ -680,7 +317,7 @@ async def sincronizar_status_assinatura(
             pendentes=pendentes,
         )
 
-    await _aplicar_conclusao(
+    await resultado_assinatura.aplicar_conclusao(
         contract,
         version,
         conclusao,
