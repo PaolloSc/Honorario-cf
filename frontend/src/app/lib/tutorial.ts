@@ -149,7 +149,7 @@ export const TOURS: Tour[] = [
       {
         titulo: "Reembolso e multa",
         texto: "Diga se o cliente reembolsa despesas (com ou sem limite) e se há multa de 10% por atraso.",
-        alvo: campo("Há reembolso de despesas"),
+        alvo: campo("Há reembolso de despesas"), // pai do rótulo = bloco dos interruptores reembolso e multa
       },
       {
         titulo: "Diligências e deslocamento",
