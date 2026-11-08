@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 from html import escape
-from typing import Any
+from typing import Any, Mapping
 
 from sqlalchemy.orm import Session
 
@@ -82,6 +82,28 @@ def objeto_do_contrato_salvo(contract_id: str, db: Session) -> str:
         return objeto_do_contrato(json.loads(ver.form_data_json))
     except (ValueError, TypeError):
         return ""
+
+
+# Campos que so' valem com participacao: o wizard guarda o que foi digitado antes de
+# desligar a chave, e isso nao pode chegar ao financeiro como se o contrato tivesse participacao.
+_CAMPOS_DE_PARTICIPACAO = (
+    "valor_tipo", "valor_percentual", "valor_monetario", "valor_outro", "percentual_ou_valor",
+    "participantes", "para_quem", "natureza", "responsavel_captacao",
+    "base_tipo", "base_escopo_index", "base_honorario", "base_label",
+)
+LINHA_SEM_PARTICIPACAO = ("Participação", "Sem participação")
+
+
+def linhas_da_ficha(objeto: str, participacao: Mapping[str, Any], tem_participacao: bool) -> list[tuple[str, str]]:
+    """Linhas da ficha: objeto, depois a participacao (ou 'Sem participacao') e o cadastro do financeiro.
+
+    A ficha sai sempre; sem participacao ela diz isso, em vez de omitir o assunto.
+    """
+    linhas: list[tuple[str, str]] = [("Objeto do Contrato", objeto)] if objeto else []
+    if tem_participacao:
+        return linhas + linhas_participacao(participacao)
+    resto = {k: v for k, v in participacao.items() if k not in _CAMPOS_DE_PARTICIPACAO}
+    return linhas + [LINHA_SEM_PARTICIPACAO] + linhas_participacao(resto)
 
 
 def montar_ficha_html(
@@ -180,17 +202,16 @@ def _liberar_reserva(db: Session, contract_id: str) -> None:
 async def enviar_ficha_assinada(db: Session, contract: ContractDB, version: ContractVersionDB | None) -> bool:
     """Ficha de participacao ao financeiro quando todas as partes assinaram. Uma vez so'.
 
-    Devolve True se mandou. Sem participacao no formulario, nao manda nada.
+    Devolve True se mandou. Sai sempre; sem participacao, diz "Sem participacao".
     """
-    if not version or not version.form_data_json:
+    if not version:
         return False
     try:
-        form_data = json.loads(version.form_data_json)
+        form_data = json.loads(version.form_data_json) if version.form_data_json else {}
     except (ValueError, TypeError):
         return False
     participacao = form_data.get("participacao") or {}
-    if not participacao.get("tem_participacao"):
-        return False
+    tem_participacao = bool(participacao.get("tem_participacao"))
 
     contract_id = contract.contract_id
     if not _reservar_envio(db, contract):
@@ -203,7 +224,7 @@ async def enviar_ficha_assinada(db: Session, contract: ContractDB, version: Cont
             cliente=cliente,
             contract_id=contract_id,
             registrado_por=contract.created_by or "sistema",
-            linhas=[("Objeto do Contrato", objeto), *linhas_participacao(participacao)],
+            linhas=linhas_da_ficha(objeto, participacao, tem_participacao),
             momento="Assinatura concluída por todas as partes",
         )
         resultado = await enviar_ficha(assunto=f"Ficha de Participação (Assinado) — {cliente}", html=html)
