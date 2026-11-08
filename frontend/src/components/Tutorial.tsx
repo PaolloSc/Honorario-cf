@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { tourDaRota } from "@/app/lib/tutorial";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { lerEtapa, ouvirEtapa, tourDaRota } from "@/app/lib/tutorial";
 
 // Tour guiado: abre sozinho na primeira visita de cada tela e pelo botão "?".
 // Visto/desligado fica no navegador da pessoa; sem localStorage, só não abre sozinho.
@@ -31,7 +31,9 @@ function gravar(k: string) {
 
 export default function Tutorial() {
   const pathname = usePathname();
-  const tour = tourDaRota(pathname);
+  // No assistente, cada etapa tem o seu tour: trocar de etapa troca o tour.
+  const etapa = useSyncExternalStore(ouvirEtapa, lerEtapa, () => 0);
+  const tour = tourDaRota(pathname, etapa);
   const [passo, setPasso] = useState<number | null>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const cartao = useRef<HTMLDivElement>(null);
