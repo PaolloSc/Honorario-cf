@@ -21,8 +21,9 @@ from app.models.documentos_complementares import (
     SubstabelecimentoRequest,
     nome_contratante,
 )
-from app.services.consumidor_generator import ConsumidorGenerator
-from app.services.contract_generator import MESES_PT_BR
+from app.services.contract_generator import MESES_PT_BR, ContractGenerator
+from app.services.pagina_documento import PaginaCompacta
+from app.services.qualificacao import qualificar_do_contrato_de_origem, qualificar_substabelecido
 from app.utils.currency import numero_com_extenso, valor_com_extenso
 
 ESCRITORIO_NOME = "CARVALHO & FURTADO ADVOGADOS"
@@ -49,7 +50,7 @@ def _data(iso: str | None) -> date:
     return date.fromisoformat(iso[:10]) if iso else date.today()
 
 
-class ComplementarGenerator(ConsumidorGenerator):
+class ComplementarGenerator(PaginaCompacta, ContractGenerator):
     """Base: titulo centralizado, corpo do tipo, fechamento com data e assinaturas."""
 
     TITULO = ""
@@ -76,36 +77,6 @@ class ComplementarGenerator(ConsumidorGenerator):
 
     def _fechamento(self, doc: Document, data, signatario_roles: list[dict] | None) -> None:
         raise NotImplementedError
-
-    # ── Partes ────────────────────────────────────────────────────
-
-    @staticmethod
-    def _cnpj_cpf(c: dict) -> str:
-        if c.get("cnpj"):
-            return f"inscrita no CNPJ sob o n.º {c['cnpj']}"
-        return f"CPF n.º {c.get('cpf', '')}"
-
-    def _qualificar(self, c: dict, *, com_representantes: bool = True) -> str:
-        """Qualificacao do contratante a partir do form_data do contrato de origem."""
-        nome = nome_contratante(c)
-        if c.get("cnpj"):
-            partes = [nome, "pessoa jurídica de direito privado", self._cnpj_cpf(c)]
-            if c.get("endereco"):
-                partes.append(f"com sede em {c['endereco']}")
-            reps = [r for r in (c.get("representantes") or []) if r.get("nome")] if com_representantes else []
-            if reps:
-                partes.append(
-                    "neste ato representada por "
-                    + "; e por ".join(
-                        ", ".join(filter(None, [r["nome"], f"CPF {r['cpf']}" if r.get("cpf") else None]))
-                        for r in reps
-                    )
-                )
-            return ", ".join(partes)
-        partes = [nome, c.get("nacionalidade"), c.get("estado_civil"), c.get("profissao"), self._cnpj_cpf(c)]
-        if c.get("endereco"):
-            partes.append(f"residente em {c['endereco']}")
-        return ", ".join(p for p in partes if p)
 
     def _data_extenso(self, iso: str | None) -> str:
         d = _data(iso)
@@ -173,7 +144,7 @@ class AditivoGenerator(ComplementarGenerator):
     def _corpo(self, doc: Document, data: AditivoRequest) -> None:
         doc.add_paragraph("Pelo presente instrumento particular, de um lado:")
         for c in data.contratantes:
-            doc.add_paragraph(f"{self._qualificar(c)}.")
+            doc.add_paragraph(f"{qualificar_do_contrato_de_origem(c)}.")
         doc.add_paragraph("E, de outro lado:")
         doc.add_paragraph(
             f"{ESCRITORIO_NOME}, pessoa jurídica de direito interno, sociedade simples de prestação de "
@@ -323,7 +294,7 @@ class DistratoGenerator(ComplementarGenerator):
             denominada = "denominada" if c.get("cnpj") else "denominado(a)"  # PJ: feminino; PF: sem presumir o genero
             # Sem contrato de origem o representante legal e' informado na tela e entra na qualificacao.
             doc.add_paragraph(
-                f"{self._qualificar(c, com_representantes=not data.contrato_origem_id)}; {denominada} apenas CONTRATANTE;"
+                f"{qualificar_do_contrato_de_origem(c, com_representantes=not data.contrato_origem_id)}; {denominada} apenas CONTRATANTE;"
             )
         doc.add_paragraph(
             f"{ESCRITORIO_NOME}, pessoa jurídica de direito interno, sociedade simples de prestação de "
@@ -414,22 +385,9 @@ class DistratoGenerator(ComplementarGenerator):
 class SubstabelecimentoGenerator(ComplementarGenerator):
     TITULO = "SUBSTABELECIMENTO SEM RESERVA DE PODERES"
 
-    @staticmethod
-    def _qualificar_substabelecido(s) -> str:
-        """Sem genero (formulario atual) o texto sai neutro; com genero (legado), como antes."""
-        if s.genero is None:
-            return f"{s.nome}, inscrito(a) na {s.oab}"
-        f = s.genero == "F"
-        nacionalidade = s.nacionalidade.strip() or ("brasileira" if f else "brasileiro")
-        partes = [f"{'Dra.' if f else 'Dr.'} {s.nome}", nacionalidade]
-        if s.estado_civil.strip():
-            partes.append(s.estado_civil.strip())
-        partes.append(f"{'inscrita' if f else 'inscrito'} na {s.oab}")
-        return ", ".join(partes)
-
     def _corpo(self, doc: Document, data: SubstabelecimentoRequest) -> None:
         substabelecentes = "; ".join(f"{s.nome.upper()}, {s.oab}" for s in data.substabelecentes)
-        substabelecidos = "; ".join(self._qualificar_substabelecido(s) for s in data.substabelecidos)
+        substabelecidos = "; ".join(qualificar_substabelecido(s) for s in data.substabelecidos)
         verbo = "substabelece" if len(data.substabelecentes) == 1 else "substabelecem"
         sem_genero = all(s.genero is None for s in data.substabelecidos)
         if len(data.substabelecidos) == 1:

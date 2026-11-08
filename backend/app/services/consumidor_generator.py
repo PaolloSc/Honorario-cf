@@ -12,14 +12,11 @@ dados bancarios, canais oficiais e os valores do milheiro.
 
 from __future__ import annotations
 
-import re
 from datetime import date, datetime
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
-from docx.shared import Cm, Pt, RGBColor
+from docx.shared import Cm
 
 from app.models.contrato_consumidor import (
     ContratanteConsumidorPJ,
@@ -27,6 +24,8 @@ from app.models.contrato_consumidor import (
     nome_signatario,
 )
 from app.services.contract_generator import ContractGenerator
+from app.services.pagina_documento import PaginaCompacta
+from app.services.qualificacao import genero_de, genero_plural, qualificar_contratante
 from app.utils.currency import formatar_valor
 
 CONTRATADA_NOME = "MÔNICA FURTADO PINHEIRO CHAGAS"
@@ -37,7 +36,7 @@ CONTRATADA_ENDERECO = (
 )
 
 
-class ConsumidorGenerator(ContractGenerator):
+class ConsumidorGenerator(PaginaCompacta, ContractGenerator):
     """Contrato de prestacao de servicos advocaticios — acao de consumo aerea."""
 
     def _build_document(  # type: ignore[override]
@@ -65,192 +64,12 @@ class ConsumidorGenerator(ContractGenerator):
 
         return doc
 
-    # ── Formatacao (medida no CONTRATO.docx do escritorio) ────────
-    #
-    # Segoe UI 11pt, justificado, entrelinha 1,15, sem espaco depois do
-    # paragrafo (o original separa os blocos com linha em branco) e margens
-    # 0,75 / 1,25 / 3 / 2 cm. Difere do contrato de honorarios, por isso
-    # esta classe sobrescreve os tres metodos de layout.
-
-    FONTE = "Segoe UI"
-    TAMANHO = Pt(11)
-    ENTRELINHA = 1.15
-    # Uma linha em branco de 11pt a 1,15 ≈ 12pt: mesmo respiro do original.
-    ESPACO_DEPOIS = Pt(12)
-
-    def _apply_page_setup(self, doc) -> None:
-        for section in doc.sections:
-            section.top_margin = Cm(0.75)
-            section.bottom_margin = Cm(1.25)
-            section.left_margin = Cm(3)
-            section.right_margin = Cm(2)
-
-    def _apply_base_styles(self, doc) -> None:
-        for style_name in ("Normal", "Body Text", "List Paragraph"):
-            if style_name not in doc.styles:
-                continue
-            style = doc.styles[style_name]
-            style.font.name = self.FONTE
-            style._element.rPr.rFonts.set(qn("w:eastAsia"), self.FONTE)
-            style.font.size = self.TAMANHO
-            style.font.color.rgb = RGBColor(0, 0, 0)
-            style.paragraph_format.line_spacing = self.ENTRELINHA
-            style.paragraph_format.space_after = self.ESPACO_DEPOIS
-
-    def _format_paragraph(self, paragraph, assinatura: bool = False, justify_body: bool = False) -> None:
-        # justify_body e' um parametro da classe base (ContractGenerator) — aqui o
-        # corpo ja e' sempre justificado (ver abaixo), entao so' aceita o argumento
-        # pra manter a assinatura compativel com a chamada de _apply_document_standard.
-        del justify_body
-        is_heading = paragraph.style and paragraph.style.name.startswith("Heading")
-        is_signature = self._is_signature_paragraph(paragraph.text) or assinatura
-
-        paragraph.paragraph_format.line_spacing = self.ENTRELINHA
-        paragraph.paragraph_format.space_after = (
-            Pt(0) if is_signature else self.ESPACO_DEPOIS
-        )
-        paragraph.paragraph_format.keep_together = True
-        if is_heading:
-            paragraph.paragraph_format.keep_with_next = True
-        if is_signature:
-            paragraph.alignment = (
-                WD_ALIGN_PARAGRAPH.CENTER if assinatura else WD_ALIGN_PARAGRAPH.LEFT
-            )
-        # Corpo justificado; titulo, assinaturas e celulas da grade nao.
-        # Justificar texto curto na tabela de assinatura deforma o DocuSeal.
-        parent = paragraph._element.getparent()
-        in_table = parent is not None and parent.tag == qn("w:tc")
-        if paragraph.alignment is None and not is_signature and not in_table:
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-
-        for run in paragraph.runs:
-            run.font.name = self.FONTE
-            run._element.rPr.rFonts.set(qn("w:eastAsia"), self.FONTE)
-            run.font.size = self.TAMANHO
-            run.font.color.rgb = RGBColor(0, 0, 0)
-
-    @staticmethod
-    def _alinhado_a_esquerda(paragraph):
-        """Linhas curtas (contatos, dados bancarios) nao devem ser justificadas."""
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        return paragraph
-
-    _PAPEL_NEGRITO = re.compile(r"(CONTRATANTES|CONTRATANTE|CONTRATADA)")
-
-    def _paragrafo_com_destaques(self, doc: Document, texto: str, nomes: list[str]):
-        """Qualificacao: negrito so nos nomes das partes e em CONTRATANTE/CONTRATADA."""
-        p = doc.add_paragraph()
-        nomes_ok = sorted({n for n in nomes if n}, key=len, reverse=True)
-        if nomes_ok:
-            padrao = "(" + "|".join(re.escape(n) for n in nomes_ok) + r"|CONTRATANTES|CONTRATANTE|CONTRATADA)"
-            splitter = re.compile(padrao)
-        else:
-            splitter = self._PAPEL_NEGRITO
-
-        pos = 0
-        for m in splitter.finditer(texto):
-            if m.start() > pos:
-                p.add_run(texto[pos:m.start()]).bold = False
-            p.add_run(m.group(0)).bold = True
-            pos = m.end()
-        if pos < len(texto):
-            p.add_run(texto[pos:]).bold = False
-        return p
-
-    def _grid_assinaturas(self, doc: Document, entries: list[tuple[str, list[str]]]) -> None:
-        """Assinaturas 2 por linha. Rotulo e' uma lista de linhas (nome / CPF / papel).
-
-        Proprio deste contrato: nao mexe no grid do contrato de honorarios.
-        """
-        if not entries:
-            return
-
-        table = doc.add_table(rows=(len(entries) + 1) // 2, cols=2)
-        table.autofit = True
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        for idx, (tag, linhas) in enumerate(entries):
-            cell = table.cell(idx // 2, idx % 2)
-            cell.paragraphs[0].text = tag  # tag do DocuSeal
-            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            for linha in linhas:
-                p = cell.add_paragraph(linha)
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            cell.add_paragraph()
-
     # ── Concordancia ──────────────────────────────────────────────
 
     @staticmethod
     def _sp(data: ContratoConsumidorRequest, singular: str, plural: str) -> str:
         """Escolhe a redacao conforme o numero de contratantes."""
         return plural if data.plural else singular
-
-    @staticmethod
-    def _genero_de(contratante) -> str:
-        """PJ concorda no feminino ('a empresa contratante')."""
-        if isinstance(contratante, ContratanteConsumidorPJ):
-            return "F"
-        return contratante.genero
-
-    @classmethod
-    def _genero_plural(cls, data: ContratoConsumidorRequest) -> str:
-        """'a' quando todas sao femininas; 'o' (masculino) em qualquer outro caso."""
-        return "a" if all(cls._genero_de(c) == "F" for c in data.contratantes) else "o"
-
-    @staticmethod
-    def _nacionalidade(informada: str, genero_f: bool) -> str:
-        """"Brasileira (o)" e' o rotulo generico do formulario — no contrato precisa
-        concordar com o genero. Nacionalidade estrangeira digitada e' preservada."""
-        texto = informada.strip()
-        generica = texto.lower().replace(" ", "") in {
-            "",
-            "brasileira(o)",
-            "brasileiro(a)",
-            "brasileira",
-            "brasileiro",
-        }
-        return ("brasileira" if genero_f else "brasileiro") if generica else texto
-
-    # ── Partes ────────────────────────────────────────────────────
-
-    def _qualificacao_pj(self, c: ContratanteConsumidorPJ) -> str:
-        rep_f = c.representante_genero == "F"
-        rep_nacionalidade = self._nacionalidade(c.representante_nacionalidade, rep_f)
-        partes = [
-            c.razao_social.upper(),
-            "pessoa jurídica de direito privado",
-            f"inscrita no CNPJ sob o n.º {c.cnpj}",
-            f"com sede à {c.endereco}",
-        ]
-        if c.email:
-            partes.append(f"email: {c.email}")
-        partes.append(
-            f"neste ato representada por {c.representante_nome.upper()}, {rep_nacionalidade}, "
-            f"{'inscrita' if rep_f else 'inscrito'} no CPF sob o n.º {c.representante_cpf}"
-        )
-        return ", ".join(partes)
-
-    def _qualificacao(self, contratante, *, com_endereco: bool) -> str:
-        if isinstance(contratante, ContratanteConsumidorPJ):
-            # A sede sempre acompanha a empresa: nao entra no agrupamento de domicilio.
-            return self._qualificacao_pj(contratante)
-
-        genero_f = contratante.genero == "F"
-        nacionalidade = self._nacionalidade(contratante.nacionalidade, genero_f)
-        partes = [
-            contratante.nome.upper(),
-            nacionalidade,
-            f"{'inscrita' if genero_f else 'inscrito'} no CPF sob o n.º {contratante.cpf}",
-        ]
-        if contratante.rg:
-            partes.append(f"RG n.º {contratante.rg}")
-        if com_endereco:
-            residente = "residente e domiciliada" if genero_f else "residente e domiciliado"
-            partes.append(f"{residente} à {contratante.endereco}")
-            if contratante.email:
-                partes.append(f"email: {contratante.email}")
-            if contratante.celular:
-                partes.append(f"celular: {contratante.celular}")
-        return ", ".join(partes)
 
     def _c_partes(self, doc: Document, data: ContratoConsumidorRequest) -> None:
         # Agrupar o domicilio so' faz sentido entre pessoas fisicas: PJ tem sede.
@@ -259,13 +78,13 @@ class ConsumidorGenerator(ContractGenerator):
         endereco_comum = so_pf and len(enderecos) == 1 and data.plural
 
         quals = [
-            self._qualificacao(c, com_endereco=not endereco_comum)
+            qualificar_contratante(c, com_endereco=not endereco_comum)
             for c in data.contratantes
         ]
         texto = " e ".join(quals) if len(quals) > 1 else quals[0]
 
         if endereco_comum:
-            g = self._genero_plural(data)
+            g = genero_plural(data)
             primeiro = data.contratantes[0]
             texto += f", residentes e domiciliad{g}s à {primeiro.endereco}"
             emails = [c.email for c in data.contratantes if c.email]
@@ -276,10 +95,10 @@ class ConsumidorGenerator(ContractGenerator):
                 texto += f", celular: {'; '.join(celulares)}"
 
         if data.plural:
-            g = self._genero_plural(data)
+            g = genero_plural(data)
             texto += f", doravante denominad{g}s apenas CONTRATANTES;"
         else:
-            g = "a" if self._genero_de(data.contratantes[0]) == "F" else "o"
+            g = "a" if genero_de(data.contratantes[0]) == "F" else "o"
             texto += f", doravante denominad{g} apenas CONTRATANTE;"
 
         nomes_contratante: list[str] = []
