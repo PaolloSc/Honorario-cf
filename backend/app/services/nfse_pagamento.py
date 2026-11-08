@@ -11,10 +11,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import ParticipacaoDB
+from app.models.nfse_db import NFSeRecebidaDB
 from app.services.pagamento_participacao import Recebimento, registrar, tax_code_padrao
 
 
@@ -26,17 +26,13 @@ class PagamentoResult:
 
 
 def gerar_pagamento_para_nfse(db: Session, nfse_id: int) -> PagamentoResult:
-    row = db.execute(
-        text("""
-            SELECT id, participacao_id, pagamento_id, valor_servicos, valor_liquido,
-                   data_emissao, numero
-            FROM nfse_recebidas WHERE id = :i
-        """),
-        {"i": nfse_id},
-    ).fetchone()
-    if row is None:
+    nota = db.get(NFSeRecebidaDB, nfse_id)
+    if nota is None:
         raise ValueError(f"NFSe {nfse_id} nao encontrada")
-    _, participacao_id, pagamento_id, valor_servicos, valor_liquido, data_emissao, numero = row
+    participacao_id, pagamento_id = nota.participacao_id, nota.pagamento_id
+    valor_servicos, valor_liquido, data_emissao, numero = (
+        nota.valor_servicos, nota.valor_liquido, nota.data_emissao, nota.numero,
+    )
 
     if pagamento_id:
         return PagamentoResult(nfse_id=nfse_id, pagamento_id=pagamento_id, motivo="ja_vinculada")
@@ -71,9 +67,7 @@ def gerar_pagamento_para_nfse(db: Session, nfse_id: int) -> PagamentoResult:
         tax_code=tc,
         aliquota_total=aliquota,
     )
-    db.execute(
-        text("UPDATE nfse_recebidas SET pagamento_id = :p, atualizado_em = :now WHERE id = :i"),
-        {"p": pag.id, "now": datetime.now(timezone.utc), "i": nfse_id},
-    )
+    nota.pagamento_id = pag.id
+    nota.atualizado_em = datetime.now(timezone.utc)
     db.commit()
     return PagamentoResult(nfse_id=nfse_id, pagamento_id=pag.id)

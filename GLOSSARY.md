@@ -51,6 +51,10 @@ _Avoid_: preview no router, arquivo temporário
 O que muda no contrato quando o DocuSeal conclui, recusa ou o envio é cancelado (status, auditoria, reflexo no contrato de origem de aditivo/distrato, ficha ao financeiro). Mora em `services/resultado_assinatura`; webhook, sincronização e cancelamento só autorizam e chamam. Idempotente: cada efeito acontece uma vez, mesmo com os caminhos juntos.
 _Avoid_: lógica de webhook no router
 
+**Notas recebidas**:
+As NFS-e baixadas do ADN/BHISS (tabela `nfse_recebidas`) e os jobs de sincronização (`sync_jobs`). Leitura e gravação passam só por `services/notas_recebidas` (ORM); o orquestrador `nfse_sync` e as rotas decidem o que fazer. Não confundir com **NFS-e emitida** (`services/emissao`).
+_Avoid_: SQL cru nas rotas e no sync
+
 **Ficha ao financeiro**:
 E-mail interno com o objeto do contrato e a participação. Texto e tabela são montados em `services/email_financeiro` (tudo escapado), tanto no envio manual quanto no automático quando todos assinam. O automático reserva o envio antes de mandar, então sai uma vez só.
 _Avoid_: ficha montada no router

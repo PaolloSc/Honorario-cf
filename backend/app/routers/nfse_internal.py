@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models.nfse import IngestRequest, SyncJobOut
+from app.models.nfse_db import CredencialPbhDB
+from app.services import notas_recebidas as notas
 from app.services.crypto import CryptoBox, EncryptedBlob, InvalidCipherError
 from app.services.nfse_sync import JobLockError, ingest_payload
 from app.utils.documento import normalizar_doc
@@ -88,27 +90,7 @@ def ingest(
     except JobLockError as e:
         raise HTTPException(409, str(e)) from e
 
-    last = db.execute(
-        text("SELECT * FROM sync_jobs WHERE cnpj_prestador=:c ORDER BY id DESC LIMIT 1"),
-        {"c": cnpj},
-    ).fetchone()
-    data = last._mapping
-    return SyncJobOut(
-        id=data["id"],
-        cnpj_prestador=data["cnpj_prestador"],
-        origem=data["origem"],
-        iniciado_em=data["iniciado_em"],
-        finalizado_em=data["finalizado_em"],
-        periodo_inicio=data["periodo_inicio"],
-        periodo_fim=data["periodo_fim"],
-        total_nfs=data["total_nfs"],
-        auto_vinculadas=data["auto_vinculadas"],
-        pendentes=data["pendentes"],
-        sem_match=data["sem_match"],
-        erros=data["erros"],
-        status=data["status"],
-        motivo_falha=data["motivo_falha"],
-    )
+    return SyncJobOut.model_validate(notas.ultimo_job(db, cnpj))
 
 
 @router.get("/adn/ultimo-nsu")
@@ -118,11 +100,7 @@ def ultimo_nsu(
     db: Session = Depends(get_db),
 ):
     """Ultimo NSU do ADN ja ingerido com sucesso (0 = comecar do inicio)."""
-    nsu = db.execute(
-        text("SELECT MAX(ultimo_nsu) FROM sync_jobs WHERE cnpj_prestador=:c AND status='ok'"),
-        {"c": normalizar_doc(cnpj)},
-    ).scalar()
-    return {"ultimo_nsu": nsu or 0}
+    return {"ultimo_nsu": notas.ultimo_nsu(db, normalizar_doc(cnpj))}
 
 
 @router.post("/sync-status")
@@ -135,21 +113,12 @@ def report_status(
 ):
     """Worker reporta falhas pre-ingest (login, captcha, layout)."""
     cnpj = normalizar_doc(cnpj_prestador)
-    now = datetime.now(timezone.utc)
-    db.execute(
-        text("""
-            INSERT INTO sync_jobs (cnpj_prestador, origem, iniciado_em, finalizado_em,
-                                   periodo_inicio, periodo_fim, status, motivo_falha)
-            VALUES (:c, 'cron', :n, :n, :n, :n, :s, :m)
-        """),
-        {"c": cnpj, "n": now, "s": status, "m": motivo},
-    )
+    notas.registrar_falha_do_worker(db, cnpj, status, motivo)
     if status == "erro_login":
-        db.execute(
-            text("""UPDATE credencial_pbh
-                    SET ativo=FALSE, motivo_inativacao=:m, atualizado_em=:n
-                    WHERE cnpj_prestador=:c"""),
-            {"m": motivo or "login_invalido", "n": now, "c": cnpj},
-        )
+        cred = db.query(CredencialPbhDB).filter(CredencialPbhDB.cnpj_prestador == cnpj).first()
+        if cred is not None:
+            cred.ativo = False
+            cred.motivo_inativacao = motivo or "login_invalido"
+            cred.atualizado_em = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
