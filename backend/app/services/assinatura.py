@@ -16,13 +16,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import ColaboradorDB, ContractDB, ContractVersionDB, utcnow
 from app.models.documentos_complementares import ROTULO_DOCUMENTO
-from app.services import servicos_externos
+from app.services import pessoas, servicos_externos
 from app.services.arquivo_contrato import resolve_backend_path, resolver_arquivo
 from app.services.ciclo_contrato import registrar_auditoria
 from app.services.contrato_carregado import carregar_versao, tipo_da_versao
@@ -133,12 +132,7 @@ def _resolver_assinatura_escritorio(signatarios: list[dict], db: Session) -> lis
     if len(escritorio) != 1:
         raise EnvioInvalido("Escolha o sócio que assina pelo escritório.")
     socio = escritorio[0]
-    email = (socio.get("email") or "").strip().lower()
-    eh_socio = email and db.query(ColaboradorDB).filter(
-        func.lower(ColaboradorDB.email) == email,
-        ColaboradorDB.papel == "socio",
-        ColaboradorDB.ativo.is_(True),
-    ).first()
+    eh_socio = pessoas.eh_socio_ativo(db, socio.get("email") or "")
     if not eh_socio:
         raise EnvioInvalido("Só um sócio ativo pode assinar pelo escritório.")
 
@@ -156,14 +150,7 @@ def _nome_testemunha1(db: Session) -> str:
     Agora o cadastro (editavel em /admin/colaboradores) e' a fonte, e a config
     fica so' de reserva para quando a pessoa nao estiver no roster.
     """
-    colaborador = (
-        db.query(ColaboradorDB)
-        .filter(
-            func.lower(ColaboradorDB.email) == settings.testemunha1_email.lower(),
-            ColaboradorDB.ativo.is_(True),
-        )
-        .first()
-    )
+    colaborador = pessoas.colaborador_ativo_por_email(db, settings.testemunha1_email)
     if not colaborador or not colaborador.nome:
         return settings.testemunha1_nome
 
@@ -377,15 +364,7 @@ def socio_sugerido(form_data_json: str | None, db: Session) -> ColaboradorDB | N
     except ValueError:
         return None
 
-    socios = (
-        db.query(ColaboradorDB)
-        .filter(
-            ColaboradorDB.papel == "socio",
-            ColaboradorDB.ativo.is_(True),
-            ColaboradorDB.email.isnot(None),
-        )
-        .all()
-    )
+    socios = pessoas.socios_ativos_com_email(db)
 
     try:
         participacao = Participacao(**(form_data.get("participacao") or {}))

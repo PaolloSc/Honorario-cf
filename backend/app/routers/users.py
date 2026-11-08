@@ -1,21 +1,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.acesso import PAPEIS
-from app.auth import CurrentUser, get_current_user, require_admin
+from app.auth import CONVITE_AZURE_ID, CurrentUser, get_current_user, require_admin
+from app.services import pessoas
 from app.models.oab import OabItem, oabs_de_json
 from app.database import (
-    ColaboradorDB,
-    PAPEIS_PARTICIPAVEIS,
+    utcnow,
     UserDB,
     get_db,
-    utcnow,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +53,10 @@ class ColaboradoresResponse(BaseModel):
 
 @router.get("/me", response_model=UserResponse)
 def get_me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.azure_id == CONVITE_AZURE_ID:
+        # O convidado nao tem conta no banco: responde com o que a autenticacao ja montou.
+        return UserResponse(id=0, azure_id=user.azure_id, email=user.email, name=user.name, role=user.role,
+                            created_at=utcnow().isoformat())
     db_user = db.query(UserDB).filter(UserDB.azure_id == user.azure_id).first()
     if not db_user:
         raise HTTPException(404, "Usuario nao encontrado")
@@ -80,12 +82,7 @@ def list_colaboradores(
     Fonte: tabela ``colaboradores`` (não ``users``). Qualquer usuário logado.
     ``participavel=true`` retorna apenas advogados/sócios (campos "Para quem" etc.).
     """
-    q = db.query(ColaboradorDB)
-    if not include_inactive:
-        q = q.filter(ColaboradorDB.ativo.is_(True))
-    if participavel:
-        q = q.filter(ColaboradorDB.papel.in_(PAPEIS_PARTICIPAVEIS))
-    rows = q.order_by(ColaboradorDB.ordem, ColaboradorDB.nome).all()
+    rows = pessoas.listar_colaboradores(db, so_participaveis=participavel, incluir_inativos=include_inactive)
     return ColaboradoresResponse(
         colaboradores=[
             ColaboradorOut(name=c.nome, email=c.email or "", role=c.papel, oabs=oabs_de_json(c.oabs))
