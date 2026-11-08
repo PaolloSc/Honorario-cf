@@ -29,6 +29,7 @@ import { dataDaApi } from "@/app/lib/datas";
 import { lerLocal, useDonoRascunho } from "@/app/lib/rascunhoLocal";
 import { useAuthStatus } from "@/app/lib/useAuthStatus";
 import { DADOS_INICIAIS, normalizarFormData } from "@/app/lib/estadoWizard";
+import { marcarEtapa } from "@/app/lib/tutorial";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  
 const STEPS = [
@@ -94,6 +95,11 @@ export default function ContractWizard({
   onSaveComplete,
 }: ContractWizardProps = {}) {
   const [currentStep, setCurrentStep] = useState(1);
+  // O tutorial mostra o tour da etapa aberta.
+  useEffect(() => {
+    marcarEtapa(currentStep);
+    return () => marcarEtapa(0);
+  }, [currentStep]);
   const [formData, setFormData] = useState<ContratoFormData>(normalizarFormData(initialData));
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   // Erros vindos da etapa 7 (422 do servidor): outro título no aviso enquanto forem eles na tela
