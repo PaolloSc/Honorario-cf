@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import tempfile
 from html import escape
 from pathlib import Path
@@ -16,8 +15,8 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser, get_current_user
 from app.config import settings
 from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
-from app.routers.contract import _SIG_TAG, _contract_filename
-from app.services.arquivo_contrato import ArquivoNaoEncontrado, resolver_arquivo
+from app.services.previa_contrato import _SIG_TAG
+from app.services.arquivo_contrato import ArquivoNaoEncontrado, nome_do_anexo, resolver_arquivo
 from app.services import servicos_externos
 from app.services.contrato_carregado import tipo_da_versao, ultima_versao
 from app.utils.participacao import linhas_participacao
@@ -164,7 +163,7 @@ async def send_contract_email(
         contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
 
         review_path = _docx_review_copy(filepath)
-        attachment_name = _contract_filename(
+        attachment_name = nome_do_anexo(
             contract.client_name if contract else None,
             data.contract_id,
             _tipo_do_contrato(data.contract_id, db),
@@ -354,7 +353,7 @@ async def send_participacao_email(
                 subject=f"{titulo} — {data.cliente_nome}",
                 html_content=html,
                 attachment_path=contract_filepath,
-                attachment_name=_contract_filename(data.cliente_nome, data.contract_id),
+                attachment_name=nome_do_anexo(data.cliente_nome, data.contract_id),
             )
         else:
             result = await service.send_html_email(
