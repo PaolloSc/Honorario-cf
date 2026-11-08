@@ -1,7 +1,7 @@
 """participacao_pagamentos: dinheiro de Float para Numeric(14,2)
 
-Valores em Float acumulam erro de centavo; Numeric guarda exato. Pronta no PR e NAO
-aplicada em producao sem o ok do Paollo (fazer backup do Neon antes). Cada valor e'
+Valores em Float acumulam erro de centavo; Numeric guarda exato. Aplicada em producao em
+07/11/2026 (ALTER direto, com backup do Neon antes; a tabela estava vazia). Cada valor e'
 arredondado a 2 casas na conversao (Postgres: USING round(col::numeric, 2)).
 
 Revision ID: 0017_pagamentos_numeric

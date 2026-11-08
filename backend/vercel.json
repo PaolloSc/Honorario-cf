@@ -1,0 +1,3 @@
+{
+  "buildCommand": "python scripts/deploy_migrar.py"
+}
