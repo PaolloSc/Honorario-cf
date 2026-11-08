@@ -58,3 +58,26 @@ def test_migrar_conhece_todas_as_tabelas_sem_depender_do_app_inteiro():
         capture_output=True, text=True,
     )
     assert "nfse_recebidas" in r.stdout and "nfse_emitidas" in r.stdout, r.stderr
+
+
+def test_passo_do_deploy_so_roda_em_production_e_nao_derruba_banco_sem_carimbo(tmp_path, monkeypatch):
+    from scripts.deploy_migrar import executar
+
+    chamadas = []
+    assert executar({"VERCEL_ENV": "preview"}, lambda: chamadas.append(1)) == 0
+    assert executar({}, lambda: chamadas.append(1)) == 0
+    assert chamadas == []  # fora de production nao migra
+
+    assert executar({"VERCEL_ENV": "production"}, lambda: "upgrade") == 0
+    assert chamadas == []
+
+    def sem_carimbo():
+        raise m.BancoSemCarimbo("falta carimbo")
+
+    assert executar({"VERCEL_ENV": "production"}, sem_carimbo) == 0  # avisa e segue
+
+    def quebrada():
+        raise RuntimeError("migration falhou")
+
+    with pytest.raises(RuntimeError):  # erro real derruba o build
+        executar({"VERCEL_ENV": "production"}, quebrada)
