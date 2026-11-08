@@ -37,3 +37,13 @@ def test_convite(monkeypatch):
             auth_mod.get_current_user(_req(""), db)
     finally:
         db.close()
+
+
+def test_me_do_convidado_responde_sem_linha_no_banco(client, monkeypatch):
+    monkeypatch.setattr(settings, "convite_token", "segredo-convite")
+    monkeypatch.setattr(settings, "convite_role", "advogado")
+    monkeypatch.setattr(settings, "dev_mode", False)
+    r = client.get("/api/users/me", headers={"Authorization": "Bearer segredo-convite"})
+    assert r.status_code == 200
+    corpo = r.json()
+    assert (corpo["id"], corpo["role"], corpo["email"]) == (0, "advogado", auth_mod.CONVITE_EMAIL)

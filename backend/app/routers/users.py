@@ -7,10 +7,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.acesso import PAPEIS
-from app.auth import CurrentUser, get_current_user, require_admin
+from app.auth import CONVITE_AZURE_ID, CurrentUser, get_current_user, require_admin
 from app.services import pessoas
 from app.models.oab import OabItem, oabs_de_json
 from app.database import (
+    utcnow,
     UserDB,
     get_db,
 )
@@ -52,6 +53,10 @@ class ColaboradoresResponse(BaseModel):
 
 @router.get("/me", response_model=UserResponse)
 def get_me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.azure_id == CONVITE_AZURE_ID:
+        # O convidado nao tem conta no banco: responde com o que a autenticacao ja montou.
+        return UserResponse(id=0, azure_id=user.azure_id, email=user.email, name=user.name, role=user.role,
+                            created_at=utcnow().isoformat())
     db_user = db.query(UserDB).filter(UserDB.azure_id == user.azure_id).first()
     if not db_user:
         raise HTTPException(404, "Usuario nao encontrado")
