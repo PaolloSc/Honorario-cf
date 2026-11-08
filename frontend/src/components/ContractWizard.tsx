@@ -96,6 +96,9 @@ export default function ContractWizard({
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<ContratoFormData>(normalizarFormData(initialData));
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  // Erros vindos da etapa 7 (422 do servidor): outro título no aviso enquanto forem eles na tela
+  // (mesma lista; qualquer outra validação troca a lista e volta o título normal).
+  const [errosDoServidor, setErrosDoServidor] = useState<string[] | null>(null);
   const currentStepErrors = validateStep(currentStep, formData);
   const canGoNext = currentStepErrors.length === 0;
 
@@ -393,8 +396,10 @@ export default function ContractWizard({
             editContractId={editContractId}
             onSaveComplete={onSaveComplete}
             onDataChange={setFormData}
-            onIrParaEtapa={(id) => {
-              setValidationErrors([]);
+            onIrParaEtapa={(id, erros) => {
+              const lista = erros ?? [];
+              setValidationErrors(lista);
+              setErrosDoServidor(lista);
               setCurrentStep(id);
             }}
             onContractGenerated={() => void autosave.descartar()}
@@ -410,7 +415,9 @@ export default function ContractWizard({
       {validationErrors.length > 0 && (
         <div className="mb-6 rounded-lg border border-danger bg-danger/[0.08] p-4 text-sm text-danger">
           <p className="font-semibold mb-2">
-            Preencha os campos obrigatórios antes de avançar:
+            {validationErrors === errosDoServidor
+              ? "O contrato não foi gerado: corrija nesta etapa e volte ao Envio."
+              : "Preencha os campos obrigatórios antes de avançar:"}
           </p>
           <ul className="list-disc list-inside space-y-1">
             {validationErrors.map((error) => (

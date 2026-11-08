@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { DayPicker } from "react-day-picker";
-import { format, parseISO } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
 
@@ -20,11 +20,9 @@ function toISO(d?: Date): string | undefined {
 
 function fromISO(s?: string): Date | undefined {
   if (!s) return undefined;
-  try {
-    return parseISO(s);
-  } catch {
-    return undefined;
-  }
+  // Data impossível (ex.: 2027-02-31) vira campo vazio: format() lançaria e derrubaria a tela.
+  const d = parseISO(s);
+  return isValid(d) ? d : undefined;
 }
 
 function formatBR(d?: Date): string {

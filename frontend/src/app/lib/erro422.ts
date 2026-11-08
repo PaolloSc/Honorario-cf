@@ -25,6 +25,19 @@ export function ehErro422(erro: unknown): boolean {
   return erro instanceof Error && /^API error 422: /.test(erro.message) && textoDoErro(erro) !== erro.message;
 }
 
+const HONORARIOS = ["honorarios", "hora_trabalhada", "pro_labore", "mensalidade", "exito", "permuta"];
+
+/** Etapa do wizard onde fica o campo do caminho do 422 (ex.: "escopos.0.pro_labore.numero_parcelas" -> 3).
+ *  O que não é das etapas 1 a 5 (e-mail, envio, ajustes de texto) está na própria etapa 7. */
+export function etapaDoCampo(caminho: string): number {
+  const [raiz, , sub] = caminho.split(".");
+  if (raiz === "contratantes" || raiz === "incluir_partes_relacionadas") return 1;
+  if (raiz === "escopos") return sub && HONORARIOS.includes(sub) ? 3 : 2;
+  if (raiz === "acessorios") return 4;
+  if (raiz === "participacao") return 5;
+  return 7;
+}
+
 /** 422 por campo: { "escopos.0.pro_labore.numero_parcelas": "Escopo 1: ..." }. O caminho é o
  *  loc do backend sem "body" (e sem "form_data", na edição de contrato salvo). Erro sem campo
  *  (loc só com "body") fica de fora: a tela mostra esse pelo textoDoErro. */

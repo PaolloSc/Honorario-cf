@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Contratante, ContratantePJ, ContratoFormData, EscopoItem } from "@/types/contract";
 import { ESCOPO_LABELS } from "@/types/contract";
 import { alterarEnvio, destinatarios as destinatariosDe, montarFicha, nomeDoContratante, socioDoEnvio, temFichaParaFinanceiro } from "@/app/lib/estadoWizard";
-import { ehErro422, textoDoErro } from "@/app/lib/erro422";
+import { ehErro422, errosPorCampo, etapaDoCampo, textoDoErro } from "@/app/lib/erro422";
 import { generateContract, updateContract, sendEmail, sendForSignature, sendParticipacao, listTestemunhas, listColaboradores, previewContract, previewTexto, reviewContract, type ColaboradorWizard, type AjusteDescartado, type ItemClausula, type Testemunha } from "@/app/lib/api";
 import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
@@ -14,12 +14,16 @@ import { ConfirmDialog } from "@/components/emissao/ui";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
 import { ComboBox } from "@/components/ui/FormField";
 
+// Nomes das etapas do wizard (ContractWizard), para o "Ir para o campo".
+const NOME_ETAPA: Record<number, string> = { 1: "Contratante", 2: "Escopo", 3: "Honorários", 4: "Acessórios", 5: "Ficha Interna" };
+
 interface Step7EnvioProps {
   data: ContratoFormData;
   editContractId?: string;
   onSaveComplete?: (contractId: string) => void;
   onDataChange?: (data: ContratoFormData) => void;
-  onIrParaEtapa?: (etapa: number) => void;
+  // erros: mensagens do servidor para mostrar na etapa de destino.
+  onIrParaEtapa?: (etapa: number, erros?: string[]) => void;
   // Chamado quando o contrato (novo ou nova versão) é gravado — o wizard descarta o rascunho.
   onContractGenerated?: () => void;
   // Levantado pro ContractWizard (que não desmonta ao trocar de passo) — sem isso,
@@ -248,6 +252,8 @@ export default function Step7Envio({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "generating" | "sending" | "sent_email" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  // 422 da geração com campo: caminho -> mensagem (ex.: escopos.0.pro_labore.numero_parcelas).
+  const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
   const [contractId, setContractId] = useState<string | null>(editContractId || null);
   const [participacaoWarning, setParticipacaoWarning] = useState("");
   const [emailWarning, setEmailWarning] = useState("");
@@ -451,9 +457,20 @@ export default function Step7Envio({
     gravarEnvio({ recipients: recipients.map((r, i) => (i === index ? { ...r, email } : r)) });
   };
 
+  // Falha ao gerar: 422 com campo vira lista com "Ir para o campo"; o resto, texto único.
+  const mostrarErroDaGeracao = (error: unknown) => {
+    const campos = errosPorCampo(error);
+    setStatus("error");
+    setErrosCampo(campos);
+    setMessage(
+      Object.keys(campos).length ? "O contrato não foi gerado. Corrija:" : textoDoErro(error),
+    );
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     setStatus("generating");
+    setErrosCampo({});
     setMessage(isEdit ? "Salvando nova versão..." : "Gerando contrato...");
 
     try {
@@ -511,8 +528,7 @@ export default function Step7Envio({
           : "Contrato gerado e enviado por e-mail com sucesso! Agora você pode enviar para assinatura digital ou voltar para a lista."
       );
     } catch (error) {
-      setStatus("error");
-      setMessage(textoDoErro(error));
+      mostrarErroDaGeracao(error);
     } finally {
       setIsSubmitting(false);
     }
@@ -521,6 +537,7 @@ export default function Step7Envio({
   const handleSaveOnly = async (): Promise<string | null> => {
     setIsSubmitting(true);
     setStatus("generating");
+    setErrosCampo({});
     setMessage(isEdit ? "Salvando nova versão..." : "Gerando contrato...");
 
     try {
@@ -558,8 +575,7 @@ export default function Step7Envio({
       );
       return resultContractId;
     } catch (error) {
-      setStatus("error");
-      setMessage(textoDoErro(error));
+      mostrarErroDaGeracao(error);
       return null;
     } finally {
       setIsSubmitting(false);
@@ -1003,6 +1019,7 @@ export default function Step7Envio({
 
       {message && (
         <div
+          role={status === "error" ? "alert" : undefined}
           className={`p-4 rounded-lg ${
             status === "success"
               ? "bg-primary/[0.1] text-primary-dark border border-primary"
@@ -1014,6 +1031,23 @@ export default function Step7Envio({
           }`}
         >
           {message}
+          {status === "error" && Object.keys(errosCampo).length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+              {Object.entries(errosCampo).map(([caminho, msg]) => {
+                const etapa = etapaDoCampo(caminho);
+                return (
+                  <li key={caminho} className="flex flex-wrap items-baseline gap-x-2">
+                    <span>• {msg}</span>
+                    {etapa !== 7 && onIrParaEtapa && (
+                      <button type="button" className="underline font-medium" onClick={() => onIrParaEtapa(etapa, [msg])}>
+                        Ir para o campo (etapa {etapa}: {NOME_ETAPA[etapa]})
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 

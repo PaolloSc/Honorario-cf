@@ -1,6 +1,6 @@
 // Verificação de erro422.ts: node src/app/lib/erro422.check.ts
 import assert from "node:assert/strict";
-import { ehErro422, errosPorCampo, mensagemDo422, textoDoErro } from "./erro422.ts";
+import { ehErro422, errosPorCampo, etapaDoCampo, mensagemDo422, textoDoErro } from "./erro422.ts";
 
 const corpo = (detail: unknown) => JSON.stringify({ detail });
 assert.equal(
@@ -32,4 +32,12 @@ assert.deepEqual(
 assert.deepEqual(errosPorCampo(new Error("API error 500: x")), {});
 assert.deepEqual(errosPorCampo(new Error("API error 422: nao json")), {});
 assert.deepEqual(errosPorCampo("x"), {});
+assert.equal(etapaDoCampo("escopos.0.pro_labore.numero_parcelas"), 3);
+assert.equal(etapaDoCampo("escopos.1.exito.percentual"), 3);
+assert.equal(etapaDoCampo("escopos.0.numero_autos"), 2);
+assert.equal(etapaDoCampo("escopos"), 2);
+assert.equal(etapaDoCampo("contratantes.0.cpf"), 1);
+assert.equal(etapaDoCampo("acessorios.foro"), 4);
+assert.equal(etapaDoCampo("participacao.percentual"), 5);
+assert.equal(etapaDoCampo("email_destinatario"), 7);
 console.log("erro422.ts ok");
