@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json as _json
-import os
 import re as _re
 from pathlib import Path
 from datetime import datetime, timezone
 
+from app.config import settings
 from app.utils.documento import normalizar_doc
 
 from sqlalchemy import (
@@ -27,7 +27,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
 
 # Support PostgreSQL (via DATABASE_URL env var, e.g. on Render) or fallback to local SQLite.
 _default_sqlite = f"sqlite:///{Path(__file__).resolve().parent.parent / 'honorarios.db'}"
-DATABASE_URL = os.getenv("DATABASE_URL", _default_sqlite)
+DATABASE_URL = settings.database_url or _default_sqlite
 # SQLAlchemy 2.1 trocou o driver padrao de postgresql:// para psycopg (v3), que nao
 # esta instalado -> a funcao Vercel caia no import (500 sem header CORS). Fixa psycopg2.
 DATABASE_URL = _re.sub(r"^postgres(ql)?://", "postgresql+psycopg2://", DATABASE_URL)

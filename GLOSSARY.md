@@ -87,6 +87,12 @@ _Avoid_: so_digitos, limpar CNPJ (apaga letras)
 O que um papel (admin, advogado, financeiro, leitor) pode fazer: administrar, operar o financeiro, ler o financeiro, ver contratos de todos. A tabela papel → capacidades vive em `backend/app/acesso.py`; as rotas pedem a capacidade (`exigir(...)` / `pode(...)`) e nunca comparam o texto do papel.
 _Avoid_: checar `user.role == "admin"` na rota
 
+## Configuração
+
+**Configuração essencial**:
+As variáveis sem as quais a produção não sobe (`ESSENCIAIS_PRODUCAO` em `backend/app/config.py`): banco, DocuSeal (chave e segredo do aviso), e-mails do financeiro e de quem assina pelo escritório, Testemunha 1 e conta bancária. Com `VERCEL_ENV=production` o backend falha no início listando o que falta; fora da produção só avisa. Toda configuração é lida de `Settings` (`config.py`); nenhum outro arquivo lê `os.getenv`, e nenhum dado pessoal fica como valor padrão no código.
+_Avoid_: os.getenv espalhado, valor padrão com e-mail ou conta real
+
 ## Rede e erros
 
 **Cliente HTTP**:
