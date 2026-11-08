@@ -88,6 +88,11 @@ async def aplicar_conclusao(
     pode rodar a cada abertura da pagina do contrato. A ficha sai uma vez so',
     mesmo com os dois caminhos juntos (ver email_financeiro.enviar_ficha_assinada).
     """
+    # Trava a linha do contrato e le o estado de agora: com varios avisos juntos, cada um carregou o
+    # contrato antes dos outros gravarem, e o status "antigo" em memoria faria todos registrarem a
+    # mesma mudanca. (SQLite ignora o bloqueio; Postgres serializa.)
+    db.query(ContractDB).filter(ContractDB.contract_id == contract.contract_id).with_for_update().first()
+    db.refresh(contract)
     if contract.status != novo_status:
         contract.status = novo_status
         contract.updated_at = utcnow()

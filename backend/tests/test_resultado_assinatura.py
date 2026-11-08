@@ -117,3 +117,31 @@ def test_ficha_final_sem_participacao_sai_dizendo_sem_participacao(client):
     _roda(cid, svc)
     html = svc.send_html_email.await_args.kwargs["html_content"]
     assert "Sem participação" in html and "Carla" in html and "9%" not in html
+
+
+def test_avisos_simultaneos_registram_a_mudanca_de_status_uma_vez(client):
+    """Cada aviso carregou o contrato 'enviado' antes de os outros gravarem: so' o primeiro registra."""
+    _seed("rc-005")
+    sessoes = [SessionLocal() for _ in range(6)]
+    try:
+        carregados = []
+        for db in sessoes:
+            c = db.query(ContractDB).filter(ContractDB.contract_id == "rc-005").first()
+            v = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == "rc-005").first()
+            carregados.append((db, c, v))
+        svc = MagicMock()
+        svc.send_html_email = AsyncMock(return_value={"success": True})
+        with patch("app.services.servicos_externos.get_email_service", return_value=svc):
+            for db, c, v in carregados:
+                asyncio.run(resultado_assinatura.aplicar_conclusao(c, v, "assinado", "webhook_assinado", "t", db))
+    finally:
+        for db in sessoes:
+            db.close()
+    db = SessionLocal()
+    try:
+        n = db.query(AuditLogDB).filter(AuditLogDB.contract_id == "rc-005",
+                                        AuditLogDB.action == "webhook_assinado").count()
+    finally:
+        db.close()
+    assert n == 1
+    assert svc.send_html_email.await_count == 1
