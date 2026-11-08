@@ -29,7 +29,7 @@ from app.models.documentos_complementares import (
     DistratoRequest,
     SubstabelecimentoRequest,
 )
-from app.routers.contracts import _check_access
+from app.auth import exigir_acesso_ao_contrato
 from app.services.ciclo_contrato import Arquivos, confirmar, travado
 from app.services.contrato_carregado import get_generator
 from app.services.previa_contrato import html_do_documento
@@ -54,7 +54,7 @@ def _origem(contrato_id: str, user: CurrentUser, db: Session) -> ContractDB:
     origem = db.query(ContractDB).filter(ContractDB.contract_id == contrato_id).first()
     if not origem:
         raise HTTPException(404, "Contrato original não encontrado")
-    _check_access(origem, user)
+    exigir_acesso_ao_contrato(origem, user)
     if origem.tipo_contrato in TIPOS_COMPLEMENTARES:
         raise HTTPException(422, "O contrato original não pode ser outro documento complementar")
     return origem
@@ -126,7 +126,7 @@ def _validar_distrato_origem(data: SubstabelecimentoRequest, user: CurrentUser, 
     if not distrato:
         raise _erro_campo("distrato_origem_id", "Distrato de origem não encontrado")
     try:
-        _check_access(distrato, user)
+        exigir_acesso_ao_contrato(distrato, user)
     except HTTPException:
         raise _erro_campo("distrato_origem_id", "Distrato de origem não encontrado")
     if data.contrato_origem_id and data.contrato_origem_id != distrato.contrato_origem_id:
@@ -270,7 +270,7 @@ def substabelecimento_existente(
     """O cliente (CPF/CNPJ) ja tem substabelecimento? Orienta 'acrescentar o processo' ou 'criar novo'."""
     for c in substabelecimentos_do_outorgante(db, normalizar_doc(documento)):
         try:
-            _check_access(c, user)
+            exigir_acesso_ao_contrato(c, user)
         except HTTPException:
             continue
         lock = travado(c)
@@ -306,7 +306,7 @@ def gerar_documento(
         alvo = db.query(ContractDB).filter(ContractDB.contract_id == acrescentar_a).first()
         if not alvo or alvo.tipo_contrato != TIPO_SUBSTABELECIMENTO or alvo.status == "cancelado":
             raise HTTPException(404, "Substabelecimento a acrescentar não encontrado")
-        _check_access(alvo, user)
+        exigir_acesso_ao_contrato(alvo, user)
         doc_alvo = documento_do_outorgante(form_data_atual(alvo, db))
         if not doc_alvo or doc_alvo != normalizar_doc(data.outorgante.cnpj or data.outorgante.cpf):
             raise HTTPException(422, "O substabelecimento a acrescentar é de outro outorgante")

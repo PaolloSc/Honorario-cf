@@ -9,6 +9,7 @@ de assinatura, reenvio e trilha de auditoria.
 """
 from __future__ import annotations
 
+import json
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
@@ -359,3 +360,40 @@ async def enviar(
         )
     else:
         return ResultadoEnvio(success=False, message=sign_result.get("message", "Erro ao enviar para assinatura"))
+
+
+def socio_sugerido(form_data_json: str | None, db: Session) -> ColaboradorDB | None:
+    """Socio pre-selecionado na tela para assinar pelo escritorio (o usuario pode trocar).
+
+    O responsavel pela gestao, se for socio; senao o primeiro socio entre os que
+    recebem participacao (regra do PR #74).
+    """
+    from app.models.contract import Participacao
+
+    if not form_data_json:
+        return None
+    try:
+        form_data = json.loads(form_data_json)
+    except ValueError:
+        return None
+
+    socios = (
+        db.query(ColaboradorDB)
+        .filter(
+            ColaboradorDB.papel == "socio",
+            ColaboradorDB.ativo.is_(True),
+            ColaboradorDB.email.isnot(None),
+        )
+        .all()
+    )
+
+    try:
+        participacao = Participacao(**(form_data.get("participacao") or {}))
+    except Exception:
+        return None
+    por_nome = {s.nome: s for s in socios}
+    for nome in [participacao.responsavel_gestao] + [p.nome for p in participacao.participantes]:
+        socio = por_nome.get((nome or "").strip())
+        if socio:
+            return socio
+    return None
