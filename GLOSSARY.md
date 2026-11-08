@@ -51,6 +51,10 @@ _Avoid_: preview no router, arquivo temporário
 O que muda no contrato quando o DocuSeal conclui, recusa ou o envio é cancelado (status, auditoria, reflexo no contrato de origem de aditivo/distrato, ficha ao financeiro). Mora em `services/resultado_assinatura`; webhook, sincronização e cancelamento só autorizam e chamam. Idempotente: cada efeito acontece uma vez, mesmo com os caminhos juntos.
 _Avoid_: lógica de webhook no router
 
+**Peças do documento**:
+Pedaços reaproveitáveis que os geradores compõem em vez de herdar uns dos outros: `services/qualificacao` (texto da qualificação das partes, funções puras) e `services/pagina_documento` (margens, fonte, destaque em negrito e grade de assinaturas do DocuSeal, como mixin `PaginaCompacta`). Contrato de consumidor, aditivo, distrato e substabelecimento usam as duas sobre o `ContractGenerator`.
+_Avoid_: gerador que herda de outro gerador só para ganhar o layout
+
 **Notas recebidas**:
 As NFS-e baixadas do ADN/BHISS (tabela `nfse_recebidas`) e os jobs de sincronização (`sync_jobs`). Leitura e gravação passam só por `services/notas_recebidas` (ORM); o orquestrador `nfse_sync` e as rotas decidem o que fazer. Não confundir com **NFS-e emitida** (`services/emissao`).
 _Avoid_: SQL cru nas rotas e no sync

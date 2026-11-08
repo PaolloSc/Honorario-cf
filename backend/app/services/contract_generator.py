@@ -27,7 +27,6 @@ from app.models.contract import (
     ESCOPO_LABELS,
     EscopoItem,
     Participacao,
-    RepresentantePJ,
     SubtipoExito,
     SubtipoMensalidade,
     TipoEscopo,
@@ -35,6 +34,7 @@ from app.models.contract import (
     TipoPessoa,
     VariacaoPrecoMensalidade,
 )
+from app.services.qualificacao import qualificar_representante
 from app.utils.parcelas import data_iso, dividir_parcelas
 from app.utils.currency import (
     formatar_percentual,
@@ -702,7 +702,7 @@ class ContractGenerator:
                     f"com sede em {c.endereco}, e-mail: {c.email}"
                 )
                 # Qualificacao de cada representante precedida por virgula (nao por ponto).
-                quals = [self._qualificar_representante(r) for r in c.representantes if r.nome]
+                quals = [qualificar_representante(r) for r in c.representantes if r.nome]
                 if quals:
                     text += ", representada por " + "; e por ".join(quals)
                 text += "."
@@ -726,17 +726,6 @@ class ContractGenerator:
                 "inscrita no CNPJ sob o n. 25.463.159/0001-73, com sede na Rua Antônio de Albuquerque, "
                 "n. 271, 5º andar, Savassi, Belo Horizonte/MG, a seguir denominado simplesmente C&F."
         )
-
-    def _qualificar_representante(self, r: "RepresentantePJ") -> str:
-        """Qualificacao do representante legal, omitindo campos vazios (sem ', ,')."""
-        return ", ".join(filter(None, [
-            r.nome.upper(),
-            r.nacionalidade,
-            r.profissao,
-            r.estado_civil.value if r.estado_civil else None,
-            f"CPF {r.cpf}" if r.cpf else None,
-            f"e-mail: {r.email}" if r.email else None,
-        ]))
 
     def _format_cnpj(self, value: str) -> str:
         """00000000000000 -> 00.000.000/0000-00 (mantem o valor se ja vier formatado)."""
