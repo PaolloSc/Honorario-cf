@@ -19,7 +19,6 @@ from app.services.arquivo_contrato import ArquivoNaoEncontrado, nome_do_anexo, r
 from app.services import email_financeiro, servicos_externos
 from app.services.ciclo_contrato import registrar_auditoria
 from app.services.contrato_carregado import tipo_da_versao, ultima_versao
-from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_EMAIL
 
 logger = logging.getLogger(__name__)
@@ -48,6 +47,8 @@ class ParticipacaoEmailRequest(BaseModel):
     contract_id: str
     cliente_nome: str
     objeto_contrato: str = ""
+    # None = cliente antigo: infere dos campos. A tela nova manda sempre.
+    tem_participacao: bool | None = None
     # Valor estruturado
     valor_tipo: str = ""           # "percentual" | "valor" | "outro"
     valor_percentual: str = ""
@@ -212,26 +213,19 @@ async def send_participacao_email(
         if not objeto_contrato:
             objeto_contrato = email_financeiro.objeto_do_contrato_salvo(data.contract_id, db)
 
-        rows = []
-        # Objeto do Contrato first (as requested by financeiro)
-        # A quebra de linha vira <br> no laco que monta a tabela, depois do escape.
-        if objeto_contrato:
-            rows.append(("Objeto do Contrato", objeto_contrato))
-        rows.extend(linhas_participacao(data.model_dump()))
-
-        # ponytail: participacao inferida dos proprios campos em vez de uma flag nova.
-        # O wizard so manda estes campos quando o toggle esta ligado, mas a inferencia
-        # cobre todos eles: uma ficha com apenas o responsavel preenchido ainda e
-        # participacao, e rotula-la "Cadastro Legal One" seria mentira.
-        # Contato financeiro e responsavel_gestao NAO entram aqui: sao sempre
-        # enviados, com ou sem participacao.
-        tem_participacao = any((
-            data.base_label,
-            data.valor_tipo,
-            data.participantes,
-            data.responsavel_captacao,
-            data.percentual_ou_valor,
-        ))
+        # ponytail: clientes antigos nao mandam tem_participacao; ai ela e' inferida dos
+        # proprios campos (uma ficha so com o responsavel preenchido ainda e' participacao).
+        # Contato financeiro e responsavel_gestao NAO entram: sao sempre enviados.
+        tem_participacao = data.tem_participacao
+        if tem_participacao is None:
+            tem_participacao = any((
+                data.base_label,
+                data.valor_tipo,
+                data.participantes,
+                data.responsavel_captacao,
+                data.percentual_ou_valor,
+            ))
+        rows = email_financeiro.linhas_da_ficha(objeto_contrato, data.model_dump(), tem_participacao)
         titulo = "Ficha de Participação" if tem_participacao else "Cadastro Legal One"
 
         html = email_financeiro.montar_ficha_html(
