@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.auth import CurrentUser, require_financeiro
 from app.database import ContractDB, ContractVersionDB, get_db
 from app.models.emissao_db import ContratoFaturamentoDB, FaturaDB, ServicoDB, TomadorDB
-from app.routers.emissor import NfseEmitidaOut, nota_out
+from app.services.emissao_saida import NfseEmitidaOut, nota_out
 from app.services import emissao
 from app.utils.documento import normalizar_doc
 

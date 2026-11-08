@@ -10,7 +10,7 @@ import jwt
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.acesso import PAPEIS_DEV, Capacidade, Papel, pode
+from app.acesso import PAPEIS_DEV, Capacidade, Papel, pode, pode_acessar_contrato
 from app.config import settings
 from app.database import UserDB, get_db, utcnow
 
@@ -242,3 +242,9 @@ def exigir(capacidade: Capacidade):
 require_admin = exigir(Capacidade.ADMINISTRAR)
 require_financeiro = exigir(Capacidade.OPERAR_FINANCEIRO)
 require_leitura_financeiro = exigir(Capacidade.LER_FINANCEIRO)
+
+
+def exigir_acesso_ao_contrato(contract, user: CurrentUser) -> None:
+    """403 se o usuario nao pode ver este contrato (admin ve todos; os demais, os que criaram)."""
+    if not pode_acessar_contrato(user, contract):
+        raise HTTPException(403, "Sem permissao para acessar este contrato")

@@ -9,8 +9,8 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from app.acesso import Capacidade, pode, pode_acessar_contrato
-from app.auth import CurrentUser, get_current_user
+from app.acesso import Capacidade, pode
+from app.auth import CurrentUser, exigir_acesso_ao_contrato, get_current_user
 from app.database import (
     ContractDB,
     ContractVersionDB,
@@ -135,7 +135,7 @@ def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_dat
     contract.cliente_docs = serialize_cliente_docs(form_data)
     if contract.tipo_contrato in REQUESTS_COMPLEMENTARES or not hasattr(contrato_data, "participacao"):
         return
-    from app.routers.contract import campos_rascunho_participacao
+    from app.services.rascunho_participacao import campos_rascunho_participacao
 
     try:
         campos = campos_rascunho_participacao(contrato_data, user.email, user.name)
@@ -150,11 +150,6 @@ def _atualizar_documentos_do_cliente(db: Session, contract: ContractDB, form_dat
     ):
         for k, v in do_contrato.items():
             setattr(ficha, k, v)
-
-
-def _check_access(contract: ContractDB, user: CurrentUser):
-    if not pode_acessar_contrato(user, contract):
-        raise HTTPException(403, "Sem permissao para acessar este contrato")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────
@@ -225,9 +220,9 @@ def get_contract(
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
 
-    _check_access(contract, user)
+    exigir_acesso_ao_contrato(contract, user)
 
-    from app.routers.docuseal import socio_sugerido
+    from app.services.assinatura import socio_sugerido
 
     atual = next((v for v in contract.versions if v.version_number == contract.current_version), None)
     sugerido = socio_sugerido(atual.form_data_json if atual else None, db)
@@ -286,7 +281,7 @@ def list_documentos(
     contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
-    _check_access(contract, user)
+    exigir_acesso_ao_contrato(contract, user)
 
     query = db.query(ContractDB).filter(ContractDB.contrato_origem_id == contract_id)
     if not pode(user, Capacidade.VER_CONTRATOS_DE_TODOS):  # mesma regra da lista de contratos
@@ -316,7 +311,7 @@ def get_contract_form_data(
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
 
-    _check_access(contract, user)
+    exigir_acesso_ao_contrato(contract, user)
 
     query = db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id)
     if version:
@@ -345,7 +340,7 @@ def update_contract(
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
 
-    _check_access(contract, user)
+    exigir_acesso_ao_contrato(contract, user)
     _exigir_versao_atual(contract, body.version)
     _exigir_editavel(contract, db)
 
@@ -422,7 +417,7 @@ def update_contract_status(
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
 
-    _check_access(contract, user)
+    exigir_acesso_ao_contrato(contract, user)
 
     valid_statuses = {"rascunho", "enviado", "assinado", "cancelado"}
     if status not in valid_statuses:
@@ -470,7 +465,7 @@ def rollback_contract(
     if not contract:
         raise HTTPException(404, "Contrato nao encontrado")
 
-    _check_access(contract, user)
+    exigir_acesso_ao_contrato(contract, user)
     _exigir_editavel(contract, db)
 
     # Find the target version

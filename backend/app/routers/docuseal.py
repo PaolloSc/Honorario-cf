@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hmac
-import json
 import logging
 from typing import Any
 
@@ -9,13 +8,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from app.auth import CurrentUser, get_current_user
+from app.auth import CurrentUser, exigir_acesso_ao_contrato, get_current_user
 from app.config import settings
-from app.database import ColaboradorDB, ContractDB, ContractVersionDB, get_db
+from app.database import ContractDB, ContractVersionDB, get_db
 from app.services.arquivo_contrato import ArquivoNaoEncontrado
 from app.services.docuseal import link_assinatura
 from app.services import assinatura, resultado_assinatura, servicos_externos
-from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_DOCUSEAL, MSG_ERRO_INTERNO
 
 logger = logging.getLogger(__name__)
@@ -44,43 +42,6 @@ class DocuSealResponse(BaseModel):
     submission_id: str | None = None
     # Contratantes com link e WhatsApp: a tela abre o WhatsApp logo apos o envio.
     whatsapp: list[dict[str, str]] = []
-
-
-def socio_sugerido(form_data_json: str | None, db: Session) -> ColaboradorDB | None:
-    """Socio pre-selecionado na tela para assinar pelo escritorio (o usuario pode trocar).
-
-    O responsavel pela gestao, se for socio; senao o primeiro socio entre os que
-    recebem participacao (regra do PR #74).
-    """
-    from app.models.contract import Participacao
-
-    if not form_data_json:
-        return None
-    try:
-        form_data = json.loads(form_data_json)
-    except ValueError:
-        return None
-
-    socios = (
-        db.query(ColaboradorDB)
-        .filter(
-            ColaboradorDB.papel == "socio",
-            ColaboradorDB.ativo.is_(True),
-            ColaboradorDB.email.isnot(None),
-        )
-        .all()
-    )
-
-    try:
-        participacao = Participacao(**(form_data.get("participacao") or {}))
-    except Exception:
-        return None
-    por_nome = {s.nome: s for s in socios}
-    for nome in [participacao.responsavel_gestao] + [p.nome for p in participacao.participantes]:
-        socio = por_nome.get((nome or "").strip())
-        if socio:
-            return socio
-    return None
 
 
 @router.post("/send-for-signature", response_model=DocuSealResponse)
@@ -256,12 +217,10 @@ async def cancelar_envio_assinatura(
 
     So para contrato 'enviado'. Se o DocuSeal recusar ou falhar, nada muda aqui.
     """
-    from app.routers.contracts import _check_access
-
     contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato não encontrado")
-    _check_access(contract, user)
+    exigir_acesso_ao_contrato(contract, user)
     try:
         await resultado_assinatura.cancelar_envio(db, contract, user.email)
     except resultado_assinatura.EnvioNaoCancelavel as e:

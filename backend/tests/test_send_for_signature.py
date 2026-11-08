@@ -1191,7 +1191,7 @@ class TestSocioSugerido:
             db.close()
 
     def _sugerido(self, form_data):
-        from app.routers.docuseal import socio_sugerido
+        from app.services.assinatura import socio_sugerido
 
         db = SessionLocal()
         try:
