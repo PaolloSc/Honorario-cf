@@ -14,6 +14,9 @@ assert.equal(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcela
 // Com texto, mensal ou parcela única: passa.
 assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "customizado", parcelamento_customizado: "50/50" })), "E"), []);
 assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal", numero_parcelas: 2, data_primeira_parcela: "2026-12-15" })), "E"), []);
+// data impossivel (31/02) conta como vazia
+assert.equal(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal", numero_parcelas: 2, data_primeira_parcela: "2027-02-31" })), "E").length, 1);
+assert.deepEqual(errosDoEscopo(escopo(pl({ tipo_parcelamento: "mensal", numero_parcelas: 2, data_primeira_parcela: "2028-02-29" })), "E"), []); // bissexto vale
 assert.deepEqual(errosDoEscopo(escopo(pl({})), "E"), []);
 // Pró-labore desmarcado não valida dado que ficou para trás.
 assert.deepEqual(

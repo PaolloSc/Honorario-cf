@@ -14,6 +14,14 @@ type Honorario = keyof typeof ROTULOS;
 
 // Parcelamento mensal automático: a parcela sai de valor_total / nº de parcelas, então o que o
 // usuário informa é o nº de parcelas e a data da 1ª.
+// Data impossivel (ex.: 2027-02-31, de rascunho) conta como vazia: o servidor a recusa na etapa 7.
+function dataExiste(iso?: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3];
+}
+
 function errosParcelamento(
   pl: { tipo_parcelamento?: string; numero_parcelas?: number; data_primeira_parcela?: string },
   rotulo: string,
@@ -21,7 +29,7 @@ function errosParcelamento(
   if (pl.tipo_parcelamento !== "mensal") return [];
   const errors: string[] = [];
   if ((pl.numero_parcelas ?? 0) <= 0) errors.push(`${rotulo} mensal precisa do número de parcelas.`);
-  if (!pl.data_primeira_parcela) errors.push(`${rotulo} mensal precisa do vencimento da 1ª parcela.`);
+  if (!dataExiste(pl.data_primeira_parcela)) errors.push(`${rotulo} mensal precisa do vencimento da 1ª parcela.`);
   return errors;
 }
 
