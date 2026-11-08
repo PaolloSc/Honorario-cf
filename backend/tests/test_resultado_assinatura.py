@@ -95,3 +95,25 @@ def test_ficha_com_falha_no_envio_tenta_de_novo_na_proxima(client):
     bom.send_html_email = AsyncMock(return_value={"success": True})
     _roda("rc-003", bom)
     assert bom.send_html_email.await_count == 1
+
+
+def test_ficha_final_sem_participacao_sai_dizendo_sem_participacao(client):
+    cid = "rc-004"
+    db = SessionLocal()
+    try:
+        db.add(ContractDB(contract_id=cid, status="enviado", client_name="Cliente Y", client_email="c@x.com",
+                          current_version=1, created_by="adv@test.com", created_at=utcnow(), updated_at=utcnow()))
+        db.commit()
+        db.add(ContractVersionDB(
+            contract_id=cid, version_number=1, docuseal_submission_id="s", created_at=utcnow(),
+            form_data_json=json.dumps({"escopos": [{"tipo": "consultoria_lgpd"}],
+                                       "participacao": {"tem_participacao": False, "valor_percentual": "9",
+                                                        "valor_tipo": "percentual", "responsavel_gestao": "Carla"}})))
+        db.commit()
+    finally:
+        db.close()
+    svc = MagicMock()
+    svc.send_html_email = AsyncMock(return_value={"success": True})
+    _roda(cid, svc)
+    html = svc.send_html_email.await_args.kwargs["html_content"]
+    assert "Sem participação" in html and "Carla" in html and "9%" not in html

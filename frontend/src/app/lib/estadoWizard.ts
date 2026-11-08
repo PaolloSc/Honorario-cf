@@ -201,21 +201,11 @@ export function alterarEnvio(data: ContratoFormData, patch: EnvioSalvo): Contrat
 // ── Ficha interna → financeiro ────────────────────────────────────────────
 
 /**
- * A ficha vai ao financeiro quando há participação, cadastro do Legal One, contato financeiro ou
- * responsável pela gestão preenchidos — contratos sem participação também precisam ser lançados.
+ * A ficha vai sempre ao financeiro. Sem participação ela diz "Sem participação" (o backend monta
+ * o texto); o cadastro do Legal One, o contato e o responsável pela gestão seguem junto.
  */
 export function temFichaParaFinanceiro(p?: Participacao): p is Participacao {
-  if (!p) return false;
-  return Boolean(
-    p.tem_participacao ||
-      p.categoria_cliente ||
-      p.etiquetas?.length ||
-      p.listas_transmissao?.length ||
-      p.contato_financeiro_nome ||
-      p.contato_financeiro_email ||
-      p.contato_financeiro_telefone ||
-      p.responsavel_gestao
-  );
+  return Boolean(p);
 }
 
 // Os campos de participação só entram no payload quando o toggle está ligado: o
@@ -227,6 +217,7 @@ export function montarFicha(contractId: string, data: ContratoFormData, objetoCo
     contract_id: contractId,
     cliente_nome: nomeDoContratante(data.contratantes[0]),
     objeto_contrato: objetoContrato,
+    tem_participacao: Boolean(p.tem_participacao),
     categoria_cliente: p.categoria_cliente,
     etiquetas: p.etiquetas ?? [],
     listas_transmissao: p.listas_transmissao ?? [],

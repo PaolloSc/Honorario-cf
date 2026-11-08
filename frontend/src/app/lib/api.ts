@@ -155,6 +155,7 @@ export async function sendParticipacao(data: {
   contract_id: string;
   cliente_nome: string;
   objeto_contrato?: string;
+  tem_participacao?: boolean;
   valor_tipo?: string;
   valor_percentual?: string;
   valor_monetario?: number;

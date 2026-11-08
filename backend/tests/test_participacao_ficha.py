@@ -102,6 +102,18 @@ def test_ficha_sem_participacao_vira_cadastro_legal_one(client, _override_auth):
     assert "Cadastro Legal One" in captured["html_content"]
     assert "Ficha de Participação" not in captured["html_content"]
     assert captured["subject"] == "Cadastro Legal One — Cliente X"
+    assert "Sem participação" in captured["html_content"]
+
+
+def test_tem_participacao_falso_explicito_ignora_o_que_foi_digitado_antes(client, _override_auth):
+    html = _enviar(client, tem_participacao=False, valor_tipo="percentual", valor_percentual="9",
+                   responsavel_gestao="Carla")["html_content"]
+    assert "Sem participação" in html and "Carla" in html and "9%" not in html
+
+
+def test_com_participacao_nao_diz_sem_participacao(client, _override_auth):
+    html = _enviar(client, tem_participacao=True, valor_tipo="percentual", valor_percentual="10")["html_content"]
+    assert "Sem participação" not in html and "10" in html
 
 
 def test_com_participacao_mantem_titulo_de_ficha(client, _override_auth):

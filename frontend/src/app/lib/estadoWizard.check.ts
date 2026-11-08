@@ -157,13 +157,15 @@ assert.equal(JSON.stringify(normalizarFormData(comExtras as never)), JSON.string
 
 // ── ficha interna ──
 assert.equal(temFichaParaFinanceiro(undefined), false);
-assert.equal(temFichaParaFinanceiro({ tem_participacao: false } as never), false);
+assert.equal(temFichaParaFinanceiro({ tem_participacao: false } as never), true); // sai sempre, dizendo "Sem participação"
 assert.equal(temFichaParaFinanceiro({ tem_participacao: false, responsavel_gestao: "Carla Sócia" } as never), true);
 const semPart = montarFicha("c1", dados({ participacao: { tem_participacao: false, valor_percentual: "9", responsavel_gestao: "Carla Sócia" } }), "objeto");
 assert.equal(semPart.responsavel_gestao, "Carla Sócia");
+assert.equal(semPart.tem_participacao, false);
 assert.equal("valor_percentual" in semPart, false); // o que foi digitado antes de desligar não vai ao financeiro
 const comPart = montarFicha("c1", dados({ participacao: { tem_participacao: true, valor_percentual: "9", valor_tipo: "percentual" } }), "objeto");
 assert.equal(comPart.valor_percentual, "9");
+assert.equal(comPart.tem_participacao, true);
 assert.equal(comPart.cliente_nome, "Ana");
 assert.equal(comPart.objeto_contrato, "objeto");
 
