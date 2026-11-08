@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from html import escape
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,10 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
 from app.config import settings
-from app.database import AuditLogDB, ContractDB, ContractVersionDB, get_db, utcnow
+from app.database import ContractDB, get_db
 from app.services.previa_contrato import _SIG_TAG
 from app.services.arquivo_contrato import ArquivoNaoEncontrado, nome_do_anexo, resolver_arquivo
-from app.services import servicos_externos
+from app.services import email_financeiro, servicos_externos
+from app.services.ciclo_contrato import registrar_auditoria
 from app.services.contrato_carregado import tipo_da_versao, ultima_versao
 from app.utils.participacao import linhas_participacao
 from app.utils.erros import MSG_ERRO_EMAIL
@@ -185,14 +185,7 @@ async def send_contract_email(
 
         if result["success"]:
             if contract:
-                db.add(AuditLogDB(
-                    contract_id=data.contract_id,
-                    action="envio_email",
-                    detail=f"E-mail enviado para {data.destinatario_email}",
-                    version_number=contract.current_version,
-                    user_email=user.email,
-                    created_at=utcnow(),
-                ))
+                registrar_auditoria(db, data.contract_id, "envio_email", f"E-mail enviado para {data.destinatario_email}", contract.current_version, user.email)
                 db.commit()
             return EmailResponse(success=True, message="E-mail enviado com sucesso")
         else:
@@ -206,80 +199,6 @@ async def send_contract_email(
         raise HTTPException(status_code=500, detail=MSG_ERRO_EMAIL)
 
 
-def _build_objeto_contrato_from_db(contract_id: str, db: Session) -> str:
-    """Build 'Objeto do Contrato' text from stored form_data_json as fallback."""
-    import json as _json
-
-    ver = (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract_id)
-        .order_by(ContractVersionDB.version_number.desc())
-        .first()
-    )
-    if not ver or not ver.form_data_json:
-        return ""
-
-    try:
-        form_data = _json.loads(ver.form_data_json)
-    except (ValueError, TypeError):
-        return ""
-
-    escopos = form_data.get("escopos", [])
-    if not escopos:
-        return ""
-
-    from app.models.contract import ESCOPO_LABELS, TipoEscopo
-
-    lines: list[str] = []
-    for escopo in escopos:
-        parts: list[str] = []
-        tipo_raw = escopo.get("tipo", "")
-
-        # Get label from ESCOPO_LABELS enum map
-        try:
-            tipo_enum = TipoEscopo(tipo_raw)
-            label = ESCOPO_LABELS.get(tipo_enum, tipo_raw)
-        except ValueError:
-            label = tipo_raw
-
-        if label and tipo_raw != "outro":
-            parts.append(label)
-        if escopo.get("descricao_custom"):
-            parts.append(escopo["descricao_custom"])
-        if escopo.get("numero_autos"):
-            parts.append(f"Processo: {escopo['numero_autos']}")
-        if escopo.get("demandas"):
-            parts.append(f"Demandas: {escopo['demandas']}")
-        if escopo.get("pessoas_patrimonios"):
-            parts.append(f"Pessoas/Patrimônios: {escopo['pessoas_patrimonios']}")
-        if escopo.get("tipo_reestruturacao"):
-            parts.append(f"Reestruturação: {escopo['tipo_reestruturacao']}")
-        if escopo.get("documentos"):
-            parts.append(f"Documentos: {escopo['documentos']}")
-        if escopo.get("consulta"):
-            parts.append(f"Consulta: {escopo['consulta']}")
-
-        subtipo_mem = escopo.get("subtipo_memoriais")
-        if subtipo_mem:
-            atividades: list[str] = []
-            if subtipo_mem.get("elaboracao_memoriais"):
-                atividades.append("Elaboração de memoriais")
-            if subtipo_mem.get("despacho_memoriais"):
-                atividades.append("Despacho de memoriais")
-            if subtipo_mem.get("sustentacao_oral_relator"):
-                atividades.append("Sustentação oral c/ Relator")
-            if subtipo_mem.get("sustentacao_oral_todos_julgadores"):
-                atividades.append("Sustentação oral c/ todos os julgadores")
-            if atividades:
-                parts.append(f"Atividades: {', '.join(atividades)}")
-
-        line = " | ".join(parts)
-        if line:
-            lines.append(line)
-
-    return "\n".join(lines)
-
-
 @router.post("/send-participacao", response_model=EmailResponse)
 async def send_participacao_email(
     data: ParticipacaoEmailRequest,
@@ -291,7 +210,7 @@ async def send_participacao_email(
         # Use objeto_contrato from request; if empty, build from stored form data
         objeto_contrato = data.objeto_contrato.strip()
         if not objeto_contrato:
-            objeto_contrato = _build_objeto_contrato_from_db(data.contract_id, db)
+            objeto_contrato = email_financeiro.objeto_do_contrato_salvo(data.contract_id, db)
 
         rows = []
         # Objeto do Contrato first (as requested by financeiro)
@@ -315,27 +234,12 @@ async def send_participacao_email(
         ))
         titulo = "Ficha de Participação" if tem_participacao else "Cadastro Legal One"
 
-        # Escapa tudo que veio do payload; a quebra de linha vira <br> depois do
-        # escape, para o objeto do contrato continuar legivel sem abrir injecao.
-        table_rows = "".join(
-            f'<tr><td style="padding:8px;border:1px solid #D7D1CA;font-weight:600;">{escape(k)}</td>'
-            f'<td style="padding:8px;border:1px solid #D7D1CA;">{escape(str(v)).replace(chr(10), "<br>")}</td></tr>'
-            for k, v in rows
-        )
-
-        html = (
-            '<div style="font-family: Segoe UI, Tahoma, sans-serif; max-width: 600px;">'
-            '<div style="background-color: #1A3C34; padding: 20px 28px; border-radius: 8px 8px 0 0;">'
-            f'<span style="color: #FFFFFF; font-size: 16px; font-weight: 500;">{titulo} — Uso Interno</span>'
-            '</div>'
-            '<div style="padding: 24px; border: 1px solid #D7D1CA; border-top: none; border-radius: 0 0 8px 8px;">'
-            f'<p><strong>Cliente:</strong> {escape(data.cliente_nome)}</p>'
-            f'<p><strong>Contrato:</strong> {escape(data.contract_id)}</p>'
-            f'<p><strong>Registrado por:</strong> {escape(user.email)}</p>'
-            '<table style="width:100%;border-collapse:collapse;margin-top:16px;">'
-            f'{table_rows}'
-            '</table>'
-            '</div></div>'
+        html = email_financeiro.montar_ficha_html(
+            titulo=titulo,
+            cliente=data.cliente_nome,
+            contract_id=data.contract_id,
+            registrado_por=user.email,
+            linhas=rows,
         )
 
         # Arquivo do contrato (refeito do banco se o disco o perdeu); sem ele, vai sem anexo
@@ -344,36 +248,17 @@ async def send_participacao_email(
         except ArquivoNaoEncontrado:
             contract_filepath = None
 
-        service = servicos_externos.get_email_service()
-
-        if contract_filepath:
-            result = await service.send_html_email_with_attachment(
-                to_email=settings.financeiro_email,
-                to_name="Financeiro C&F",
-                subject=f"{titulo} — {data.cliente_nome}",
-                html_content=html,
-                attachment_path=contract_filepath,
-                attachment_name=nome_do_anexo(data.cliente_nome, data.contract_id),
-            )
-        else:
-            result = await service.send_html_email(
-                to_email=settings.financeiro_email,
-                to_name="Financeiro C&F",
-                subject=f"{titulo} — {data.cliente_nome}",
-                html_content=html,
-            )
+        result = await email_financeiro.enviar_ficha(
+            assunto=f"{titulo} — {data.cliente_nome}",
+            html=html,
+            anexo_path=contract_filepath,
+            anexo_nome=nome_do_anexo(data.cliente_nome, data.contract_id),
+        )
 
         if result["success"]:
             contract = db.query(ContractDB).filter(ContractDB.contract_id == data.contract_id).first()
             if contract:
-                db.add(AuditLogDB(
-                    contract_id=data.contract_id,
-                    action="envio_ficha_participacao",
-                    detail=f"Ficha de participação enviada para {settings.financeiro_email}",
-                    version_number=contract.current_version,
-                    user_email=user.email,
-                    created_at=utcnow(),
-                ))
+                registrar_auditoria(db, data.contract_id, "envio_ficha_participacao", f"Ficha de participação enviada para {settings.financeiro_email}", contract.current_version, user.email)
                 db.commit()
             return EmailResponse(success=True, message="Ficha enviada para o financeiro")
 
