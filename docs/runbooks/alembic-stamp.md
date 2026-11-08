@@ -10,8 +10,10 @@ Produção só com OK do Paollo. Homolog (dados fictícios) pode ser carimbado n
 1. Conferir o esquema (só leitura): `DATABASE_URL=<url do ambiente> python backend/scripts/comparar_esquema.py`. Diferenças conhecidas e inofensivas em produção em 08/11/2026: `colaboradores.areas` (coluna que a 0011 remove e nunca rodou lá) e `nfse_recebidas.chave_acesso` (índice único em vez de constraint). Qualquer outra diferença: parar e avisar.
 2. Backup do Neon do ambiente (produção: obrigatório).
 3. Carimbar: `cd backend && DATABASE_URL=<url> alembic stamp 0017`.
-4. Conferir: `python -m app.migrar` imprime `upgrade` (nada pendente) e `SELECT version_num FROM alembic_version` devolve a cabeça atual.
+4. Conferir (`cd backend` antes; `DATABASE_URL` apontando para o mesmo banco): `python -m app.migrar` imprime `upgrade` (nada pendente) e `SELECT version_num FROM alembic_version` devolve a cabeça atual.
 5. Fazer um deploy: o log do build mostra `migrar: upgrade`.
+
+Atenção: rodar `scripts/deploy_migrar.py` na sua máquina com `VERCEL_ENV=production` carrega a configuração estrita do app, que exige as variáveis essenciais (as mesmas do deploy, ver #209); sem elas o script falha ao importar. Para só conferir ou carimbar, prefira `python -m app.migrar` e `alembic stamp` acima.
 
 ## Voltar atrás
 `DROP TABLE alembic_version;` no ambiente. Volta ao estado anterior (sem carimbo); o app não depende da tabela.
