@@ -51,45 +51,48 @@ export default function Step4Acessorios({ acessorios, onChange }: Step4Props) {
           />
         </FormField>
 
-        <Toggle
-          label="Há reembolso de despesas?"
-          value={acessorios.tem_reembolso}
-          onChange={(v) => onChange({ ...acessorios, tem_reembolso: v })}
-        />
+        {/* Bloco dos interruptores: o tour da etapa 4 destaca ele inteiro. */}
+        <div className="space-y-4">
+          <Toggle
+            label="Há reembolso de despesas?"
+            value={acessorios.tem_reembolso}
+            onChange={(v) => onChange({ ...acessorios, tem_reembolso: v })}
+          />
  
-        {acessorios.tem_reembolso && (
-          <div className="ml-14 space-y-3">
-            <Toggle
-              label="O reembolso terá limitação?"
-              value={acessorios.reembolso_limitado}
-              onChange={(v) =>
-                onChange({ ...acessorios, reembolso_limitado: v })
-              }
-            />
-            {acessorios.reembolso_limitado && (
-              <FormField label="Descreva a limitação do reembolso">
-                <TextArea
-                  value={acessorios.descricao_limitacao_reembolso || ""}
-                  onChange={(e) =>
-                    onChange({
-                      ...acessorios,
-                      descricao_limitacao_reembolso: e.target.value,
-                    })
-                  }
-                  placeholder="Descreva as limitações de reembolso..."
-                />
-              </FormField>
-            )}
-          </div>
-        )}
+          {acessorios.tem_reembolso && (
+            <div className="ml-14 space-y-3">
+              <Toggle
+                label="O reembolso terá limitação?"
+                value={acessorios.reembolso_limitado}
+                onChange={(v) =>
+                  onChange({ ...acessorios, reembolso_limitado: v })
+                }
+              />
+              {acessorios.reembolso_limitado && (
+                <FormField label="Descreva a limitação do reembolso">
+                  <TextArea
+                    value={acessorios.descricao_limitacao_reembolso || ""}
+                    onChange={(e) =>
+                      onChange({
+                        ...acessorios,
+                        descricao_limitacao_reembolso: e.target.value,
+                      })
+                    }
+                    placeholder="Descreva as limitações de reembolso..."
+                  />
+                </FormField>
+              )}
+            </div>
+          )}
  
-        <Toggle
-          label="Haverá multa de 10% por inadimplemento?"
-          value={acessorios.tem_penalidade_inadimplemento}
-          onChange={(v) =>
-            onChange({ ...acessorios, tem_penalidade_inadimplemento: v })
-          }
-        />
+          <Toggle
+            label="Haverá multa de 10% por inadimplemento?"
+            value={acessorios.tem_penalidade_inadimplemento}
+            onChange={(v) =>
+              onChange({ ...acessorios, tem_penalidade_inadimplemento: v })
+            }
+          />
+        </div>
  
         <FormField
           label="Valor da Diligência Externa (R$)"
