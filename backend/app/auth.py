@@ -194,12 +194,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Current
     token = auth_header[7:]
 
     if settings.convite_token and hmac.compare_digest(token, settings.convite_token):
-        user = _get_or_create_user(db, CONVITE_AZURE_ID, CONVITE_EMAIL, "Convidado (link)")
-        if user.role != settings.convite_role:
-            user.role = settings.convite_role
-            db.commit()
+        # O convidado nao tem conta: entra com o papel da configuracao, sem gravar nada no banco.
         return _enforce_readonly(request, CurrentUser(
-            azure_id=user.azure_id, email=user.email, name=user.name, role=user.role,
+            azure_id=CONVITE_AZURE_ID, email=CONVITE_EMAIL, name="Convidado (link)", role=settings.convite_role,
         ))
 
     payload = _decode_token(token)

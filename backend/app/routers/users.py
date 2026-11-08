@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -9,13 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.acesso import PAPEIS
 from app.auth import CurrentUser, get_current_user, require_admin
+from app.services import pessoas
 from app.models.oab import OabItem, oabs_de_json
 from app.database import (
-    ColaboradorDB,
-    PAPEIS_PARTICIPAVEIS,
     UserDB,
     get_db,
-    utcnow,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,12 +77,7 @@ def list_colaboradores(
     Fonte: tabela ``colaboradores`` (não ``users``). Qualquer usuário logado.
     ``participavel=true`` retorna apenas advogados/sócios (campos "Para quem" etc.).
     """
-    q = db.query(ColaboradorDB)
-    if not include_inactive:
-        q = q.filter(ColaboradorDB.ativo.is_(True))
-    if participavel:
-        q = q.filter(ColaboradorDB.papel.in_(PAPEIS_PARTICIPAVEIS))
-    rows = q.order_by(ColaboradorDB.ordem, ColaboradorDB.nome).all()
+    rows = pessoas.listar_colaboradores(db, so_participaveis=participavel, incluir_inativos=include_inactive)
     return ColaboradoresResponse(
         colaboradores=[
             ColaboradorOut(name=c.nome, email=c.email or "", role=c.papel, oabs=oabs_de_json(c.oabs))

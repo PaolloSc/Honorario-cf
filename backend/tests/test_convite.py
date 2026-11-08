@@ -23,6 +23,7 @@ def test_convite(monkeypatch):
         db.commit()
         u = auth_mod.get_current_user(_req("segredo-convite"), db)
         assert (u.email, u.role) == (auth_mod.CONVITE_EMAIL, "admin")
+        assert db.query(auth_mod.UserDB).filter_by(azure_id=auth_mod.CONVITE_AZURE_ID).count() == 0  # nao grava no banco
 
         monkeypatch.setattr(settings, "convite_role", "advogado")  # troca pela env, sem mexer no banco
         assert auth_mod.get_current_user(_req("segredo-convite"), db).role == "advogado"
