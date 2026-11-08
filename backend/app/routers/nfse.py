@@ -6,13 +6,13 @@ from datetime import date as _date, datetime, datetime as _dt, timedelta as _td,
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.auth import require_financeiro
 from app.config import settings
 from app.database import SessionLocal, get_db
-from app.models.nfse import NFSeOut, SyncJobOut, VincularRequest
+from app.models.nfse import NFSeOut, VincularRequest
+from app.services import notas_recebidas as notas
 from app.services.nfse_pagamento import gerar_pagamento_para_nfse
 
 
@@ -26,27 +26,20 @@ def nfse_health() -> dict:
         return {"enabled": False}
 
     with SessionLocal() as db:
-        last = db.execute(text("""
-            SELECT iniciado_em, finalizado_em, status, total_nfs, erros
-            FROM sync_jobs
-            ORDER BY iniciado_em DESC LIMIT 1
-        """)).fetchone()
+        last = notas.ultimo_job(db)
+        ultimo = None if last is None else {
+            "iniciado_em": last.iniciado_em.isoformat() if last.iniciado_em else None,
+            "finalizado_em": last.finalizado_em.isoformat() if last.finalizado_em else None,
+            "status": last.status,
+            "total_nfs": last.total_nfs,
+            "erros": last.erros,
+        }
 
     return {
         "enabled": True,
-        "last_job": None if last is None else {
-            "iniciado_em": last[0].isoformat() if last[0] else None,
-            "finalizado_em": last[1].isoformat() if last[1] else None,
-            "status": last[2],
-            "total_nfs": last[3],
-            "erros": last[4],
-        },
+        "last_job": ultimo,
         "now": datetime.now(timezone.utc).isoformat(),
     }
-
-
-def _nfse_out(row) -> NFSeOut:
-    return NFSeOut.model_validate(dict(row._mapping))
 
 
 @router.get("", response_model=list[NFSeOut])
@@ -60,27 +53,16 @@ def listar_nfse(
 ):
     if not settings.nfse_enabled:
         raise HTTPException(404, "NFS-e desabilitado")
-    sql = ["SELECT * FROM nfse_recebidas WHERE 1=1"]
-    params: dict = {}
-    if direcao:
-        sql.append("AND direcao = :d")
-        params["d"] = direcao
-    if cnpj_prestador:
-        sql.append("AND cnpj_prestador = :c")
-        params["c"] = cnpj_prestador
+    de = ate = None
     if competencia_mes:
         year, month = map(int, competencia_mes.split("-"))
-        inicio = _date(year, month, 1)
-        fim = _date(year + (month // 12), (month % 12) + 1, 1) - _td(days=1)
-        sql.append("AND competencia BETWEEN :i AND :f")
-        params["i"] = inicio
-        params["f"] = fim
-    if status:
-        sql.append("AND status_matching = :s")
-        params["s"] = status
-    sql.append("ORDER BY data_emissao DESC LIMIT 500")
-    rows = db.execute(text(" ".join(sql)), params).fetchall()
-    return [_nfse_out(row) for row in rows]
+        de = _date(year, month, 1)
+        ate = _date(year + (month // 12), (month % 12) + 1, 1) - _td(days=1)
+    rows = notas.listar(
+        db, direcao=direcao, cnpj_prestador=cnpj_prestador,
+        competencia_de=de, competencia_ate=ate, status=status,
+    )
+    return [NFSeOut.model_validate(r) for r in rows]
 
 
 @router.post("/{nfse_id}/vincular", response_model=NFSeOut)
@@ -92,58 +74,20 @@ def vincular_manual(
 ):
     if not settings.nfse_enabled:
         raise HTTPException(404, "NFS-e desabilitado")
-    row = db.execute(
-        text("SELECT id, status_matching FROM nfse_recebidas WHERE id=:i"),
-        {"i": nfse_id},
-    ).fetchone()
-    if not row:
-        raise HTTPException(404, "NFS-e nao encontrada")
-    if row.status_matching == "auto":
-        raise HTTPException(409, "NFS-e ja vinculada automaticamente; use 'revisar'")
-    if row.status_matching == "recebida":
-        raise HTTPException(409, "NFS-e recebida de fornecedor nao se vincula a contrato")
-
-    contract = db.execute(
-        text("SELECT contract_id FROM contracts WHERE contract_id=:c"),
-        {"c": body.contract_id},
-    ).fetchone()
-    if not contract:
-        raise HTTPException(404, "contrato nao existe")
-
-    part = db.execute(
-        text("""SELECT id FROM participacoes
-                WHERE contract_id=:c AND vinculo_ativo=TRUE AND aprovada=TRUE
-                ORDER BY data_inicio DESC LIMIT 1"""),
-        {"c": body.contract_id},
-    ).fetchone()
-    participacao_id = part[0] if part else None
-
     user_email = user.get("email") if isinstance(user, dict) else getattr(user, "email", "?")
-    now = _dt.now(_tz.utc)
-    db.execute(
-        text("""UPDATE nfse_recebidas
-               SET contract_id=:c, participacao_id=:p, status_matching='manual',
-                   motivo=:m, atualizado_em=:n WHERE id=:i"""),
-        {
-            "c": body.contract_id,
-            "p": participacao_id,
-            "m": body.motivo or "vinculo manual",
-            "n": now,
-            "i": nfse_id,
-        },
-    )
-    db.execute(
-        text("""INSERT INTO nfse_audit_log (nfse_id, acao, user_email, ts)
-               VALUES (:i, 'nfse.vincular_manual', :u, :n)"""),
-        {"i": nfse_id, "u": user_email, "n": now},
-    )
-    db.commit()
+    try:
+        nota, participacao_id = notas.vincular_manual(db, nfse_id, body.contract_id, body.motivo, user_email)
+    except notas.NotaNaoEncontrada:
+        raise HTTPException(404, "NFS-e nao encontrada")
+    except notas.NotaNaoVinculavel as e:
+        raise HTTPException(409, str(e))
+    except notas.ContratoNaoExiste:
+        raise HTTPException(404, "contrato nao existe")
 
     if participacao_id:
         gerar_pagamento_para_nfse(db, nfse_id=nfse_id)
-
-    out = db.execute(text("SELECT * FROM nfse_recebidas WHERE id=:i"), {"i": nfse_id}).fetchone()
-    return _nfse_out(out)
+        db.refresh(nota)
+    return NFSeOut.model_validate(nota)
 
 
 @router.post("/sync", response_model=dict)
@@ -158,13 +102,5 @@ def sync_manual(
     cnpj = re.sub(r"\D", "", cnpj_prestador)
     now = _dt.now(_tz.utc)
     user_email = user.get("email") if isinstance(user, dict) else getattr(user, "email", "?")
-    db.execute(
-        text("""
-            INSERT INTO sync_jobs (cnpj_prestador, origem, disparado_por,
-                                   iniciado_em, periodo_inicio, periodo_fim, status)
-            VALUES (:c, 'manual', :u, :n, :n, :n, 'agendado')
-        """),
-        {"c": cnpj, "u": user_email, "n": now},
-    )
-    db.commit()
+    notas.criar_job(db, cnpj, "manual", user_email, now.date(), now.date(), status="agendado")
     return {"ok": True, "msg": "sync agendado; GH Actions executara no proximo run ou via dispatch"}
