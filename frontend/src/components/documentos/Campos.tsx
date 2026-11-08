@@ -298,6 +298,8 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
   const [numeroEnd, setNumeroEnd] = useState("");
   const [msgCep, setMsgCep] = useState("");
   const [logradouro, setLogradouro] = useState("");
+  // Endereço só entra pelo CEP; digitação livre só depois de o CEP falhar e o usuário pedir.
+  const [enderecoManual, setEnderecoManual] = useState(false);
 
   useEffect(() => {
     listColaboradores().then((r) => setColaboradores(r.colaboradores)).catch(() => setColaboradores([]));
@@ -397,15 +399,16 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
     try {
       const r = await consultarCep(digitos);
       if (!r) {
-        setMsgCep("CEP não encontrado. Digite o endereço no campo abaixo.");
+        setMsgCep("CEP não encontrado.");
         return;
       }
+      setEnderecoManual(false);
       const resto = [r.bairro, r.localidade && r.uf ? `${r.localidade}/${r.uf}` : ""].filter(Boolean).join(", ");
       setLogradouro(r.logradouro);
       setBairroCidade(resto);
       set({ endereco_substabelecidos: montarEndereco(r.logradouro, numeroEnd, formatCEP(digitos), resto) });
     } catch {
-      setMsgCep("Não foi possível buscar o CEP. Digite o endereço no campo abaixo.");
+      setMsgCep("Não foi possível buscar o CEP.");
     }
   };
   const mudarNumeroEnd = (valor: string) => {
@@ -491,13 +494,32 @@ export function CamposPoderes({ estado, onChange, erros }: Props<PoderesForm> & 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4">
         <FormField label="CEP" error={msgCep || undefined}>
           <Input value={cep} onChange={(e) => buscarCep(e.target.value)} inputMode="numeric" placeholder="00000-000" />
+          {msgCep && !enderecoManual && (
+            <button type="button" className={botaoLink} onClick={() => setEnderecoManual(true)}>Preencher o endereço à mão</button>
+          )}
         </FormField>
         <FormField label="Número">
           <Input value={numeroEnd} onChange={(e) => mudarNumeroEnd(e.target.value)} />
         </FormField>
       </div>
-      <FormField label="Endereço" hint="Preenchido pelo CEP; pode ser digitado ou ajustado. Vazio, a frase do endereço sai do documento.">
-        <Input value={estado.endereco_substabelecidos} onChange={(e) => set({ endereco_substabelecidos: e.target.value })} placeholder="Rua …, nº, bairro, cidade/UF, CEP" />
+      <FormField label="Endereço" hint="Preenchido pelo CEP. Vazio, a frase do endereço sai do documento.">
+        <Input
+          value={estado.endereco_substabelecidos}
+          onChange={(e) => set({ endereco_substabelecidos: e.target.value })}
+          readOnly={!enderecoManual}
+          tabIndex={enderecoManual ? undefined : -1}
+          className={enderecoManual ? "" : "bg-border/35 border-muted text-muted cursor-not-allowed"}
+          placeholder={enderecoManual ? "Rua …, nº, bairro, cidade/UF, CEP" : "Preenchido pelo CEP"}
+        />
+        {!enderecoManual && !logradouro && !bairroCidade && estado.endereco_substabelecidos?.trim() && (
+          <button
+            type="button"
+            className={botaoLink}
+            onClick={() => { setCep(""); setNumeroEnd(""); setMsgCep(""); set({ endereco_substabelecidos: "" }); }}
+          >
+            Trocar endereço (informar CEP)
+          </button>
+        )}
       </FormField>
 
       <h3 className="font-display text-sm font-semibold text-primary-dark mt-6 mb-1">Processos<span className="text-danger ml-1">*</span></h3>

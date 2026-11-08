@@ -68,7 +68,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
   // Marcado quando o ViaCEP nao devolve rua (CEP unico de cidade). Fica ligado
   // enquanto o usuario digita — se dependesse do valor, o campo sumiria na 1a letra.
   const [precisaRua, setPrecisaRua] = useState<Record<number, boolean>>({});
-  // CEP que falhou (não achado, ViaCEP fora): rua, bairro, cidade e UF são digitados.
+  // CEP que falhou (não achado, ViaCEP fora) e o usuário pediu: rua, bairro, cidade e UF são digitados.
   const [cepManual, setCepManual] = useState<Record<number, boolean>>({});
 
   // A lista mais recente: as consultas sao assincronas e o estado muda no meio.
@@ -100,12 +100,17 @@ export default function StepPartes({ contratantes, onChange }: Props) {
     );
   };
 
-  // Rua/cidade de um CEP anterior não podem sobrar no endereço do novo.
+  // Rua/cidade de um CEP anterior não podem sobrar no endereço do novo. A digitação
+  // só abre pelo botão "Preencher o endereço à mão" (CEP rural ou novo).
   const falhouCEP = (i: number, msg: string) => {
     setErroCep((prev) => ({ ...prev, [i]: msg }));
+    setPrecisaRua((prev) => ({ ...prev, [i]: false }));
+    setCepManual((prev) => ({ ...prev, [i]: false }));
+    update(i, { logradouro: "", bairro: "", cidade: "", uf: "" });
+  };
+  const preencherAMao = (i: number) => {
     setPrecisaRua((prev) => ({ ...prev, [i]: true }));
     setCepManual((prev) => ({ ...prev, [i]: true }));
-    update(i, { logradouro: "", bairro: "", cidade: "", uf: "" });
   };
 
   const buscarCEP = async (i: number, valor: string) => {
@@ -119,7 +124,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
     try {
       const data = await buscarCep(digitos);
       if (!data) {
-        falhouCEP(i, "CEP não encontrado. Preencha o endereço abaixo.");
+        falhouCEP(i, "CEP não encontrado.");
         return;
       }
       update(i, {
@@ -133,7 +138,7 @@ export default function StepPartes({ contratantes, onChange }: Props) {
       setPrecisaRua((prev) => ({ ...prev, [i]: !data.logradouro }));
       setCepManual((prev) => ({ ...prev, [i]: false }));
     } catch {
-      falhouCEP(i, "Erro ao buscar CEP. Preencha o endereço abaixo.");
+      falhouCEP(i, "Não foi possível buscar o CEP.");
     } finally {
       setBuscando(null);
     }
@@ -371,7 +376,16 @@ export default function StepPartes({ contratantes, onChange }: Props) {
                       <span className="text-sm text-muted self-center whitespace-nowrap">...</span>
                     )}
                   </div>
-                  {erroCep[i] && <p className="text-xs text-danger mt-1">{erroCep[i]}</p>}
+                  {erroCep[i] && (
+                    <p className="text-xs text-danger mt-1">
+                      {erroCep[i]}{" "}
+                      {!cepManual[i] && (
+                        <button type="button" className="font-medium text-primary hover:underline" onClick={() => preencherAMao(i)}>
+                          Preencher o endereço à mão
+                        </button>
+                      )}
+                    </p>
+                  )}
                 </FormField>
 
                 <FormField label="Número" required>
