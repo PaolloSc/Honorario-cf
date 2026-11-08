@@ -234,7 +234,7 @@ class TestResolveContractFilepath:
         output_dir = _get_output_dir()
         output_dir.mkdir(parents=True, exist_ok=True)
         contract_id = "resolve-regen-001"
-        regen_file = output_dir / f"contrato_{contract_id}.docx"
+        regen_file = output_dir / f"contrato_{contract_id}_v1.docx"  # refeito no nome da versao
 
         try:
             # Store a non-existent file_path but valid form_data_json
@@ -265,7 +265,7 @@ class TestResolveContractFilepath:
 
             mock_gen_instance = MagicMock()
 
-            def _mock_generate(data, contract_id=None):
+            def _mock_generate(data, contract_id=None, nome_arquivo=None):
                 # Simulate the generator creating the file
                 regen_file.write_bytes(b"regenerated docx content")
                 return (contract_id, str(regen_file))

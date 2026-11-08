@@ -112,7 +112,7 @@ class DocuSealService:
         logger.error("Failed to create submission: %s %s", response.status_code, response.text)
         return {
             "success": False,
-            "message": f"Erro ao enviar para assinatura: {response.status_code} - {response.text}",
+            "message": f"Erro ao enviar para assinatura (DocuSeal respondeu {response.status_code}). Tente novamente ou fale com o suporte.",
         }
  
     async def archive_submission(self, submission_id: int | str) -> bool:

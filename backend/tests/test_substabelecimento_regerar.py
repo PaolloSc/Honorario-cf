@@ -206,7 +206,7 @@ def test_falha_no_segundo_documento_nao_deixa_docx_nem_registro(client, monkeypa
 
 def test_falha_ao_gravar_no_banco_apaga_o_docx(client, monkeypatch):
     from app.database import AuditLogDB
-    import app.services.substabelecimento_vinculado as sv
+    import app.services.ciclo_contrato as sv
 
     original = sv.AuditLogDB
 

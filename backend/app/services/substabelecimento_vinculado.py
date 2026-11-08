@@ -10,11 +10,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
-
 from sqlalchemy.orm import Session
 
-from app.database import AuditLogDB, ContractDB, ContractVersionDB, serialize_cliente_docs, utcnow
+from app.database import ContractDB, ContractVersionDB, serialize_cliente_docs
 from app.models.documentos_complementares import (
     ROTULO_DOCUMENTO,
     TIPO_SUBSTABELECIMENTO,
@@ -24,6 +22,14 @@ from app.models.documentos_complementares import (
     email_contato,
     nome_contratante,
     nome_exibicao,
+)
+from app.services.ciclo_contrato import (
+    Arquivos,
+    criar,
+    gravar_versao,
+    preparar_versao,
+    registrar_auditoria,
+    travado,
 )
 from app.services.contrato_carregado import get_generator
 from app.utils.documento import normalizar_doc
@@ -47,18 +53,6 @@ def form_data_atual(contract: ContractDB, db: Session) -> dict:
         .first()
     )
     return json.loads(ver.form_data_json) if ver else {}
-
-
-def travado(contract: ContractDB, db: Session) -> bool:
-    """Ja foi enviado para assinatura (ou assinado): nao se mexe mais no documento."""
-    if contract.status in ("enviado", "assinado"):
-        return True
-    return (
-        db.query(ContractVersionDB)
-        .filter(ContractVersionDB.contract_id == contract.contract_id, ContractVersionDB.docuseal_submission_id.isnot(None))
-        .first()
-        is not None
-    )
 
 
 def _numero_normalizado(numero: str) -> str:
@@ -90,79 +84,40 @@ def substabelecimentos_do_outorgante(db: Session, documento: str) -> list[Contra
     return [c for c in candidatos if documento_do_outorgante(form_data_atual(c, db)) == documento]
 
 
-def nova_versao(db: Session, contract: ContractDB, data: SubstabelecimentoRequest, user_email: str, motivo: str) -> str:
-    """Regera o DOCX do mesmo documento e grava a proxima versao (sem commit). Devolve o arquivo."""
-    _, filepath = get_generator(TIPO_SUBSTABELECIMENTO).generate(data, contract_id=contract.contract_id)
-    numero = contract.current_version + 1
-    db.add(ContractVersionDB(
-        contract_id=contract.contract_id,
-        version_number=numero,
+def nova_versao(
+    db: Session, contract: ContractDB, data: SubstabelecimentoRequest, user_email: str, motivo: str, arquivos: Arquivos
+) -> None:
+    """Regera o DOCX do mesmo documento e grava a proxima versao (sem commit; o chamador usa `confirmar`)."""
+    prep = preparar_versao(db, contract, get_generator(TIPO_SUBSTABELECIMENTO), data, arquivos)
+    gravar_versao(
+        db, contract, prep,
         form_data_json=json.dumps(data.model_dump(mode="json"), ensure_ascii=False),
-        file_path=str(filepath),
-        created_by=user_email,
-        created_at=utcnow(),
-    ))
-    contract.current_version = numero
-    contract.client_name = nome_exibicao(data)
-    contract.client_email = email_contato(data)
-    contract.status = "rascunho"
-    contract.updated_by = user_email
-    contract.updated_at = utcnow()
-    db.add(AuditLogDB(
-        contract_id=contract.contract_id, action="edicao", version_number=numero, user_email=user_email,
-        detail=f"Nova versão {numero} gerada: {motivo}", created_at=utcnow(),
-    ))
-    return str(filepath)
+        client_name=nome_exibicao(data), client_email=email_contato(data), user_email=user_email,
+        acao="edicao", detalhe=f"Nova versão {prep.numero} gerada: {motivo}",
+    )
 
 
-def gravar_novo(db: Session, tipo: str, data, origem: ContractDB | None, user_email: str) -> tuple[str, str]:
+def gravar_novo(
+    db: Session, tipo: str, data, origem: ContractDB | None, user_email: str, arquivos: Arquivos
+) -> tuple[str, str]:
     """Gera o DOCX e grava contrato, versao 1 e auditoria (sem commit). Devolve (contract_id, arquivo)."""
-    contract_id, filepath = get_generator(tipo).generate(data)
-    try:
-        form_dict = data.model_dump(mode="json")
-        nome = nome_exibicao(data)
-        origem_id = origem.contract_id if origem else None
-
-        db.add(ContractDB(
-            contract_id=contract_id,
-            status="rascunho",
-            client_name=nome,
-            client_email=email_contato(data),
-            tipo_contrato=tipo,
-            contrato_origem_id=origem_id,
-            current_version=1,
-            created_by=user_email,
-            updated_by=user_email,
-            created_at=utcnow(),
-            updated_at=utcnow(),
-            cliente_docs=serialize_cliente_docs(
-                {"contratantes": [data.outorgante.model_dump()]}
-                if isinstance(data, SubstabelecimentoRequest)
-                else form_dict
-            ),
-        ))
-        db.flush()
-        db.add(ContractVersionDB(
-            contract_id=contract_id,
-            version_number=1,
-            form_data_json=json.dumps(form_dict, ensure_ascii=False),
-            file_path=filepath,
-            created_by=user_email,
-            created_at=utcnow(),
-        ))
-        rotulo = ROTULO_DOCUMENTO[tipo]
-        db.add(AuditLogDB(
-            contract_id=contract_id, action="criacao", version_number=1, user_email=user_email,
-            detail=f"{rotulo} gerado para {nome}", created_at=utcnow(),
-        ))
-        if origem_id:
-            db.add(AuditLogDB(
-                contract_id=origem_id, action="documento_complementar", user_email=user_email,
-                detail=f"{rotulo} criado ({contract_id})", created_at=utcnow(),
-            ))
-    except Exception:
-        Path(filepath).unlink(missing_ok=True)  # nada de .docx sem registro
-        raise
+    form_dict = data.model_dump(mode="json")
+    nome = nome_exibicao(data)
+    origem_id = origem.contract_id if origem else None
+    rotulo = ROTULO_DOCUMENTO[tipo]
+    contract_id, filepath = criar(
+        db, arquivos,
+        gerador=get_generator(tipo), request=data, tipo=tipo, form_dict=form_dict,
+        client_name=nome, client_email=email_contato(data), user_email=user_email,
+        detalhe=f"{rotulo} gerado para {nome}", contrato_origem_id=origem_id,
+        cliente_docs=serialize_cliente_docs(
+            {"contratantes": [data.outorgante.model_dump()]}
+            if isinstance(data, SubstabelecimentoRequest)
+            else form_dict
+        ),
+    )
+    if origem_id:
+        registrar_auditoria(db, origem_id, "documento_complementar", f"{rotulo} criado ({contract_id})", user_email=user_email)
     return contract_id, filepath
 
 
@@ -190,16 +145,16 @@ def substabelecimento_do_distrato(distrato: DistratoRequest, distrato_id: str) -
 
 
 def sincronizar_do_distrato(
-    db: Session, distrato: ContractDB, form_distrato: dict, user_email: str
-) -> tuple[list[str], list[str], list[str]]:
+    db: Session, distrato: ContractDB, form_distrato: dict, user_email: str, arquivos: Arquivos
+) -> tuple[list[str], list[str]]:
     """Depois de editar um distrato, mantem o substabelecimento que nasceu dele em dia.
 
-    Devolve (regerados, criados, arquivos_novos). Distrato sem substabelecimento vinculado
+    Devolve (regerados, criados); os arquivos criados entram em `arquivos`. Distrato sem substabelecimento vinculado
     (salvo antes da opcao) nao gera nada. Vinculado ja enviado/assinado: cria um novo.
     """
     data = DistratoRequest(**form_distrato)
     if not (data.substabelecer_e_devolver and data.substabelecimento):
-        return [], [], []
+        return [], []
     vinculados = [
         c for c in db.query(ContractDB)
         .filter(
@@ -212,7 +167,7 @@ def sincronizar_do_distrato(
         if form_data_atual(c, db).get("distrato_origem_id") == distrato.contract_id
     ]
     if not vinculados:
-        return [], [], []
+        return [], []
     atual = vinculados[0]
     novo = substabelecimento_do_distrato(data, distrato.contract_id)
     salvo_req = SubstabelecimentoRequest(**form_data_atual(atual, db))
@@ -223,10 +178,10 @@ def sincronizar_do_distrato(
     novo = novo.model_copy(update={"processos": acrescentar_processos(novo.processos, acrescentados)})
     salvo = salvo_req.model_dump(mode="json")
     if salvo == novo.model_dump(mode="json"):
-        return [], [], []
-    if travado(atual, db):
+        return [], []
+    if travado(atual):
         origem = db.query(ContractDB).filter(ContractDB.contract_id == distrato.contrato_origem_id).first()
-        cid, arquivo = gravar_novo(db, TIPO_SUBSTABELECIMENTO, novo, origem, user_email)
-        return [], [cid], [arquivo]
-    nova_versao(db, atual, novo, user_email, "distrato de origem alterado")
-    return [atual.contract_id], [], []
+        cid, _ = gravar_novo(db, TIPO_SUBSTABELECIMENTO, novo, origem, user_email, arquivos)
+        return [], [cid]
+    nova_versao(db, atual, novo, user_email, "distrato de origem alterado", arquivos)
+    return [atual.contract_id], []
