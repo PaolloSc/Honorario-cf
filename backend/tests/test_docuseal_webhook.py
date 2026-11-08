@@ -72,18 +72,35 @@ def test_completed_sends_ficha_once_idempotent(client):
     assert _audit_count("wh-001", "envio_participacao_final") == 1
 
 
-def test_declined_does_not_send_ficha(client):
+def _status(contract_id: str) -> str:
+    db = SessionLocal()
+    try:
+        return db.query(ContractDB).filter(ContractDB.contract_id == contract_id).one().status
+    finally:
+        db.close()
+
+
+def test_recusa_chega_como_form_declined_e_usa_o_id_da_submissao(client):
+    """form.declined: data.id e' o do signatario; a submissao vem em data.submission.id."""
     _seed("wh-002", "sub-002")
     email = _mock_email()
 
-    with patch("app.config.settings.docuseal_webhook_secret", SECRET), \
-         patch("app.services.servicos_externos.get_email_service", return_value=email):
-        body = {"event_type": "submission.declined", "data": {"id": "sub-002"}}
+    with patch("app.config.settings.docuseal_webhook_secret", SECRET),          patch("app.services.servicos_externos.get_email_service", return_value=email):
+        body = {"event_type": "form.declined", "data": {"id": 987654, "submission": {"id": "sub-002"}}}
         r = client.post("/api/docuseal/webhook", json=body, headers={"x-docuseal-secret": SECRET})
 
-    assert r.status_code == 200
+    assert r.status_code == 200 and r.json()["new_status"] == "recusado"
+    assert _status("wh-002") == "recusado"
     assert email.send_html_email.await_count == 0
     assert _audit_count("wh-002", "envio_participacao_final") == 0
+
+
+def test_form_declined_de_submissao_desconhecida_nao_acha_contrato(client):
+    _seed("wh-003", "sub-003")
+    with patch("app.config.settings.docuseal_webhook_secret", SECRET):
+        body = {"event_type": "form.declined", "data": {"id": "sub-003"}}  # sem data.submission: id de signatario
+        r = client.post("/api/docuseal/webhook", json=body, headers={"x-docuseal-secret": SECRET})
+    assert r.json()["status"] == "not_found" and _status("wh-003") == "enviado"
 
 
 # ── Sincronizacao ativa: contrato preso em "enviado" ─────────────────────
