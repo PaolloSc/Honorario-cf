@@ -60,7 +60,7 @@ Quem trabalha no escritório. Hoje em três cadastros: conta de login (`users`),
 _Avoid_: consulta a `colaboradores` montada na rota ou no serviço de assinatura
 
 **Bloco IBS/CBS**:
-Parte da DPS/NFS-e com CST, cClassTrib e cIndOp. Quem decide o que sai é `services/ibscbs`, pelo regime, pela data de emissão (Brasília) e pelo tomador, e não só pela configuração do serviço. Simples Nacional: em 2026 sem bloco; desde 01/01/2027 CST 200 / cClassTrib 200052 / cIndOp 100301; tomador no exterior 410 / 410004. Fonte: orientação do contador de 12/11/2026.
+Parte da DPS/NFS-e com CST, cClassTrib e cIndOp. Quem decide o que sai é `services/ibscbs`, pelo regime, pela competência da DPS (dCompet, não a data de emissão) e pelo tomador, e não só pela configuração do serviço. Simples Nacional: em 2026 sem bloco; desde 01/01/2027 CST 200 / cClassTrib 200052 / cIndOp 100301; tomador no exterior 410 / 410004. Fonte: orientação do contador de 12/11/2026.
 _Avoid_: usar 000 / 000001 e as alíquotas de teste de 2026 como modelo de nota real
 
 **Notas recebidas**:

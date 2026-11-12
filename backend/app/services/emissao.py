@@ -11,7 +11,7 @@ Regras que mordem (architecture.md, secao 7):
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -127,7 +127,7 @@ def _snapshot_servico(s: ServicoDB, cfg: EmissorConfigDB) -> dict:
 def _params(f: FaturaDB, tom: dict, srv: dict, cnpj: str, numero: int, agora: datetime | None) -> DpsParams:
     emi = srv["emissor"]
     doc = tom["documento"]
-    bloco = _bloco_ibscbs(tom, srv, agora)
+    bloco = _bloco_ibscbs(tom, srv, f.competencia)
     end = {"cMun": tom["municipio_ibge"], "CEP": tom["cep"], "xLgr": tom["logradouro"], "nro": tom["numero"],
            "xBairro": tom["bairro"], "xCpl": tom["complemento"]}
     return DpsParams(
@@ -144,11 +144,11 @@ def _params(f: FaturaDB, tom: dict, srv: dict, cnpj: str, numero: int, agora: da
     )
 
 
-def _bloco_ibscbs(tom: dict, srv: dict, agora: datetime | None) -> ibscbs_regra.BlocoIbsCbs:
-    """Regra do bloco IBS/CBS (app.services.ibscbs): regime, data de emissao em Brasilia e tomador."""
-    quando = agora.astimezone(ZoneInfo("America/Sao_Paulo")) if agora else _brt()
+def _bloco_ibscbs(tom: dict, srv: dict, competencia: date) -> ibscbs_regra.BlocoIbsCbs:
+    """Regra do bloco IBS/CBS (app.services.ibscbs). A data que decide e' a competencia da DPS (dCompet),
+    nao a da emissao: competencia dez/2026 emitida em jan/2027 segue a regra de 2026 (Anexo VI, E0855/E0015)."""
     return ibscbs_regra.resolver(
-        srv["emissor"]["op_simp_nac"], quando.date(), exterior=bool(tom.get("exterior")),
+        srv["emissor"]["op_simp_nac"], competencia, exterior=bool(tom.get("exterior")),
         incluir_config=srv["incluir_ibscbs"], c_ind_op=srv["c_ind_op"], cst=srv["cst_ibscbs"],
         c_class_trib=srv["c_class_trib"],
     )
@@ -246,7 +246,7 @@ def emitir(db: Session, fatura_id: int, idempotency_key: str, usuario: str,
         raise EmissaoErro(400, "Competencia no futuro: a competencia nao pode passar da data de emissao")
 
     tom, srv = _snapshot_tomador(tomador), _snapshot_servico(servico, cfg)
-    srv["ibscbs_aplicado"] = _bloco_ibscbs(tom, srv, agora).como_dict()  # o que a regra decidiu, para auditoria
+    srv["ibscbs_aplicado"] = _bloco_ibscbs(tom, srv, fatura.competencia).como_dict()  # o que a regra decidiu, para auditoria
     # valida as regras do Anexo I antes de gastar um numero de DPS
     params = _params(fatura, tom, srv, cfg.cnpj, 1, agora)
     erros = regras_locais(params)

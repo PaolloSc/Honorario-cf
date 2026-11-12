@@ -1,8 +1,8 @@
 """Bloco IBS/CBS da NFS-e: o que sai na nota conforme o regime, a data e o tomador.
 
 Orientacao do contador (PDF de 12/11/2026), escritorio optante do Simples Nacional:
-- ate 31/12/2026: bloco IBS/CBS em BRANCO (sem bloco, sem aliquotas de teste; LC 214, art. 348, III, "c");
-- a partir de 01/01/2027 (Ato Conjunto RFB/CGIBS 4/2026): CST 200, cClassTrib 200052 (profissoes
+- competencia (dCompet da DPS, nao a data de emissao) ate 31/12/2026: bloco IBS/CBS em BRANCO (sem bloco, sem aliquotas de teste; LC 214, art. 348, III, "c");
+- competencia a partir de 01/01/2027 (Ato Conjunto RFB/CGIBS 4/2026): CST 200, cClassTrib 200052 (profissoes
   intelectuais, reducao de 30%, LC 214 art. 127), cIndOp 100301. Vale para as NBS 1.1301.10/20/90 e
   1.1303.10/20 e para tomador PF no Brasil;
 - tomador no exterior: CST 410, cClassTrib 410004 (exportacao, art. 8 da LC 214).
@@ -33,11 +33,11 @@ class BlocoIbsCbs:
 
 
 def resolver(
-    op_simp_nac: str | None, data_emissao: date, *, exterior: bool = False,
+    op_simp_nac: str | None, competencia: date, *, exterior: bool = False,
     incluir_config: bool = False, c_ind_op: str | None = None, cst: str | None = None, c_class_trib: str | None = None,
 ) -> BlocoIbsCbs:
     if op_simp_nac in SIMPLES_NACIONAL:
-        if data_emissao < INICIO_SIMPLES:
+        if competencia < INICIO_SIMPLES:
             return BlocoIbsCbs(False, "", "", "")
         if exterior:
             return BlocoIbsCbs(True, C_IND_OP, CST_EXPORTACAO, C_CLASS_EXPORTACAO)
