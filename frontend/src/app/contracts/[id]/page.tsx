@@ -354,7 +354,7 @@ export default function ContractDetailPage() {
         throw new Error(result.message || "Erro ao enviar para assinatura");
       }
 
-      setNotification({type: "success", message: "Documento enviado para assinatura digital com sucesso!"});
+      setNotification({type: "success", message: result.message || "Documento enviado para assinatura digital com sucesso!"});
       fetchContract(); // Refresh to update status and audit log
     } catch (e) {
       setNotification({type: "error", message: e instanceof Error ? e.message : "Erro ao enviar para assinatura"});

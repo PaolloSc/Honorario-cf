@@ -179,8 +179,9 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
 
       setSignatureSent(true);
       setStatus("success");
-      setMessage("Documento enviado para assinatura digital com sucesso!");
-      if (onSaveComplete) setTimeout(() => onSaveComplete(contractId), 2000);
+      setMessage(r.message || "Documento enviado para assinatura digital com sucesso!");
+      // tempo p/ ler o aviso da ordem antes de navegar
+      if (onSaveComplete) setTimeout(() => onSaveComplete(contractId), 10000);
     } catch (e) {
       setStatus("error");
       setMessage(e instanceof Error ? e.message : "Erro desconhecido");
