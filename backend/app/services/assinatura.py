@@ -42,6 +42,22 @@ class ResultadoEnvio:
     contratantes: list[dict[str, Any]] = field(default_factory=list)
 
 
+def _mensagem_ordem_assinatura(signatarios: list[dict]) -> str:
+    """Aviso de sucesso com a ordem real de assinatura (lista ja ordenada)."""
+    nomes = [s.get("name") or s.get("email", "") for s in signatarios]
+    msg = "Enviado para assinatura com sucesso!"
+    if len(nomes) < 2:
+        return msg
+    ordem = f"{nomes[0]} assina primeiro"
+    if len(nomes) > 2:
+        ordem += ", depois " + ", depois ".join(nomes[1:-1])
+    ordem += f" e por último {nomes[-1]}"
+    return (
+        f"{msg} Como o DocuSeal tem ordem de assinatura, {ordem}. "
+        "Cada pessoa só recebe o e-mail depois que a anterior assinar."
+    )
+
+
 def _patch_docx_with_signatures(
     existing_filepath: Path,
     signatarios: list[dict],
@@ -338,7 +354,7 @@ async def enviar(
 
         return ResultadoEnvio(
             success=True,
-            message="Documento enviado para assinatura com sucesso",
+            message=_mensagem_ordem_assinatura(all_signatarios),
             submission_id=str(submission_id) if submission_id else None,
             contratantes=[
                 s for s in submission.get("submitters") or []

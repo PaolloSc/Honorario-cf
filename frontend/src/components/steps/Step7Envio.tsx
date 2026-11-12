@@ -651,7 +651,8 @@ export default function Step7Envio({
       setSignatureSent(true);
       setStatus("success");
       const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      setMessage(`Enviado para assinatura às ${hora}. Cada signatário recebe o link do DocuSeal por e-mail.`);
+      // result.message traz a ordem real de assinatura, com os nomes.
+      setMessage(`${result.message || "Enviado para assinatura com sucesso!"} (enviado às ${hora})`);
 
       // Com WhatsApp cadastrado, abre a conversa do contratante com a mensagem
       // pronta — só falta apertar enviar. Se o navegador bloquear a janela, os
@@ -663,9 +664,9 @@ export default function Step7Envio({
         window.open(urlWhatsApp(primeiro.name, primeiro.link, primeiro.whatsapp), "_blank", "noopener");
       }
 
-      // Navigate to detail page after signature is sent
+      // Navigate to detail page after signature is sent (tempo p/ ler o aviso da ordem)
       if (onSaveComplete && paraWhatsApp.length === 0) {
-        setTimeout(() => onSaveComplete(id), 2000);
+        setTimeout(() => onSaveComplete(id), 10000);
       }
     } catch (error) {
       setStatus("error");
