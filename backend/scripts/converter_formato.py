@@ -72,7 +72,7 @@ def motivos(antes: dict, depois: dict) -> list[str]:
 
 def texto_docx(form: dict) -> str:
     from docx import Document
-    from app.services.contract_dispatch import get_generator, parse_form_data
+    from app.services.contrato_carregado import parse_form_data
     # copia: os validadores do backend completam campos NO PROPRIO dict e gravariam essas chaves
     data, gen = parse_form_data(copy.deepcopy(form))
     _, caminho = gen.generate(data)
@@ -131,7 +131,7 @@ def main():
 
     os.environ.setdefault("OUTPUT_DIR", str(RAIZ / "backend" / ".dryrun_docx"))
     sys.path.insert(0, str(RAIZ / "backend"))
-    seguros, pulados, erros = [], 0, 0
+    seguros, pulados, erros, causas = [], 0, 0, Counter()
     for item in mudariam:
         tipo, id_, antes, depois = item
         if tipo == "rascunho":
@@ -142,9 +142,12 @@ def main():
                 seguros.append(item)
             else:
                 pulados += 1
-        except Exception:
+        except Exception as e:
             erros += 1  # nao da para provar que o DOCX nao muda: nao converte
+            causas[type(e).__name__] += 1
     print(f"  versoes puladas (DOCX regerado mudaria): {pulados} | sem como provar (erro): {erros} | a converter: {len(seguros)} de {len(mudariam)}")
+    if causas:
+        print("  causas dos erros (so o tipo):", dict(causas))
     mudariam = seguros
 
     if a.apply:
