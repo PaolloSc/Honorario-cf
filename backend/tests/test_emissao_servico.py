@@ -174,12 +174,25 @@ def test_emite_e_a_nota_fica_autorizada_com_xml_e_fatura_emitida(client, sefin):
 
 
 def test_numeracao_sequencial_por_nota_e_ibscbs_so_quando_o_servico_pede(client, sefin):
-    s, t = _cenario(client, servico_extra={"incluir_ibscbs": True, "c_ind_op": "100301", "cst_ibscbs": "000",
+    s, t = _cenario(client, op_simp_nac="1", servico_extra={"incluir_ibscbs": True, "c_ind_op": "100301", "cst_ibscbs": "000",
                                            "c_class_trib": "000001"})
     f1, f2 = _fatura(client, s, t), _fatura(client, s, t, competencia="2026-09-01")
     assert _emitir(client, f1["id"], "a").json()["dps_numero"] == 1
     assert _emitir(client, f2["id"], "b").json()["dps_numero"] == 2
     assert etree.fromstring(sefin.posts[0]).find(f".//{{{NS}}}IBSCBS") is not None
+
+
+def test_simples_em_2026_nao_leva_bloco_ibscbs_mesmo_com_servico_configurado_com_000(client, sefin):
+    """Orientacao do contador (12/11/2026): Simples Nacional em 2026 = bloco em branco. O servico de teste
+    configurado com CST 000 / cClassTrib 000001 nao pode mais vazar para a nota."""
+    s, t = _cenario(client, servico_extra={"incluir_ibscbs": True, "c_ind_op": "100301", "cst_ibscbs": "000",
+                                           "c_class_trib": "000001"})
+    j = _emitir(client, _fatura(client, s, t)["id"]).json()
+    assert j["status"] == "autorizada"
+    assert etree.fromstring(sefin.posts[0]).find(f".//{{{NS}}}IBSCBS") is None
+    with SessionLocal() as db:
+        nota = db.get(NfseEmitidaDB, j["id"])
+        assert nota.servico_snapshot["ibscbs_aplicado"]["incluir"] is False
 
 
 def test_tomador_pessoa_fisica_vai_como_cpf(client, sefin):
@@ -378,7 +391,7 @@ def test_regra_do_anexo_i_barra_antes_de_gastar_numero_de_dps(client, sefin):
 
 def test_ibscbs_sem_endereco_do_tomador_barra_antes_de_gastar_numero_de_dps(client, sefin):
     # E0239 (smoke 21/10/2026): com IBS/CBS (cIndOp 100301) a incidencia e no endereco do adquirente
-    s, t = _cenario(client, servico_extra={"incluir_ibscbs": True, "c_ind_op": "100301", "cst_ibscbs": "000",
+    s, t = _cenario(client, op_simp_nac="1", servico_extra={"incluir_ibscbs": True, "c_ind_op": "100301", "cst_ibscbs": "000",
                                            "c_class_trib": "000001"})
     assert client.patch(f"/api/tomadores/{t['id']}", json={"bairro": ""}).status_code == 200
     f = _fatura(client, s, t)

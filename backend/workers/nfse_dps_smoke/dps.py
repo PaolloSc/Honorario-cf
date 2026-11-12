@@ -42,8 +42,8 @@ class DpsParams:
     tomador_end: dict | None = None  # cMun, CEP, xLgr, nro, xBairro (+ xCpl): so entra se completo
     ibscbs: bool = True
     c_ind_op: str = "100301"  # demais servicos onerosos (Anexo VII)
-    cst: str = "000"
-    c_class_trib: str = "000001"
+    cst: str = "200"  # orientacao do contador (12/11/2026): Simples Nacional, profissoes intelectuais
+    c_class_trib: str = "200052"
     ver_aplic: str = "honorario-cf-smoke"
     agora: datetime | None = None
 

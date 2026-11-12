@@ -59,6 +59,10 @@ _Avoid_: gerador que herda de outro gerador só para ganhar o layout
 Quem trabalha no escritório. Hoje em três cadastros: conta de login (`users`), colaboradores — advogados e sócios, com OAB — e testemunhas. As perguntas sobre colaboradores (sócio ativo por e-mail, lista do wizard) passam só por `services/pessoas`. O convidado do link não tem conta: entra com o papel da configuração e nada é gravado. Unificar os três cadastros numa tabela exige migração de dados em produção e fica para depois do OK do Paollo.
 _Avoid_: consulta a `colaboradores` montada na rota ou no serviço de assinatura
 
+**Bloco IBS/CBS**:
+Parte da DPS/NFS-e com CST, cClassTrib e cIndOp. Quem decide o que sai é `services/ibscbs`, pelo regime, pela data de emissão (Brasília) e pelo tomador, e não só pela configuração do serviço. Simples Nacional: em 2026 sem bloco; desde 01/01/2027 CST 200 / cClassTrib 200052 / cIndOp 100301; tomador no exterior 410 / 410004. Fonte: orientação do contador de 12/11/2026.
+_Avoid_: usar 000 / 000001 e as alíquotas de teste de 2026 como modelo de nota real
+
 **Notas recebidas**:
 As NFS-e baixadas do ADN/BHISS (tabela `nfse_recebidas`) e os jobs de sincronização (`sync_jobs`). Leitura e gravação passam só por `services/notas_recebidas` (ORM); o orquestrador `nfse_sync` e as rotas decidem o que fazer. Não confundir com **NFS-e emitida** (`services/emissao`).
 _Avoid_: SQL cru nas rotas e no sync

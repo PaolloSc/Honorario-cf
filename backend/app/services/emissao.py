@@ -25,6 +25,7 @@ from app.models.emissao_db import (
     ServicoDB, TomadorDB, proximo_dps,
 )
 from app.config import settings
+from app.services import ibscbs as ibscbs_regra
 from app.services.crypto import InvalidCipherError
 from app.services.emissor_cert import cnpjs_do_certificado, decifrar_certificado, tem_certificado
 from workers.nfse_adn.cert import CertificadoError, carregar_pfx, ssl_context_do_pfx
@@ -126,6 +127,7 @@ def _snapshot_servico(s: ServicoDB, cfg: EmissorConfigDB) -> dict:
 def _params(f: FaturaDB, tom: dict, srv: dict, cnpj: str, numero: int, agora: datetime | None) -> DpsParams:
     emi = srv["emissor"]
     doc = tom["documento"]
+    bloco = _bloco_ibscbs(tom, srv, agora)
     end = {"cMun": tom["municipio_ibge"], "CEP": tom["cep"], "xLgr": tom["logradouro"], "nro": tom["numero"],
            "xBairro": tom["bairro"], "xCpl": tom["complemento"]}
     return DpsParams(
@@ -137,8 +139,18 @@ def _params(f: FaturaDB, tom: dict, srv: dict, cnpj: str, numero: int, agora: da
         aliquota_iss=Decimal(srv["aliquota_iss"]) if srv["aliquota_iss"] is not None else None,
         tomador_cnpj=doc if len(doc) == 14 else "", tomador_cpf=doc if len(doc) == 11 else None,
         tomador_nome=tom["nome"], tomador_end=end, competencia=f.competencia,
-        ibscbs=srv["incluir_ibscbs"], c_ind_op=srv["c_ind_op"] or "100301", cst=srv["cst_ibscbs"] or "000",
-        c_class_trib=srv["c_class_trib"] or "000001", ver_aplic="honorario-cf", agora=agora,
+        ibscbs=bloco.incluir, c_ind_op=bloco.c_ind_op, cst=bloco.cst,
+        c_class_trib=bloco.c_class_trib, ver_aplic="honorario-cf", agora=agora,
+    )
+
+
+def _bloco_ibscbs(tom: dict, srv: dict, agora: datetime | None) -> ibscbs_regra.BlocoIbsCbs:
+    """Regra do bloco IBS/CBS (app.services.ibscbs): regime, data de emissao em Brasilia e tomador."""
+    quando = agora.astimezone(ZoneInfo("America/Sao_Paulo")) if agora else _brt()
+    return ibscbs_regra.resolver(
+        srv["emissor"]["op_simp_nac"], quando.date(), exterior=bool(tom.get("exterior")),
+        incluir_config=srv["incluir_ibscbs"], c_ind_op=srv["c_ind_op"], cst=srv["cst_ibscbs"],
+        c_class_trib=srv["c_class_trib"],
     )
 
 
@@ -234,6 +246,7 @@ def emitir(db: Session, fatura_id: int, idempotency_key: str, usuario: str,
         raise EmissaoErro(400, "Competencia no futuro: a competencia nao pode passar da data de emissao")
 
     tom, srv = _snapshot_tomador(tomador), _snapshot_servico(servico, cfg)
+    srv["ibscbs_aplicado"] = _bloco_ibscbs(tom, srv, agora).como_dict()  # o que a regra decidiu, para auditoria
     # valida as regras do Anexo I antes de gastar um numero de DPS
     params = _params(fatura, tom, srv, cfg.cnpj, 1, agora)
     erros = regras_locais(params)
