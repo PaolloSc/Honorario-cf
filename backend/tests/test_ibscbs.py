@@ -38,12 +38,14 @@ def test_regime_nao_orientado_segue_a_configuracao_do_servico():
     assert (b.cst, b.c_class_trib) == ("200", "200052")
 
 
-def test_a_data_e_a_de_brasilia_na_virada_do_ano():
+def test_quem_decide_e_a_competencia_nao_a_emissao():
+    """Competencia dez/2026 emitida em jan/2027 sai sem bloco; competencia jan/2027 sai com CST 200
+    (Anexo VI: E0855 e E0015 olham dCompet)."""
     srv = {"emissor": {"op_simp_nac": "3"}, "incluir_ibscbs": False, "c_ind_op": None, "cst_ibscbs": None,
            "c_class_trib": None}
-    utc = timezone.utc
-    assert _bloco_ibscbs({}, srv, datetime(2027, 1, 1, 1, 0, tzinfo=utc)).incluir is False  # 31/12 22h em Brasilia
-    assert _bloco_ibscbs({}, srv, datetime(2027, 1, 1, 4, 0, tzinfo=utc)).incluir is True   # 01/01 01h em Brasilia
+    assert _bloco_ibscbs({}, srv, date(2026, 12, 1)).incluir is False
+    b = _bloco_ibscbs({}, srv, date(2027, 1, 1))
+    assert (b.incluir, b.cst, b.c_class_trib) == (True, "200", "200052")
 
 
 @pytest.mark.parametrize("cst,cc", [("200", "200052"), ("410", "410004")])
