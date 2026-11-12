@@ -13,8 +13,21 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.database import Base, engine
 
+def _reativar_fks_use_alter():
+    """Um create_all/drop_all em Postgres marca a FK use_alter como "so' via ALTER"
+    (AddConstraint grava _create_rule na constraint, para sempre). Dai' em diante o
+    SQLite, que nao tem ALTER ADD CONSTRAINT, cria a tabela sem a FK. So' acontece
+    nos testes, que usam os dois bancos no mesmo processo.
+    """
+    for tabela in Base.metadata.tables.values():
+        for fk in tabela.foreign_key_constraints:
+            if fk.use_alter:
+                fk._create_rule = None
+
+
 @pytest.fixture(autouse=True)
 def setup_db():
+    _reativar_fks_use_alter()
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
