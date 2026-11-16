@@ -47,6 +47,16 @@ from app.utils.currency import (
 )
  
 
+def testemunhas_do_documento(signatario_roles: list[dict] | None) -> list[dict]:
+    """Testemunhas na ordem do papel (Testemunha 1, Testemunha 2...).
+
+    A lista chega na ordem de ASSINATURA, em que a Testemunha 1 (financeiro) e' a ultima;
+    impressa assim, a Testemunha 2 saia antes da 1 no documento.
+    """
+    testemunhas = [s for s in (signatario_roles or []) if s.get("role", "").startswith("Testemunha")]
+    return sorted(testemunhas, key=lambda s: s["role"])
+
+
 def rotulo_testemunha(sig: dict) -> list[str]:
     """Linhas sob a assinatura da testemunha: papel + nome e, se informado, o CPF."""
     linhas = [f"{sig['role'].upper()}: {sig.get('name', 'Testemunha').upper()}"]
@@ -1663,7 +1673,7 @@ class ContractGenerator:
             # Group by base role for display ordering: Contratado first, then Contratante(s)
             contratado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratado")]
             contratante_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratante")]
-            testemunha_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Testemunha")]
+            testemunha_sigs = testemunhas_do_documento(signatario_roles)
 
             # Partes: dispostas lado a lado (2 por linha)
             partes_entries: list[tuple[str, str]] = []

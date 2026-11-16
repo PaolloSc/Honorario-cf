@@ -338,3 +338,18 @@ def test_cpf_da_testemunha_sai_tambem_no_contrato_de_consumidor(tmp_path):
         {"email": "l@x.com", "name": "Lilian", "role": "Testemunha", "cpf": "52998224725"},
     ])[1])
     assert paras[paras.index("TESTEMUNHA: LILIAN") + 1] == f"CPF: {CPF}"
+
+
+def test_testemunha_1_sai_antes_da_2_mesmo_assinando_por_ultimo():
+    """No envio a lista vem na ordem de assinatura (Testemunha 1 por ultimo); no documento vale o numero."""
+    paras = _paras(_req(), roles=[
+        {"email": "c@a.com", "name": "Client", "role": "Contratante"},
+        {"email": "o@cf.com", "name": "Outra", "role": "Testemunha 2", "cpf": "11144477735"},
+        {"email": "l@cf.com", "name": "Lilian", "role": "Testemunha 1", "cpf": "52998224725"},
+    ])
+    rotulos = [p for p in paras if p.startswith("TESTEMUNHA ")]
+    assert rotulos == ["TESTEMUNHA 1: LILIAN", "TESTEMUNHA 2: OUTRA"]
+    # tag de assinatura e CPF acompanham o rotulo
+    tags = [p for p in paras if "role=Testemunha" in p]
+    assert "role=Testemunha 1" in tags[0] and "role=Testemunha 2" in tags[1]
+    assert paras[paras.index("TESTEMUNHA 1: LILIAN") + 1] == f"CPF: {CPF}"
