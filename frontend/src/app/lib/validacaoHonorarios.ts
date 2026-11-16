@@ -113,6 +113,16 @@ export function errosDoEscopo(
   if (escopo.honorarios.includes("exito") && escopo.exito?.forma_pagamento?.trim().toLowerCase() === "a definir") {
     errors.push(`${label}: descreva a forma de pagamento do êxito (\"Outro\" sem texto).`);
   }
+  if (escopo.honorarios.includes("exito") && !escopo.exito?.incidencia) {
+    errors.push(`${label}: selecione a incidência do êxito.`);
+  }
+  if (
+    escopo.honorarios.includes("exito") &&
+    escopo.exito?.incidencia === "customizado" &&
+    !escopo.exito.incidencia_customizada?.trim()
+  ) {
+    errors.push(`${label}: conceitue a base de incidência customizada do êxito.`);
+  }
   for (const hon of Object.keys(ROTULOS) as Honorario[]) {
     const h = escopo[hon];
     if (

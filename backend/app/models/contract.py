@@ -242,6 +242,8 @@ class Exito(_ComDesconto):
     subtipo: SubtipoExito = SubtipoExito.PERCENTUAL_FIXO
     percentual: Optional[float] = None
     incidencia: str = ""
+    # Texto livre do conceito de "Benefício" quando incidencia == "customizado"
+    incidencia_customizada: Optional[str] = None
     base_calculo: str = ""
     vencimento: str = ""
     vencimento_data: Optional[str] = None

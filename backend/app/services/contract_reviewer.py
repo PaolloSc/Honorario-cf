@@ -189,6 +189,8 @@ def campos_abertos(data: dict, aplicados: set[str] | None = None) -> list[tuple[
         exito = escopo.get("exito") or {}
         frases_exito = _frases_do_honorario("exito", exito) if exito else []
         add(f"{prefix} - êxito: base de cálculo", exito.get("base_calculo"))
+        if exito.get("incidencia") == "customizado":
+            add(f"{prefix} - êxito: incidência customizada", exito.get("incidencia_customizada"), frases_exito)
         add(f"{prefix} - êxito: observação de vencimento", exito.get("vencimento_obs"), frases_exito)
         add(f"{prefix} - êxito: honorário deduzido", exito.get("honorario_deduzido"))
         add(f"{prefix} - êxito: vencimento", exito.get("vencimento"), frases_exito)

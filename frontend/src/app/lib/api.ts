@@ -253,13 +253,15 @@ export async function sincronizarAssinatura(contractId: string) {
 
 export async function sendForSignature(data: {
   contract_id: string;
-  signatarios: Array<{ email: string; name: string; role: string; phone?: string }>;
+  signatarios: Array<{ email: string; name: string; role: string; phone?: string; cpf?: string }>;
 }) {
   return request<{
     success: boolean;
     message: string;
     // Contratantes com link e WhatsApp, para abrir o WhatsApp logo após o envio.
     whatsapp?: Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>;
+    // Todos os signatários com o link de cada um, na ordem de assinatura.
+    pendentes?: Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>;
   }>(
     "/api/docuseal/send-for-signature",
     {
@@ -275,6 +277,8 @@ export interface Testemunha {
   id: number;
   nome: string;
   email: string;
+  /** Formatado (000.000.000-00); vazio em quem foi cadastrado antes do campo. */
+  cpf: string;
   ativo: boolean;
   created_at: string;
 }
@@ -284,7 +288,7 @@ export async function listTestemunhas(includeInactive = false) {
   return request<{ testemunhas: Testemunha[] }>(`/api/testemunhas${qs}`);
 }
 
-export async function createTestemunha(body: { nome: string; email: string }) {
+export async function createTestemunha(body: { nome: string; email: string; cpf: string }) {
   return request<Testemunha>("/api/testemunhas", {
     method: "POST",
     body: JSON.stringify(body),
@@ -293,7 +297,7 @@ export async function createTestemunha(body: { nome: string; email: string }) {
 
 export async function updateTestemunha(
   id: number,
-  body: { nome?: string; email?: string; ativo?: boolean }
+  body: { nome?: string; email?: string; cpf?: string; ativo?: boolean }
 ) {
   return request<Testemunha>(`/api/testemunhas/${id}`, {
     method: "PATCH",
@@ -554,6 +558,13 @@ export async function updateContractStatus(contractId: string, status: string) {
     `/api/contracts/${contractId}/status?status=${encodeURIComponent(status)}`,
     { method: "PATCH" }
   );
+}
+
+// Apaga de vez uma minuta em rascunho que nunca foi enviada para assinatura.
+export async function deleteContract(contractId: string) {
+  return request<{ success: boolean }>(`/api/contracts/${encodeURIComponent(contractId)}`, {
+    method: "DELETE",
+  });
 }
 
 // ── Rascunhos do wizard (autosave) ───────────────────────────────

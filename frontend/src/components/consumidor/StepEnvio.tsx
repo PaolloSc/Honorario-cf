@@ -17,6 +17,7 @@ import {
   type ConsumidorFormData,
 } from "@/types/consumidor";
 import { useRouter } from "next/navigation";
+import EnvioWhatsApp from "@/components/EnvioWhatsApp";
 import { useEffect, useState } from "react";
 
 interface Props {
@@ -39,6 +40,9 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
   const [previewErro, setPreviewErro] = useState("");
   const [emailWarning, setEmailWarning] = useState("");
   const [signatureSent, setSignatureSent] = useState(false);
+  const [pendentes, setPendentes] = useState<
+    Array<{ role: string; name: string; email: string; link: string; whatsapp: string }>
+  >([]);
   const [recipients, setRecipients] = useState(() =>
     data.contratantes.map((c) => ({ email: emailContato(c), nome: nomeExibicao(c) }))
   );
@@ -158,7 +162,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
     setMessage("Enviando para assinatura digital...");
     try {
       // Na PJ quem assina é o representante legal.
-      const signatarios = data.contratantes
+      const signatarios: Array<{ email: string; name: string; role: string; cpf?: string }> = data.contratantes
         .filter((c) => emailContato(c))
         .map((c) => ({
           email: emailContato(c),
@@ -171,7 +175,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
       }
 
       for (const t of roster.filter((r) => testemunhasSelecionadas.includes(r.id))) {
-        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
+        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha", cpf: t.cpf });
       }
 
       const r = await sendForSignature({ contract_id: contractId, signatarios });
@@ -180,8 +184,11 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
       setSignatureSent(true);
       setStatus("success");
       setMessage(r.message || "Documento enviado para assinatura digital com sucesso!");
-      // tempo p/ ler o aviso da ordem antes de navegar
-      if (onSaveComplete) setTimeout(() => onSaveComplete(contractId), 10000);
+      // Quem falta assinar fica na tela, com o link de cada um; sem lista, vai para o
+      // contrato depois de um tempo p/ ler o aviso da ordem.
+      const todos = (r.pendentes ?? []).filter((p) => p.link);
+      setPendentes(todos);
+      if (onSaveComplete && todos.length === 0) setTimeout(() => onSaveComplete(contractId), 10000);
     } catch (e) {
       setStatus("error");
       setMessage(e instanceof Error ? e.message : "Erro desconhecido");
@@ -287,6 +294,29 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
         </div>
       )}
 
+      {signatureSent && pendentes.length > 0 && (
+        <div className="border border-border rounded-xl p-5">
+          <p className="text-sm font-medium">Falta assinar:</p>
+          <ul className="mt-2 space-y-3 text-sm">
+            {pendentes.map((p) => (
+              <li key={p.link}>
+                {p.name || p.email} <span className="text-muted">({p.role})</span>
+                <EnvioWhatsApp nome={p.name || p.email} link={p.link} whatsapp={p.whatsapp} />
+              </li>
+            ))}
+          </ul>
+          {onSaveComplete && contractId && (
+            <button
+              type="button"
+              onClick={() => onSaveComplete(contractId)}
+              className="mt-4 px-4 py-2 border border-border rounded-lg text-sm hover:bg-background transition"
+            >
+              Abrir o contrato
+            </button>
+          )}
+        </div>
+      )}
+
       {podeAssinar && !signatureSent && roster.length > 0 && (
         <div className="border border-border rounded-xl p-5">
           <h3 className="font-medium mb-3">Testemunhas para assinatura digital</h3>
@@ -304,6 +334,7 @@ export default function StepEnvio({ data, editContractId, onSaveComplete }: Prop
                   className="h-4 w-4 rounded border-border text-primary"
                 />
                 {t.nome} <span className="text-muted">({t.email})</span>
+                {!t.cpf && <em className="text-danger">sem CPF: preencha no Cadastro de Testemunhas</em>}
               </label>
             ))}
           </div>

@@ -21,7 +21,7 @@ from app.models.documentos_complementares import (
     SubstabelecimentoRequest,
     nome_contratante,
 )
-from app.services.contract_generator import MESES_PT_BR, ContractGenerator
+from app.services.contract_generator import MESES_PT_BR, ContractGenerator, rotulo_testemunha
 from app.services.pagina_documento import PaginaCompacta
 from app.services.qualificacao import qualificar_do_contrato_de_origem, qualificar_substabelecido
 from app.utils.currency import numero_com_extenso, valor_com_extenso
@@ -123,7 +123,7 @@ class ComplementarGenerator(PaginaCompacta, ContractGenerator):
             self._grid_assinaturas(doc, [
                 (
                     f"{{{{Assinatura {s.get('name', 'Testemunha')};type=signature;role={s['role']}}}}}",
-                    [f"{s['role'].upper()}: {s.get('name', 'Testemunha').upper()}"],
+                    rotulo_testemunha(s),
                 )
                 for s in testemunhas
             ])

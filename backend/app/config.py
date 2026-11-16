@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     # O nome vem do cadastro de colaboradores; este e' so' a reserva.
     testemunha1_nome: str = ""
     testemunha1_email: str = ""
+    # CPF da Testemunha 1, impresso sob a assinatura dela. Dado pessoal: so' no ambiente.
+    testemunha1_cpf: str = ""
     bank_account_info: str = ""       # conta/Pix que aparece na clausula de pagamento
 
     # Segredo do aviso (webhook) do DocuSeal. Sem ele todo aviso da' 403.

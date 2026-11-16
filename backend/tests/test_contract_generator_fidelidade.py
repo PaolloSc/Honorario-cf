@@ -244,13 +244,18 @@ def _req_com_exito() -> dict:
 def test_secao8_rescisao_cpc_e_extincao():
     paras = _paras_for(_base_req())
     assert _has(paras, "arts. 112, § 1º, do Código de Processo Civil")
-    assert _has(paras, "honorários vencidos serão devidos integralmente")
+    assert _has(paras, "(i) os honorários vencidos, em qualquer modalidade, serão devidos integralmente")
+    assert _has(paras, "serão devidos incluindo o prazo de antecedência de 30 (trinta) dias")
     # Virgula com elementos normativos: ordem hibrida fecha com virgula antes do diploma.
     assert _has(paras, "artigo 10, § 2º, da MP 2200-2/2001")
 
 
 def test_secao8_tabela_exito_presente_com_exito():
     paras = _paras_for(_req_com_exito())
+    assert _has(paras, "(v) especificamente quanto aos honorários de êxito vincendos ao momento da "
+                       "extinção contratual, estes continuarão devidos ao C&F observando-se a seguinte "
+                       "proporção não cumulativa:")
+    assert _has(paras, "Fase processual em que for extinto o Contrato")
     assert _has(paras, "50% (cinquenta por cento) do percentual de êxito pactuado")
     assert _has(paras, "100% (cem por cento) do percentual de êxito pactuado")
     assert _has(paras, "Antes da primeira decisão de mérito")

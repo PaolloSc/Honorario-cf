@@ -8,6 +8,7 @@ import {
   downloadContract,
   previewContract,
   updateContractStatus,
+  deleteContract,
   sendForSignature,
   sincronizarAssinatura,
   cancelarEnvioAssinatura,
@@ -26,7 +27,7 @@ import {
 } from "@/app/lib/api";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import EnvioWhatsApp from "@/components/EnvioWhatsApp";
-import { ComboBox } from "@/components/ui/FormField";
+import AdicionarTestemunha, { CpfDaTestemunha } from "@/components/AdicionarTestemunha";
 import { formatarDataHora } from "@/app/lib/datas";
 import { ROTULO_TIPO, ehDocumentoComplementar, type TipoDocumento } from "@/app/lib/documentos";
 import { TipoBadge } from "@/components/documentos/Selos";
@@ -143,9 +144,7 @@ export default function ContractDetailPage() {
   const [roster, setRoster] = useState<Testemunha[]>([]);
   const [selectedTestemunhaIds, setSelectedTestemunhaIds] = useState<number[]>([]);
   const [rosterTestemunhaPick, setRosterTestemunhaPick] = useState("");
-  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string}>>([]);
-  const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
-  const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
+  const [extraTestemunhas, setExtraTestemunhas] = useState<Array<{email: string; name: string; cpf?: string}>>([]);
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [socioEscritorio, setSocioEscritorio] = useState("");
   const [sincronizando, setSincronizando] = useState(false);
@@ -284,6 +283,22 @@ export default function ContractDetailPage() {
     }
   };
 
+  const handleExcluirMinuta = async () => {
+    if (!window.confirm("Excluir esta minuta? Ela é apagada de vez, com as versões e o histórico. Não dá para desfazer.")) return;
+    try {
+      await deleteContract(contractId);
+      window.location.href = "/contracts";
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      let motivo = "Não foi possível excluir a minuta. Nada foi apagado.";
+      try {
+        const d = JSON.parse(m.slice(m.indexOf("{"))).detail;
+        if (typeof d === "string" && d) motivo = d;
+      } catch { /* sem JSON: mantem a mensagem generica */ }
+      setNotification({type: "error", message: motivo});
+    }
+  };
+
   const handleStatusChange = async (newStatus: string, confirmacao?: string) => {
     if (!window.confirm(confirmacao ?? `Tem certeza que deseja alterar o status para "${newStatus}"?`)) return;
     try {
@@ -317,7 +332,7 @@ export default function ContractDetailPage() {
     setNotification(null);
 
     try {
-      let signatarios: Array<{email: string; name: string; role: string}>;
+      let signatarios: Array<{email: string; name: string; role: string; cpf?: string}>;
 
       if (ehSubstabelecimento) {
         // Só os substabelecentes assinam: sem contratante, sócio nem testemunha.
@@ -338,10 +353,10 @@ export default function ContractDetailPage() {
 
         // Testemunhas: do roster (selecionadas) + avulsas. Lilian (Testemunha 1) e injetada no backend.
         for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
-          signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
+          signatarios.push({ email: t.email, name: t.nome, role: "Testemunha", cpf: t.cpf });
         }
         for (const t of extraTestemunhas) {
-          signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
+          signatarios.push({ email: t.email, name: t.name, role: "Testemunha", cpf: t.cpf });
         }
       }
 
@@ -355,6 +370,8 @@ export default function ContractDetailPage() {
       }
 
       setNotification({type: "success", message: result.message || "Documento enviado para assinatura digital com sucesso!"});
+      // Quem falta assinar aparece na hora, com o link de cada um (sem esperar a consulta ao DocuSeal).
+      setPendentes((result.pendentes ?? []).filter((p) => p.link));
       fetchContract(); // Refresh to update status and audit log
     } catch (e) {
       setNotification({type: "error", message: e instanceof Error ? e.message : "Erro ao enviar para assinatura"});
@@ -567,6 +584,14 @@ export default function ContractDetailPage() {
             )}
             {contract.status === "rascunho" && (
               <ItemMenu
+                titulo="Excluir minuta"
+                dica="Apaga de vez a minuta que nunca foi enviada para assinatura. Não dá para desfazer."
+                perigo
+                onClick={handleExcluirMinuta}
+              />
+            )}
+            {contract.status === "rascunho" && (
+              <ItemMenu
                 titulo="Descartar rascunho (cliente desistiu)"
                 dica="O contrato fica com status cancelado; nada é apagado."
                 perigo
@@ -643,7 +668,7 @@ export default function ContractDetailPage() {
           <div className="mb-4 pt-3 border-t border-border">
             <p className="text-xs font-semibold text-foreground mb-1">Testemunhas</p>
             <p className="text-xs text-muted mb-2">
-              <strong>Testemunha 1 (financeiro)</strong> e incluida automaticamente. Busque pelo nome (cadastro) ou digite uma avulsa.
+              <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Busque pelo nome (cadastro) ou digite uma avulsa; o CPF é obrigatório e sai sob a assinatura.
             </p>
 
             {(roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 || extraTestemunhas.length > 0) && (
@@ -652,7 +677,7 @@ export default function ContractDetailPage() {
                   .filter((t) => selectedTestemunhaIds.includes(t.id))
                   .map((t) => (
                     <div key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
-                      <span className="flex-1">{t.nome} ({t.email})</span>
+                      <span className="flex-1">{t.nome} ({t.email}) <CpfDaTestemunha cpf={t.cpf} /></span>
                       <button
                         onClick={() => setSelectedTestemunhaIds((prev) => prev.filter((id) => id !== t.id))}
                         className="text-danger hover:opacity-80 text-xs font-medium"
@@ -663,7 +688,7 @@ export default function ContractDetailPage() {
                   ))}
                 {extraTestemunhas.map((t, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
-                    <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
+                    <span className="flex-1">{t.name} ({t.email}) <CpfDaTestemunha cpf={t.cpf} /> <em className="text-accent">avulsa</em></span>
                     <button
                       onClick={() => setExtraTestemunhas((prev) => prev.filter((_, idx) => idx !== i))}
                       className="text-danger hover:opacity-80 text-xs font-medium"
@@ -675,46 +700,12 @@ export default function ContractDetailPage() {
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
-              <ComboBox
-                livre
-                className="flex-1 min-w-40"
-                value={newTestemunhaNome}
-                options={roster.map((t) => ({ value: t.nome, label: t.nome }))}
-                onChange={(v) => {
-                  setNewTestemunhaNome(v);
-                  const t = roster.find((x) => x.nome === v);
-                  if (t) setNewTestemunhaEmail(t.email);
-                }}
-                placeholder="Busque por nome ou digite uma testemunha avulsa"
-              />
-              <input
-                type="email"
-                value={newTestemunhaEmail}
-                onChange={(e) => setNewTestemunhaEmail(e.target.value)}
-                placeholder="email@exemplo.com"
-                className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-              />
-              <button
-                onClick={() => {
-                  const nome = newTestemunhaNome.trim();
-                  const email = newTestemunhaEmail.trim();
-                  if (!nome || !email) return;
-                  const match = roster.find((t) => t.nome.trim().toLowerCase() === nome.toLowerCase());
-                  if (match) {
-                    setSelectedTestemunhaIds((prev) => (prev.includes(match.id) ? prev : [...prev, match.id]));
-                  } else {
-                    setExtraTestemunhas((prev) => [...prev, { email, name: nome }]);
-                  }
-                  setNewTestemunhaNome("");
-                  setNewTestemunhaEmail("");
-                }}
-                disabled={!newTestemunhaNome.trim() || !newTestemunhaEmail.trim()}
-                className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
-              >
-                Adicionar
-              </button>
-            </div>
+            <AdicionarTestemunha
+              roster={roster}
+              onRosterChange={setRoster}
+              onDoCadastro={(id) => setSelectedTestemunhaIds((prev) => (prev.includes(id) ? prev : [...prev, id]))}
+              onAvulsa={(t) => setExtraTestemunhas((prev) => [...prev, t])}
+            />
           </div>
           )}
 

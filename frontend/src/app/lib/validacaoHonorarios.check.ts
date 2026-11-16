@@ -38,7 +38,7 @@ assert.deepEqual(
 );
 
 // Êxito de 0 a 100 e valores maiores que zero (achados 4 e 10 da varredura).
-const exito = (percentual: number) => ({ honorarios: ["exito"], exito: { percentual } }) as never;
+const exito = (percentual: number) => ({ honorarios: ["exito"], exito: { percentual, incidencia: "ambos" } }) as never;
 assert.deepEqual(errosDoEscopo(exito(150), "E1"), ["E1: o percentual de êxito deve ficar entre 0 e 100."]);
 assert.equal(errosDoEscopo(exito(-5), "E").length, 1);
 assert.deepEqual(errosDoEscopo(exito(100), "E"), []);
@@ -76,19 +76,19 @@ assert.deepEqual(errosDoEscopo(mensAd({ descricao_fase: "", valor_total: 0 }), "
   "E: adicional de mensalidade 1: informe o valor (maior que zero).",
 ]);
 assert.deepEqual(errosDoEscopo(mensAd({ descricao_fase: "2ª instância", valor_total: 5000 }), "E"), []);
-assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "x", adicionais: [{ descricao_fase: "", valor_total: 1 }] } } as never, "E").length, 1);
+assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { incidencia: "ambos", forma_pagamento: "x", adicionais: [{ descricao_fase: "", valor_total: 1 }] } } as never, "E").length, 1);
 // Torna parcelada precisa de valor e data da 1ª parcela
 const torna = (extra: object) => ({ honorarios: ["permuta"], permuta: { objeto_permuta: "x", tem_torna: true, numero_parcelas_torna: 4, ...extra } }) as never;
 assert.equal(errosDoEscopo(torna({}), "E").length, 2);
 assert.deepEqual(errosDoEscopo(torna({ valor_torna: 6000, data_primeira_parcela_torna: "2026-12-05" }), "E"), []);
 assert.equal(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: " " } } as never, "E").length, 1);
 assert.deepEqual(errosDoEscopo({ honorarios: ["permuta"], permuta: { objeto_permuta: "imóvel" } } as never, "E"), []);
-assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "a definir" } } as never, "E").length, 1);
-assert.deepEqual(errosDoEscopo({ honorarios: ["exito"], exito: { forma_pagamento: "em 2 vezes" } } as never, "E"), []);
+assert.equal(errosDoEscopo({ honorarios: ["exito"], exito: { incidencia: "ambos", forma_pagamento: "a definir" } } as never, "E").length, 1);
+assert.deepEqual(errosDoEscopo({ honorarios: ["exito"], exito: { incidencia: "ambos", forma_pagamento: "em 2 vezes" } } as never, "E"), []);
 
 // Êxito variável precisa de faixa completa (item 7).
 const variavel = (faixas: object[]) =>
-  ({ honorarios: ["exito"], exito: { subtipo: "percentual_variavel", faixas_percentual: faixas } }) as never;
+  ({ honorarios: ["exito"], exito: { incidencia: "ambos", subtipo: "percentual_variavel", faixas_percentual: faixas } }) as never;
 assert.equal(errosDoEscopo(variavel([]), "E").length, 1);
 assert.equal(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "" }]), "E").length, 1);
 assert.deepEqual(errosDoEscopo(variavel([{ faixa: "até 100 mil", percentual: "10" }]), "E"), []);
@@ -100,3 +100,15 @@ assert.deepEqual(errosDoEscopo(variavel([{ faixa: "a", percentual: "10,5%" }, { 
 assert.equal(errosDoEscopo({ honorarios: ["mensalidade"], mensalidade: { data_inicio: "2026-12-31", data_fim: "2026-01-10" } } as never, "E").length, 1);
 
 console.log("validacaoHonorarios.ts ok");
+
+// Êxito: incidência é obrigatória (em branco o contrato caía na redação antiga) e o
+// "Customizado" exige o conceito digitado.
+const exitoCom = (extra: object) =>
+  ({ honorarios: ["exito"], exito: { subtipo: "percentual_fixo", percentual: 20, forma_pagamento: "", ...extra } }) as never;
+assert.deepEqual(errosDoEscopo(exitoCom({ incidencia: "" }), "E"), ["E: selecione a incidência do êxito."]);
+assert.deepEqual(errosDoEscopo(exitoCom({ incidencia: "ambos" }), "E"), []);
+assert.deepEqual(errosDoEscopo(exitoCom({ incidencia: "beneficio_economico" }), "E"), []); // contrato antigo segue valendo
+assert.deepEqual(errosDoEscopo(exitoCom({ incidencia: "customizado", incidencia_customizada: " " }), "E"), [
+  "E: conceitue a base de incidência customizada do êxito.",
+]);
+assert.deepEqual(errosDoEscopo(exitoCom({ incidencia: "customizado", incidencia_customizada: "o valor do acordo" }), "E"), []);

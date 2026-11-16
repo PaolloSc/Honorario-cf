@@ -12,7 +12,7 @@ import AjustarTexto from "@/components/steps/AjustarTexto";
 import SocioEscritorioSelect from "@/components/SocioEscritorioSelect";
 import { ConfirmDialog } from "@/components/emissao/ui";
 import EnvioWhatsApp, { urlWhatsApp } from "@/components/EnvioWhatsApp";
-import { ComboBox } from "@/components/ui/FormField";
+import AdicionarTestemunha, { CpfDaTestemunha } from "@/components/AdicionarTestemunha";
 
 // Nomes das etapas do wizard (ContractWizard), para o "Ir para o campo".
 const NOME_ETAPA: Record<number, string> = { 1: "Contratante", 2: "Escopo", 3: "Honorários", 4: "Acessórios", 5: "Ficha Interna" };
@@ -193,6 +193,7 @@ function applyFix(data: ContratoFormData, trecho: string, sugestao: string): Con
       ["exito", "vencimento"],
       ["exito", "vencimento_obs"],
       ["exito", "forma_parcelamento"],
+      ["exito", "incidencia_customizada"],
       ["mensalidade", "dia_vencimento_obs"],
       ...(["hora_trabalhada", "pro_labore", "mensalidade", "exito", "permuta"] as const).flatMap(
         (h) => [[h, "desconto_condicao"], [h, "desconto_livre"]] as Array<[keyof typeof e, string]>,
@@ -260,12 +261,10 @@ export default function Step7Envio({
   const [signatureSent, setSignatureSent] = useState(false);
   // Contratantes que podem receber o link também pelo WhatsApp, logo após o envio.
   const [whatsappEnvio, setWhatsappEnvio] = useState<
-    Array<{ name: string; link: string; whatsapp: string }>
+    Array<{ name: string; role: string; link: string; whatsapp: string }>
   >([]);
   // Testemunhas: roster + selecionadas + avulsas (Lilian/Testemunha 1 injetada no backend)
   const [roster, setRoster] = useState<Testemunha[]>([]);
-  const [newTestemunhaNome, setNewTestemunhaNome] = useState("");
-  const [newTestemunhaEmail, setNewTestemunhaEmail] = useState("");
   // Colaboradores do escritorio: autopreenchimento de testemunhas.
   const [colaboradores, setColaboradores] = useState<ColaboradorWizard[]>([]);
   const [avisoSocio, setAvisoSocio] = useState(false);
@@ -600,7 +599,7 @@ export default function Step7Envio({
       // PJ com mais de um representante legal: cada administrador assina
       // (ha empresas cuja assinatura so vale com dois administradores).
       // phone = WhatsApp: vai ao DocuSeal e volta na lista "Falta assinar" do contrato.
-      const signatarios: Array<{ email: string; name: string; role: string; phone?: string }> =
+      const signatarios: Array<{ email: string; name: string; role: string; phone?: string; cpf?: string }> =
         data.contratantes.flatMap((c) => {
         const reps = c.tipo === "PJ" ? (c as ContratantePJ).representantes ?? [] : [];
         const assinantes = reps.filter((r) => r.nome && r.email);
@@ -617,10 +616,10 @@ export default function Step7Envio({
 
       // Testemunhas: do roster + avulsas (Testemunha 1 = financeiro e' injetada no backend)
       for (const t of roster.filter((r) => selectedTestemunhaIds.includes(r.id))) {
-        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha" });
+        signatarios.push({ email: t.email, name: t.nome, role: "Testemunha", cpf: t.cpf });
       }
       for (const t of extraTestemunhas) {
-        signatarios.push({ email: t.email, name: t.name, role: "Testemunha" });
+        signatarios.push({ email: t.email, name: t.name, role: "Testemunha", cpf: t.cpf });
       }
 
       const socio = colaboradores.find((c) => c.email === socioEscritorio);
@@ -658,14 +657,18 @@ export default function Step7Envio({
       // pronta — só falta apertar enviar. Se o navegador bloquear a janela, os
       // botões abaixo ficam na tela e a página não sai sozinha.
       const paraWhatsApp = (result.whatsapp ?? []).filter((w) => w.link);
-      setWhatsappEnvio(paraWhatsApp);
+      // Na tela fica todo mundo que falta assinar (sócio e testemunhas também), já com o
+      // link de cada um — sem esperar a vez na ordem de assinatura.
+      const todos = (result.pendentes ?? []).filter((w) => w.link);
+      setWhatsappEnvio(todos.length > 0 ? todos : paraWhatsApp);
       const primeiro = paraWhatsApp.find((w) => w.whatsapp);
       if (primeiro) {
         window.open(urlWhatsApp(primeiro.name, primeiro.link, primeiro.whatsapp), "_blank", "noopener");
       }
 
-      // Navigate to detail page after signature is sent (tempo p/ ler o aviso da ordem)
-      if (onSaveComplete && paraWhatsApp.length === 0) {
+      // Sem lista para mostrar, vai para o contrato (tempo p/ ler o aviso da ordem).
+      // Com a lista na tela a página não sai sozinha: há o botão "Abrir o contrato".
+      if (onSaveComplete && todos.length === 0 && paraWhatsApp.length === 0) {
         setTimeout(() => onSaveComplete(id), 10000);
       }
     } catch (error) {
@@ -766,7 +769,7 @@ export default function Step7Envio({
       <div className="w-full mb-2 p-4 rounded-lg bg-card border border-border">
         <h4 className="text-sm font-semibold text-foreground mb-2">Testemunhas</h4>
         <p className="text-xs text-muted mb-3">
-          <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Busque pelo nome (cadastro) ou digite uma avulsa.
+          <strong>Testemunha 1 (financeiro)</strong> é incluída automaticamente. Busque pelo nome (cadastro) ou digite uma avulsa; o CPF é obrigatório e sai sob a assinatura.
         </p>
 
         {(roster.filter((t) => selectedTestemunhaIds.includes(t.id)).length > 0 || extraTestemunhas.length > 0) && (
@@ -775,7 +778,10 @@ export default function Step7Envio({
               .filter((t) => selectedTestemunhaIds.includes(t.id))
               .map((t) => (
                 <div key={t.id} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
-                  <span className="flex-1">{t.nome} ({t.email})</span>
+                  <span className="flex-1">
+                    {t.nome} ({t.email}){" "}
+                    <CpfDaTestemunha cpf={t.cpf} />
+                  </span>
                   <button
                     onClick={() => {
                       gravarEnvio({ testemunhaIds: selectedTestemunhaIds.filter((id) => id !== t.id) });
@@ -788,7 +794,11 @@ export default function Step7Envio({
               ))}
             {extraTestemunhas.map((t, i) => (
               <div key={i} className="flex items-center gap-2 text-sm bg-card px-3 py-1.5 rounded border border-border">
-                <span className="flex-1">{t.name} ({t.email}) <em className="text-accent">avulsa</em></span>
+                <span className="flex-1">
+                  {t.name} ({t.email}){" "}
+                  <CpfDaTestemunha cpf={t.cpf} />{" "}
+                  <em className="text-accent">avulsa</em>
+                </span>
                 <button
                   onClick={() => {
                     gravarEnvio({ testemunhasExtras: extraTestemunhas.filter((_, idx) => idx !== i) });
@@ -802,46 +812,14 @@ export default function Step7Envio({
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          <ComboBox
-            livre
-            className="flex-1 min-w-40"
-            value={newTestemunhaNome}
-            options={roster.map((t) => ({ value: t.nome, label: t.nome }))}
-            onChange={(v) => {
-              setNewTestemunhaNome(v);
-              const t = roster.find((x) => x.nome === v);
-              if (t) setNewTestemunhaEmail(t.email);
-            }}
-            placeholder="Busque por nome ou digite uma testemunha avulsa"
-          />
-          <input
-            type="email"
-            value={newTestemunhaEmail}
-            onChange={(e) => setNewTestemunhaEmail(e.target.value)}
-            placeholder="email@exemplo.com"
-            className="flex-1 min-w-48 px-3 py-1.5 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-          />
-          <button
-            onClick={() => {
-              const nome = newTestemunhaNome.trim();
-              const email = newTestemunhaEmail.trim();
-              if (!nome || !email) return;
-              const match = roster.find((t) => t.nome.trim().toLowerCase() === nome.toLowerCase());
-              if (match) {
-                gravarEnvio({ testemunhaIds: selectedTestemunhaIds.includes(match.id) ? selectedTestemunhaIds : [...selectedTestemunhaIds, match.id] });
-              } else {
-                gravarEnvio({ testemunhasExtras: [...extraTestemunhas, { email, name: nome }] });
-              }
-              setNewTestemunhaNome("");
-              setNewTestemunhaEmail("");
-            }}
-            disabled={!newTestemunhaNome.trim() || !newTestemunhaEmail.trim()}
-            className="shrink-0 px-3 py-1.5 bg-accent text-white text-sm rounded hover:opacity-90 disabled:opacity-50 transition"
-          >
-            Adicionar
-          </button>
-        </div>
+        <AdicionarTestemunha
+          roster={roster}
+          onRosterChange={setRoster}
+          onDoCadastro={(id) =>
+            gravarEnvio({ testemunhaIds: selectedTestemunhaIds.includes(id) ? selectedTestemunhaIds : [...selectedTestemunhaIds, id] })
+          }
+          onAvulsa={(t) => gravarEnvio({ testemunhasExtras: [...extraTestemunhas, t] })}
+        />
       </div>
 
       {avisoDesatualizada && (
@@ -1181,13 +1159,15 @@ export default function Step7Envio({
         {/* After signature sent or final success */}
         {status === "success" && whatsappEnvio.length > 0 && (
           <div className="w-full p-4 rounded-lg bg-card border border-border">
-            <p className="text-sm font-medium text-foreground">Enviar o link também pelo WhatsApp</p>
+            <p className="text-sm font-medium text-foreground">Falta assinar:</p>
             <p className="text-xs text-muted mb-2">
-              O e-mail já foi enviado. Se o WhatsApp não abriu sozinho, use os botões.
+              O DocuSeal manda o e-mail a cada pessoa na vez dela. Se quiser, envie o link também pelo WhatsApp.
             </p>
             {whatsappEnvio.map((w) => (
               <div key={w.link} className="mt-2">
-                <span className="text-sm text-foreground">{w.name}</span>
+                <span className="text-sm text-foreground">
+                  {w.name} <span className="text-muted">({w.role})</span>
+                </span>
                 <EnvioWhatsApp nome={w.name} link={w.link} whatsapp={w.whatsapp} />
               </div>
             ))}

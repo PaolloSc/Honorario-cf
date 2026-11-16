@@ -842,7 +842,8 @@ class TestSendForSignatureEndpoint:
                     "contract_id": contract_id,
                     "signatarios": [
                         {"email": "client@example.com", "name": "Client", "role": "Contratante"}, SOCIO,
-                        {"email": "outra@example.com", "name": "Outra Testemunha", "role": "Testemunha"},
+                        {"email": "outra@example.com", "name": "Outra Testemunha", "role": "Testemunha",
+                         "cpf": "529.982.247-25"},
                     ],
                 },
             )

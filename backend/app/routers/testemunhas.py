@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, get_current_user
 from app.database import TestemunhaDB, get_db, utcnow
+from app.utils.documento import cpf_valido, formatar_cpf, normalizar_doc
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/testemunhas", tags=["Testemunhas"])
@@ -16,10 +17,17 @@ router = APIRouter(prefix="/api/testemunhas", tags=["Testemunhas"])
 _EMAIL_RE = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.-]+$")
 
 
+def _cpf_normalizado(v: str | None) -> str:
+    if not cpf_valido(v):
+        raise ValueError("CPF invalido")
+    return normalizar_doc(v)
+
+
 class TestemunhaOut(BaseModel):
     id: int
     nome: str
     email: str
+    cpf: str = ""  # formatado; vazio em cadastro antigo
     ativo: bool
     created_at: str
 
@@ -31,6 +39,9 @@ class TestemunhasResponse(BaseModel):
 class CreateTestemunhaRequest(BaseModel):
     nome: str
     email: str
+    cpf: str
+
+    _cpf = field_validator("cpf")(lambda v: _cpf_normalizado(v))
 
     @field_validator("nome")
     @classmethod
@@ -52,7 +63,10 @@ class CreateTestemunhaRequest(BaseModel):
 class UpdateTestemunhaRequest(BaseModel):
     nome: str | None = None
     email: str | None = None
+    cpf: str | None = None
     ativo: bool | None = None
+
+    _cpf = field_validator("cpf")(lambda v: None if v is None else _cpf_normalizado(v))
 
     @field_validator("email")
     @classmethod
@@ -70,6 +84,7 @@ def _to_out(t: TestemunhaDB) -> TestemunhaOut:
         id=t.id,
         nome=t.nome,
         email=t.email,
+        cpf=formatar_cpf(t.cpf),
         ativo=t.ativo,
         created_at=t.created_at.isoformat(),
     )
@@ -98,6 +113,7 @@ def create_testemunha(
     t = TestemunhaDB(
         nome=body.nome,
         email=body.email,
+        cpf=body.cpf,
         ativo=True,
         created_by=user.email,
         created_at=utcnow(),
@@ -117,7 +133,7 @@ def update_testemunha(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Edita nome/email ou ativa/desativa (soft delete via ativo=False)."""
+    """Edita nome/email/CPF ou ativa/desativa (soft delete via ativo=False)."""
     t = db.query(TestemunhaDB).filter(TestemunhaDB.id == testemunha_id).first()
     if not t:
         raise HTTPException(404, "Testemunha nao encontrada")
@@ -129,6 +145,8 @@ def update_testemunha(
         t.nome = nome
     if body.email is not None:
         t.email = body.email
+    if body.cpf is not None:
+        t.cpf = body.cpf
     if body.ativo is not None:
         t.ativo = body.ativo
 
