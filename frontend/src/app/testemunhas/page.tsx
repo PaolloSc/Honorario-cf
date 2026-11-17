@@ -8,6 +8,7 @@ import {
   updateTestemunha,
   type Testemunha,
 } from "@/app/lib/api";
+import { formatCPF, isValidCPF } from "@/app/lib/cpf";
 
 // Remove acentos pra busca "monica" achar "Mônica" tambem.
 function semAcento(s: string): string {
@@ -23,6 +24,9 @@ export default function TestemunhasPage() {
   const [busca, setBusca] = useState("");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
+  // CPF em edição na linha (preencher o de quem não tem ou corrigir um errado).
+  const [cpfPendente, setCpfPendente] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
 
   const fetchRows = useCallback(async () => {
@@ -44,16 +48,30 @@ export default function TestemunhasPage() {
 
   const handleCreate = async () => {
     if (!nome.trim() || !email.trim()) return;
+    if (!isValidCPF(cpf)) return setError("CPF inválido.");
     setSaving(true);
     try {
-      await createTestemunha({ nome: nome.trim(), email: email.trim() });
+      await createTestemunha({ nome: nome.trim(), email: email.trim(), cpf });
       setNome("");
       setEmail("");
+      setCpf("");
       fetchRows();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao criar testemunha");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const salvarCpf = async (t: Testemunha) => {
+    const valor = cpfPendente[t.id] ?? "";
+    if (!isValidCPF(valor)) return setError(`CPF inválido para ${t.nome}.`);
+    try {
+      await updateTestemunha(t.id, { cpf: valor });
+      setCpfPendente(({ [t.id]: _, ...resto }) => resto);
+      fetchRows();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao gravar o CPF");
     }
   };
 
@@ -79,6 +97,7 @@ export default function TestemunhasPage() {
       <p className="text-sm text-muted mb-6">
         Testemunhas recorrentes do escritório. Selecionáveis no envio para assinatura.
         A Testemunha 1 (financeiro) é incluída automaticamente em todo contrato.
+        O CPF é obrigatório e sai sob a assinatura da testemunha.
       </p>
 
       {error && (
@@ -104,9 +123,19 @@ export default function TestemunhasPage() {
             placeholder="email@exemplo.com"
             className="flex-1 min-w-48 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
           />
+          <input
+            type="text"
+            inputMode="numeric"
+            required
+            aria-label="CPF (obrigatório)"
+            value={cpf}
+            onChange={(e) => setCpf(formatCPF(e.target.value))}
+            placeholder="CPF (obrigatório)"
+            className="w-44 px-3 py-2 border border-border bg-card text-foreground rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+          />
           <button
             onClick={handleCreate}
-            disabled={saving || !nome.trim() || !email.trim()}
+            disabled={saving || !nome.trim() || !email.trim() || !cpf.trim()}
             className="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
           >
             {saving ? "Salvando..." : "Adicionar"}
@@ -149,6 +178,20 @@ export default function TestemunhasPage() {
                 <p className="text-sm font-medium text-foreground">{t.nome}</p>
                 <p className="text-xs text-muted">{t.email}</p>
               </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label={`CPF de ${t.nome}`}
+                value={cpfPendente[t.id] ?? t.cpf}
+                onChange={(e) => setCpfPendente((m) => ({ ...m, [t.id]: formatCPF(e.target.value) }))}
+                placeholder="CPF pendente"
+                className={`w-36 px-2 py-1 border bg-card text-foreground rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 ${t.cpf ? "border-border" : "border-danger/50"}`}
+              />
+              {(cpfPendente[t.id] ?? t.cpf) !== t.cpf && (
+                <button onClick={() => void salvarCpf(t)} className="text-xs font-medium text-accent hover:underline">
+                  Salvar CPF
+                </button>
+              )}
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                   t.ativo ? "bg-primary/[0.16] text-primary-dark" : "bg-border/35 text-muted"

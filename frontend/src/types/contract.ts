@@ -205,6 +205,8 @@ export interface Exito extends ComDesconto {
   subtipo: SubtipoExito;
   percentual?: number;
   incidencia: string;
+  /** Conceito de "Benefício" em texto livre, quando incidencia === "customizado". */
+  incidencia_customizada?: string;
   base_calculo: string;
   vencimento: string;
   vencimento_data?: string;
@@ -328,7 +330,7 @@ export interface ContratoFormData {
 export interface EnvioSalvo {
   recipients?: Array<{ email: string; nome: string }>;
   testemunhaIds?: number[];
-  testemunhasExtras?: Array<{ email: string; name: string }>;
+  testemunhasExtras?: Array<{ email: string; name: string; cpf?: string }>;
   socioEscritorio?: string;
 }
  

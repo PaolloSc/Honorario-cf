@@ -23,7 +23,7 @@ from app.models.contrato_consumidor import (
     ContratoConsumidorRequest,
     nome_signatario,
 )
-from app.services.contract_generator import ContractGenerator
+from app.services.contract_generator import ContractGenerator, rotulo_testemunha, testemunhas_do_documento
 from app.services.pagina_documento import PaginaCompacta
 from app.services.qualificacao import genero_de, genero_plural, qualificar_contratante
 from app.utils.currency import formatar_valor
@@ -471,7 +471,7 @@ class ConsumidorGenerator(PaginaCompacta, ContractGenerator):
             contratado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratado")]
             advogado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Advogado")]
             contratante_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratante")]
-            testemunha_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Testemunha")]
+            testemunha_sigs = testemunhas_do_documento(signatario_roles)
 
             entries: list[tuple[str, list[str]]] = []
             for sig in contratante_sigs:
@@ -504,7 +504,7 @@ class ConsumidorGenerator(PaginaCompacta, ContractGenerator):
                     [
                         (
                             f"{{{{Assinatura {s.get('name', 'Testemunha')};type=signature;role={s['role']}}}}}",
-                            [f"{s['role'].upper()}: {s.get('name', 'Testemunha').upper()}"],
+                            rotulo_testemunha(s),
                         )
                         for s in testemunha_sigs
                     ],

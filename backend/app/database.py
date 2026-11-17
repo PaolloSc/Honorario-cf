@@ -89,6 +89,8 @@ class TestemunhaDB(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     nome = Column(String(256), nullable=False)
     email = Column(String(256), nullable=False, index=True)
+    # So' digitos. Obrigatorio no cadastro novo; nulo em quem foi cadastrado antes da coluna.
+    cpf = Column(String(11), nullable=True)
     ativo = Column(Boolean, nullable=False, default=True)
     created_by = Column(String(256), nullable=True)  # user email
     created_at = Column(DateTime, nullable=False, default=utcnow)

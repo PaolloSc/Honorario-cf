@@ -51,6 +51,16 @@ const VARIACAO_PRECO = [
   { value: "variacao_fase_processual", label: "Com Variação por Fase Processual" },
 ];
 
+// Incidências que saíram do formulário em nov/2026; contrato que já tinha uma segue com ela.
+const INCIDENCIAS_ANTIGAS: Record<string, string> = {
+  beneficio_economico: "Benefício econômico",
+  beneficio_financeiro: "Benefício financeiro",
+  beneficio_fiscal: "Benefício fiscal",
+  beneficio_tributario: "Benefício fiscal",
+  qualquer_valor_recebido: "Qualquer valor recebido pelo cliente",
+  todos: "Todos os benefícios",
+};
+
 const SUBTIPO_EXITO = [
   { value: "percentual_fixo", label: "Percentual Fixo" },
   { value: "percentual_variavel", label: "Percentual Variável" },
@@ -899,20 +909,40 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
 
                       <FormField label="Incidência">
                         <Select
-                          value={escopo.exito.incidencia === "beneficio_tributario" ? "beneficio_fiscal" : escopo.exito.incidencia || ""}
+                          value={escopo.exito.incidencia || ""}
                           onChange={(e) =>
                             updateExito(idx, { incidencia: e.target.value })
                           }
                           options={[
-                            { value: "beneficio_economico", label: "Benefício econômico" },
-                            { value: "beneficio_financeiro", label: "Benefício financeiro" },
-                            { value: "beneficio_fiscal", label: "Benefício fiscal" },
-                            { value: "qualquer_valor_recebido", label: "Qualquer valor recebido pelo cliente" },
-                            { value: "todos", label: "Todos os benefícios" },
+                            { value: "valor_recebido", label: "Valor recebido" },
+                            { value: "valor_economizado", label: "Valor economizado" },
+                            { value: "ambos", label: "Ambos" },
+                            { value: "customizado", label: "Customizado" },
+                            // Contrato antigo: a opção que ele já tinha continua aparecendo (e com a redação antiga).
+                            ...(escopo.exito.incidencia in INCIDENCIAS_ANTIGAS
+                              ? [{ value: escopo.exito.incidencia, label: `${INCIDENCIAS_ANTIGAS[escopo.exito.incidencia]} (redação antiga)` }]
+                              : []),
                           ]}
                           placeholder="Selecione..."
                         />
                       </FormField>
+
+                      {escopo.exito.incidencia === "customizado" && (
+                        <FormField
+                          label="Conceitue a base de incidência de forma customizada"
+                          hint='Completa a frase do contrato: "considera-se “Benefício” ...".'
+                        >
+                          <TextArea
+                            value={escopo.exito.incidencia_customizada || ""}
+                            onChange={(e) => {
+                              textoLivre(escopo, "exito").onEditar();
+                              updateExito(idx, { incidencia_customizada: e.target.value });
+                            }}
+                            onBlur={textoLivre(escopo, "exito").onSair}
+                            placeholder="Ex.: qualquer valor recebido ou economizado pela CONTRATANTE em razão do acordo"
+                          />
+                        </FormField>
+                      )}
 
                       <FormField label="Forma de pagamento">
                         {(() => {
@@ -964,7 +994,14 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                         </FormField>
                       )}
 
-                      <FormField label="Vencimento (dias após o recebimento)" hint='O contrato diz "N dias após o recebimento de qualquer valor pela CONTRATANTE".'>
+                      <FormField
+                        label="Vencimento (dias)"
+                        hint={
+                          escopo.exito.incidencia in INCIDENCIAS_ANTIGAS
+                            ? 'O contrato diz "N dias após o recebimento de qualquer valor pela CONTRATANTE".'
+                            : 'O contrato diz "N dias após a obtenção, ainda que parcial, do Benefício". Com parcelas, é o vencimento da primeira.'
+                        }
+                      >
                         <Input
                           type="number"
                           min={1}

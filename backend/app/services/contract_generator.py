@@ -35,6 +35,7 @@ from app.models.contract import (
     VariacaoPrecoMensalidade,
 )
 from app.services.qualificacao import qualificar_representante
+from app.utils.documento import formatar_cpf
 from app.utils.parcelas import data_iso, dividir_parcelas
 from app.utils.currency import (
     formatar_percentual,
@@ -46,6 +47,24 @@ from app.utils.currency import (
 )
  
 
+def testemunhas_do_documento(signatario_roles: list[dict] | None) -> list[dict]:
+    """Testemunhas na ordem do papel (Testemunha 1, Testemunha 2...).
+
+    A lista chega na ordem de ASSINATURA, em que a Testemunha 1 (financeiro) e' a ultima;
+    impressa assim, a Testemunha 2 saia antes da 1 no documento.
+    """
+    testemunhas = [s for s in (signatario_roles or []) if s.get("role", "").startswith("Testemunha")]
+    return sorted(testemunhas, key=lambda s: s["role"])
+
+
+def rotulo_testemunha(sig: dict) -> list[str]:
+    """Linhas sob a assinatura da testemunha: papel + nome e, se informado, o CPF."""
+    linhas = [f"{sig['role'].upper()}: {sig.get('name', 'Testemunha').upper()}"]
+    if sig.get("cpf"):
+        linhas.append(f"CPF: {formatar_cpf(sig['cpf'])}")
+    return linhas
+
+
 INCIDENCIA_EXITO_LABELS = {
     "beneficio_economico": "benefício econômico",
     "beneficio_financeiro": "benefício financeiro",
@@ -54,6 +73,30 @@ INCIDENCIA_EXITO_LABELS = {
     "qualquer_valor_recebido": "qualquer valor recebido pela CONTRATANTE",
     "todos": "benefício econômico, financeiro e/ou fiscal",
 }
+
+# Incidencia atual do exito (redacao do escritorio, nov/2026): o que conta como "Benefício".
+# As chaves de INCIDENCIA_EXITO_LABELS acima sao as antigas e seguem com a redacao antiga,
+# para contrato ja salvo nao mudar de texto ao ser regerado.
+BENEFICIO_EXITO = {
+    "valor_recebido": (
+        "de qualquer valor recebido pela CONTRATANTE",
+        "qualquer valor recebido no âmbito do Objeto ou Escopo contratado, inclusive por decisão, "
+        "acordo, compensação ou outra forma de satisfação da pretensão da CONTRATANTE",
+    ),
+    "valor_economizado": (
+        "do Benefício proporcionado à CONTRATANTE",
+        "qualquer valor economizado ou cuja exigibilidade seja afastada ou reduzida no âmbito do "
+        "Objeto ou Escopo contratado, inclusive por decisão, acordo, compensação ou outra forma de "
+        "redução da exposição da CONTRATANTE",
+    ),
+    "ambos": (
+        "do Benefício proporcionado à CONTRATANTE",
+        "qualquer valor recebido, economizado ou cuja exigibilidade seja afastada ou reduzida no "
+        "âmbito do Objeto ou Escopo contratado, inclusive por decisão, acordo, compensação ou outra "
+        "forma de satisfação da pretensão ou de redução da exposição da CONTRATANTE",
+    ),
+}
+INCIDENCIA_CUSTOMIZADA = "customizado"
 
 FORMA_PAGAMENTO_LABELS = {
     "a_vista": "à vista",
@@ -1016,6 +1059,11 @@ class ContractGenerator:
         if com_subtitulo:
             doc.add_heading("ÊXITO", level=3)
 
+        if ex.incidencia in BENEFICIO_EXITO or ex.incidencia == INCIDENCIA_CUSTOMIZADA:
+            self._add_exito_beneficio(doc, ex, num)
+            self._add_exito_complementos(ex, num)
+            return
+
         incidencia = (
             self._label_from_map(ex.incidencia, INCIDENCIA_EXITO_LABELS)
             or "benefício econômico e/ou financeiro e/ou fiscal"
@@ -1089,6 +1137,74 @@ class ContractGenerator:
         elif venc:
             num(f"Os honorários de êxito vencerão {venc}.", chave="pagamento")
 
+        self._add_exito_complementos(ex, num)
+
+    def _add_exito_beneficio(self, doc: Document, ex: "Exito", num: "_Numerador") -> None:
+        """Incidencia atual: percentual sobre o Benefício definido + pagamento contado da obtencao."""
+        if ex.incidencia == INCIDENCIA_CUSTOMIZADA:
+            base = "do Benefício proporcionado à CONTRATANTE"
+            conceito = (self._texto_livre(ex.incidencia_customizada) or "").rstrip(". ")
+        else:
+            base, conceito = BENEFICIO_EXITO[ex.incidencia]
+        cauda = f'{base} ("Benefício"), ainda que parcial.'
+        if conceito:
+            cauda += f" Para os fins deste Contrato, considera-se “Benefício” {conceito}."
+
+        if ex.subtipo == SubtipoExito.PERCENTUAL_VARIAVEL and ex.faixas_percentual:
+            num(
+                "Os honorários de êxito corresponderão ao percentual indicado na tabela abaixo, "
+                f"conforme a faixa de valor, {cauda}", chave="incidencia"
+            )
+            table = doc.add_table(rows=1, cols=2)
+            self._apply_table_grid(table)
+            self._set_table_header(table, "Faixa de Valor", "Percentual")
+            for faixa in ex.faixas_percentual:
+                if not (faixa.get("faixa") or "").strip() and not (faixa.get("percentual") or "").strip():
+                    continue  # linha em branco da tela
+                row = table.add_row().cells
+                row[0].text = faixa.get("faixa", "")
+                row[1].text = self._percentual_digitado(faixa.get("percentual", ""))
+        elif ex.percentual and ex.subtipo != SubtipoExito.PERCENTUAL_VARIAVEL:
+            num(
+                f"Os honorários de êxito corresponderão a {percentual_com_extenso(ex.percentual)} {cauda}",
+                chave="incidencia",
+            )
+        else:
+            num(f"Os honorários de êxito incidirão sobre o valor {cauda}", chave="incidencia")
+
+        forma = (ex.forma_pagamento or "").strip()
+        parcelamento = self._texto_livre(ex.forma_parcelamento)
+        obtencao = "a obtenção, ainda que parcial, do Benefício"
+        venc = ""
+        if ex.vencimento or ex.vencimento_data or ex.vencimento_obs:
+            venc = self._vencimento_combined(ex.vencimento_data, ex.vencimento_obs, ex.vencimento)
+        prazo = numero_com_extenso(ex.vencimento_dias, "dias") if ex.vencimento_dias else ""
+        if forma == "parcelado" and ex.numero_parcelas:
+            parcelas = numero_com_extenso(ex.numero_parcelas, "parcelas", fem=True)
+            primeira = f"em {prazo} após {obtencao}" if prazo else f"com {obtencao}"
+            num(
+                f"Os honorários de êxito serão pagos em {parcelas} mensais, iguais e sucessivas, "
+                f"vencendo-se a primeira {primeira}, e as demais no mesmo dia dos meses subsequentes.",
+                chave="pagamento",
+            )
+        elif forma or parcelamento or prazo or venc:
+            if forma in FORMA_PAGAMENTO_LABELS:
+                como = f" {FORMA_PAGAMENTO_LABELS[forma]}"
+                if parcelamento:  # texto livre do parcelamento nao some ao lado de "à vista"/"parcelado"
+                    como += f", observado o seguinte parcelamento: {parcelamento}"
+            elif forma or parcelamento:
+                como = f" da seguinte forma: {self._texto_livre(forma) or parcelamento}"
+            else:
+                como = ""
+            if prazo:
+                quando = f"{',' if como else ''} em {prazo} após {obtencao}"
+            elif venc:  # vencimento em texto livre de contrato antigo
+                quando = f"{',' if como else ''} com vencimento {venc}"
+            else:
+                quando = ""
+            num(f"Os honorários de êxito serão pagos{como}{quando}.", chave="pagamento")
+
+    def _add_exito_complementos(self, ex: "Exito", num: "_Numerador") -> None:
         if ex.tem_beneficio_prospectivo and ex.prospectivo_duracao_meses:
             num(
                 "Caso os serviços do C&F também proporcionem Benefício prospectivo à "
@@ -1388,11 +1504,11 @@ class ContractGenerator:
             ilvl=2, chave="prazo.antecedencia",
         )
         incisos = [
-            "(i) os honorários vencidos serão devidos integralmente",
+            "(i) os honorários vencidos, em qualquer modalidade, serão devidos integralmente",
             "(ii) os honorários vincendos pactuados por hora trabalhada serão devidos em "
             "relação aos serviços executados até a efetiva extinção",
             "(iii) os honorários vincendos pactuados por mensalidade serão devidos "
-            "observando-se o prazo de antecedência de 30 (trinta) dias previsto nesta cláusula",
+            "incluindo o prazo de antecedência de 30 (trinta) dias previsto nesta cláusula",
             "(iv) os honorários vincendos pactuados por pró-labore serão devidos, "
             "proporcionalmente, observando-se os serviços executados e ainda não remunerados",
         ]
@@ -1406,16 +1522,17 @@ class ContractGenerator:
         if has_exito and criterio_exito:
             self._add_clausula(
                 doc,
-                f"{base_83}; {incisos[-1]}; e (v) os honorários de êxito vincendos ao momento "
-                f"da resilição continuarão devidos ao C&F observando-se o seguinte critério: "
+                f"{base_83}; {incisos[-1]}; e (v) especificamente quanto aos honorários de êxito "
+                "vincendos ao momento da extinção contratual, estes continuarão devidos ao C&F "
+                "observando-se o seguinte critério: "
                 f"{criterio_exito}.", chave="prazo.efeitos_extincao"
             )
         elif has_exito:
             self._add_clausula(
                 doc,
-                f"{base_83}; {incisos[-1]}; e (v) os honorários de êxito vincendos ao momento "
-                "da resilição continuarão devidos ao C&F observando-se a seguinte proporção "
-                "não cumulativa:", chave="prazo.efeitos_extincao"
+                f"{base_83}; {incisos[-1]}; e (v) especificamente quanto aos honorários de êxito "
+                "vincendos ao momento da extinção contratual, estes continuarão devidos ao C&F "
+                "observando-se a seguinte proporção não cumulativa:", chave="prazo.efeitos_extincao"
             )
             linhas = [
                 ("Antes da primeira decisão de mérito", 50),
@@ -1429,7 +1546,7 @@ class ContractGenerator:
             table = doc.add_table(rows=1, cols=2)
             self._apply_table_grid(table)
             self._set_table_header(
-                table, "Fase processual em que for resilido o Contrato", "Honorário devido ao C&F"
+                table, "Fase processual em que for extinto o Contrato", "Honorário devido ao C&F"
             )
             for fase, valor in linhas:
                 row = table.add_row().cells
@@ -1556,7 +1673,7 @@ class ContractGenerator:
             # Group by base role for display ordering: Contratado first, then Contratante(s)
             contratado_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratado")]
             contratante_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Contratante")]
-            testemunha_sigs = [s for s in signatario_roles if s.get("role", "").startswith("Testemunha")]
+            testemunha_sigs = testemunhas_do_documento(signatario_roles)
 
             # Partes: dispostas lado a lado (2 por linha)
             partes_entries: list[tuple[str, str]] = []
@@ -1582,7 +1699,7 @@ class ContractGenerator:
                 test_entries = [
                     (
                         f"{{{{Assinatura {sig.get('name', 'Testemunha')};type=signature;role={sig['role']}}}}}",
-                        f"{sig['role'].upper()}: {sig.get('name', 'Testemunha').upper()}",
+                        chr(10).join(rotulo_testemunha(sig)),
                     )
                     for sig in testemunha_sigs
                 ]

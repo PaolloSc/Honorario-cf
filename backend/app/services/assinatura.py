@@ -16,15 +16,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import ColaboradorDB, ContractDB, ContractVersionDB, utcnow
+from app.database import ColaboradorDB, ContractDB, ContractVersionDB, TestemunhaDB, utcnow
 from app.models.documentos_complementares import ROTULO_DOCUMENTO
 from app.services import pessoas, servicos_externos
 from app.services.arquivo_contrato import resolve_backend_path, resolver_arquivo
 from app.services.ciclo_contrato import registrar_auditoria
 from app.services.contrato_carregado import carregar_versao, tipo_da_versao
+from app.utils.documento import cpf_valido
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,9 @@ class ResultadoEnvio:
     submission_id: str | None = None
     # Submitters "Contratante*" como o DocuSeal devolveu; a rota decide o que a tela mostra.
     contratantes: list[dict[str, Any]] = field(default_factory=list)
+    # Todos os submitters, na ordem de assinatura: a tela lista quem falta assinar
+    # (com o link de cada um) assim que o envio termina, sem esperar a vez de ninguem.
+    assinantes: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _mensagem_ordem_assinatura(signatarios: list[dict]) -> str:
@@ -234,6 +239,28 @@ async def enviar(
         and s.get("role", "").startswith("Testemunha")
         for s in all_signatarios
     )
+    # CPF da testemunha (vai sob a assinatura): o da Testemunha 1 e' fixo, do ambiente;
+    # o das do cadastro vem do banco — a tela nao e' a fonte.
+    for sig in all_signatarios:
+        if not sig.get("role", "").startswith("Testemunha"):
+            continue
+        email = sig.get("email", "").lower()
+        if email == settings.testemunha1_email.lower():
+            sig["cpf"] = settings.testemunha1_cpf
+        else:
+            cadastrada = (
+                db.query(TestemunhaDB)
+                .filter(func.lower(TestemunhaDB.email) == email, TestemunhaDB.cpf.isnot(None))
+                .order_by(TestemunhaDB.ativo.desc(), TestemunhaDB.id.desc())
+                .first()
+            )
+            if cadastrada:
+                sig["cpf"] = cadastrada.cpf
+            if not cpf_valido(sig.get("cpf")):
+                raise EnvioInvalido(
+                    f"Informe o CPF da testemunha {sig.get('name') or email} "
+                    "(no Cadastro de Testemunhas ou ao incluí-la no envio)."
+                )
     if not lilian_present:
         first_testemunha_idx = next(
             (i for i, s in enumerate(all_signatarios) if s.get("role", "").startswith("Testemunha")),
@@ -243,6 +270,7 @@ async def enviar(
             "email": settings.testemunha1_email,
             "name": _nome_testemunha1(db),
             "role": "Testemunha",
+            "cpf": settings.testemunha1_cpf,
         })
 
     # Deduplicate roles: DocuSeal requires unique role per submitter
@@ -360,6 +388,7 @@ async def enviar(
                 s for s in submission.get("submitters") or []
                 if s.get("role", "").startswith("Contratante")
             ],
+            assinantes=list(submission.get("submitters") or []),
         )
     else:
         return ResultadoEnvio(success=False, message=sign_result.get("message", "Erro ao enviar para assinatura"))

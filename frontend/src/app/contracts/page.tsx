@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  deleteContract,
   listContracts,
   type ContractSummary,
   type ContractListResponse,
@@ -76,6 +77,22 @@ export default function ContractsPage() {
       fetchContracts();
     }
   }, [fetchContracts, sessionStatus]);
+
+  const excluirMinuta = async (id: string, cliente: string) => {
+    if (!window.confirm(`Excluir a minuta${cliente ? ` de ${cliente}` : ""}? Ela é apagada de vez. Não dá para desfazer.`)) return;
+    try {
+      await deleteContract(id);
+      fetchContracts();
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      let motivo = "Não foi possível excluir a minuta. Nada foi apagado.";
+      try {
+        const d = JSON.parse(m.slice(m.indexOf("{"))).detail;
+        if (typeof d === "string" && d) motivo = d;
+      } catch { /* sem JSON: mantém a mensagem genérica */ }
+      setError(motivo);
+    }
+  };
 
   const totalPages = data ? Math.ceil(data.total / data.page_size) : 0;
 
@@ -224,6 +241,15 @@ export default function ContractsPage() {
                           >
                             Editar
                           </a>
+                        )}
+                        {c.status === "rascunho" && (
+                          <button
+                            type="button"
+                            onClick={() => void excluirMinuta(c.contract_id, c.client_name)}
+                            className="px-3 py-1.5 text-xs font-medium text-danger border border-danger/30 rounded-md hover:bg-danger/5 transition"
+                          >
+                            Excluir
+                          </button>
                         )}
                       </div>
                     </td>

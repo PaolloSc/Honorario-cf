@@ -24,16 +24,48 @@ def override_auth():
 def test_create_and_list(client):
     resp = client.post(
         "/api/testemunhas",
-        json={"nome": "Lilian Silveira Correa", "email": "lilian@cf.com.br"},
+        json={"nome": "Lilian Silveira Correa", "email": "lilian@cf.com.br", "cpf": CPF},
     )
     assert resp.status_code == 201
     created = resp.json()
     assert created["nome"] == "Lilian Silveira Correa"
+    assert created["cpf"] == CPF
     assert created["ativo"] is True
 
     listed = client.get("/api/testemunhas").json()["testemunhas"]
     assert len(listed) == 1
     assert listed[0]["email"] == "lilian@cf.com.br"
+
+
+CPF = "529.982.247-25"  # ficticio, com digitos verificadores validos
+
+
+@pytest.mark.parametrize("cpf", [None, "", "123.456.789-00", "111.111.111-11"])
+def test_cpf_obrigatorio_e_valido_no_cadastro(client, cpf):
+    """Testemunha nova sem CPF, ou com CPF de verificador errado, nao entra no cadastro."""
+    corpo = {"nome": "Fulana", "email": "f@b.com"}
+    if cpf is not None:
+        corpo["cpf"] = cpf
+    assert client.post("/api/testemunhas", json=corpo).status_code == 422
+
+
+def test_cpf_pode_ser_preenchido_depois_em_cadastro_antigo(client):
+    """Quem ja' estava no cadastro (sem CPF) recebe o CPF por edicao; CPF invalido e' recusado."""
+    from app.database import SessionLocal, TestemunhaDB
+
+    db = SessionLocal()
+    try:
+        antiga = TestemunhaDB(nome="Antiga", email="antiga@b.com", ativo=True)
+        db.add(antiga)
+        db.commit()
+        tid = antiga.id
+    finally:
+        db.close()
+
+    assert client.get("/api/testemunhas").json()["testemunhas"][0]["cpf"] == ""
+    assert client.patch(f"/api/testemunhas/{tid}", json={"cpf": "123"}).status_code == 422
+    resp = client.patch(f"/api/testemunhas/{tid}", json={"cpf": "52998224725"})
+    assert resp.status_code == 200 and resp.json()["cpf"] == CPF
 
 
 def test_invalid_email_rejected(client):
@@ -54,7 +86,7 @@ def test_empty_nome_rejected(client):
 
 def test_patch_updates_fields(client):
     tid = client.post(
-        "/api/testemunhas", json={"nome": "Antigo", "email": "a@b.com"}
+        "/api/testemunhas", json={"nome": "Antigo", "email": "a@b.com", "cpf": CPF}
     ).json()["id"]
 
     resp = client.patch(
@@ -69,7 +101,7 @@ def test_patch_updates_fields(client):
 
 def test_soft_delete_hides_from_default_list(client):
     tid = client.post(
-        "/api/testemunhas", json={"nome": "Some", "email": "some@b.com"}
+        "/api/testemunhas", json={"nome": "Some", "email": "some@b.com", "cpf": CPF}
     ).json()["id"]
 
     client.patch(f"/api/testemunhas/{tid}", json={"ativo": False})

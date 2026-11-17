@@ -14,7 +14,7 @@ function isEmail(value: string | undefined): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text(value));
 }
 
-function isValidCPF(cpf: string): boolean {
+export function isValidCPF(cpf: string): boolean {
   const d = cpf.replace(/\D/g, "");
   if (d.length !== 11) return false;
   // Reject known invalid patterns (all same digit)

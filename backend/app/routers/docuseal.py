@@ -42,6 +42,8 @@ class DocuSealResponse(BaseModel):
     submission_id: str | None = None
     # Contratantes com link e WhatsApp: a tela abre o WhatsApp logo apos o envio.
     whatsapp: list[dict[str, str]] = []
+    # Todos os signatarios com o link de cada um, na ordem de assinatura ("Falta assinar").
+    pendentes: list[dict[str, str]] = []
 
 
 @router.post("/send-for-signature", response_model=DocuSealResponse)
@@ -67,6 +69,7 @@ async def send_for_signature(
         message=r.message,
         submission_id=r.submission_id,
         whatsapp=[_assinante_para_tela(s) for s in r.contratantes],
+        pendentes=[_assinante_para_tela(s) for s in r.assinantes],
     )
 
 

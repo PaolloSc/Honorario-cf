@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.acesso import Capacidade, pode
 from app.auth import CurrentUser, exigir_acesso_ao_contrato, get_current_user
 from app.database import (
+    AuditLogDB,
     ContractDB,
     ContractVersionDB,
     ParticipacaoDB,
@@ -451,6 +452,57 @@ def update_contract_status(
     db.commit()
     return {"success": True, "status": status}
 
+
+
+@router.delete("/{contract_id}")
+def excluir_minuta(
+    contract_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Apaga de vez uma minuta em rascunho que nunca saiu do sistema.
+
+    So' rascunho, nunca enviado ao DocuSeal, sem documento derivado, fatura, nota
+    ou participacao aprovada. Fora disso o caminho continua sendo cancelar.
+    """
+    from app.models.emissao_db import ContratoFaturamentoDB, FaturaDB
+    from app.models.nfse_db import NFSeRecebidaDB
+
+    contract = db.query(ContractDB).filter(ContractDB.contract_id == contract_id).first()
+    if not contract:
+        raise HTTPException(404, "Contrato nao encontrado")
+    exigir_acesso_ao_contrato(contract, user)
+
+    if contract.status != "rascunho":
+        raise HTTPException(409, "Só uma minuta em rascunho pode ser excluída.")
+    if any(v.docuseal_submission_id for v in contract.versions):
+        raise HTTPException(409, "Esta minuta já foi enviada para assinatura; use \"Descartar rascunho\".")
+
+    def existe(modelo, *filtros) -> bool:
+        return db.query(modelo).filter(*filtros).first() is not None
+
+    participacoes = db.query(ParticipacaoDB).filter(ParticipacaoDB.contract_id == contract_id).all()
+    if (
+        existe(ContractDB, ContractDB.contrato_origem_id == contract_id)
+        or existe(FaturaDB, FaturaDB.contract_id == contract_id)
+        or existe(NFSeRecebidaDB, NFSeRecebidaDB.contract_id == contract_id)
+        or any(p.aprovada or p.pagamentos for p in participacoes)
+    ):
+        raise HTTPException(
+            409,
+            "Esta minuta tem documentos, faturas, notas ou participações ligados a ela; use \"Descartar rascunho\".",
+        )
+
+    for p in participacoes:
+        db.delete(p)
+    db.query(ContratoFaturamentoDB).filter(ContratoFaturamentoDB.contract_id == contract_id).delete()
+    db.query(AuditLogDB).filter(AuditLogDB.contract_id == contract_id).delete()
+    db.query(ContractVersionDB).filter(ContractVersionDB.contract_id == contract_id).delete()
+    db.delete(contract)
+    db.commit()
+    # O historico do contrato vai junto; o registro de quem apagou fica no log da aplicacao.
+    logger.info("Minuta %s (%s) excluida por %s", contract_id, contract.client_name, user.email)
+    return {"success": True}
 
 
 @router.post("/{contract_id}/rollback")
