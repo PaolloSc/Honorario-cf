@@ -939,7 +939,7 @@ export default function Step3Honorarios({ escopos, onChange }: Step3Props) {
                               updateExito(idx, { incidencia_customizada: e.target.value });
                             }}
                             onBlur={textoLivre(escopo, "exito").onSair}
-                            placeholder="Ex.: qualquer valor recebido ou economizado pela CONTRATANTE em razão do acordo"
+                            placeholder="Identifique a base customizada de incidência do êxito que seja diferente dos campos disponíveis (valor recebido, economizado ou ambos)"
                           />
                         </FormField>
                       )}
